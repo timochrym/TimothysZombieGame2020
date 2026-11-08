@@ -1,0 +1,8 @@
+.updater/
+logs/
+.user-folder
+.control_panel.json
+*.lock
+*.pid
+.venv/
+__pycache__/
