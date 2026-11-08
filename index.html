@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Tim's Game</title>
+    <style>
+        * {
+            padding: 0;
+            margin: 0;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #075;
+        }
+
+        canvas {
+            background: #075;
+            display: block;
+            margin: 0 auto;
+        }
+        
+        .hidden {
+            visibility: hidden;
+            display: none;
+        }
+    </style>
+
+    <img id="zombie" src="Zombie.png" class="hidden">
+    <img id="character" src="Character.png" class="hidden">
+
+</head>
+
+<body>
+
+    <p id="text" style="text-align: center;"></p>
+
+    <canvas id="screen" width="100" height="100"></canvas>
+
+    <!-- Completed Features: Zombie Powers, Powers, Levels, Better Map, Death = Zombie, Death, Camera, Blow up, Object Collision Prediction, Multiplayer -->
+
+    <script src="math.js"></script>
+    <script src="var.js"></script>
+    <script src="keyHandler.js"></script>
+    <script src="collisionDetector.js"></script>
+    <script src="polygon.js"></script>
+    <script src="components.js"></script>
+    <script src="character.js"></script>
+    <script src="objects.js"></script>
+    <script src="frame.js"></script>
+
+</body>
+
+</html>
