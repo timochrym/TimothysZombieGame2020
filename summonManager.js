@@ -30,11 +30,14 @@ class SummonManager {
 
         // Presets are authored at the 2x structure scale
         this.presets = {
-            "box": { w: 480, h: 80, color: "#b84a27", texture: "brick", label: "Brick Platform" },
+            "box": { w: 480, h: 160, color: "#b84a27", texture: "brick", label: "Solid Block" },
             "grass_box": { w: 640, h: 80, color: "#7f4f24", texture: "grass_dirt", label: "Grass Platform" },
-            "wall": { w: 80, h: 480, color: "#4a5568", texture: "castle_stone", label: "Castle Wall" },
-            "ramp_right": { w: 480, h: 240, color: "#6c3c28", texture: "dojo_wood", label: "Ramp Right (/)" },
-            "ramp_left": { w: 480, h: 240, color: "#6c3c28", texture: "dojo_wood", label: "Ramp Left (\\)" },
+            "platform": { w: 480, h: 80, color: "#2b3a4a", texture: "lab_metal", label: "One-way Platform" },
+            "wall": { w: 80, h: 480, color: "#4a5568", texture: "castle_stone", label: "Wall" },
+            "ramp_right": { w: 480, h: 320, color: "#6c3c28", texture: "dojo_wood", label: "Stairs /" },
+            "ramp_left": { w: 480, h: 320, color: "#6c3c28", texture: "dojo_wood", label: "Stairs \\" },
+            "slide_right": { w: 480, h: 240, color: "#38bdf8", texture: "solid", label: "Slide /" },
+            "slide_left": { w: 480, h: 240, color: "#38bdf8", texture: "solid", label: "Slide \\" },
             "bumper": { w: 240, h: 80, color: "#ff2e63", texture: "solid", bounce: 24, label: "Bounce Pad" },
             "crate": { w: 80, h: 80, color: "#d9a05b", texture: "crate_plank", label: "Wooden Crate" },
             "tnt": { w: 80, h: 80, color: "#e84545", texture: "solid", label: "TNT Barrel" },

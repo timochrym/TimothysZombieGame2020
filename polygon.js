@@ -377,9 +377,27 @@ class Polygon {
             return;
         }
 
+        // Stairs are drawn as a real stepped staircase (collision stays a smooth walkable slope)
+        if (object && object.isRamp && object.kind === "stairs" && object.w && object.h) {
+            if (!object._stepPoly || object._stepKey !== object.w + "x" + object.h + object.rampDir) {
+                object._stepKey = object.w + "x" + object.h + object.rampDir;
+                object._stepPoly = Polygon.buildStairPoly(object.w, object.h, object.rampDir);
+            }
+            poly = object._stepPoly;
+        }
+
         ctx.save();
         var pat = (object && object.texture) ? TextureManager.getPattern(object.texture) : null;
         ctx.fillStyle = pat ? pat : color;
+        if (object && object.isRamp && object.kind === "slide") {
+            // Slides: glossy ice-blue gradient, no texture, so they never read as stairs or walls
+            var gy0 = (-(oy + (object.h || 100) / 2) - offsetY) * cameraScaleY + yc;
+            var gy1 = (-(oy - (object.h || 100) / 2) - offsetY) * cameraScaleY + yc;
+            var gr = ctx.createLinearGradient(0, gy0, 0, gy1);
+            gr.addColorStop(0, "#e0f7ff");
+            gr.addColorStop(1, "#38bdf8");
+            ctx.fillStyle = gr;
+        }
         ctx.beginPath();
 
         var startX = Math.round(((poly[0][0] + ox) * cameraScaleX + xc) * rounder) / rounder;
@@ -414,27 +432,34 @@ class Polygon {
             var by0 = (-(pMaxY + oy) - offsetY) * cameraScaleY + yc;
             var by1 = (-(pMinY + oy) - offsetY) * cameraScaleY + yc;
 
-            if (object.isRamp) {
-                // Stair-step shading so ramps clearly read as STEPS: lighter treads, darker risers
+            if (object.isRamp && object.kind === "slide") {
                 ctx.clip();
-                var stepW = 40;                                       // 40px treads
-                var nSteps = Math.max(2, Math.round(((pMaxX - pMinX) || object.w || 80) / stepW));
-                var pw = (bx1 - bx0) / nSteps;
-                var ph = (by1 - by0) / nSteps;
-                var left = object.rampDir == "left";
-                for (let k = 0; k < nSteps; k++) {
-                    var colX = left ? (bx1 - (k + 1) * pw) : (bx0 + k * pw);
-                    var stepTop = by1 - (k + 1) * ph;
-                    ctx.fillStyle = "rgba(255,255,255,0.17)";
-                    ctx.fillRect(colX, stepTop, pw, Math.max(3, ph * 0.28));
-                    ctx.fillStyle = "rgba(0,0,0,0.20)";
-                    ctx.fillRect(left ? colX : colX + pw - Math.max(2, pw * 0.1), stepTop, Math.max(2, pw * 0.1), by1 - stepTop);
+                // Downhill chevrons + gloss streaks
+                var leftS = object.rampDir == "left";
+                var dirX = leftS ? 1 : -1;
+                ctx.strokeStyle = "rgba(255,255,255,0.85)";
+                ctx.lineWidth = Math.max(2, 3 * cameraScaleX + 1);
+                var t0 = (Date.now() * 0.0006) % 1;
+                for (let k = 0; k < 5; k++) {
+                    var tt = ((k / 5) + t0) % 1;
+                    var cxp = leftS ? bx0 + (bx1 - bx0) * tt : bx1 - (bx1 - bx0) * tt;
+                    var cyp = leftS ? by0 + (by1 - by0) * tt : by0 + (by1 - by0) * (1 - tt);
+                    cyp = (by0 + by1) / 2 + ((leftS ? 1 : -1) * ((by1 - by0)) * (tt - 0.5)) * 1.0;
+                    ctx.beginPath();
+                    ctx.moveTo(cxp - dirX * 10 - 6, cyp - 9);
+                    ctx.lineTo(cxp - dirX * 10 + 6 * dirX, cyp);
+                    ctx.lineTo(cxp - dirX * 10 - 6, cyp + 9);
+                    ctx.stroke();
                 }
-                ctx.strokeStyle = "rgba(255,255,255,0.55)";
-                ctx.lineWidth = Math.max(2, 3 * cameraScaleX);
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = Math.max(3, 4 * cameraScaleX);
                 ctx.beginPath();
-                if (left) { ctx.moveTo(bx0, by0); ctx.lineTo(bx1, by1); }
-                else { ctx.moveTo(bx0, by1); ctx.lineTo(bx1, by0); }
+                if (leftS) { ctx.moveTo(bx0, by0); ctx.lineTo(bx1, by1); } else { ctx.moveTo(bx0, by1); ctx.lineTo(bx1, by0); }
+                ctx.stroke();
+            } else if (object.isRamp) {
+                // Stairs: bright tread edges
+                ctx.strokeStyle = "rgba(255,255,255,0.55)";
+                ctx.lineWidth = Math.max(1.5, 2 * cameraScaleX);
                 ctx.stroke();
             } else if (object.isBumper) {
                 ctx.clip();
@@ -450,19 +475,80 @@ class Polygon {
                     ctx.fillText("▲", bx0 + (c + 0.5) * ((bx1 - bx0) / chev), (by0 + by1) / 2);
                 }
             } else if (!object.movable) {
-                // Bright top edge + soft inner highlight: platforms and floors pop clearly from the background
-                var topCol = object.texture == "grass_dirt" ? "#52b788" : "rgba(255,255,255,0.45)";
-                ctx.fillStyle = topCol;
-                ctx.fillRect(bx0, by0, bx1 - bx0, Math.max(3, Math.min(8, 8 * cameraScaleY + 2)));
-                if (object.texture == "grass_dirt") {
-                    ctx.fillStyle = "#74c69d";
-                    ctx.fillRect(bx0, by0, bx1 - bx0, Math.max(2, 3 * cameraScaleY));
+                if (object.kind === "wall") {
+                    // WALL: dark hatching + bold outline + light vertical edges = "you cannot pass"
+                    ctx.clip();
+                    ctx.fillStyle = "rgba(0,0,0,0.28)";
+                    ctx.fillRect(bx0, by0, bx1 - bx0, by1 - by0);
+                    ctx.strokeStyle = "rgba(255,255,255,0.10)";
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    for (var hx = bx0 - (by1 - by0); hx < bx1; hx += 34 * Math.max(0.6, cameraScaleX * 1.4)) {
+                        ctx.moveTo(hx, by1);
+                        ctx.lineTo(hx + (by1 - by0), by0);
+                    }
+                    ctx.stroke();
+                    ctx.fillStyle = "rgba(255,255,255,0.35)";
+                    ctx.fillRect(bx0, by0, Math.max(3, 5 * cameraScaleX), by1 - by0);
+                    ctx.fillStyle = "rgba(0,0,0,0.5)";
+                    ctx.fillRect(bx1 - Math.max(3, 5 * cameraScaleX), by0, Math.max(3, 5 * cameraScaleX), by1 - by0);
+                } else if (object.kind === "platform") {
+                    // ONE-WAY PLATFORM: neon top rail + dashed underside = "jump up through me"
+                    ctx.fillStyle = "#67e8f9";
+                    ctx.fillRect(bx0, by0, bx1 - bx0, Math.max(4, 7 * cameraScaleY + 1));
+                    ctx.strokeStyle = "rgba(103,232,249,0.9)";
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([10, 8]);
+                    ctx.beginPath();
+                    ctx.moveTo(bx0, by1 - 2);
+                    ctx.lineTo(bx1, by1 - 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                } else {
+                    var topCol = object.texture == "grass_dirt" ? "#52b788" : "rgba(255,255,255,0.45)";
+                    ctx.fillStyle = topCol;
+                    ctx.fillRect(bx0, by0, bx1 - bx0, Math.max(3, Math.min(8, 8 * cameraScaleY + 2)));
+                    if (object.texture == "grass_dirt") {
+                        ctx.fillStyle = "#74c69d";
+                        ctx.fillRect(bx0, by0, bx1 - bx0, Math.max(2, 3 * cameraScaleY));
+                    }
+                    ctx.fillStyle = "rgba(0,0,0,0.22)";
+                    ctx.fillRect(bx0, by1 - Math.max(3, 5 * cameraScaleY), bx1 - bx0, Math.max(3, 5 * cameraScaleY));
                 }
-                ctx.fillStyle = "rgba(0,0,0,0.22)";
-                ctx.fillRect(bx0, by1 - Math.max(3, 5 * cameraScaleY), bx1 - bx0, Math.max(3, 5 * cameraScaleY));
             }
         }
         ctx.restore();
+    }
+
+    // Stepped silhouette for a ramp: ~20px risers, treads centred on the walkable slope line
+    static buildStairPoly(w, h, dir) {
+        var hw = w / 2, hh = h / 2;
+        var n = Math.max(3, Math.round(h / 20));
+        var sw = w / n, sh = h / n;
+        var pts = [];
+        if (dir == "left") {
+            // high on the left, descending to the right
+            pts.push([hw, -hh]);
+            pts.push([-hw, -hh]);
+            for (let k = 0; k < n; k++) {
+                var top = hh - (k + 0.5) * sh;
+                var xl = -hw + k * sw;
+                pts.push([xl, top]);
+                pts.push([xl + sw, top]);
+            }
+            pts.push([hw, -hh]);
+        } else {
+            pts.push([-hw, -hh]);
+            pts.push([hw, -hh]);
+            for (let k = n - 1; k >= 0; k--) {
+                var top2 = -hh + (k + 0.5) * sh;
+                var xr = -hw + (k + 1) * sw;
+                pts.push([xr, top2]);
+                pts.push([xr - sw, top2]);
+            }
+            pts.push([-hw, -hh]);
+        }
+        return pts;
     }
 
     static rotate(poly, anchorPoint, degree) {

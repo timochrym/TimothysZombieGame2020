@@ -530,9 +530,10 @@ SummonManager.buildUI = function() {
     dock.addEventListener("mousedown", stop);
     dock.addEventListener("click", stop);
     var dockItems = [
-        { id: "box", icon: "🧱", label: "Platform" }, { id: "grass_box", icon: "🌿", label: "Grass" },
-        { id: "wall", icon: "🏰", label: "Wall" },
-        { id: "ramp_right", icon: "◢", label: "Stairs /" }, { id: "ramp_left", icon: "◣", label: "Stairs \\" },
+        { id: "box", icon: "🧱", label: "Block" }, { id: "grass_box", icon: "🌿", label: "Grass" },
+        { id: "wall", icon: "🏰", label: "Wall" }, { id: "platform", icon: "➖", label: "1-way Plat." },
+        { id: "ramp_right", icon: "🪜", label: "Stairs /" }, { id: "ramp_left", icon: "🪜", label: "Stairs \\" },
+        { id: "slide_right", icon: "🛝", label: "Slide /" }, { id: "slide_left", icon: "🛝", label: "Slide \\" },
         { id: "bumper", icon: "⏫", label: "Bouncer" }, { id: "crate", icon: "📦", label: "Crate" },
         { id: "tnt", icon: "🧨", label: "TNT" }, { id: "bouncy_cube", icon: "💎", label: "Bouncy" },
         { id: "zombie", icon: "🧟", label: "Enemy" }, { id: "powerup", icon: "⚡", label: "Power-Up" }
@@ -635,7 +636,8 @@ SummonManager.buildUI = function() {
                 <div class="dp-section"><div class="dp-grid2">
                     <button class="dp-btn" id="sp-toggle-physics" data-act="togglePhysics">Toggle Physics</button>
                     <button class="dp-btn" data-act="duplicateSelected">📋 Duplicate</button>
-                    <button class="dp-btn" id="sp-flip-btn" data-act="flipRamp" style="display:none">↔ Flip stairs</button>
+                    <button class="dp-btn" id="sp-flip-btn" data-act="flipRamp" style="display:none">↔ Flip direction</button>
+                    <select id="sp-kind-select" class="dp-select" onchange="SummonManager.setSelectedKind(this.value)" title="Structure type"><option value="stairs">Stairs</option><option value="slide">Slide</option><option value="wall">Wall</option><option value="platform">One-way platform</option><option value="block">Solid block</option></select>
                     <button class="dp-btn warn" id="sp-kill-btn" data-act="killSelected" style="display:none">☠ Kill</button>
                 </div></div>
             </div>
@@ -718,8 +720,9 @@ SummonManager.buildUI = function() {
                 <div class="dp-title"><span>World objects (<span id="sp-obj-count">0</span>)</span></div>
                 <input type="text" id="sp-obj-search" class="dp-text" style="width:100%;box-sizing:border-box" placeholder="Search by name…" oninput="SummonManager.refreshObjectList()">
                 <div class="dp-chips" style="margin-top:8px">
-                    <button class="active" data-filter="all">All</button><button data-filter="Static">Static</button><button data-filter="Ramp">Stairs</button>
-                    <button data-filter="Bumper">Bouncers</button><button data-filter="Physics">Physics</button><button data-filter="Enemy">Enemies</button>
+                    <button class="active" data-filter="all">All</button><button data-filter="Stairs">Stairs</button><button data-filter="Slide">Slides</button>
+                    <button data-filter="Wall">Walls</button><button data-filter="Platform">Platforms</button><button data-filter="Block">Blocks</button>
+                    <button data-filter="Bouncer">Bouncers</button><button data-filter="Physics">Physics</button><button data-filter="Enemy">Enemies</button>
                 </div>
                 <div id="sp-obj-list"></div>
             </div>
@@ -856,12 +859,13 @@ SummonManager.spawnAt = function(worldX, worldY) {
     var created = null;
     var t = this.spawnType;
 
-    if (t == "box" || t == "grass_box" || t == "wall") {
-        created = Object.addBox(rx, ry, w, h, col, { name: t == "wall" ? "Wall" : "Platform", texture: tex });
-    } else if (t == "ramp_right") {
-        created = Object.addRamp(rx, ry, w, h, "right", col, { name: "Stairs (/)", texture: tex });
-    } else if (t == "ramp_left") {
-        created = Object.addRamp(rx, ry, w, h, "left", col, { name: "Stairs (\\)", texture: tex });
+    if (t == "box" || t == "grass_box" || t == "wall" || t == "platform") {
+        var bk = (t == "wall") ? "wall" : (t == "platform" ? "platform" : "block");
+        created = Object.addBox(rx, ry, w, h, col, { name: bk == "wall" ? "Wall" : (bk == "platform" ? "One-way Platform" : "Block"), texture: tex, kind: bk });
+    } else if (t == "ramp_right" || t == "ramp_left") {
+        created = Object.addRamp(rx, ry, w, h, t == "ramp_right" ? "right" : "left", col, { name: "Stairs", texture: tex, kind: "stairs" });
+    } else if (t == "slide_right" || t == "slide_left") {
+        created = Object.addRamp(rx, ry, w, h, t == "slide_right" ? "right" : "left", col, { name: "Slide", texture: null, kind: "slide" });
     } else if (t == "bumper") {
         created = Object.addBumper(rx, ry, w, h, this.spawnBounce || 24, col, { name: "Bounce Pad", texture: tex });
     } else if (t == "crate") {
@@ -885,6 +889,17 @@ SummonManager.spawnAt = function(worldX, worldY) {
     }
     rebuildAllObjects();
     if (typeof Pathfinder !== "undefined") Pathfinder.rebuildGraph(true);
+    this.refreshObjectList();
+};
+
+SummonManager.setSelectedKind = function(k) {
+    var o = this.selectedObject;
+    if (!o || o instanceof Character || o.movable || o.isBumper) return;
+    if (o.isRamp && k !== "stairs" && k !== "slide") return;
+    if (!o.isRamp && (k === "stairs" || k === "slide")) return;
+    o.kind = k;
+    o._stepKey = null;
+    Pathfinder.rebuildGraph(true);
     this.refreshObjectList();
 };
 
@@ -921,6 +936,8 @@ SummonManager.selectObject = function(obj) {
         var disp = function(id, on) { var el = document.getElementById(id); if (el) el.style.display = on ? "" : "none"; };
         disp("sp-toggle-physics", !isChar);
         disp("sp-flip-btn", !!obj.isRamp);
+        var ks = document.getElementById("sp-kind-select");
+        if (ks) { ks.style.display = (!isChar && !obj.movable && !obj.isBumper) ? "" : "none"; ks.value = obj.kind || "block"; }
         disp("sp-kill-btn", isChar);
         var bounceRow = document.getElementById("sp-edit-bounce-row");
         if (bounceRow) {
@@ -961,7 +978,8 @@ SummonManager.refreshObjectList = function() {
     for (let i = staticObjects.length - 1; i >= 0; i--) {
         var so = staticObjects[i];
         if (so.dead) continue;
-        items.push({ obj: so, tag: so.isRamp ? "Ramp" : (so.isBumper ? "Bumper" : "Static") });
+        var kd = so.kind || "block";
+        items.push({ obj: so, tag: kd.charAt(0).toUpperCase() + kd.slice(1) });
     }
 
     var search = document.getElementById("sp-obj-search");

@@ -306,7 +306,7 @@ class Components {
         if (object.abilityCooldown > 0) {
             object.abilityCooldown--;
         }
-        if (object.frozenTimer > 0) return;
+        if (object.frozenTimer > 0 || object.staggerTimer > 0) return;
 
         // Shockwave (suppressed while the key is being used to revive a teammate)
         if (object.abilityPressed && !object.suppressAbility && (object.abilityCooldown == 0 || godMode || devOpts.infiniteAmmo) && object.isPlayer && !object.isZombie) {
@@ -392,8 +392,9 @@ class Components {
 
             var baseAngle = Math.atan2(dy, dx);
             var projSpeed = lazerSpeed;
-            var projColor = isRapid ? "#ffdd44" : lazerColor;
+            var projColor = isRapid ? "#ffdd44" : (hero && !object.isZombie ? (object.playerIndex === 0 ? "#ff6b4a" : "#4cc9ff") : lazerColor);
             var projW = lazerW, projH = lazerH;
+            if (living) { projW = 26; projH = 26; } // generous hero hitbox: shots connect more easily
             var projDmg = Math.round(lazerDamage * rpgDamageMult * (godMode ? 2 : 1) * devOpts.playerDamage);
             if (berserk) {
                 projDmg *= 2;
@@ -433,6 +434,7 @@ class Components {
                 }
             }
 
+            var visW = living ? (berserk ? 22 : 14) : projW;
             for (var a = 0; a < angles.length; a++) {
                 var ang = baseAngle + Math.radians(angles[a]);
                 var vx = Math.cos(ang) * projSpeed;
@@ -456,6 +458,7 @@ class Components {
                     homing: hero && object.hasPower("HOMING"),
                     chain: hero && object.hasPower("CHAIN"),
                     speed: projSpeed,
+                    vw: visW,
                     life: 90
                 });
             }
@@ -541,7 +544,7 @@ class Components {
         var sy = -l.y * cameraScaleY + yc;
         if (sx < -60 || sx > canvas.width + 60 || sy < -60 || sy > canvas.height + 60) return;
         var ang = Math.atan2(-l.yspeed, l.xspeed);
-        var size = Math.max(7, (l.w || 14) * 0.75 * Math.max(0.8, cameraScaleX * 1.2));
+        var size = Math.max(7, (l.vw || l.w || 14) * 0.75 * Math.max(0.8, cameraScaleX * 1.2));
         var tail = size * 3.2;
         var hostile = (l.team !== undefined) ? (l.team === 0) : l.fromZombie;
         ctx.save();
@@ -764,7 +767,7 @@ class Components {
     }
 
     static blowUp(x, y, color, count = 18, radius = 230, damage = -30, source = null) {
-        screenShake = Math.min(18, screenShake + 10);
+        screenShake = Math.min(9, screenShake + 5);
         Components.addRing(x, y, Math.min(radius, 420), color, 20);
 
         for (let i = 0; i < count; i++) {

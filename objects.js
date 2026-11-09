@@ -29,6 +29,18 @@ class Object {
         this.explosive = options.explosive || false;
         this.isInfiniteBase = options.isInfiniteBase || false;
         this.baseOffsetX = options.baseOffsetX || 0;
+        // KIND: the four distinct structure types the player sees & feels
+        //   stairs   = stepped walkable staircase (grippy)      slide    = icy slope (slippery, you slide down)
+        //   wall     = solid vertical barrier (never passable)  platform = thin ONE-WAY ledge (jump up through it, stand on top)
+        //   block    = solid ground / chunky mass               bouncer  = spring pad            crate = physics prop
+        var nm = (options.name || name || "");
+        if (options.kind) this.kind = options.kind;
+        else if (this.isRamp) this.kind = /roof|funnel|slide|chute|slope|bowl|descent/i.test(nm) ? "slide" : "stairs";
+        else if (this.isBumper) this.kind = "bouncer";
+        else if (movable) this.kind = "crate";
+        else if (this.h <= 100 && this.w >= 80) this.kind = "platform";
+        else if (this.h > this.w || /wall|pillar|divider|cage/i.test(nm)) this.kind = "wall";
+        else this.kind = "block";
         this.texture = options.texture !== undefined ? options.texture : (movable && !this.explosive ? "crate_plank" : null);
         this.health = options.health || (this.explosive ? 25 : 9999);
         this.dead = false;

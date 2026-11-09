@@ -127,11 +127,20 @@ class Character {
         this.powerHitTimers = {};
         this.invulnTimer = 0;
         this.spawnPulse = 0;
+        this.hitCooldown = 0;        // i-frames after a hero is hit (no more chain-bounces)
+        this.staggerTimer = 0;       // enemies reel back when a hero hits them
+        this.onSlide = false;
     }
 
     get team() { return this.isPlayer ? 1 : 0; }
 
     get input() { return PlayerInput[this.playerIndex] || PlayerInput[0]; }
+
+    // Calm top running speed (px/frame); knockback, dashes and wall-jumps can briefly exceed it
+    runCapNow() {
+        if (!this.isPlayer) return this.maxspeed * 0.4;
+        return this.maxspeed * (this.hasPower("SPEED") ? 0.56 : 0.42);
+    }
 
     hasPower(type) { return (this.powers[type] || 0) > 0; }
 
@@ -261,6 +270,20 @@ class Character {
             return;
         }
         if (attacker && attacker.team === this.team && attacker !== this && !devOpts.friendlyFire) return;
+
+        // Heroes get brief i-frames after every hit and only a small nudge, so enemies can't juggle you
+        if (this.isPlayer && amount < 0) {
+            if (this.hitCooldown > 0) return;
+            this.hitCooldown = 42;
+            knockX = Math.max(-4.5, Math.min(4.5, knockX));
+            knockY = Math.max(-2, Math.min(3, knockY));
+        }
+        // Enemies reel back harder when a hero lands a hit
+        if (!this.isPlayer && amount < 0 && attacker && attacker.isPlayer) {
+            this.staggerTimer = 10;
+            knockX *= 1.5;
+            knockY += 1.5;
+        }
 
         if (amount < 0 && this.isPlayer && attacker && !attacker.isPlayer) amount *= devOpts.enemyDamage;
         if (amount < 0 && this.frozenTimer > 0) amount *= 1.25;
@@ -518,6 +541,12 @@ class Character {
         }
         if (powersChanged) this.recomputeStats();
         if (this.invulnTimer > 0) this.invulnTimer--;
+        if (this.hitCooldown > 0) this.hitCooldown--;
+        if (this.staggerTimer > 0) {
+            this.staggerTimer--;
+            this.leftPressed = this.rightPressed = this.upPressed = false;
+            this.xspeed *= 0.92;
+        }
         if (this.spawnPulse > 0) this.spawnPulse--;
 
         // Frozen enemies are completely locked in ice
@@ -553,6 +582,7 @@ class Character {
             }
         }
 
+        this.onSlide = false;
         var wasGrounded = this.onGround;
         var preLandSpeedY = this.yspeed;
 
@@ -587,6 +617,13 @@ class Character {
                 }
             }
             this.fastFalling = false;
+
+            // Slides are slippery: gravity drags you downhill, climbing them is a slog
+            this.onSlide = !!(this.collidedRamp && this.collidedRamp.kind === "slide");
+            if (this.onSlide) {
+                var downhill = (this.collidedRamp.rampDir == "left") ? 1 : -1;
+                this.xspeed += downhill * 0.5;
+            }
 
             if (this.collidedWith && this.collidedWith.isBumper) {
                 this.yspeed = this.collidedWith.bounceForce;
@@ -676,8 +713,9 @@ class Character {
         } else {
             // Tactile Arcade Horizontal Movement (snappy turn-around skid + apex air-control boost)
             var isAtJumpApex = !this.onGround && Math.abs(this.yspeed) < 3.4;
-            var accel = this.speed * (isAtJumpApex ? 1.25 : 1.12);
-            var turnSnap = this.onGround ? (this.speed * 1.85 + this.slower * 1.2) : (this.speed * 1.35 + this.slower * 0.6);
+            var capNow = this.runCapNow();
+            var accel = this.speed * (isAtJumpApex ? 0.95 : 0.82) * (this.onSlide ? 0.55 : 1);
+            var turnSnap = this.onGround ? (this.speed * 1.3 + this.slower * 0.9) : (this.speed * 1.0 + this.slower * 0.4);
 
             if (this.rightPressed && !this.leftPressed) {
                 if (this.xspeed < 0) {
@@ -685,8 +723,8 @@ class Character {
                         Components.spawnSparks(this.x - this.s1 * 0.3, this.y - this.s2 * 0.45, "#cccccc", 2);
                     }
                     this.xspeed += turnSnap;
-                } else {
-                    this.xspeed += accel;
+                } else if (this.xspeed < capNow) {
+                    this.xspeed = Math.min(capNow, this.xspeed + accel);
                 }
             } else if (this.leftPressed && !this.rightPressed) {
                 if (this.xspeed > 0) {
@@ -694,11 +732,11 @@ class Character {
                         Components.spawnSparks(this.x + this.s1 * 0.3, this.y - this.s2 * 0.45, "#cccccc", 2);
                     }
                     this.xspeed -= turnSnap;
-                } else {
-                    this.xspeed -= accel;
+                } else if (this.xspeed > -capNow) {
+                    this.xspeed = Math.max(-capNow, this.xspeed - accel);
                 }
             } else if (this.xspeed != 0) {
-                var stopFriction = this.onGround ? this.slower * 1.15 : this.slower * 0.35;
+                var stopFriction = this.onGround ? this.slower * (this.onSlide ? 0.12 : 0.95) : this.slower * 0.3;
                 if (Math.abs(this.xspeed) < stopFriction) {
                     this.xspeed = 0;
                 } else {
@@ -858,6 +896,11 @@ class Character {
 
         // Max Speed
         var curMaxSpeed = (this.hasPower("SPEED") || godMode || this.dashTimer > 0) ? this.maxspeed * 1.45 : this.maxspeed;
+        // Calmer run speed: a soft cap that bleeds off excess (wall-jumps / wavedash / knockback still feel punchy)
+        var runCap = this.runCapNow();
+        if (this.dashTimer <= 0 && !godMode && Math.abs(this.xspeed) > runCap && !this.onSlide) {
+            this.xspeed = Math.sign(this.xspeed) * (runCap + (Math.abs(this.xspeed) - runCap) * 0.9);
+        }
         if (this.xspeed > curMaxSpeed) this.xspeed = curMaxSpeed;
         if (this.xspeed < -curMaxSpeed) this.xspeed = -curMaxSpeed;
         if (this.yspeed > curMaxSpeed) this.yspeed = curMaxSpeed;
@@ -992,7 +1035,7 @@ class Character {
         var bully = this.isPlayer ? other : this;
         if (bully.frozenTimer > 0) return;
         var mult = victim.isZombie ? 0.5 : 1;
-        victim.takeDamage(zombieDamage * 2.5 * mult, (victim.x > bully.x ? 4 : -4), 2, bully);
+        victim.takeDamage(-9 * mult, (victim.x > bully.x ? 3 : -3), 1.5, bully);
     }
 
     createCharacter() {
@@ -1229,7 +1272,7 @@ class Character {
         if (this.isPlayer && !this.isZombie) {
             // Hero: bright visor with eyes, belt stripe in player colour and gun barrel
             var accent = this.playerIndex === 0 ? "#ff5a5f" : "#3da5ff";
-            this.drawSprite(characterImg, x, y, w, h, r, null);
+            this.drawSprite(characterImg, x, y, w, h, r, this.playerIndex === 1 ? "#2f8cff" : null);
             ctx.fillStyle = accent;
             ctx.fillRect(x + 2, y + h * 0.66, w - 4, h * 0.10);
             // headband tail
@@ -1409,7 +1452,7 @@ class Character {
         }
 
         // Invulnerability sparkle
-        if (this.invulnTimer > 0 && Math.floor(this.invulnTimer / 4) % 2 === 0) {
+        if ((this.invulnTimer > 0 || this.hitCooldown > 0) && Math.floor((this.invulnTimer + this.hitCooldown) / 4) % 2 === 0) {
             ctx.save();
             ctx.globalAlpha = 0.35;
             ctx.fillStyle = "#ffffff";

@@ -230,7 +230,7 @@ class CollisionDetector {
     // Helper: returns true if `st` is a thin horizontal interior floor / platform slab (h <= 60)
     // that should be solid from above and pass-through from below/sides (Mario / Terraria / Smash Bros style!)
     static isSemiSolidPlatform(st) {
-        return st && !st.movable && !st.isRamp && !st.isBumper && !st.isInfiniteBase && st.w >= 80 && st.h <= 60;
+        return st && !st.movable && !st.isRamp && !st.isBumper && !st.isInfiniteBase && st.kind !== "wall" && st.kind !== "block" && st.w >= 80 && st.h <= 100;
     }
 
     // Checks if an entity's center is currently on a ramp that smoothly adjoins the top of `box`.

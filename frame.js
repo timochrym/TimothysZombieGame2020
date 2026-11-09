@@ -3,6 +3,7 @@ var movingObjects = [];
 var characters = [];
 var allObjects = [];
 
+var levelBounds = null; // inner walls of arena levels (null for the endless frontier)
 var redGuy = null;
 var blueGuy = null;
 
@@ -46,6 +47,16 @@ function createMap() {
     var currentLvl = (typeof LevelManager !== "undefined") ? LevelManager.getCurrentLevel() : null;
     if (currentLvl && currentLvl.layout) {
         Object.loadMap(currentLvl.layout);
+    }
+    // Remember the arena's enclosure so nothing can ever leave it
+    levelBounds = null;
+    var lw = null, rw = null;
+    for (let i = 0; i < staticObjects.length; i++) {
+        if (staticObjects[i].name == "Left Wall") lw = staticObjects[i];
+        if (staticObjects[i].name == "Right Wall") rw = staticObjects[i];
+    }
+    if (lw && rw && !(currentLvl && currentLvl.isProcedural)) {
+        levelBounds = { minX: lw.x + lw.w / 2, maxX: rw.x - rw.w / 2, topY: lw.y + lw.h / 2 - 40, floorY: -1500 };
     }
     if (currentLvl && currentLvl.isProcedural && typeof WorldGenerator !== "undefined") {
         WorldGenerator.reset();
@@ -183,8 +194,42 @@ function spawnZombie(forcePower, forceX, forceY) {
         maxspeed * 0.85, slower, gravity, bounciness, speed * spec.spd,
         "ZOMBIE", zHealth, "NONE", true, power
     );
+    // Spawn inside the enclosure and never inside solid geometry
+    if (levelBounds && forceX === undefined) {
+        z.x = Math.max(levelBounds.minX + spec.size, Math.min(levelBounds.maxX - spec.size, z.x));
+        z.y = Math.min(z.y, levelBounds.topY - 200);
+    }
+    for (let k = 0; k < 14; k++) {
+        if (!CollisionDetector.collision(z, [0, 0], staticObjects)) break;
+        z.y += 90;
+    }
+    z.collidedWith = null;
     zombies.push(z);
     return z;
+}
+
+// Keeps heroes & enemies inside the arena walls/ceiling and rescues anything that tunnels out of the world
+function enforceContainment() {
+    var all = characters.concat(zombies);
+    for (let i = 0; i < all.length; i++) {
+        var c = all[i];
+        if (c.dead) continue;
+        var half = (c.s1 || 80) / 2;
+        if (levelBounds) {
+            if (c.x < levelBounds.minX + half) { c.x = levelBounds.minX + half; if (c.xspeed < 0) c.xspeed = 0; }
+            if (c.x > levelBounds.maxX - half) { c.x = levelBounds.maxX - half; if (c.xspeed > 0) c.xspeed = 0; }
+            if (c.y > levelBounds.topY) { c.y = levelBounds.topY; if (c.yspeed > 0) c.yspeed = 0; }
+        }
+        if (c.y < -1700 && !c.isPlayer) {
+            // fell through the world: put the enemy back on the battlefield near a hero
+            var anchor = redGuy;
+            for (let h = 0; h < characters.length; h++) if (!characters[h].isZombie) anchor = characters[h];
+            c.x = anchor.x + (Math.random() < 0.5 ? -1 : 1) * (500 + Math.random() * 400);
+            c.y = anchor.y + 400;
+            c.xspeed = c.yspeed = 0;
+            if (levelBounds) c.x = Math.max(levelBounds.minX + half, Math.min(levelBounds.maxX - half, c.x));
+        }
+    }
 }
 
 function pickPowerUpType() {
@@ -563,6 +608,41 @@ function uiText(txt, x, y, size, color, align, weight) {
     ctx.restore();
 }
 
+// Always-visible key legend above each hero card (colour matches the hero) so co-op players never mix up controls
+function drawKeyLegend(ch, x, y) {
+    var p2 = ch.playerIndex === 1;
+    var accent = p2 ? "#3da5ff" : "#ff5a5f";
+    var items = p2 ?
+        [["← ↑ ↓ →", "move"], ["ENTER", "shoot"], [".", "jetpack"], ["R-SHIFT", "dash"], ["/", "revive"]] :
+        [["W A S D", "move"], ["F", "shoot"], ["SPACE", "jetpack"], ["L-SHIFT", "dash"], ["E", "revive"]];
+    var widths = [];
+    ctx.save();
+    ctx.font = "800 11px " + UI_FONT;
+    var total = 0;
+    for (let i = 0; i < items.length; i++) {
+        widths[i] = Math.max(26, ctx.measureText(items[i][0]).width + 14);
+        total += widths[i] + 6;
+    }
+    var bx = x;
+    uiPanel(x - 6, y - 6, total + 6, 48, accent, 0.82);
+    for (let i = 0; i < items.length; i++) {
+        ctx.fillStyle = "#e8eef4";
+        ch.roundRectPath(bx, y, widths[i], 22, 5);
+        ctx.fill();
+        ctx.fillStyle = accent;
+        ctx.fillRect(bx + 2, y + 19, widths[i] - 4, 3);
+        ctx.fillStyle = "#101820";
+        ctx.textAlign = "center";
+        ctx.fillText(items[i][0], bx + widths[i] / 2, y + 15);
+        ctx.fillStyle = "#b8c9d6";
+        ctx.font = "700 10px " + UI_FONT;
+        ctx.fillText(items[i][1], bx + widths[i] / 2, y + 37);
+        ctx.font = "800 11px " + UI_FONT;
+        bx += widths[i] + 6;
+    }
+    ctx.restore();
+}
+
 function drawHeroCard(ch, x, y) {
     var cw = 330, chh = 132;
     var accent = ch.playerIndex === 0 ? "#ff5a5f" : "#3da5ff";
@@ -576,7 +656,7 @@ function drawHeroCard(ch, x, y) {
     ctx.lineWidth = 3;
     ctx.strokeStyle = "#0a0f16";
     ctx.stroke();
-    ch.drawSprite(ch.isZombie ? zombieImg : characterImg, x + 12, y + 12, 54, 54, 12, ch.isZombie ? "#7a5cff" : null);
+    ch.drawSprite(ch.isZombie ? zombieImg : characterImg, x + 12, y + 12, 54, 54, 12, ch.isZombie ? "#7a5cff" : (ch.playerIndex === 1 ? "#2f8cff" : null));
     ctx.restore();
 
     var label = (ch.playerLabel || "P" + (ch.playerIndex + 1)) + (ch.isZombie ? "  UNDEAD" : "  HERO LV " + heroLevel);
@@ -670,6 +750,10 @@ function drawHUD() {
     var cardY = h - 148;
     drawHeroCard(redGuy, 14, cardY);
     if (multiplayer && blueGuy) drawHeroCard(blueGuy, w - 344, cardY);
+    if (multiplayer) {
+        drawKeyLegend(redGuy, 20, cardY - 58);
+        if (blueGuy) drawKeyLegend(blueGuy, w - 338, cardY - 58);
+    }
 
     // ---------- World-space prompts & off-screen partner arrows ----------
     for (let i = 0; i < characters.length; i++) {
@@ -817,6 +901,7 @@ function frame() {
     // Hard Mathematical Non-Penetration Solver
     var dynamicList = [].concat(characters, zombies, movingObjects);
     CollisionDetector.enforceNonPenetration(staticObjects, dynamicList);
+    enforceContainment();
 
     // Draw Static Map Objects
     for (let i = 0; i < staticObjects.length; i++) {

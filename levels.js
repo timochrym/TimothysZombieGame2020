@@ -372,6 +372,7 @@ class LevelManager {
                     w: Math.round(s.w),
                     h: Math.round(s.h),
                     dir: s.rampDir,
+                    kind: s.kind,
                     color: s.color,
                     texture: s.texture
                 });
@@ -390,6 +391,7 @@ class LevelManager {
             } else {
                 layout.push({
                     type: "box",
+                    kind: s.kind,
                     name: s.name,
                     x: Math.round(s.x),
                     y: Math.round(s.y),
