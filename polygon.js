@@ -240,9 +240,10 @@ class BackgroundMosaic {
         this.drawInteriorBackWalls(ctx);
     }
 
-    static addBackgroundTree(worldX, groundTopY, height = 180, style = "oak", chunkIdx = null) {
+    static addBackgroundTree(worldX, groundTopY, height = 180, style = "oak", chunkIdx = null, sc = 1) {
         if (!this.bgProps) this.init();
         this.bgProps.push({
+            sc: sc,
             x: worldX,
             y: groundTopY,
             h: height,
@@ -283,10 +284,22 @@ class BackgroundMosaic {
             if (visW <= 0 || visH <= 0) continue;
 
             if (bw.style === "castle") {
-                ctx.fillStyle = "#181e29";
+                ctx.fillStyle = "#1c2433";
                 ctx.fillRect(visX, visY, visW, visH);
-                ctx.strokeStyle = "rgba(255,255,255,0.06)";
-                ctx.lineWidth = 2;
+                // faint stone-block lines (kept subtle so the foreground stays dominant)
+                ctx.strokeStyle = "rgba(255,255,255,0.045)";
+                ctx.lineWidth = 1.5;
+                var bs = 160 * cameraScaleX;
+                ctx.beginPath();
+                for (var gy = Math.ceil((visY - sy) / bs) * bs + sy; gy < visY + visH; gy += bs) {
+                    ctx.moveTo(visX, gy); ctx.lineTo(visX + visW, gy);
+                }
+                for (var gx = Math.ceil((visX - sx) / (bs * 2)) * bs * 2 + sx; gx < visX + visW; gx += bs * 2) {
+                    ctx.moveTo(gx, visY); ctx.lineTo(gx, visY + visH);
+                }
+                ctx.stroke();
+                ctx.strokeStyle = "rgba(255,255,255,0.10)";
+                ctx.lineWidth = 3;
                 ctx.strokeRect(sx, sy, sw, sh);
             } else if (bw.style === "wood") {
                 ctx.fillStyle = "#261810";
@@ -304,33 +317,43 @@ class BackgroundMosaic {
         ctx.save();
         for (let i = 0; i < this.bgProps.length; i++) {
             var t = this.bgProps[i];
+            var sc = t.sc || 1;
             var sx = t.x * cameraScaleX + xc;
-            if (sx < -180 || sx > canvas.width + 180) continue;
+            if (sx < -300 * sc || sx > canvas.width + 300 * sc) continue;
 
             var baseSy = -t.y * cameraScaleY + yc;
-            var trunkW = 28 * cameraScaleX;
+            var trunkW = 28 * sc * cameraScaleX;
             var trunkH = t.h * cameraScaleY;
 
             // Muted dark bark & foliage so background trees sit calmly behind the action
-            ctx.fillStyle = "rgba(52, 34, 22, 0.75)";
+            ctx.fillStyle = "rgba(52, 34, 22, 0.7)";
             ctx.fillRect(sx - trunkW / 2, baseSy - trunkH, trunkW, trunkH);
 
             var cY = baseSy - trunkH;
             if (t.style === "pine") {
                 for (let k = 0; k < 3; k++) {
-                    var tw = (136 - k * 34) * cameraScaleX;
-                    var th = 42 * cameraScaleY;
-                    var ty = cY - k * 30 * cameraScaleY;
-                    ctx.fillStyle = (k % 2 === 0) ? "rgba(27, 67, 50, 0.78)" : "rgba(45, 106, 79, 0.78)";
-                    ctx.fillRect(sx - tw / 2, ty - th, tw, th);
+                    var tw = (136 - k * 34) * sc * cameraScaleX;
+                    var th = 42 * sc * cameraScaleY;
+                    var ty = cY - k * 30 * sc * cameraScaleY;
+                    ctx.fillStyle = (k % 2 === 0) ? "rgba(27, 67, 50, 0.72)" : "rgba(45, 106, 79, 0.72)";
+                    ctx.beginPath();
+                    ctx.moveTo(sx - tw / 2, ty);
+                    ctx.lineTo(sx, ty - th * 1.5);
+                    ctx.lineTo(sx + tw / 2, ty);
+                    ctx.closePath();
+                    ctx.fill();
                 }
             } else {
-                var w1 = 156 * cameraScaleX, h1 = 42 * cameraScaleY;
-                var w2 = 112 * cameraScaleX, h2 = 36 * cameraScaleY;
-                ctx.fillStyle = "rgba(24, 58, 45, 0.78)";
-                ctx.fillRect(sx - w1 / 2, cY - h1 + 8 * cameraScaleY, w1, h1);
-                ctx.fillStyle = "rgba(38, 84, 65, 0.78)";
-                ctx.fillRect(sx - w2 / 2, cY - h1 - h2 + 14 * cameraScaleY, w2, h2);
+                var r1 = 78 * sc * cameraScaleX;
+                ctx.fillStyle = "rgba(24, 58, 45, 0.72)";
+                ctx.beginPath();
+                ctx.arc(sx, cY, r1, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = "rgba(38, 84, 65, 0.72)";
+                ctx.beginPath();
+                ctx.arc(sx - r1 * 0.4, cY - r1 * 0.35, r1 * 0.62, 0, Math.PI * 2);
+                ctx.arc(sx + r1 * 0.45, cY - r1 * 0.2, r1 * 0.55, 0, Math.PI * 2);
+                ctx.fill();
             }
         }
         ctx.restore();
@@ -372,20 +395,71 @@ class Polygon {
         ctx.closePath();
         ctx.fill();
 
-        if (object && (object.texture || object.isRamp || object.movable) && !(object instanceof Character)) {
-            ctx.strokeStyle = object.texture == "neon_grid" ? "#00b4d8" : "rgba(0, 0, 0, 0.5)";
-            ctx.lineWidth = Math.max(1.5, 2 * cameraScaleX);
+        if (object && (object.texture || object.isRamp || object.movable || object.isBumper) && !(object instanceof Character)) {
+            ctx.strokeStyle = object.texture == "neon_grid" ? "#00b4d8" : "rgba(6, 10, 16, 0.85)";
+            ctx.lineWidth = Math.max(2, 3 * cameraScaleX + 1);
+            ctx.lineJoin = "round";
             ctx.stroke();
 
-            if (object.texture == "grass_dirt" && !object.isRamp) {
-                var b = CollisionDetector.getBounds(object);
-                var gx = Math.max(-20, b.left * cameraScaleX + xc);
-                var gr = Math.min(canvas.width + 20, b.right * cameraScaleX + xc);
-                var gy = -b.top * cameraScaleY + yc;
-                if (gr > gx) {
-                    ctx.fillStyle = "#40916c";
-                    ctx.fillRect(gx, gy, gr - gx, Math.max(4, 7 * cameraScaleY));
+            // Bounds come straight from the polygon so ghost/preview objects without hitboxes work too
+            var pMinX = Infinity, pMaxX = -Infinity, pMinY = Infinity, pMaxY = -Infinity;
+            for (let pi = 0; pi < poly.length; pi++) {
+                if (poly[pi][0] < pMinX) pMinX = poly[pi][0];
+                if (poly[pi][0] > pMaxX) pMaxX = poly[pi][0];
+                if (poly[pi][1] < pMinY) pMinY = poly[pi][1];
+                if (poly[pi][1] > pMaxY) pMaxY = poly[pi][1];
+            }
+            var bx0 = (pMinX + ox) * cameraScaleX + xc;
+            var bx1 = (pMaxX + ox) * cameraScaleX + xc;
+            var by0 = (-(pMaxY + oy) - offsetY) * cameraScaleY + yc;
+            var by1 = (-(pMinY + oy) - offsetY) * cameraScaleY + yc;
+
+            if (object.isRamp) {
+                // Stair-step shading so ramps clearly read as STEPS: lighter treads, darker risers
+                ctx.clip();
+                var stepW = 40;                                       // 40px treads
+                var nSteps = Math.max(2, Math.round(((pMaxX - pMinX) || object.w || 80) / stepW));
+                var pw = (bx1 - bx0) / nSteps;
+                var ph = (by1 - by0) / nSteps;
+                var left = object.rampDir == "left";
+                for (let k = 0; k < nSteps; k++) {
+                    var colX = left ? (bx1 - (k + 1) * pw) : (bx0 + k * pw);
+                    var stepTop = by1 - (k + 1) * ph;
+                    ctx.fillStyle = "rgba(255,255,255,0.17)";
+                    ctx.fillRect(colX, stepTop, pw, Math.max(3, ph * 0.28));
+                    ctx.fillStyle = "rgba(0,0,0,0.20)";
+                    ctx.fillRect(left ? colX : colX + pw - Math.max(2, pw * 0.1), stepTop, Math.max(2, pw * 0.1), by1 - stepTop);
                 }
+                ctx.strokeStyle = "rgba(255,255,255,0.55)";
+                ctx.lineWidth = Math.max(2, 3 * cameraScaleX);
+                ctx.beginPath();
+                if (left) { ctx.moveTo(bx0, by0); ctx.lineTo(bx1, by1); }
+                else { ctx.moveTo(bx0, by1); ctx.lineTo(bx1, by0); }
+                ctx.stroke();
+            } else if (object.isBumper) {
+                ctx.clip();
+                var pulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.01);
+                ctx.fillStyle = "rgba(255,255,255," + (0.18 + pulse * 0.2) + ")";
+                ctx.fillRect(bx0, by0, bx1 - bx0, (by1 - by0) * 0.4);
+                ctx.fillStyle = "rgba(255,255,255,0.9)";
+                ctx.font = "900 " + Math.max(10, Math.round((by1 - by0) * 0.7)) + "px sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                var chev = Math.max(1, Math.floor((bx1 - bx0) / 46));
+                for (let c = 0; c < chev; c++) {
+                    ctx.fillText("▲", bx0 + (c + 0.5) * ((bx1 - bx0) / chev), (by0 + by1) / 2);
+                }
+            } else if (!object.movable) {
+                // Bright top edge + soft inner highlight: platforms and floors pop clearly from the background
+                var topCol = object.texture == "grass_dirt" ? "#52b788" : "rgba(255,255,255,0.45)";
+                ctx.fillStyle = topCol;
+                ctx.fillRect(bx0, by0, bx1 - bx0, Math.max(3, Math.min(8, 8 * cameraScaleY + 2)));
+                if (object.texture == "grass_dirt") {
+                    ctx.fillStyle = "#74c69d";
+                    ctx.fillRect(bx0, by0, bx1 - bx0, Math.max(2, 3 * cameraScaleY));
+                }
+                ctx.fillStyle = "rgba(0,0,0,0.22)";
+                ctx.fillRect(bx0, by1 - Math.max(3, 5 * cameraScaleY), bx1 - bx0, Math.max(3, 5 * cameraScaleY));
             }
         }
         ctx.restore();

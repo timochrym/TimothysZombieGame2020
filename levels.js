@@ -212,6 +212,12 @@ class LevelManager {
             }
         };
 
+        // Every built-in structure is built at STRUCT_SCALE (2x): scale layouts about the ground line (x = 0, y = 40)
+        for (var lk in this.builtInLevels) {
+            if (lk === "infinite_frontier") continue;
+            this.scaleLevel(this.builtInLevels[lk], STRUCT_SCALE);
+        }
+
         this.customLevels = {};
         try {
             var saved = localStorage.getItem("timsZombieGameCustomLevels");
@@ -219,6 +225,25 @@ class LevelManager {
                 this.customLevels = JSON.parse(saved) || {};
             }
         } catch (e) {}
+    }
+
+    static scaleLevel(lvl, S) {
+        if (!lvl || lvl._scaled) return;
+        lvl._scaled = true;
+        var gy = 40;
+        var sy = function(y) { return gy + (y - gy) * S; };
+        if (lvl.spawnP1) lvl.spawnP1 = [lvl.spawnP1[0] * S, sy(lvl.spawnP1[1])];
+        if (lvl.spawnP2) lvl.spawnP2 = [lvl.spawnP2[0] * S, sy(lvl.spawnP2[1])];
+        var items = lvl.layout || [];
+        for (let i = 0; i < items.length; i++) {
+            var it = items[i];
+            it.x *= S;
+            it.y = sy(it.y);
+            if (it.type != "crate") {
+                it.w *= S;
+                it.h *= S;
+            }
+        }
     }
 
     static getAllLevels() {
@@ -278,7 +303,7 @@ class LevelManager {
         }
 
         for (let i = 0; i < 4; i++) {
-            var cube = Object.addCrate(1360 + (i % 2) * 80, 160 + i * 80, 80, "#ffbe0b", {
+            var cube = Object.addCrate((1360 + (i % 2) * 80) * STRUCT_SCALE, 160 + i * 80, 80, "#ffbe0b", {
                 bounciness: -0.95,
                 name: "Cage Cube",
                 texture: "question_gold"
@@ -291,7 +316,7 @@ class LevelManager {
         if (typeof SummonManager !== "undefined" && SummonManager.isOpen) {
             SummonManager.refreshObjectList();
         }
-        Components.addFloatingText("STRESS TEST LAB LOADED!", -1100, 260, "#00f5d4", 22);
+        Components.addFloatingText("STRESS TEST LAB LOADED!", -1100, 360, "#00f5d4", 22);
     }
 
     static rainStressCrates(count = 18) {
@@ -450,7 +475,12 @@ class LevelManager {
 class WorldGenerator {
 
     static init() {
-        this.chunkWidth = 2240; // 56 tiles of 40px AND 70 tiles of 32px textures (~2 screens wide per macro-chunk!)
+        // Chunks are authored on a 2240px design grid (56 tiles of 40px / 70 tiles of 32px) and BUILT at STRUCT_SCALE x
+        // so every castle, house, bridge and cavern is twice as large as before.
+        this.designWidth = 2240;
+        this.chunkWidth = this.designWidth * STRUCT_SCALE;
+        this.buildOriginX = 0;
+        this.buildOriginY = 40;
         this.generatedChunks = {};
         this.chunkBoundaryY = { 0: 40 }; // Left edge surface Y of chunk 0 starts at y = 40
         this.currentBiomeTitle = "🌾 Frontier Trailhead";
@@ -582,31 +612,40 @@ class WorldGenerator {
     }
 
     // Grid-exact builder helpers: (left, bottom, w, h) are all multiples of 40px!
+    // Design-space -> world-space transform (scale about the current chunk's left edge & ground line)
+    static tx(x) { return this.buildOriginX + (x - this.buildOriginX) * STRUCT_SCALE; }
+    static ty(y) { return this.buildOriginY + (y - this.buildOriginY) * STRUCT_SCALE; }
+
     static addGridBox(left, bottom, w, h, color, opts = {}) {
+        left = this.tx(left); bottom = this.ty(bottom); w *= STRUCT_SCALE; h *= STRUCT_SCALE;
         var obj = Object.addBox(left + w / 2, bottom + h / 2, w, h, color, opts);
         obj.chunkIdx = this.activeBuildChunk;
         return obj;
     }
 
     static addGridRamp(left, bottom, w, h, dir, color, opts = {}) {
+        left = this.tx(left); bottom = this.ty(bottom); w *= STRUCT_SCALE; h *= STRUCT_SCALE;
         var obj = Object.addRamp(left + w / 2, bottom + h / 2, w, h, dir, color, opts);
         obj.chunkIdx = this.activeBuildChunk;
         return obj;
     }
 
     static addGridBumper(left, bottom, w, h, bounce, color, opts = {}) {
+        left = this.tx(left); bottom = this.ty(bottom); w *= STRUCT_SCALE; h *= STRUCT_SCALE;
         var obj = Object.addBumper(left + w / 2, bottom + h / 2, w, h, bounce, color, opts);
         obj.chunkIdx = this.activeBuildChunk;
         return obj;
     }
 
     static addGridCrate(left, bottom, size, color, opts = {}) {
+        left = this.tx(left); bottom = this.ty(bottom);
         var obj = Object.addCrate(left + size / 2, bottom + size / 2, size, color, opts);
         obj.chunkIdx = this.activeBuildChunk;
         return obj;
     }
 
     static addInteriorWall(left, bottom, w, h, style = "castle") {
+        left = this.tx(left); bottom = this.ty(bottom); w *= STRUCT_SCALE; h *= STRUCT_SCALE;
         if (typeof BackgroundMosaic !== "undefined") {
             BackgroundMosaic.addInteriorBackWall(left, bottom, w, h, style, this.activeBuildChunk);
         }
@@ -614,13 +653,15 @@ class WorldGenerator {
 
     static addChest(x, bottomY) {
         if (typeof Components !== "undefined" && Components.spawnChest) {
-            Components.spawnChest(x, bottomY, "Royal Treasure Chest", this.activeBuildChunk);
+            Components.spawnChest(this.tx(x), this.ty(bottomY), "Royal Treasure Chest", this.activeBuildChunk);
         }
     }
 
     // Spawns biome-specific enemy guardians inside castles, caves, bridges & mountains
     static spawnChunkEnemy(power, x, y) {
         if (zombies.length >= 16) return;
+        x = this.tx(x);
+        y = this.ty(y);
         var specs = {
             "BAT":       { color: "#6c5ce7", size: 56, hp: 34 + level * 6,  spd: speed * 0.72 },
             "SLIME":     { color: "#00f5d4", size: 76, hp: 62 + level * 10, spd: speed * 0.56 },
@@ -674,7 +715,7 @@ class WorldGenerator {
 
         // 1. Floating Origin: Move the world around the player whenever player drifts > 2400px from local origin 0!
         var playerRefX = redGuy ? redGuy.x : focusX;
-        if (Math.abs(playerRefX) >= 2400) {
+        if (Math.abs(playerRefX) >= this.chunkWidth) {
             var shiftChunks = Math.trunc(playerRefX / this.chunkWidth);
             this.shiftWorldOrigin(shiftChunks * this.chunkWidth);
             focusX = cameraTargetX;
@@ -699,7 +740,7 @@ class WorldGenerator {
         var localCenter = redGuy ? redGuy.x : focusX;
         for (let z = zombies.length - 1; z >= 0; z--) {
             var zom = zombies[z];
-            if (!zom.dead && Math.abs(zom.x - localCenter) > 2800) {
+            if (!zom.dead && Math.abs(zom.x - localCenter) > 5600) {
                 zombies.splice(z, 1);
             }
         }
@@ -708,7 +749,7 @@ class WorldGenerator {
         if (this.generatedChunks[centerChunk]) {
             this.currentBiomeTitle = this.generatedChunks[centerChunk].title;
         }
-        var miles = Math.floor(Math.abs(trueWorldX) / 120);
+        var miles = Math.floor(Math.abs(trueWorldX) / 240);
         if (miles > this.maxMilesTraveled) {
             if (miles % 15 === 0 && miles > 0 && redGuy) {
                 coins += 5;
@@ -732,10 +773,10 @@ class WorldGenerator {
     // Adds a non-colliding Background Mosaic Tree so gameplay movement & shooting are 100% unobstructed!
     static buildTree(trunkLeftX, groundTopY, trunkHeight = 160, hasTreasure = false, style = "oak") {
         if (typeof BackgroundMosaic !== "undefined") {
-            BackgroundMosaic.addBackgroundTree(trunkLeftX + 20, groundTopY, trunkHeight, style, this.activeBuildChunk);
+            BackgroundMosaic.addBackgroundTree(this.tx(trunkLeftX + 20), this.ty(groundTopY), trunkHeight * STRUCT_SCALE, style, this.activeBuildChunk, STRUCT_SCALE);
         }
         if (hasTreasure && typeof Components !== "undefined") {
-            Components.spawnCoins(trunkLeftX + 20, groundTopY + 60, 2);
+            Components.spawnCoins(this.tx(trunkLeftX + 20), this.ty(groundTopY) + 80, 2);
         }
     }
 
@@ -743,14 +784,16 @@ class WorldGenerator {
         this.activeBuildChunk = chunkIdx;
         var originOff = (typeof worldOriginOffsetX !== "undefined") ? worldOriginOffsetX : 0;
         var leftX = chunkIdx * this.chunkWidth - originOff;
-        var rightX = leftX + this.chunkWidth;
+        var rightX = leftX + this.designWidth;
         var startY = this.getLeftEdgeY(chunkIdx);
+        this.buildOriginX = leftX;
+        this.buildOriginY = startY;
 
         // Starting Chunk 0: Safe Oregon Trail Outpost & Frontier Lodge
         if (chunkIdx === 0) {
             this.generatedChunks[chunkIdx] = { type: "OUTPOST", title: "🏕️ Independence Frontier Outpost" };
             this.setRightEdgeY(chunkIdx, 40);
-            this.addGridBox(leftX, -440, this.chunkWidth, 480, "#588157", { name: "Trailhead Ground", texture: "grass_dirt" });
+            this.addGridBox(leftX, -440, this.designWidth, 480, "#588157", { name: "Trailhead Ground", texture: "grass_dirt" });
             this.buildTree(leftX + 160, 40, 180, false, "oak");
             this.buildTownBuilding(leftX + 480, 40, 640, 3, true);
             this.buildTree(leftX + 1320, 40, 170, false, "pine");
@@ -995,7 +1038,7 @@ class WorldGenerator {
         // ====================================================================
         else if (pick === "FRONTIER_TOWN") {
             this.generatedChunks[chunkIdx] = { type: "FRONTIER_TOWN", title: "🏘️ Gold Rush Frontier Town" };
-            this.addGridBox(leftX, startY - 480, this.chunkWidth, 480, "#588157", { name: "Town Main Street", texture: "grass_dirt" });
+            this.addGridBox(leftX, startY - 480, this.designWidth, 480, "#588157", { name: "Town Main Street", texture: "grass_dirt" });
 
             this.buildTree(leftX + 80, startY, 170, false, "oak");
             // West Building: 3-Story Frontier Grand Saloon & Hotel (width = 720px)

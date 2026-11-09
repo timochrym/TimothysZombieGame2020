@@ -11,7 +11,10 @@ var xc = xcMaster;
 var yc = ycMaster;
 var maxX = w / 2;
 var maxY = h / 2;
-var cameraScaleX = 0.68;
+var STRUCT_SCALE = 2; // Every castle / house / platform is built at 2x its original size
+var baseZoom = 0.56;
+var userZoom = 1.0;
+var cameraScaleX = baseZoom;
 var cameraScaleY = cameraScaleX;
 var cameraTargetX = 0;
 var cameraTargetY = 0;
@@ -151,3 +154,39 @@ window.addEventListener("resize", function() {
     xcMaster = w / 2;
     ycMaster = h / 2;
 });
+
+
+// ---------------------------------------------------------------------------
+// Per-player input (P1 = WASD cluster, P2 = Arrow cluster). Filled by keyHandler.js
+// ---------------------------------------------------------------------------
+var PlayerInput = [
+    { shoot: false, jet: false, interact: false, dashQueued: false, grabQueued: false },
+    { shoot: false, jet: false, interact: false, dashQueued: false, grabQueued: false }
+];
+
+// ---------------------------------------------------------------------------
+// Developer / tuning options (driven by the Dev Mode panel)
+// ---------------------------------------------------------------------------
+var devOpts = {
+    timeScale: 1.0,          // 0.2x slow-mo .. 2x fast
+    spawnRate: 1.0,          // enemy spawn speed multiplier
+    enemyDamage: 1.0,        // damage dealt by enemies
+    enemyHealth: 1.0,        // enemy HP multiplier
+    playerDamage: 1.0,       // extra player damage multiplier
+    maxEnemies: 11,          // simultaneous enemy cap
+    infiniteAmmo: false,     // no jetpack drain / ability cooldowns
+    showHitboxes: false,
+    showFPS: false,
+    showHelp: true,
+    friendlyFire: false,
+    powerUpRate: 1.0         // drop chance multiplier
+};
+
+var helpTimer = 60 * 14; // controls cheat-sheet fades after 14 seconds (toggle with H)
+var lastSecondStamp = Date.now();
+var framesThisSecond = 0;
+var measuredFPS = 60;
+
+// Last Stand: when every hero has fallen the team has this long to earn a life back
+var lastStandTimerMax = 60 * 40;
+var lastStandTimer = -1;

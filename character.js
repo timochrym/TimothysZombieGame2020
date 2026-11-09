@@ -1,3 +1,21 @@
+// ============================================================================
+// POWER-UP CATALOGUE  (duration in frames @60fps, 0 = instant)
+// ============================================================================
+var PowerUpDefs = {
+    RAPID:   { label: "TRIPLE LASER",  icon: "✦", color: "#ffdd33", duration: 600, weight: 10, desc: "3-way rapid fire" },
+    SPEED:   { label: "MEGA SPEED",    icon: "»", color: "#33ddff", duration: 600, weight: 10, desc: "Faster + higher jump" },
+    HEAL:    { label: "MEDKIT",        icon: "+", color: "#33ff88", duration: 0,   weight: 8,  desc: "+55 HP & full fuel" },
+    BLOWUP:  { label: "MEGA BLAST",    icon: "✹", color: "#ff7722", duration: 0,   weight: 6,  desc: "Huge explosion" },
+    SHIELD:  { label: "ENERGY SHIELD", icon: "◉", color: "#6ee7ff", duration: 900, weight: 9,  desc: "Absorbs 90 damage" },
+    FREEZE:  { label: "FROST NOVA",    icon: "❄", color: "#bdeaff", duration: 0,   weight: 7,  desc: "Freezes all nearby enemies" },
+    MAGNET:  { label: "COIN MAGNET",   icon: "⊛", color: "#f9a8d4", duration: 900, weight: 6,  desc: "Pulls in coins & drops" },
+    BERSERK: { label: "BERSERK",       icon: "♨", color: "#ff5a1f", duration: 540, weight: 7,  desc: "Double damage, big shots" },
+    ORBIT:   { label: "BLADE ORBIT",   icon: "✧", color: "#d946ef", duration: 720, weight: 7,  desc: "3 spinning blades shred foes" },
+    HOMING:  { label: "HOMING SHOTS",  icon: "◎", color: "#a3e635", duration: 720, weight: 7,  desc: "Bullets seek enemies" },
+    CHAIN:   { label: "CHAIN LIGHTNING", icon: "ϟ", color: "#fde047", duration: 720, weight: 6, desc: "Shots arc between enemies" },
+    SERUM:   { label: "LIFE SERUM",    icon: "♥", color: "#ff4d8d", duration: 0,   weight: 0,  desc: "Revives fallen heroes" }
+};
+
 class Character {
 
     constructor(name, hitbox, poly, color, xy, maxspeed, slower, gravity, bounciness, speed, moveType, health, lazerType = "ULDR", isZombie = false, zombiePower = "NORMAL") {
@@ -90,6 +108,47 @@ class Character {
         this.heldObject = null;
         this.navPath = [];
         this.navTimer = 0;
+
+        // --- Co-op / team state ---
+        this.isPlayer = false;       // true for the two heroes (alive OR undead ally)
+        this.playerIndex = 0;        // 0 = Player 1, 1 = Player 2
+        this.playerLabel = "";
+        this.humanity = 0;           // 0..100 - fill it as an undead hero to earn your life back
+        this.reviveProgress = 0;     // 0..1 while a partner is channelling a revive on this hero
+        this.reviveChannel = 0;      // 0..1 progress of THIS hero reviving somebody
+        this.kills = 0;
+        this.revives = 0;
+        this.lastHitBy = null;
+        this.frozenTimer = 0;
+        this.shield = 0;
+        this.shieldMax = 0;
+        this.orbAngle = Math.random() * 6.28;
+        this.powers = {};            // type -> frames remaining (several can be active at once)
+        this.powerHitTimers = {};
+        this.invulnTimer = 0;
+        this.spawnPulse = 0;
+    }
+
+    get team() { return this.isPlayer ? 1 : 0; }
+
+    get input() { return PlayerInput[this.playerIndex] || PlayerInput[0]; }
+
+    hasPower(type) { return (this.powers[type] || 0) > 0; }
+
+    recomputeStats() {
+        var lvlMult = this.isZombie ? 1.15 : (1 + (heroLevel - 1) * 0.04);
+        var spd = this.hasPower("SPEED");
+        this.speed = this.baseSpeed * lvlMult * (spd ? 1.5 : 1);
+        this.jumpSpeed = this.baseJumpSpeed * (this.isZombie ? 1.15 : 1) * (spd ? 1.25 : 1);
+    }
+
+    addHumanity(amount, reason) {
+        if (!this.isPlayer || !this.isZombie || this.dead) return;
+        this.humanity = Math.min(100, this.humanity + amount);
+        Components.addFloatingText("+" + Math.round(amount) + "% HUMANITY", this.x, this.y + 80, "#c77dff", 15);
+        if (this.humanity >= 100) {
+            this.reviveAsHuman(0.6, "HUMANITY RESTORED!");
+        }
     }
 
     tryGrabOrThrow(cursorWorldX, cursorWorldY) {
@@ -180,7 +239,7 @@ class Character {
         var mPos = Components.getMouseWorldPos();
         var dx = mPos[0] - this.x;
         var dy = mPos[1] - this.y;
-        if (!useMouseAim || Math.hypot(dx, dy) < 10) {
+        if (this.playerIndex !== 0 || !useMouseAim || Math.hypot(dx, dy) < 10) {
             var rad = Math.radians(this.degree);
             dx = Math.sin(rad);
             dy = Math.cos(rad);
@@ -189,17 +248,36 @@ class Character {
         this.dashVX = (dx / len) * 23;
         this.dashVY = (dy / len) * 14 + 1;
         this.dashTimer = 8;
-        this.dashCooldown = godMode ? 6 : 42;
+        this.dashCooldown = (godMode || devOpts.infiniteAmmo) ? 6 : 42;
         this.scaleX = 1.22;
         this.scaleY = 0.82;
         Components.spawnSparks(this.x, this.y, "#00f5d4", 6);
     }
 
-    takeDamage(amount, knockX = 0, knockY = 0) {
+    takeDamage(amount, knockX = 0, knockY = 0, attacker = null) {
         if (this.dead) return;
-        // God Mode protects human players from all damage!
-        if (!this.isZombie && (godMode || this.dashTimer > 0)) {
+        // God Mode protects living heroes from all damage!
+        if (!this.isZombie && (godMode || this.dashTimer > 0 || this.invulnTimer > 0)) {
             return;
+        }
+        if (attacker && attacker.team === this.team && attacker !== this && !devOpts.friendlyFire) return;
+
+        if (amount < 0 && this.isPlayer && attacker && !attacker.isPlayer) amount *= devOpts.enemyDamage;
+        if (amount < 0 && this.frozenTimer > 0) amount *= 1.25;
+        if (attacker) this.lastHitBy = attacker;
+
+        // Energy shield soaks damage first
+        if (amount < 0 && this.shield > 0) {
+            var soak = Math.min(this.shield, -amount);
+            this.shield -= soak;
+            amount += soak;
+            this.hitFlashTimer = 3;
+            Components.spawnSparks(this.x, this.y, "#6ee7ff", 5);
+            if (this.shield <= 0) {
+                delete this.powers["SHIELD"];
+                Components.addFloatingText("SHIELD BROKEN", this.x, this.y + 70, "#6ee7ff", 15);
+            }
+            if (amount > -0.5) return;
         }
 
         this.health += amount;
@@ -234,6 +312,17 @@ class Character {
                 combo = 1;
             }
             comboTimer = comboTimerMax;
+
+            // Fallen heroes earn their life back by taking the horde down!
+            var humanityGain = (this.zombiePower == "BOSS_KING") ? 100 : ((this.zombiePower == "TANK" || this.zombiePower == "KNIGHT") ? 45 : (this.zombiePower == "MINI_SLIME" ? 8 : 24));
+            var killer = this.lastHitBy;
+            if (killer && killer.isPlayer) killer.kills++;
+            for (let pi = 0; pi < characters.length; pi++) {
+                var pc = characters[pi];
+                if (pc.isPlayer && pc.isZombie) {
+                    pc.addHumanity(humanityGain * (pc === killer ? 1.5 : 0.6));
+                }
+            }
             var earned = basePts * combo;
             score += earned;
             if (score > highScore) {
@@ -287,19 +376,23 @@ class Character {
             var blastDamage = (this.zombiePower == "EXPLODER") ? -35 : -8;
             Components.blowUp(this.x, this.y, this.color, 14, blastRadius, blastDamage, this);
 
-            if (Math.random() < 0.25 && typeof spawnPowerUp === "function") {
+            if (Math.random() < 0.25 * devOpts.powerUpRate && typeof spawnPowerUp === "function") {
                 spawnPowerUp(this.x, this.y + 20);
             }
         } else if (!this.isZombie) {
             this.death = true;
             this.isZombie = true;
-            this.color = "#2d6e32";
+            this.color = this.isPlayer ? "#7a5cff" : "#2d6e32";
             this.maxHealth = 120;
             this.health = 120;
-            this.speed = this.baseSpeed * 1.15;
-            this.jumpSpeed = this.baseJumpSpeed * 1.15;
+            this.humanity = 0;
+            this.reviveProgress = 0;
+            this.powers = {};
+            this.shield = 0;
             this.zombiePower = "SPITTER";
-            Components.addFloatingText("INFECTED!", this.x, this.y + 60, "#44ff44", 24);
+            this.recomputeStats();
+            Components.addFloatingText("YOU FELL!", this.x, this.y + 70, "#ff6b6b", 26);
+            Components.addFloatingText("Kill enemies or get revived", this.x, this.y + 42, "#c77dff", 15);
             Components.blowUp(this.x, this.y, "#ff3333", 20, 180, -15, this);
 
             var anyHumanAlive = false;
@@ -308,48 +401,93 @@ class Character {
                     anyHumanAlive = true;
                 }
             }
-            if (!anyHumanAlive) {
-                gameOver = true;
+            if (!anyHumanAlive && lastStandTimer < 0) {
+                lastStandTimer = lastStandTimerMax;
+                Components.addFloatingText("LAST STAND! Earn a life back!", this.x, this.y + 120, "#ffdd44", 22);
             }
         } else {
+            // An undead hero got destroyed: lose some humanity and respawn beside a living teammate
             Components.blowUp(this.x, this.y, this.color, 16, 150, 0, this);
             this.health = this.maxHealth;
-            this.x = (Math.random() - 0.5) * 600;
-            this.y = 550;
+            this.humanity = Math.max(0, this.humanity - 25);
+            var buddy = null;
+            for (let i = 0; i < characters.length; i++) {
+                if (characters[i] !== this && !characters[i].isZombie) buddy = characters[i];
+            }
+            if (buddy) {
+                this.x = buddy.x + (Math.random() < 0.5 ? -120 : 120);
+                this.y = buddy.y + 60;
+            } else {
+                this.x = (Math.random() - 0.5) * 600;
+                this.y = 550;
+            }
             this.xspeed = 0;
             this.yspeed = 0;
+            this.invulnTimer = 90;
         }
     }
 
-    reviveAsHuman() {
+    reviveAsHuman(healthPct = 1, label = "REVIVED!") {
+        var wasUndead = this.isZombie;
         this.death = false;
         this.isZombie = false;
         this.color = this.originalColor;
         this.maxHealth = 100 + (heroLevel - 1) * 20;
-        this.health = this.maxHealth;
-        this.speed = this.baseSpeed * (1 + (heroLevel - 1) * 0.04);
-        this.jumpSpeed = this.baseJumpSpeed;
-        Components.addFloatingText("REVIVED!", this.x, this.y + 60, "#44ffaa", 22);
+        this.health = Math.max(20, Math.round(this.maxHealth * healthPct));
+        this.humanity = 0;
+        this.reviveProgress = 0;
+        this.zombiePower = "NORMAL";
+        this.invulnTimer = 120;
+        this.recomputeStats();
+        this.jetpackFuel = this.jetpackMaxFuel;
+        if (wasUndead) {
+            Components.addFloatingText(label, this.x, this.y + 70, "#44ffaa", 24);
+            Components.spawnSparks(this.x, this.y, "#44ffaa", 22);
+            Components.blowUp(this.x, this.y, "#44ffaa", 14, 220, -10, this);
+            lastStandTimer = -1;
+        }
     }
 
+    // ---- Power-Ups --------------------------------------------------------
+    // Instant: HEAL, BLOWUP, SERUM, FREEZE | Timed (stackable): RAPID, SPEED, SHIELD, MAGNET, BERSERK, ORBIT, HOMING, CHAIN
     applyPowerUp(type) {
-        this.powerType = type;
-        this.powerTimer = this.powerTimerMax;
-        if (type == "SPEED") {
-            this.speed = this.baseSpeed * 1.5;
-            this.jumpSpeed = this.baseJumpSpeed * 1.25;
-            Components.addFloatingText("MEGA SPEED!", this.x, this.y + 60, "#33ddff", 20);
-        } else if (type == "RAPID") {
-            Components.addFloatingText("TRIPLE LASER!", this.x, this.y + 60, "#ffdd33", 20);
-        } else if (type == "HEAL") {
-            this.health = Math.min(this.maxHealth, this.health + 50);
+        var def = PowerUpDefs[type];
+        if (!def) return;
+        Components.addFloatingText(def.icon + " " + def.label, this.x, this.y + 70, def.color, 20);
+        Components.spawnSparks(this.x, this.y, def.color, 14);
+
+        if (type == "HEAL") {
+            this.health = Math.min(this.maxHealth, this.health + 55);
             this.jetpackFuel = this.jetpackMaxFuel;
-            this.powerTimer = 90;
-            Components.addFloatingText("+50 HP & FUEL!", this.x, this.y + 60, "#33ff88", 20);
         } else if (type == "BLOWUP") {
-            Components.addFloatingText("MEGA BLAST!", this.x, this.y + 60, "#ff7722", 22);
-            Components.blowUp(this.x, this.y, "#ffaa00", 28, 350, -55, this);
-            this.powerTimer = 90;
+            Components.blowUp(this.x, this.y, "#ffaa00", 28, 420, -55 * rpgDamageMult, this);
+        } else if (type == "FREEZE") {
+            Components.freezeBlast(this.x, this.y, 1100, 300);
+        } else if (type == "SERUM") {
+            this.reviveAllies();
+        } else {
+            this.powers[type] = def.duration;
+            if (type == "SHIELD") {
+                this.shield = this.shieldMax = 90;
+            }
+            this.recomputeStats();
+        }
+        this.powerType = type;
+    }
+
+    // Serum / team revive: brings every undead hero back (including self)
+    reviveAllies() {
+        var any = false;
+        for (let i = 0; i < characters.length; i++) {
+            var c = characters[i];
+            if (c.isPlayer && c.isZombie) {
+                c.reviveAsHuman(0.7, "LIFE SERUM!");
+                any = true;
+            }
+        }
+        if (!any) {
+            this.shield = this.shieldMax = 60;
+            this.powers["SHIELD"] = 600;
         }
     }
 
@@ -368,12 +506,50 @@ class Character {
             this.jetpackFuel = this.jetpackMaxFuel;
         }
 
-        if (this.powerTimer > 0) {
-            this.powerTimer--;
-            if (this.powerTimer == 0) {
-                this.powerType = null;
-                this.speed = this.baseSpeed * (1 + (heroLevel - 1) * 0.04);
-                this.jumpSpeed = this.baseJumpSpeed;
+        // Stackable power timers
+        var powersChanged = false;
+        for (var pk in this.powers) {
+            this.powers[pk]--;
+            if (this.powers[pk] <= 0) {
+                delete this.powers[pk];
+                if (pk == "SHIELD") this.shield = 0;
+                powersChanged = true;
+            }
+        }
+        if (powersChanged) this.recomputeStats();
+        if (this.invulnTimer > 0) this.invulnTimer--;
+        if (this.spawnPulse > 0) this.spawnPulse--;
+
+        // Frozen enemies are completely locked in ice
+        if (this.frozenTimer > 0) {
+            this.frozenTimer--;
+            this.leftPressed = this.rightPressed = this.upPressed = this.downPressed = false;
+            this.dashTimer = 0;
+            this.xspeed *= 0.8;
+        }
+
+        // Orbiting energy blades
+        if (this.hasPower("ORBIT")) {
+            this.orbAngle += 0.11;
+            for (let b = 0; b < 3; b++) {
+                var a = this.orbAngle + b * (Math.PI * 2 / 3);
+                var bx = this.x + Math.cos(a) * 115;
+                var by = this.y + Math.sin(a) * 115;
+                for (let z = 0; z < zombies.length; z++) {
+                    var zz = zombies[z];
+                    if (zz.dead) continue;
+                    if (Math.hypot(zz.x - bx, zz.y - by) < zz.s1 * 0.5 + 26) {
+                        var key = zz.id;
+                        if (!this.powerHitTimers[key] || this.powerHitTimers[key] <= 0) {
+                            zz.takeDamage(-13 * rpgDamageMult * devOpts.playerDamage, Math.cos(a) * 3, 3, this);
+                            this.powerHitTimers[key] = 14;
+                            Components.spawnSparks(bx, by, "#d946ef", 3);
+                        }
+                    }
+                }
+            }
+            for (var hk in this.powerHitTimers) {
+                if (this.powerHitTimers[hk] > 0) this.powerHitTimers[hk]--;
             }
         }
 
@@ -491,8 +667,8 @@ class Character {
             for (let z = 0; z < zombies.length; z++) {
                 var zom = zombies[z];
                 if (!zom.dead && Math.hypot(zom.x - this.x, zom.y - this.y) < this.s1 + 35) {
-                    var slashDmg = Math.round(-45 * rpgDamageMult);
-                    zom.takeDamage(slashDmg, this.dashVX * 0.5, 6);
+                    var slashDmg = Math.round(-45 * rpgDamageMult * devOpts.playerDamage);
+                    zom.takeDamage(slashDmg, this.dashVX * 0.5, 6, this);
                     this.airJumps = this.maxAirJumps; // Hit-confirm resets air jump!
                     Components.addFloatingText("SLASH! " + slashDmg, zom.x, zom.y + 65, "#00f5d4", 20);
                 }
@@ -638,11 +814,11 @@ class Character {
 
             // Jetpack Joyride Machine-Gun Jetpack! (Hold Space in 1P or Up while airborne)
             this.jetpackFiring = false;
-            var wantJetpack = !this.isZombie && jetpackEnabled && (SpacePressed || (godMode && this.upPressed && !this.onGround));
+            var wantJetpack = !this.isZombie && jetpackEnabled && (this.input.jet || (godMode && this.upPressed && !this.onGround));
             if (wantJetpack && (this.jetpackFuel > 0 || godMode)) {
                 this.jetpackFiring = true;
                 this.fastFalling = false;
-                if (!godMode) {
+                if (!godMode && !devOpts.infiniteAmmo) {
                     this.jetpackFuel = Math.max(0, this.jetpackFuel - 0.65);
                 }
                 this.yspeed = Math.min(11.5, this.yspeed + this.gravity * 1.75);
@@ -672,7 +848,8 @@ class Character {
                         color: "#ffbe0b",
                         owner: this,
                         fromZombie: false,
-                        damage: Math.round(lazerDamage * 0.85 * rpgDamageMult),
+                        damage: Math.round(lazerDamage * 0.85 * rpgDamageMult * devOpts.playerDamage),
+                        team: 1,
                         life: 55
                     });
                 }
@@ -680,7 +857,7 @@ class Character {
         }
 
         // Max Speed
-        var curMaxSpeed = (this.powerType == "SPEED" || godMode || this.dashTimer > 0) ? this.maxspeed * 1.45 : this.maxspeed;
+        var curMaxSpeed = (this.hasPower("SPEED") || godMode || this.dashTimer > 0) ? this.maxspeed * 1.45 : this.maxspeed;
         if (this.xspeed > curMaxSpeed) this.xspeed = curMaxSpeed;
         if (this.xspeed < -curMaxSpeed) this.xspeed = -curMaxSpeed;
         if (this.yspeed > curMaxSpeed) this.yspeed = curMaxSpeed;
@@ -781,7 +958,7 @@ class Character {
         }
 
         // Fast proximity check only against opposing Characters (instead of scanning all 200 static objects twice!)
-        if (!this.isZombie) {
+        if (this.isPlayer) {
             for (let z = 0; z < zombies.length; z++) {
                 var zom = zombies[z];
                 if (!zom.dead && Math.abs(zom.x - this.x) <= (this.s1 + zom.s1) * 0.5 + 3 && Math.abs(zom.y - this.y) <= (this.s2 + zom.s2) * 0.5 + 3) {
@@ -792,8 +969,10 @@ class Character {
 
         if (this.y < -3200) {
             this.takeDamage(-25, 0, 0);
-            this.x = 0;
-            this.y = 550;
+            var anchor = null;
+            for (let ci = 0; ci < characters.length; ci++) if (characters[ci] !== this && !characters[ci].dead) anchor = characters[ci];
+            this.x = anchor ? anchor.x : 0;
+            this.y = anchor ? anchor.y + 120 : 550;
             this.xspeed = 0;
             this.yspeed = 0;
         }
@@ -806,40 +985,17 @@ class Character {
 
     handleCharacterCollision(other) {
         if (!other || !(other instanceof Character)) return;
-        if (this.isZombie && !other.isZombie) {
-            other.takeDamage(zombieDamage * 2.5, (other.x > this.x ? 4 : -4), 2);
-        } else if (!this.isZombie && other.isZombie) {
-            this.takeDamage(zombieDamage * 2.5, (this.x > other.x ? 4 : -4), 2);
-        }
+        if (other.team === this.team) return;
+        if (this.frozenTimer > 0) return;
+        // Enemy touches hero => hero is hurt (heroes only get a half-strength hit while undead)
+        var victim = this.isPlayer ? this : other;
+        var bully = this.isPlayer ? other : this;
+        if (bully.frozenTimer > 0) return;
+        var mult = victim.isZombie ? 0.5 : 1;
+        victim.takeDamage(zombieDamage * 2.5 * mult, (victim.x > bully.x ? 4 : -4), 2, bully);
     }
 
     createCharacter() {
-        // Draw God Mode golden halo if active
-        if (!this.isZombie && godMode) {
-            var gx = (this.x - this.s1 * 0.62) * cameraScaleX + xc;
-            var gy = (-this.y - this.s2 * 0.62) * cameraScaleY + yc;
-            ctx.save();
-            ctx.strokeStyle = "#ffdd00";
-            ctx.lineWidth = 3;
-            ctx.strokeRect(gx, gy, this.s1 * 1.24 * cameraScaleX, this.s2 * 1.24 * cameraScaleY);
-            ctx.restore();
-        }
-
-        // Draw Stick Ninja fluttering headband ribbon
-        if (!this.isZombie) {
-            var dirSign = this.xspeed >= 0 ? -1 : 1;
-            var hx = (this.x + dirSign * (this.s1 * 0.5)) * cameraScaleX + xc;
-            var hy = (-this.y - this.s2 * 0.28) * cameraScaleY + yc;
-            ctx.save();
-            ctx.strokeStyle = "#e63946";
-            ctx.lineWidth = 4 * cameraScaleX;
-            ctx.beginPath();
-            ctx.moveTo(hx, hy);
-            ctx.lineTo(hx + dirSign * 22 * cameraScaleX, hy + Math.sin(Date.now() * 0.02) * 8 * cameraScaleY);
-            ctx.stroke();
-            ctx.restore();
-        }
-
         var sx = this.scaleX || 1.0;
         var sy = this.scaleY || 1.0;
         var visualW = this.s1 * sx;
@@ -856,6 +1012,9 @@ class Character {
         if (drawX + drawW < -80 || drawX > canvas.width + 80 || drawY + drawH < -80 || drawY > canvas.height + 80) {
             return;
         }
+
+        // Soft ground shadow + team aura (makes every character pop against the background)
+        this.drawAura(drawX, drawY, drawW, drawH);
 
         // Custom Distinct Artwork for Non-Zombie Enemy Archetypes (Bats, Slimes, Archers, Knights, Mages, Bosses)
         var customEnemyTypes = ["BAT", "SLIME", "MINI_SLIME", "ARCHER", "KNIGHT", "MAGE", "BOSS_KING"];
@@ -971,23 +1130,293 @@ class Character {
                 ctx.fillRect(cx - 18 * cameraScaleX, drawY + drawH * 0.24, 10 * cameraScaleX, 8 * cameraScaleY);
                 ctx.fillRect(cx + 8 * cameraScaleX, drawY + drawH * 0.24, 10 * cameraScaleX, 8 * cameraScaleY);
             }
+            this.outlineBox(drawX, drawY, drawW, drawH, 3);
             ctx.restore();
         } else {
-            Polygon.create(Math.makeHitbox(visualW, visualH), drawColor, { x: this.x, y: visualY });
-
-            var img = this.isZombie ? zombieImg : characterImg;
-            if (img && img.complete && img.naturalWidth > 0 && this.hitFlashTimer == 0) {
-                ctx.webkitImageSmoothingEnabled = false;
-                ctx.mozImageSmoothingEnabled = false;
-                ctx.imageSmoothingEnabled = false;
-
-                ctx.globalAlpha = 0.85;
-                ctx.drawImage(img, drawX, drawY, drawW, drawH);
-                ctx.globalAlpha = 1.0;
-            }
+            this.drawModernBody(drawX, drawY, drawW, drawH, drawColor);
         }
 
+        this.drawOverlays(drawX, drawY, drawW, drawH);
+
         Components.healthBar(this);
+    }
+
+    // ------------------------------------------------------------------
+    // MODERN VISUALS
+    // ------------------------------------------------------------------
+    teamColor() {
+        if (this.isPlayer) return this.isZombie ? "#c77dff" : (this.playerIndex === 0 ? "#ff5a5f" : "#3da5ff");
+        return "#ff3b4a";
+    }
+
+    roundRectPath(x, y, w, h, r) {
+        r = Math.min(r, w / 2, h / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+    }
+
+    outlineBox(x, y, w, h, lw) {
+        ctx.save();
+        ctx.lineWidth = lw;
+        ctx.strokeStyle = "#0a0f16";
+        this.roundRectPath(x, y, w, h, 8 * cameraScaleX + 2);
+        ctx.stroke();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = this.isPlayer ? "#ffffff" : this.teamColor();
+        ctx.globalAlpha = 0.9;
+        this.roundRectPath(x + 1.5, y + 1.5, w - 3, h - 3, 7 * cameraScaleX + 1);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    drawAura(x, y, w, h) {
+        ctx.save();
+        var cx = x + w / 2;
+        // ground shadow
+        ctx.fillStyle = "rgba(0,0,0,0.30)";
+        ctx.beginPath();
+        ctx.ellipse(cx, y + h + 2, w * 0.55, Math.max(3, 7 * cameraScaleY), 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // team glow ring so heroes (cyan/red/blue) and enemies (red) are instantly distinguishable
+        var t = Date.now() * 0.004 + this.id;
+        var glow = this.teamColor();
+        ctx.strokeStyle = glow;
+        ctx.globalAlpha = this.isPlayer ? 0.55 + Math.sin(t) * 0.15 : 0.35;
+        ctx.lineWidth = this.isPlayer ? 3 : 2;
+        ctx.beginPath();
+        ctx.ellipse(cx, y + h + 2, w * 0.66, Math.max(4, 9 * cameraScaleY), 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        if (!this.isZombie && godMode) {
+            ctx.globalAlpha = 0.9;
+            ctx.strokeStyle = "#ffdd00";
+            ctx.lineWidth = 3;
+            this.roundRectPath(x - w * 0.12, y - h * 0.12, w * 1.24, h * 1.24, 12);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    drawModernBody(x, y, w, h, drawColor) {
+        ctx.save();
+        var cx = x + w / 2;
+        var cy = y + h / 2;
+        var facing = (this.xspeed > 0.4) ? 1 : ((this.xspeed < -0.4) ? -1 : (this.lastFacing || 1));
+        this.lastFacing = facing;
+        var flash = this.hitFlashTimer > 0;
+        var r = Math.max(6, 11 * cameraScaleX);
+
+        // body gradient
+        var g = ctx.createLinearGradient(0, y, 0, y + h);
+        var base = flash ? "#ffffff" : drawColor;
+        g.addColorStop(0, flash ? "#ffffff" : Components.shade(base, 38));
+        g.addColorStop(1, flash ? "#dddddd" : Components.shade(base, -34));
+        ctx.fillStyle = g;
+        this.roundRectPath(x, y, w, h, r);
+        ctx.fill();
+
+        var pw = this.zombiePower;
+        if (this.isPlayer && !this.isZombie) {
+            // Hero: bright visor with eyes, belt stripe in player colour and gun barrel
+            var accent = this.playerIndex === 0 ? "#ff5a5f" : "#3da5ff";
+            this.drawSprite(characterImg, x, y, w, h, r, null);
+            ctx.fillStyle = accent;
+            ctx.fillRect(x + 2, y + h * 0.66, w - 4, h * 0.10);
+            // headband tail
+            var rib = Math.sin(Date.now() * 0.02) * 6 * cameraScaleY;
+            ctx.strokeStyle = accent;
+            ctx.lineWidth = Math.max(3, 5 * cameraScaleX);
+            ctx.beginPath();
+            ctx.moveTo(cx - facing * w * 0.46, y + h * 0.14);
+            ctx.lineTo(cx - facing * (w * 0.46 + 26 * cameraScaleX), y + h * 0.14 + rib);
+            ctx.stroke();
+            // aim barrel
+            var rad = Math.radians(this.degree);
+            var ax = Math.sin(rad), ay = -Math.cos(rad);
+            ctx.strokeStyle = "#0a0f16";
+            ctx.lineWidth = Math.max(6, 11 * cameraScaleX);
+            ctx.lineCap = "round";
+            ctx.beginPath();
+            ctx.moveTo(cx + ax * w * 0.2, cy + ay * h * 0.2);
+            ctx.lineTo(cx + ax * w * 0.78, cy + ay * h * 0.78);
+            ctx.stroke();
+            ctx.strokeStyle = this.hasPower("BERSERK") ? "#ff6b1a" : "#e8fbff";
+            ctx.lineWidth = Math.max(3, 5 * cameraScaleX);
+            ctx.beginPath();
+            ctx.moveTo(cx + ax * w * 0.2, cy + ay * h * 0.2);
+            ctx.lineTo(cx + ax * w * 0.78, cy + ay * h * 0.78);
+            ctx.stroke();
+        } else {
+            // Undead / enemy: glowing eyes + jagged teeth
+            this.drawSprite(zombieImg, x, y, w, h, r, this.isPlayer ? "#7a5cff" : (pw == "NORMAL" ? null : drawColor));
+            if (pw == "TANK") {
+                ctx.fillStyle = "#3b1d33";
+                ctx.fillRect(x + 3, y + h * 0.80, w - 6, h * 0.12);
+                ctx.fillRect(x + w * 0.1, y + h * 0.05, w * 0.8, h * 0.06);
+            } else if (pw == "EXPLODER") {
+                var pulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.02);
+                ctx.fillStyle = "rgba(255," + Math.round(120 + pulse * 120) + ",30,0.9)";
+                ctx.fillRect(x + 3, y + h * 0.80, w - 6, h * 0.12);
+                ctx.fillStyle = "#111";
+                ctx.font = "bold " + Math.max(9, Math.round(14 * cameraScaleX)) + "px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("TNT", cx, y + h * 0.9);
+            } else if (pw == "LEAPER") {
+                ctx.strokeStyle = "#d9ff66";
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(x + w * 0.2, y + h);
+                ctx.lineTo(x + w * 0.3, y + h + 8 * cameraScaleY);
+                ctx.lineTo(x + w * 0.4, y + h);
+                ctx.moveTo(x + w * 0.6, y + h);
+                ctx.lineTo(x + w * 0.7, y + h + 8 * cameraScaleY);
+                ctx.lineTo(x + w * 0.8, y + h);
+                ctx.stroke();
+            }
+        }
+        ctx.restore();
+        this.outlineBox(x, y, w, h, 3.5);
+    }
+
+    // Original pixel-art sprites (Character.png / Zombie.png) drawn crisp inside the rounded body
+    drawSprite(img, x, y, w, h, r, tint) {
+        if (!img || !img.complete || img.naturalWidth === 0) return;
+        ctx.save();
+        this.roundRectPath(x, y, w, h, r);
+        ctx.clip();
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, x, y, w, h);
+        if (tint) {
+            ctx.globalAlpha = 0.38;
+            ctx.fillStyle = tint;
+            ctx.fillRect(x, y, w, h);
+        }
+        ctx.restore();
+    }
+
+    drawOverlays(x, y, w, h) {
+        var cx = x + w / 2;
+        var cy = y + h / 2;
+        var now = Date.now();
+
+        // Frozen: icy tint + crystals
+        if (this.frozenTimer > 0) {
+            ctx.save();
+            ctx.fillStyle = "rgba(150, 225, 255, 0.55)";
+            this.roundRectPath(x - 3, y - 3, w + 6, h + 6, 10);
+            ctx.fill();
+            ctx.strokeStyle = "#e0f7ff";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - w * 0.3, y);
+            ctx.lineTo(cx - w * 0.2, y - 12);
+            ctx.lineTo(cx - w * 0.1, y);
+            ctx.moveTo(cx + w * 0.1, y);
+            ctx.lineTo(cx + w * 0.22, y - 16);
+            ctx.lineTo(cx + w * 0.32, y);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Energy shield bubble
+        if (this.shield > 0) {
+            ctx.save();
+            var rr = Math.max(w, h) * 0.78;
+            var gg = ctx.createRadialGradient(cx, cy, rr * 0.55, cx, cy, rr);
+            gg.addColorStop(0, "rgba(110, 231, 255, 0.04)");
+            gg.addColorStop(1, "rgba(110, 231, 255, " + (0.25 + 0.1 * Math.sin(now * 0.008)) + ")");
+            ctx.fillStyle = gg;
+            ctx.beginPath();
+            ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = "rgba(180, 245, 255, 0.9)";
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Orbiting blades
+        if (this.hasPower("ORBIT")) {
+            ctx.save();
+            for (let b = 0; b < 3; b++) {
+                var a = this.orbAngle + b * (Math.PI * 2 / 3);
+                var bx = (this.x + Math.cos(a) * 115) * cameraScaleX + xc;
+                var by = (-(this.y + Math.sin(a) * 115)) * cameraScaleY + yc;
+                ctx.translate(bx, by);
+                ctx.rotate(-a * 2);
+                ctx.shadowColor = "#d946ef";
+                ctx.shadowBlur = 14;
+                ctx.fillStyle = "#f5d0fe";
+                var bs = 15 * cameraScaleX + 5;
+                ctx.beginPath();
+                ctx.moveTo(0, -bs * 1.5);
+                ctx.lineTo(bs * 0.6, 0);
+                ctx.lineTo(0, bs * 1.5);
+                ctx.lineTo(-bs * 0.6, 0);
+                ctx.closePath();
+                ctx.fill();
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+            }
+            ctx.restore();
+        }
+
+        // Undead hero: halo + humanity ring
+        if (this.isPlayer && this.isZombie) {
+            ctx.save();
+            ctx.strokeStyle = "rgba(199,125,255," + (0.5 + 0.3 * Math.sin(now * 0.006)) + ")";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.ellipse(cx, y - 14 * cameraScaleY, w * 0.32, 6 * cameraScaleY + 2, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = "rgba(0,0,0,0.5)";
+            ctx.beginPath();
+            ctx.arc(cx, cy, Math.max(w, h) * 0.75, -Math.PI / 2, Math.PI * 1.5);
+            ctx.stroke();
+            ctx.strokeStyle = "#c77dff";
+            ctx.beginPath();
+            ctx.arc(cx, cy, Math.max(w, h) * 0.75, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (this.humanity / 100));
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Revive channel ring (drawn on the hero being revived)
+        if (this.reviveProgress > 0) {
+            ctx.save();
+            ctx.lineWidth = 7;
+            ctx.strokeStyle = "rgba(0,0,0,0.55)";
+            ctx.beginPath();
+            ctx.arc(cx, cy, Math.max(w, h) * 0.95, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.strokeStyle = "#44ffaa";
+            ctx.shadowColor = "#44ffaa";
+            ctx.shadowBlur = 14;
+            ctx.beginPath();
+            ctx.arc(cx, cy, Math.max(w, h) * 0.95, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * this.reviveProgress);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Invulnerability sparkle
+        if (this.invulnTimer > 0 && Math.floor(this.invulnTimer / 4) % 2 === 0) {
+            ctx.save();
+            ctx.globalAlpha = 0.35;
+            ctx.fillStyle = "#ffffff";
+            this.roundRectPath(x, y, w, h, 8);
+            ctx.fill();
+            ctx.restore();
+        }
     }
 
     animate() {
