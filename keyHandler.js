@@ -3,6 +3,7 @@
 //   Player 1 :  WASD move | F shoot | X reload | Space jetpack | Left-Shift dash | E shockwave / hold to REVIVE | G grab
 //   Player 2 :  Arrows move | Enter shoot | ' reload | . jetpack | Right-Shift dash | / shockwave / hold to REVIVE | , grab
 //   Solo     :  Arrow keys also fire twin-stick style, mouse aims & shoots.
+//   Esc      :  Pause menu - restart, co-op toggle and level select live there (no stray-key resets).
 // ============================================================================
 function isTypingTarget(e) {
     return e.target && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA");
@@ -29,6 +30,10 @@ function keyDownHandler(e) {
     if (isTypingTarget(e)) return;
     var k = e.key;
     var c = e.code;
+
+    // Pause menu owns the keyboard while it is open (restart / co-op / levels live there)
+    if (c == "Escape") { if (!e.repeat) togglePause(); e.preventDefault(); return; }
+    if (paused) { pauseKey(e); return; }
 
     if (k == "ArrowRight") { ULDRrightPressed = true; e.preventDefault(); }
     if (k == "ArrowLeft") { ULDRleftPressed = true; e.preventDefault(); }
@@ -67,16 +72,6 @@ function keyDownHandler(e) {
             e.preventDefault();
         }
     }
-    if (typeof LevelManager !== "undefined") {
-        if (k == "1") LevelManager.selectLevel("classic_arena");
-        if (k == "2") LevelManager.selectLevel("zigzag_tower");
-        if (k == "3") LevelManager.selectLevel("bunker_bridges");
-        if (k == "4") LevelManager.selectLevel("bounce_chaos");
-        if (k == "5") LevelManager.selectLevel("stress_test");
-        if (k == "6") LevelManager.selectLevel("infinite_frontier");
-    }
-    if (c == "KeyM") { if (typeof toggleMultiplayer === "function") toggleMultiplayer(); }
-    if (c == "KeyR") { if (typeof resetGame === "function") resetGame(); }
     if (k == "-" || k == "_") { userZoom = Math.max(0.55, userZoom - 0.1); }
     if (k == "=" || k == "+") { userZoom = Math.min(1.9, userZoom + 0.1); }
 }
@@ -118,6 +113,7 @@ function mouseMoveHandler(e) {
     var rect = canvas.getBoundingClientRect();
     mouseX = e.clientX - rect.left;
     mouseY = e.clientY - rect.top;
+    if (paused) { pauseHover(mouseX, mouseY); return; }
     useMouseAim = true;
     if (typeof SummonManager !== "undefined") SummonManager.handleCanvasMouseMove(e);
 }
@@ -126,6 +122,7 @@ function mouseDownHandler(e) {
     var rect = canvas.getBoundingClientRect();
     mouseX = e.clientX - rect.left;
     mouseY = e.clientY - rect.top;
+    if (paused) { if (e.button === 0) pauseClick(mouseX, mouseY); return; }
     useMouseAim = true;
 
     if (typeof SummonManager !== "undefined" && SummonManager.handleCanvasMouseDown(e)) return;

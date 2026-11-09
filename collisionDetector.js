@@ -227,6 +227,11 @@ class CollisionDetector {
         return bA.bottom >= slopeY - 30 && bA.bottom <= slopeY + 14;
     }
 
+    // Stairs are OPT-IN for heroes: you only climb them while holding Up (or already standing on them)
+    static ignoresStairs(entity, ramp) {
+        return ramp && ramp.kind === "stairs" && entity && entity.isPlayer && !(entity.stairsGrip > 0);
+    }
+
     // Helper: returns true if `st` is a thin horizontal interior floor / platform slab (h <= 60)
     // that should be solid from above and pass-through from below/sides (Mario / Terraria / Smash Bros style!)
     static isSemiSolidPlatform(st) {
@@ -243,6 +248,7 @@ class CollisionDetector {
         for (let i = 0; i < objects.length; i++) {
             var obj = objects[i];
             if (!obj || !obj.isRamp || obj.dead || obj.noCollide) continue;
+            if (this.ignoresStairs(entity, obj)) continue;
             var bR = this.getBounds(obj, [0, 0]);
             if (centerA >= bR.left - 8 && centerA <= bR.right + 8) {
                 var sy = this.getRampSlopeY(obj, bA, bR);
@@ -289,6 +295,7 @@ class CollisionDetector {
             if (hit) {
                 // 1. Staircase Ramps: ONLY collide along their walkable top slope! Never block from underneath or behind!
                 if (other.isRamp) {
+                    if (this.ignoresStairs(objectToTest, other)) continue;
                     var bR = this.getBounds(other, [0, 0]);
                     if (this.isWalkableRampContact(other, bA, bR, hit) && (objectToTest.yspeed === undefined || objectToTest.yspeed <= 5)) {
                         var sy = this.getRampSlopeY(other, bA, bR);
@@ -306,7 +313,7 @@ class CollisionDetector {
                 // 2. Semi-Solid Interior Floors & Platforms (h <= 60):
                 //    Solid when landing/standing on top (bCurr.bottom >= bO.top - 22 and not moving upward);
                 //    100% pass-through when jumping up from below, climbing a ramp, or intentionally dropping through!
-                if (this.isSemiSolidPlatform(other) && objectToTest.movable) {
+                if ((this.isSemiSolidPlatform(other) || other.isBumper) && objectToTest.movable) {
                     if (objectToTest.dropThroughTimer && objectToTest.dropThroughTimer > 0) {
                         continue;
                     }
@@ -402,6 +409,7 @@ class CollisionDetector {
         for (let i = 0; i < staticList.length; i++) {
             var s = staticList[i];
             if (!s || s.dead || s.noCollide || !s.isRamp) continue;
+            if (this.ignoresStairs(entity, s)) continue;
             var bR = this.getBounds(s, [0, 0]);
             if (centerA < bR.left - 10 || centerA > bR.right + 10) continue;
 
@@ -612,6 +620,7 @@ class CollisionDetector {
 
                         // 1. Staircase Ramps: align bottom strictly to center-foot slopeY when on the walkable slope; never block from underneath/behind!
                         if (st.isRamp) {
+                            if (this.ignoresStairs(d, st)) continue;
                             var bR = this.getBounds(st, [0, 0]);
                             if (this.isWalkableRampContact(st, bD, bR, hit) && (d.yspeed === undefined || d.yspeed <= 5)) {
                                 var slopeY = this.getRampSlopeY(st, bD, bR);
@@ -628,7 +637,7 @@ class CollisionDetector {
                         }
 
                         // 2. Semi-Solid Interior Floors & Platforms (h <= 60): only push UP onto the top surface when feet are near top; never push down or sideways!
-                        if (this.isSemiSolidPlatform(st)) {
+                        if (this.isSemiSolidPlatform(st) || st.isBumper) {
                             if (d.dropThroughTimer && d.dropThroughTimer > 0) {
                                 continue;
                             }

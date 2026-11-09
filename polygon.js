@@ -456,6 +456,15 @@ class Polygon {
                 ctx.beginPath();
                 if (leftS) { ctx.moveTo(bx0, by0); ctx.lineTo(bx1, by1); } else { ctx.moveTo(bx0, by1); ctx.lineTo(bx1, by0); }
                 ctx.stroke();
+            } else if (object.isRamp && object.kind === "slope") {
+                // Slope: smooth walkable hill/ramp - plain texture with a bright ridge line along the surface
+                ctx.clip();
+                var leftSl = object.rampDir == "left";
+                ctx.strokeStyle = "rgba(255,255,255,0.85)";
+                ctx.lineWidth = Math.max(3, 4 * cameraScaleX + 1);
+                ctx.beginPath();
+                if (leftSl) { ctx.moveTo(bx0, by0); ctx.lineTo(bx1, by1); } else { ctx.moveTo(bx0, by1); ctx.lineTo(bx1, by0); }
+                ctx.stroke();
             } else if (object.isRamp) {
                 // Stairs: bright tread edges
                 ctx.strokeStyle = "rgba(255,255,255,0.55)";

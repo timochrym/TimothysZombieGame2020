@@ -290,7 +290,7 @@ var DevUI = {
         var coopBtn = document.getElementById("coop-btn");
         if (coopBtn) {
             coopBtn.classList.toggle("active", multiplayer);
-            coopBtn.innerHTML = multiplayer ? "👥 Co-op: ON [M]" : "👤 Solo [M]";
+            coopBtn.innerHTML = multiplayer ? "👥 Co-op: ON" : "👤 Solo";
         }
         var godBtn = document.getElementById("god-mode-btn");
         if (godBtn) {
@@ -522,8 +522,8 @@ SummonManager.buildUI = function() {
         topBar.appendChild(b);
         return b;
     };
-    mk("coop-btn", "👤 Solo [M]", "Toggle 2-player co-op", function() { toggleMultiplayer(); DevUI.sync(); });
-    mk("", "🌲 Frontier [6]", "Procedural frontier with the giant castle", function() { LevelManager.selectLevel("infinite_frontier"); });
+    mk("coop-btn", "👤 Solo", "Toggle 2-player co-op (restarts the run)", function() { toggleMultiplayer(); DevUI.sync(); });
+    mk("", "🌲 Frontier", "Procedural frontier with the giant castle", function() { LevelManager.selectLevel("infinite_frontier"); });
     mk("god-mode-btn", "⚡ God Mode [V]", "Invincible + unlimited everything", function() { SummonManager.toggleGodMode(); DevUI.sync(); }, true);
     mk("summon-toggle-btn", "🛠️ Dev Mode [B]", "Open the developer tools", function() { SummonManager.togglePanel(); });
     document.body.appendChild(topBar);
@@ -537,6 +537,7 @@ SummonManager.buildUI = function() {
         { id: "box", icon: "🧱", label: "Block" }, { id: "grass_box", icon: "🌿", label: "Grass" },
         { id: "wall", icon: "🏰", label: "Wall" }, { id: "platform", icon: "➖", label: "1-way Plat." },
         { id: "ramp_right", icon: "🪜", label: "Stairs /" }, { id: "ramp_left", icon: "🪜", label: "Stairs \\" },
+        { id: "slope_right", icon: "⛰", label: "Slope /" }, { id: "slope_left", icon: "⛰", label: "Slope \\" },
         { id: "slide_right", icon: "🛝", label: "Slide /" }, { id: "slide_left", icon: "🛝", label: "Slide \\" },
         { id: "bumper", icon: "⏫", label: "Bouncer" }, { id: "crate", icon: "📦", label: "Crate" },
         { id: "tnt", icon: "🧨", label: "TNT" }, { id: "bouncy_cube", icon: "💎", label: "Bouncy" },
@@ -641,7 +642,7 @@ SummonManager.buildUI = function() {
                     <button class="dp-btn" id="sp-toggle-physics" data-act="togglePhysics">Toggle Physics</button>
                     <button class="dp-btn" data-act="duplicateSelected">📋 Duplicate</button>
                     <button class="dp-btn" id="sp-flip-btn" data-act="flipRamp" style="display:none">↔ Flip direction</button>
-                    <select id="sp-kind-select" class="dp-select" onchange="SummonManager.setSelectedKind(this.value)" title="Structure type"><option value="stairs">Stairs</option><option value="slide">Slide</option><option value="wall">Wall</option><option value="platform">One-way platform</option><option value="block">Solid block</option></select>
+                    <select id="sp-kind-select" class="dp-select" onchange="SummonManager.setSelectedKind(this.value)" title="Structure type"><option value="stairs">Stairs</option><option value="slope">Slope</option><option value="slide">Slide</option><option value="wall">Wall</option><option value="platform">One-way platform</option><option value="block">Solid block</option></select>
                     <button class="dp-btn warn" id="sp-kill-btn" data-act="killSelected" style="display:none">☠ Kill</button>
                 </div></div>
             </div>
@@ -653,7 +654,7 @@ SummonManager.buildUI = function() {
                 <div class="dp-title"><span>Toggles</span></div>
                 <div class="dp-toggles">
                     ${devToggle("God mode [V]", "", "Invincible, endless fuel", "god")}
-                    ${devToggle("Co-op [M]", "", "Two players", "coop")}
+                    ${devToggle("Co-op", "", "Two players (restarts the run)", "coop")}
                     ${devToggle("Waves running", "", "Pause enemy waves", "waves")}
                     ${devToggle("Jetpack", "", "Enable jetpacks", "jetpack")}
                     ${devToggle("Infinite ammo", "infiniteAmmo", "Unlimited bullets, no fuel drain or cooldowns")}
@@ -725,7 +726,7 @@ SummonManager.buildUI = function() {
                 <div class="dp-title"><span>World objects (<span id="sp-obj-count">0</span>)</span></div>
                 <input type="text" id="sp-obj-search" class="dp-text" style="width:100%;box-sizing:border-box" placeholder="Search by name…" oninput="SummonManager.refreshObjectList()">
                 <div class="dp-chips" style="margin-top:8px">
-                    <button class="active" data-filter="all">All</button><button data-filter="Stairs">Stairs</button><button data-filter="Slide">Slides</button>
+                    <button class="active" data-filter="all">All</button><button data-filter="Stairs">Stairs</button><button data-filter="Slope">Slopes</button><button data-filter="Slide">Slides</button>
                     <button data-filter="Wall">Walls</button><button data-filter="Platform">Platforms</button><button data-filter="Block">Blocks</button>
                     <button data-filter="Bouncer">Bouncers</button><button data-filter="Physics">Physics</button><button data-filter="Enemy">Enemies</button>
                 </div>
@@ -869,6 +870,8 @@ SummonManager.spawnAt = function(worldX, worldY) {
         created = Object.addBox(rx, ry, w, h, col, { name: bk == "wall" ? "Wall" : (bk == "platform" ? "One-way Platform" : "Block"), texture: tex, kind: bk });
     } else if (t == "ramp_right" || t == "ramp_left") {
         created = Object.addRamp(rx, ry, w, h, t == "ramp_right" ? "right" : "left", col, { name: "Stairs", texture: tex, kind: "stairs" });
+    } else if (t == "slope_right" || t == "slope_left") {
+        created = Object.addRamp(rx, ry, w, h, t == "slope_right" ? "right" : "left", col, { name: "Slope", texture: tex, kind: "slope" });
     } else if (t == "slide_right" || t == "slide_left") {
         created = Object.addRamp(rx, ry, w, h, t == "slide_right" ? "right" : "left", col, { name: "Slide", texture: null, kind: "slide" });
     } else if (t == "bumper") {
@@ -900,8 +903,8 @@ SummonManager.spawnAt = function(worldX, worldY) {
 SummonManager.setSelectedKind = function(k) {
     var o = this.selectedObject;
     if (!o || o instanceof Character || o.movable || o.isBumper) return;
-    if (o.isRamp && k !== "stairs" && k !== "slide") return;
-    if (!o.isRamp && (k === "stairs" || k === "slide")) return;
+    if (o.isRamp && k !== "stairs" && k !== "slide" && k !== "slope") return;
+    if (!o.isRamp && (k === "stairs" || k === "slide" || k === "slope")) return;
     o.kind = k;
     o._stepKey = null;
     Pathfinder.rebuildGraph(true);

@@ -807,16 +807,16 @@ function drawHUD() {
             uiText("PLAYER 1", hx + 24, hy + 28, 14, "#ff7b80", "left", "900");
             uiText("WASD move/jump   F shoot   Space jetpack", hx + 24, hy + 50, 12, "#dbe7f0", "left", "600");
             uiText("L-Shift dash   E shockwave / hold: revive   G grab", hx + 24, hy + 68, 12, "#dbe7f0", "left", "600");
-            uiText("(mouse also aims & shoots for P1)", hx + 24, hy + 86, 11, "#8ba2b4", "left", "600");
+            uiText("Stairs: hold UP to climb, DOWN to step off · mouse also aims for P1", hx + 24, hy + 86, 11, "#8ba2b4", "left", "600");
             uiText("PLAYER 2", hx + 340, hy + 28, 14, "#6cb8ff", "left", "900");
             uiText("Arrows move/jump   Enter shoot   . jetpack", hx + 340, hy + 50, 12, "#dbe7f0", "left", "600");
             uiText("R-Shift dash   / shockwave / hold: revive   , grab", hx + 340, hy + 68, 12, "#dbe7f0", "left", "600");
         } else {
             uiText("WASD move/jump   Mouse aim + click or F shoot   Arrows: twin-stick fire", hx + 24, hy + 28, 12, "#dbe7f0", "left", "700");
             uiText("Space jetpack   L-Shift dash   E shockwave   R-click/G grab & throw", hx + 24, hy + 50, 12, "#dbe7f0", "left", "700");
-            uiText("Press M for 2-player co-op", hx + 24, hy + 72, 12, "#ffd23f", "left", "800");
+            uiText("Stairs: hold UP to climb, DOWN to step off.   Esc: pause menu (co-op, restart, levels)", hx + 24, hy + 72, 12, "#ffd23f", "left", "800");
         }
-        uiText("M co-op · H hide · V god mode · B dev mode · +/- zoom · 1-6 levels · R restart", hx + hw / 2, hy + 116, 11, "#8ba2b4", "center", "600");
+        uiText("Esc pause menu (restart · co-op · levels) · H hide · V god mode · B dev mode · +/- zoom", hx + hw / 2, hy + 116, 11, "#8ba2b4", "center", "600");
         ctx.restore();
     } else {
         uiText("H: controls", w / 2, h - 12, 11, "rgba(200,220,235,0.55)", "center", "600");
@@ -846,7 +846,7 @@ function drawHUD() {
             statLine += (characters[i].playerLabel || "P") + ": " + characters[i].kills + " kills, " + characters[i].revives + " revives     ";
         }
         uiText(statLine, w / 2, h / 2 + 28, 14, "#a8c0d0", "center", "700");
-        uiText("Press [R] to play again", w / 2, h / 2 + 78, 18, "#ffd23f", "center", "800");
+        uiText("Opening the menu…", w / 2, h / 2 + 78, 16, "#8ba2b4", "center", "700");
     }
 
     // ---------- Dev overlays ----------
@@ -991,6 +991,146 @@ resetGame();
 if (typeof Pathfinder !== "undefined") Pathfinder.init();
 if (typeof SummonManager !== "undefined") SummonManager.init();
 
+// ============================================================================
+// PAUSE MENU (Esc). Restart, co-op, level changes and dev tools live here - never on a single stray key.
+// ============================================================================
+var paused = false;
+var pauseIndex = 0;
+var pauseConfirm = false;
+var pauseRects = [];
+var pauseSnap = null;
+var pauseFromGameOver = false;
+var pauseLevelKeys = [];
+var pauseLevelIdx = 0;
+var gameOverTimer = 0;
+
+function openPause(fromGameOver) {
+    pauseFromGameOver = !!fromGameOver;
+    pauseConfirm = false;
+    pauseIndex = 0;
+    pauseSnap = document.createElement("canvas");
+    pauseSnap.width = canvas.width;
+    pauseSnap.height = canvas.height;
+    pauseSnap.getContext("2d").drawImage(canvas, 0, 0);
+    pauseLevelKeys = [];
+    var all = LevelManager.getAllLevels();
+    for (var k in all) pauseLevelKeys.push(k);
+    pauseLevelIdx = Math.max(0, pauseLevelKeys.indexOf(LevelManager.currentLevelKey));
+    paused = true;
+    for (let i = 0; i < PlayerInput.length; i++) PlayerInput[i].shoot = PlayerInput[i].jet = PlayerInput[i].interact = false;
+}
+
+function closePause() {
+    paused = false;
+    pauseSnap = null;
+    pauseConfirm = false;
+}
+
+function togglePause() {
+    if (paused) closePause();
+    else openPause(false);
+}
+
+function pauseItems() {
+    if (pauseConfirm) {
+        return [
+            { id: "yes", label: "Yes - restart the run", hint: "Score and wave progress are lost" },
+            { id: "no", label: "No - go back", hint: "" }
+        ];
+    }
+    var items = [];
+    if (!pauseFromGameOver) items.push({ id: "resume", label: "Resume", hint: "Esc" });
+    else items.push({ id: "again", label: "Play again", hint: "Start a fresh run" });
+    var lvlName = LevelManager.getAllLevels()[pauseLevelKeys[pauseLevelIdx]];
+    items.push({ id: "mode", label: "Players:  " + (multiplayer ? "2-player co-op" : "Solo") + "   ▶  " + (multiplayer ? "Solo" : "Co-op"), hint: "Enter switches mode (restarts the run)" });
+    items.push({ id: "level", label: "Level:  ◀  " + (lvlName ? lvlName.name : "?") + "  ▶", hint: "◀ ▶ choose, Enter loads it (restarts the run)" });
+    if (!pauseFromGameOver) items.push({ id: "restart", label: "Restart run", hint: "Asks for confirmation" });
+    items.push({ id: "help", label: "Controls help:  " + (devOpts.showHelp ? "ON" : "OFF"), hint: "Shows the key cheat-sheet" });
+    items.push({ id: "dev", label: "Developer Mode panel", hint: "Same as pressing B" });
+    return items;
+}
+
+function pauseActivate(id, dir) {
+    if (id === "resume") closePause();
+    else if (id === "again" || id === "yes") { closePause(); resetGame(); }
+    else if (id === "no") { pauseConfirm = false; pauseIndex = 0; }
+    else if (id === "restart") { pauseConfirm = true; pauseIndex = 1; }
+    else if (id === "mode") { closePause(); toggleMultiplayer(); }
+    else if (id === "level") {
+        if (dir) pauseLevelIdx = (pauseLevelIdx + dir + pauseLevelKeys.length) % pauseLevelKeys.length;
+        else { var key = pauseLevelKeys[pauseLevelIdx]; closePause(); LevelManager.selectLevel(key); }
+    }
+    else if (id === "help") { devOpts.showHelp = !devOpts.showHelp; helpTimer = devOpts.showHelp ? 60 * 14 : 0; }
+    else if (id === "dev") { closePause(); if (!SummonManager.isOpen) SummonManager.togglePanel(); }
+}
+
+function pauseKey(e) {
+    var items = pauseItems();
+    var c = e.code;
+    if (c === "ArrowUp" || c === "KeyW") pauseIndex = (pauseIndex - 1 + items.length) % items.length;
+    else if (c === "ArrowDown" || c === "KeyS") pauseIndex = (pauseIndex + 1) % items.length;
+    else if (c === "ArrowLeft" || c === "KeyA") { if (items[pauseIndex].id === "level") pauseActivate("level", -1); }
+    else if (c === "ArrowRight" || c === "KeyD") { if (items[pauseIndex].id === "level") pauseActivate("level", 1); }
+    else if (c === "Enter" || c === "NumpadEnter" || c === "Space") pauseActivate(items[pauseIndex].id, 0);
+    e.preventDefault();
+}
+
+function pauseHover(mx, my) {
+    for (let i = 0; i < pauseRects.length; i++) {
+        var r = pauseRects[i];
+        if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) { pauseIndex = i; return; }
+    }
+}
+
+function pauseClick(mx, my) {
+    var items = pauseItems();
+    for (let i = 0; i < pauseRects.length; i++) {
+        var r = pauseRects[i];
+        if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+            pauseIndex = i;
+            var dir = 0;
+            if (items[i].id === "level") dir = (mx > r.x + r.w / 2) ? 1 : -1;
+            pauseActivate(items[i].id, dir);
+            return true;
+        }
+    }
+    return false;
+}
+
+function drawPauseMenu() {
+    if (!pauseSnap) return;
+    ctx.drawImage(pauseSnap, 0, 0);
+    ctx.fillStyle = "rgba(4, 8, 14, 0.72)";
+    ctx.fillRect(0, 0, w, h);
+
+    var items = pauseItems();
+    if (pauseIndex >= items.length) pauseIndex = 0;
+    var pw = 560, rowH = 58;
+    var ph = 150 + items.length * rowH;
+    var px = w / 2 - pw / 2, py = Math.max(20, h / 2 - ph / 2);
+    uiPanel(px, py, pw, ph, pauseFromGameOver ? "#ff4d5e" : "#22d3ee", 0.96);
+    uiText(pauseConfirm ? "RESTART?" : (pauseFromGameOver ? "OVERRUN" : "PAUSED"), w / 2, py + 62, 44, pauseFromGameOver ? "#ff4d5e" : "#ffd23f", "center", "900");
+    uiText("Wave " + level + "  ·  Score " + score + "  ·  " + (multiplayer ? "Co-op" : "Solo"), w / 2, py + 92, 15, "#a8c0d0", "center", "700");
+
+    pauseRects = [];
+    for (let i = 0; i < items.length; i++) {
+        var ry = py + 116 + i * rowH;
+        var sel = (i === pauseIndex);
+        ctx.save();
+        ctx.fillStyle = sel ? "rgba(34, 211, 238, 0.22)" : "rgba(255,255,255,0.05)";
+        redGuy.roundRectPath(px + 24, ry, pw - 48, rowH - 8, 12);
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = sel ? "#22d3ee" : "rgba(255,255,255,0.08)";
+        ctx.stroke();
+        ctx.restore();
+        uiText(items[i].label, w / 2, ry + 28, 19, sel ? "#ffffff" : "#c3d5e2", "center", "800");
+        if (sel && items[i].hint) uiText(items[i].hint, w / 2, ry + 43, 11, "#7ff0ff", "center", "600");
+        pauseRects.push({ x: px + 24, y: ry, w: pw - 48, h: rowH - 8 });
+    }
+    uiText("↑ ↓ select    ← → change    Enter confirm    Esc resume", w / 2, py + ph - 14, 12, "#8ba2b4", "center", "600");
+}
+
 function drawHitboxes() {
     ctx.save();
     ctx.lineWidth = 1.5;
@@ -1012,6 +1152,13 @@ function drawHitboxes() {
 // Fixed-rate loop with a time-scale accumulator (dev slow-mo / fast-forward) and FPS meter
 var tickAccumulator = 0;
 function tick() {
+    if (paused) { drawPauseMenu(); return; }
+    if (gameOver) {
+        gameOverTimer++;
+        if (gameOverTimer > 150) { gameOverTimer = 0; openPause(true); return; }
+    } else {
+        gameOverTimer = 0;
+    }
     tickAccumulator += devOpts.timeScale;
     var guard = 0;
     while (tickAccumulator >= 1 && guard < 4) {

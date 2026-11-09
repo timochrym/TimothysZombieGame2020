@@ -238,10 +238,17 @@ class LevelManager {
         for (let i = 0; i < items.length; i++) {
             var it = items[i];
             it.x *= S;
-            it.y = sy(it.y);
-            if (it.type != "crate") {
+            if (it.type == "bumper") {
+                // thin spring pad: widen it, keep it 40px thick and sitting on its surface
+                var bottomY = it.y - it.h / 2;
                 it.w *= S;
-                it.h *= S;
+                it.y = sy(bottomY) + it.h / 2;
+            } else {
+                it.y = sy(it.y);
+                if (it.type != "crate") {
+                    it.w *= S;
+                    it.h *= S;
+                }
             }
         }
     }
@@ -630,6 +637,11 @@ class WorldGenerator {
         return obj;
     }
 
+    // Covers a pit with a one-way trapdoor: you never fall in by accident, hold Down to drop through, jump up through from below
+    static addHatch(left, right, topY) {
+        return this.addGridBox(left, topY - 40, right - left, 40, "#334155", { name: "Trapdoor Hatch", texture: "lab_metal", kind: "platform" });
+    }
+
     static addGridRamp(left, bottom, w, h, dir, color, opts = {}) {
         left = this.tx(left); bottom = this.ty(bottom); w *= STRUCT_SCALE; h *= STRUCT_SCALE;
         var obj = Object.addRamp(left + w / 2, bottom + h / 2, w, h, dir, color, opts);
@@ -638,7 +650,7 @@ class WorldGenerator {
     }
 
     static addGridBumper(left, bottom, w, h, bounce, color, opts = {}) {
-        left = this.tx(left); bottom = this.ty(bottom); w *= STRUCT_SCALE; h *= STRUCT_SCALE;
+        left = this.tx(left); bottom = this.ty(bottom); w *= STRUCT_SCALE; h = 40; // thin spring pad: walk over it, never blocked
         var obj = Object.addBumper(left + w / 2, bottom + h / 2, w, h, bounce, color, opts);
         obj.chunkIdx = this.activeBuildChunk;
         return obj;
@@ -911,6 +923,8 @@ class WorldGenerator {
             this.addGridBox(leftX, startY - 40, cLeft - leftX + 800, 40, "#4a5568", { name: "Castle West Courtyard Floor", texture: "castle_stone" });
             this.addGridBox(cLeft + 1280, startY - 40, rightX - (cLeft + 1280), 40, "#4a5568", { name: "Castle East Courtyard Floor", texture: "castle_stone" });
 
+            this.addHatch(cLeft + 800, cLeft + 1280, startY);
+
             // Sub-Level B1: Royal Crypt (top = cryptB1Y = startY - 160, flush stairs up to Courtyard!)
             this.addGridRamp(cLeft + 560, cryptB1Y, 240, 160, "left", "#4a5568", { name: "Crypt B1 West Stairs \\", texture: "castle_stone" });
             this.addGridBox(cLeft + 160, cryptB1Y - 40, 720, 40, "#3d5a80", { name: "Crypt B1 West Hall", texture: "castle_stone" });
@@ -1087,6 +1101,7 @@ class WorldGenerator {
             // Ground Floor with central 320px Subterranean Grotto Entrance inside the mountain tunnel!
             this.addGridBox(leftX, startY - 120, 960, 120, "#4a5568", { name: "West Mountain Tunnel Floor", texture: "castle_stone" });
             this.addGridBox(leftX + 1280, startY - 120, 960, 120, "#4a5568", { name: "East Mountain Tunnel Floor", texture: "castle_stone" });
+            this.addHatch(leftX + 960, leftX + 1280, startY);
 
             // Subterranean Crystal Grotto inside the mountain root (top = grottoY = startY - 240)
             this.addGridBox(leftX + 240, grottoY - 280, 1760, 280, "#1d3557", { name: "Subterranean Grotto Floor", texture: "castle_stone" });
@@ -1134,6 +1149,8 @@ class WorldGenerator {
             this.addGridBox(leftX, startY - 120, 360, 120, "#4a5568", { name: "Cavern West Rim", texture: "castle_stone" });
             this.addGridBox(rightX - 360, startY - 120, 360, 120, "#4a5568", { name: "Cavern East Rim", texture: "castle_stone" });
             this.addGridBox(leftX + 680, startY - 40, 880, 40, "#3d5a80", { name: "Cavern Surface Overpass", texture: "castle_stone" });
+            this.addHatch(leftX + 360, leftX + 680, startY);
+            this.addHatch(leftX + 1560, rightX - 360, startY);
 
             // Tier 1 Underground Ledges (top = tier1Y = startY - 240)
             this.addGridBox(leftX + 200, tier1Y - 40, 640, 40, "#2b2d42", { name: "Upper Cavern West Shelf", texture: "lab_metal" });
@@ -1208,8 +1225,8 @@ class WorldGenerator {
         // Pitched slide-roof with eaves + a chimney
         var roofBaseY = floorTop(stories) + 120;
         var halfSpan = Math.floor((houseW / 2) / 40) * 40;
-        this.addGridRamp(houseLeftX - 40, roofBaseY, halfSpan + 40, 80, "right", "#bc4749", { name: "Roof Slide /", texture: "brick", kind: "slide" });
-        this.addGridRamp(houseLeftX + halfSpan, roofBaseY, houseW - halfSpan + 40, 80, "left", "#bc4749", { name: "Roof Slide \\", texture: "brick", kind: "slide" });
+        this.addGridRamp(houseLeftX - 40, roofBaseY, halfSpan + 40, 80, "right", "#bc4749", { name: "Roof /", texture: "brick", kind: "slope" });
+        this.addGridRamp(houseLeftX + halfSpan, roofBaseY, houseW - halfSpan + 40, 80, "left", "#bc4749", { name: "Roof \\", texture: "brick", kind: "slope" });
         this.addGridBox(houseLeftX + Math.round(houseW * 0.72 / 40) * 40, roofBaseY, 40, 120, "#7f1d1d", { name: "Chimney", texture: "brick", kind: "wall" });
 
         if (hasChest) {

@@ -135,6 +135,9 @@ class Character {
         this.reloadTimer = 0;
         this.noAmmoMsg = 0;
         this.emergencyTimer = 0;
+        this.stairsGrip = 0;         // >0 while this hero is climbing stairs (hold Up)
+        this.stairsIgnore = 0;
+        this.onStairs = false;
         this.hitCooldown = 0;        // i-frames after a hero is hit (no more chain-bounces)
         this.staggerTimer = 0;       // enemies reel back when a hero hits them
         this.onSlide = false;
@@ -147,7 +150,7 @@ class Character {
     // Calm top running speed (px/frame); knockback, dashes and wall-jumps can briefly exceed it
     runCapNow() {
         if (!this.isPlayer) return this.maxspeed * 0.4;
-        return this.maxspeed * (this.hasPower("SPEED") ? 0.56 : 0.42);
+        return this.maxspeed * (this.hasPower("SPEED") ? 0.62 : 0.48);
     }
 
     // ---- Ammo ------------------------------------------------------------
@@ -647,6 +650,31 @@ class Character {
         }
 
         this.onSlide = false;
+        // Stairs are opt-in: hold Up to climb, keep gripping while standing on them, press Down to step off
+        if (this.isPlayer) {
+            if (this.stairsIgnore > 0) this.stairsIgnore--;
+            var freshDownS = this.downPressed && !this.wasDownPressed;
+            if (this.upPressed && this.stairsIgnore <= 0) this.stairsGrip = 14;
+            else if (this.onStairs && this.onGround && !this.downPressed && this.stairsIgnore <= 0) this.stairsGrip = Math.max(this.stairsGrip, 8);
+            if (freshDownS && this.onStairs) { this.stairsGrip = 0; this.stairsIgnore = 18; this.onGround = false; this.coyoteTimer = 0; }
+            if (this.stairsGrip > 0) this.stairsGrip--;
+            this.stairsHintTimer = Math.max(0, (this.stairsHintTimer || 0) - 1);
+        }
+        // Gentle hint the first time you pass the foot of a staircase
+        if (this.isPlayer && !this.isZombie && this.stairsGrip <= 0 && this.onGround && this.stairsHintTimer <= 0 && ((this.hintFrame = (this.hintFrame || 0) + 1) % 10 === 0)) {
+            var feetY = this.y - this.s2 / 2;
+            for (let hs = 0; hs < staticObjects.length; hs++) {
+                var st = staticObjects[hs];
+                if (st.kind !== "stairs" || st.dead) continue;
+                var lowX = (st.rampDir == "right") ? st.x - st.w / 2 : st.x + st.w / 2;
+                if (Math.abs(this.x - lowX) < 110 && Math.abs(feetY - (st.y - st.h / 2)) < 50) {
+                    Components.addFloatingText("▲ hold UP to climb stairs", this.x, this.y + 95, "#ffe08a", 14);
+                    this.stairsHintTimer = 600;
+                    break;
+                }
+            }
+        }
+        this.onStairs = false;
         var wasGrounded = this.onGround;
         var preLandSpeedY = this.yspeed;
 
@@ -682,6 +710,8 @@ class Character {
             }
             this.fastFalling = false;
 
+            this.onStairs = !!(this.collidedRamp && this.collidedRamp.kind === "stairs");
+
             // Slides are slippery: gravity drags you downhill, climbing them is a slog
             this.onSlide = !!(this.collidedRamp && this.collidedRamp.kind === "slide");
             if (this.onSlide) {
@@ -689,7 +719,7 @@ class Character {
                 this.xspeed += downhill * 0.5;
             }
 
-            if (this.collidedWith && this.collidedWith.isBumper) {
+            if (this.collidedWith && this.collidedWith.isBumper && !(this.isPlayer && this.downPressed)) {
                 this.yspeed = this.collidedWith.bounceForce;
                 this.onGround = false;
                 this.jump = false;
@@ -778,7 +808,7 @@ class Character {
             // Tactile Arcade Horizontal Movement (snappy turn-around skid + apex air-control boost)
             var isAtJumpApex = !this.onGround && Math.abs(this.yspeed) < 3.4;
             var capNow = this.runCapNow();
-            var accel = this.speed * (isAtJumpApex ? 0.95 : 0.82) * (this.onSlide ? 0.55 : 1);
+            var accel = this.speed * (isAtJumpApex ? 1.0 : 0.9) * (this.onSlide ? 0.55 : 1);
             var turnSnap = this.onGround ? (this.speed * 1.3 + this.slower * 0.9) : (this.speed * 1.0 + this.slower * 0.4);
 
             if (this.rightPressed && !this.leftPressed) {
@@ -1030,7 +1060,7 @@ class Character {
                     this.y += stepY + this.yOver;
                     this.handleCharacterCollision(hitY);
 
-                    if (hitY && hitY.isBumper && this.yspeed <= 0) {
+                    if (hitY && hitY.isBumper && this.yspeed <= 0 && !(this.isPlayer && this.downPressed)) {
                         this.yspeed = hitY.bounceForce;
                         this.jump = false;
                         Components.spawnSparks(this.x, this.y - this.s2 / 2, "#ff2e63", 8);

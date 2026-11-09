@@ -36,6 +36,8 @@ class SummonManager {
             "wall": { w: 80, h: 480, color: "#4a5568", texture: "castle_stone", label: "Wall" },
             "ramp_right": { w: 480, h: 320, color: "#6c3c28", texture: "dojo_wood", label: "Stairs /" },
             "ramp_left": { w: 480, h: 320, color: "#6c3c28", texture: "dojo_wood", label: "Stairs \\" },
+            "slope_right": { w: 480, h: 240, color: "#7f4f24", texture: "grass_dirt", label: "Slope /" },
+            "slope_left": { w: 480, h: 240, color: "#7f4f24", texture: "grass_dirt", label: "Slope \\" },
             "slide_right": { w: 480, h: 240, color: "#38bdf8", texture: "solid", label: "Slide /" },
             "slide_left": { w: 480, h: 240, color: "#38bdf8", texture: "solid", label: "Slide \\" },
             "bumper": { w: 240, h: 80, color: "#ff2e63", texture: "solid", bounce: 24, label: "Bounce Pad" },

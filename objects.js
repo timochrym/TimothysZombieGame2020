@@ -30,12 +30,13 @@ class Object {
         this.isInfiniteBase = options.isInfiniteBase || false;
         this.baseOffsetX = options.baseOffsetX || 0;
         // KIND: the four distinct structure types the player sees & feels
-        //   stairs   = stepped walkable staircase (grippy)      slide    = icy slope (slippery, you slide down)
+        //   stairs   = stepped staircase (opt-in: hold Up to climb)   slope = smooth walkable ramp / hill / roof
+        //   slide    = icy chute (slippery, you slide down)
         //   wall     = solid vertical barrier (never passable)  platform = thin ONE-WAY ledge (jump up through it, stand on top)
         //   block    = solid ground / chunky mass               bouncer  = spring pad            crate = physics prop
         var nm = (options.name || name || "");
         if (options.kind) this.kind = options.kind;
-        else if (this.isRamp) this.kind = /roof|funnel|slide|chute|slope|bowl|descent/i.test(nm) ? "slide" : "stairs";
+        else if (this.isRamp) this.kind = /slide|chute|descent/i.test(nm) ? "slide" : (/stair|spire/i.test(nm) ? "stairs" : "slope");
         else if (this.isBumper) this.kind = "bouncer";
         else if (movable) this.kind = "crate";
         else if (this.h <= 100 && this.w >= 80) this.kind = "platform";
