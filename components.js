@@ -448,6 +448,7 @@ class Components {
                 }
             }
 
+            if (hero) object.lastShotAt = Date.now();
             var visW = living ? (berserk ? 22 : 14) : projW;
             for (var a = 0; a < angles.length; a++) {
                 var ang = baseAngle + Math.radians(angles[a]);

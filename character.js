@@ -1393,7 +1393,37 @@ class Character {
         ctx.restore();
     }
 
+    skinId() { return (typeof heroSkins !== "undefined" && heroSkins[this.playerIndex]) || "original"; }
+
+    // Alternate playable characters (stick figure / street brawler / cap hero) - animated, same hitbox
+    drawSkinned(x, y, w, h) {
+        var rad = Math.radians(this.degree);
+        var aimX = Math.sin(rad), aimY = -Math.cos(rad);
+        var firing = (Date.now() - (this.lastShotAt || 0)) < 120;
+        if (this.onGround) this.animPhase = (this.animPhase || 0) + Math.min(0.45, Math.abs(this.xspeed) * 0.05);
+        var facing = this.xspeed > 0.4 ? 1 : (this.xspeed < -0.4 ? -1 : (this.lastFacing || 1));
+        if (firing && Math.abs(aimX) > 0.3) facing = aimX > 0 ? 1 : -1;
+        this.lastFacing = facing;
+        drawHeroSkin(this.skinId(), x + w / 2, y + h / 2, (w + h) / 2, {
+            facing: facing,
+            phase: this.animPhase || 0,
+            moving: this.onGround ? Math.min(1, Math.abs(this.xspeed) / 3) : 0,
+            air: !this.onGround,
+            rising: this.yspeed > 0,
+            aimX: aimX, aimY: aimY,
+            color: this.playerIndex === 0 ? "#ff5a5f" : "#3da5ff",
+            firing: firing,
+            flash: this.hitFlashTimer > 0,
+            t: Date.now(),
+            label: "P" + (this.playerIndex + 1)
+        });
+    }
+
     drawModernBody(x, y, w, h, drawColor) {
+        if (this.isPlayer && !this.isZombie && this.skinId() !== "original") {
+            this.drawSkinned(x, y, w, h);
+            return;
+        }
         ctx.save();
         var cx = x + w / 2;
         var cy = y + h / 2;

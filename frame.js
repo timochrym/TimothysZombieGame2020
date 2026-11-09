@@ -668,7 +668,11 @@ function drawHeroCard(ch, x, y) {
     ctx.lineWidth = 3;
     ctx.strokeStyle = "#0a0f16";
     ctx.stroke();
-    ch.drawSprite(ch.isZombie ? zombieImg : characterImg, x + 12, y + 12, 54, 54, 12, ch.isZombie ? "#7a5cff" : (ch.playerIndex === 1 ? "#2f8cff" : null));
+    if (!ch.isZombie && ch.skinId() !== "original") {
+        drawSkinPreview(ch.skinId(), x + 39, y + 40, 50, ch.playerIndex === 0 ? "#ff5a5f" : "#3da5ff", "P" + (ch.playerIndex + 1));
+    } else {
+        ch.drawSprite(ch.isZombie ? zombieImg : characterImg, x + 12, y + 12, 54, 54, 12, ch.isZombie ? "#7a5cff" : (ch.playerIndex === 1 ? "#2f8cff" : null));
+    }
     ctx.restore();
 
     var label = (ch.playerLabel || "P" + (ch.playerIndex + 1)) + (ch.isZombie ? "  UNDEAD" : "  HERO LV " + heroLevel);
@@ -814,7 +818,7 @@ function drawHUD() {
         } else {
             uiText("WASD move/jump   Mouse aim + click or F shoot   Arrows: twin-stick fire", hx + 24, hy + 28, 12, "#dbe7f0", "left", "700");
             uiText("Space jetpack   L-Shift dash   E shockwave   R-click/G grab & throw", hx + 24, hy + 50, 12, "#dbe7f0", "left", "700");
-            uiText("Stairs: hold UP to climb, DOWN to step off.   Esc: pause menu (co-op, restart, levels)", hx + 24, hy + 72, 12, "#ffd23f", "left", "800");
+            uiText("Stairs: hold UP to climb, DOWN to step off.   Esc: pause menu (character, co-op, restart, levels)", hx + 24, hy + 72, 12, "#ffd23f", "left", "800");
         }
         uiText("Esc pause menu (restart · co-op · levels) · H hide · V god mode · B dev mode · +/- zoom", hx + hw / 2, hy + 116, 11, "#8ba2b4", "center", "600");
         ctx.restore();
@@ -1043,6 +1047,8 @@ function pauseItems() {
     else items.push({ id: "again", label: "Play again", hint: "Start a fresh run" });
     var lvlName = LevelManager.getAllLevels()[pauseLevelKeys[pauseLevelIdx]];
     items.push({ id: "mode", label: "Players:  " + (multiplayer ? "2-player co-op" : "Solo") + "   ▶  " + (multiplayer ? "Solo" : "Co-op"), hint: "Enter switches mode (restarts the run)" });
+    items.push({ id: "skin0", label: "Player 1 character:  ◀  " + skinName(heroSkins[0]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
+    if (multiplayer) items.push({ id: "skin1", label: "Player 2 character:  ◀  " + skinName(heroSkins[1]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
     items.push({ id: "level", label: "Level:  ◀  " + (lvlName ? lvlName.name : "?") + "  ▶", hint: "◀ ▶ choose, Enter loads it (restarts the run)" });
     if (!pauseFromGameOver) items.push({ id: "restart", label: "Restart run", hint: "Asks for confirmation" });
     items.push({ id: "help", label: "Controls help:  " + (devOpts.showHelp ? "ON" : "OFF"), hint: "Shows the key cheat-sheet" });
@@ -1055,6 +1061,8 @@ function pauseActivate(id, dir) {
     else if (id === "again" || id === "yes") { closePause(); resetGame(); }
     else if (id === "no") { pauseConfirm = false; pauseIndex = 0; }
     else if (id === "restart") { pauseConfirm = true; pauseIndex = 1; }
+    else if (id === "skin0") cycleSkin(0, dir || 1);
+    else if (id === "skin1") cycleSkin(1, dir || 1);
     else if (id === "mode") { closePause(); toggleMultiplayer(); }
     else if (id === "level") {
         if (dir) pauseLevelIdx = (pauseLevelIdx + dir + pauseLevelKeys.length) % pauseLevelKeys.length;
@@ -1069,8 +1077,8 @@ function pauseKey(e) {
     var c = e.code;
     if (c === "ArrowUp" || c === "KeyW") pauseIndex = (pauseIndex - 1 + items.length) % items.length;
     else if (c === "ArrowDown" || c === "KeyS") pauseIndex = (pauseIndex + 1) % items.length;
-    else if (c === "ArrowLeft" || c === "KeyA") { if (items[pauseIndex].id === "level") pauseActivate("level", -1); }
-    else if (c === "ArrowRight" || c === "KeyD") { if (items[pauseIndex].id === "level") pauseActivate("level", 1); }
+    else if (c === "ArrowLeft" || c === "KeyA") { var li = items[pauseIndex].id; if (li === "level" || li === "skin0" || li === "skin1") pauseActivate(li, -1); }
+    else if (c === "ArrowRight" || c === "KeyD") { var ri = items[pauseIndex].id; if (ri === "level" || ri === "skin0" || ri === "skin1") pauseActivate(ri, 1); }
     else if (c === "Enter" || c === "NumpadEnter" || c === "Space") pauseActivate(items[pauseIndex].id, 0);
     e.preventDefault();
 }
@@ -1089,7 +1097,7 @@ function pauseClick(mx, my) {
         if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
             pauseIndex = i;
             var dir = 0;
-            if (items[i].id === "level") dir = (mx > r.x + r.w / 2) ? 1 : -1;
+            if (items[i].id === "level" || items[i].id === "skin0" || items[i].id === "skin1") dir = (mx > r.x + r.w / 2) ? 1 : -1;
             pauseActivate(items[i].id, dir);
             return true;
         }
@@ -1126,6 +1134,10 @@ function drawPauseMenu() {
         ctx.restore();
         uiText(items[i].label, w / 2, ry + 28, 19, sel ? "#ffffff" : "#c3d5e2", "center", "800");
         if (sel && items[i].hint) uiText(items[i].hint, w / 2, ry + 43, 11, "#7ff0ff", "center", "600");
+        if (items[i].id === "skin0" || items[i].id === "skin1") {
+            var si = (items[i].id === "skin0") ? 0 : 1;
+            drawSkinPreview(heroSkins[si], px + 62, ry + (rowH - 8) / 2, 40, si === 0 ? "#ff5a5f" : "#3da5ff", "P" + (si + 1));
+        }
         pauseRects.push({ x: px + 24, y: ry, w: pw - 48, h: rowH - 8 });
     }
     uiText("↑ ↓ select    ← → change    Enter confirm    Esc resume", w / 2, py + ph - 14, 12, "#8ba2b4", "center", "600");
