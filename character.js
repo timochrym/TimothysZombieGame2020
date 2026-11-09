@@ -913,6 +913,7 @@ class Character {
 
             if (this.collidedWith && this.collidedWith.isBumper && !(this.isPlayer && this.downPressed)) {
                 this.yspeed = this.collidedWith.bounceForce;
+                if (GameModes.flag("bigPads", false)) this.launchSpeed = this.yspeed;
                 if (typeof SFX !== "undefined") SFX.play("boing", this.x, this.y);
                 this.onGround = false;
                 this.jump = false;
@@ -1205,10 +1206,14 @@ class Character {
         if (this.dashTimer <= 0 && !godMode && Math.abs(this.xspeed) > runCap && !this.onSlide && !(this.flingTimer > 0)) {
             this.xspeed = Math.sign(this.xspeed) * (runCap + (Math.abs(this.xspeed) - runCap) * 0.9);
         }
-        if (this.xspeed > curMaxSpeed) this.xspeed = curMaxSpeed;
-        if (this.xspeed < -curMaxSpeed) this.xspeed = -curMaxSpeed;
-        if (this.yspeed > curMaxSpeed) this.yspeed = curMaxSpeed;
-        if (this.yspeed < -curMaxSpeed) this.yspeed = -curMaxSpeed;
+        // bounce pads and portal flings may exceed the normal cap (that's the whole point of them)
+        var flingCap = this.flingTimer > 0 ? Math.max(curMaxSpeed, 40) : curMaxSpeed;
+        var upCap = Math.max(flingCap, this.launchSpeed || 0);
+        if (this.launchSpeed && this.yspeed < curMaxSpeed) this.launchSpeed = 0;
+        if (this.xspeed > flingCap) this.xspeed = flingCap;
+        if (this.xspeed < -flingCap) this.xspeed = -flingCap;
+        if (this.yspeed > upCap) this.yspeed = upCap;
+        if (this.yspeed < -flingCap) this.yspeed = -flingCap;
 
         // Sub-stepped movement so characters never tunnel or clip into ramps or other objects
         var maxSteps = this.isZombie ? 2 : 3;
@@ -1272,6 +1277,7 @@ class Character {
 
                     if (hitY && hitY.isBumper && this.yspeed <= 0 && !(this.isPlayer && this.downPressed)) {
                         this.yspeed = hitY.bounceForce;
+                        if (GameModes.flag("bigPads", false)) this.launchSpeed = this.yspeed;
                         if (typeof SFX !== "undefined") SFX.play("boing", this.x, this.y);
                         this.jump = false;
                         Components.spawnSparks(this.x, this.y - this.s2 / 2, "#ff2e63", 8);

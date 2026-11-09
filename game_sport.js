@@ -411,15 +411,15 @@ GameModes.register({
 
     drawHUD: function() {
         var S = Sport;
-        var cx = cssW / 2;
-        uiPanel(cx - 230, 12, 460, 78, "#4ade80");
-        uiText(TEAM_NAMES[0], cx - 150, 46, 18, TEAM_COLORS[0], "center", "900");
-        uiText(TEAM_NAMES[1], cx + 150, 46, 18, TEAM_COLORS[1], "center", "900");
-        uiText(S.score[0] + "  -  " + S.score[1], cx, 58, 40, "#ffffff", "center", "900");
+        var cx = cssW / 2, T = 58; // below the top-right button bar
+        uiPanel(cx - 230, T, 460, 78, "#4ade80");
+        uiText(TEAM_NAMES[0], cx - 150, T + 34, 18, TEAM_COLORS[0], "center", "900");
+        uiText(TEAM_NAMES[1], cx + 150, T + 34, 18, TEAM_COLORS[1], "center", "900");
+        uiText(S.score[0] + "  -  " + S.score[1], cx, T + 46, 40, "#ffffff", "center", "900");
         var secs = Math.max(0, Math.ceil(S.clock / 60));
-        uiText(S.sudden ? "SUDDEN DEATH" : (Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0")), cx, 82, 13, S.sudden ? "#ffd23f" : "#cbd5e1", "center", "800");
-        uiText("first to " + sportCfg.goals, cx - 150, 72, 11, "#94a3b8", "center", "700");
-        uiText(SPORT_FORMATS.find(function(f) { return f[0] === sportCfg.format; })[1], cx + 150, 72, 11, "#94a3b8", "center", "700");
+        uiText(S.sudden ? "SUDDEN DEATH" : (Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0")), cx, T + 70, 13, S.sudden ? "#ffd23f" : "#cbd5e1", "center", "800");
+        uiText("first to " + sportCfg.goals, cx - 150, T + 60, 11, "#94a3b8", "center", "700");
+        uiText(SPORT_FORMATS.find(function(f) { return f[0] === sportCfg.format; })[1], cx + 150, T + 60, 11, "#94a3b8", "center", "700");
         if (S.phase === "kickoff") {
             var n = Math.ceil(S.timer / 60);
             uiText(n > 0 ? String(n) : "GO!", cx, cssH / 2 - 60, 110, "#ffd23f", "center", "900");

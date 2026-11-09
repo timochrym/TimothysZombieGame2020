@@ -343,6 +343,7 @@ class LevelManager {
         brawl.active = nowBrawl;
         GameModes.activate(GameModes.modeOf(lvl));
         jetpackEnabled = GameModes.flag("jetpack", true);
+        if (typeof SummonManager !== "undefined") SummonManager.refreshLevelDropdown();
         if (nowBrawl) { brawlCfg.stage = key; saveBrawlCfg(); }
 
         resetGame();
