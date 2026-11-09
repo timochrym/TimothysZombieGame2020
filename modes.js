@@ -8,7 +8,8 @@
 //
 //   id, title, tagline, color, firstLevel        identity + which level to load from the Arcade
 //   flags: {                                      engine features to switch on/off for this game
-//     waves, revive, jetpack, shooting, ability, ammo, playerControl, noBedrock, scenery, enemiesPassive
+//     waves, revive, jetpack, shooting, ability, ammo, playerControl, noBedrock, scenery, enemiesPassive,
+//     coopToggle, dash, wallJump, airJumps, bigPads
 //   }
 //   onActivate() / onDeactivate()                 entering / leaving this game
 //   setupLevel(lvl)                               after the level geometry loads (build gadgets, balls ...)
@@ -21,12 +22,13 @@
 //   drawHUD()                                     replaces the standard HUD
 //   cameraTargets()                               -> [{x, y}] points the camera should keep in frame
 //   cpuThink(ch)                                  AI for CPU-controlled heroes (ch.isCPU)
-//   onPrimary(ch) / onSecondary(ch) / onInteract(ch)   fire / alt-fire / interact pressed
+//   onSecondary(ch)                               right-click / alt-fire -> return true to consume
 //   onKey(code, e)                                keyboard hook -> return true to consume
-//   onDamage(ch, amount, kx, ky, attacker)        hero damaged -> return true to consume
+//   onDamage(ch, amount, kx, ky, attacker)        a character is damaged -> return true to consume
 //   onExplosion(x, y, radius, power)              any explosion in the world
+//   onExit(ch, gadget) / onHazard(ch, gadget)     gadget events (level exit reached / spikes touched)
 //   menuItems(items) / onMenu(id, dir)            add / handle pause-menu rows (row.cycle = true for ◀ ▶)
-//   overTitle / againLabel / onRestart()          game-over screen text + restart behaviour
+//   overTitle / overSub(over) / againLabel / onRestart()   game-over screen text + restart behaviour
 // ============================================================================
 var GameModes = {
     list: [],

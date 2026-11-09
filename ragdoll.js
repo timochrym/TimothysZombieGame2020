@@ -259,14 +259,15 @@ var Ragdolls = {
 
             // Verlet integration
             var pts = rd.pts;
+            var dmp = rd.drag || 0.993, gk = g * (rd.gScale || 1);   // per-body overrides (e.g. slingshot shots)
             for (let j = 0; j < pts.length; j++) {
                 var p = pts[j];
-                var vx = (p.x - p.px) * 0.993, vy = (p.y - p.py) * 0.993;
+                var vx = (p.x - p.px) * dmp, vy = (p.y - p.py) * dmp;
                 var sp = Math.hypot(vx, vy);
                 if (sp > 36) { vx *= 36 / sp; vy *= 36 / sp; }
                 p.px = p.x; p.py = p.y;
                 p.x += vx;
-                p.y += vy - g;
+                p.y += vy - gk;
             }
             if (rd.heldBy) this.pinToHolder(rd);
 
@@ -275,7 +276,7 @@ var Ragdolls = {
             for (let it = 0; it < 3; it++) {
                 this.solveSticks(rd);
                 if (rd.heldBy) this.pinToHolder(rd);
-                this.collide(rd, near, bounce, it === 2);
+                this.collide(rd, near, bounce, it === 2, it);
             }
 
             // Arena walls / ceiling
@@ -342,7 +343,7 @@ var Ragdolls = {
     },
 
     // Resolve every point against nearby solids; apply bounce + friction; report hard impacts
-    collide: function(rd, near, bounce, finalPass) {
+    collide: function(rd, near, bounce, finalPass, iter) {
         var pts = rd.pts;
         var maxImpact = 0;
         for (let j = 0; j < pts.length; j++) {
@@ -383,10 +384,16 @@ var Ragdolls = {
                     else { p.x = R + p.r; nx = 1; }
                     if (o.movable && !o.heldBy) {
                         // bodies slam crates with real momentum (towers topple in Ragdoll Siege!)
+                        // use the INCOMING velocity (before the positional fix-up), so a body that merely
+                        // overlaps a crate (e.g. a corpse spawning on a tower) can't launch it
                         var mass = rd.k * rd.k * (rd.style.thick || 1);
-                        var pvx = p.x - p.px, pvy = p.y - p.py;
-                        o.xspeed = Math.max(-24, Math.min(24, o.xspeed + pvx * 0.22 * mass - nx * 0.15));
-                        o.yspeed = Math.max(-24, Math.min(24, o.yspeed + pvy * 0.12 * mass));
+                        var ivx = ox - p.px, ivy = oy - p.py;
+                        // once per frame (first solver pass) and per contact point: a whole body sums to a
+                        // believable shove instead of every point x every pass stacking up
+                        if (!iter && -(ivx * nx + ivy * ny) > 0.4) {
+                            o.xspeed = Math.max(-16, Math.min(16, o.xspeed + ivx * 0.075 * mass));
+                            o.yspeed = Math.max(-16, Math.min(16, o.yspeed + ivy * 0.05 * mass));
+                        }
                     }
                 }
 

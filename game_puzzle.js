@@ -184,6 +184,10 @@ GameModes.register({
         return false;
     },
 
+    overSub: function(over) {
+        return over ? ("All " + PUZZLE_ROOMS.length + " rooms solved!") : ("Room " + (puzzleState.room + 1) + " / " + PUZZLE_ROOMS.length + "  ·  " + (puzzleState.time / 60).toFixed(1) + "s  ·  ★ " + Gadgets.starsGot + "/" + Gadgets.starsTotal);
+    },
+
     onRestart: function() { puzzleState.room = 0; LevelManager.selectLevel(PUZZLE_ROOMS[0]); },
 
     drawHUD: function() {

@@ -12,6 +12,7 @@ function saveSiege() { try { localStorage.setItem("timsRagdollSiege", JSON.strin
 var SIEGE_ANCHOR = { x: -700, y: 330 };
 var SIEGE_MAX_PULL = 230;
 var SIEGE_POWER = 0.152;           // launch speed per px of pull  (max ~35 px/frame)
+var SIEGE_GRAV = 0.55;             // in-flight gravity scale for shots (normal after first impact)
 var AMMO = {
     dummy: { name: "Dummy", color: "#ff4d5e", desc: "Crash-test hero" },
     heavy: { name: "Heavy", color: "#a855f7", desc: "Twice the mass" },
@@ -58,7 +59,7 @@ siegeLevel(1, "Plank House",
 siegeLevel(2, "Boom Town",
     [].concat(sgTower(520, 0, 2), sgTower(980, 0, 2), [sgPlank(750, 175, 560), sgTNT(750, 225), sgTNT(750, 36)], sgTower(1250, 0, 3), [sgTNT(1250, 276)]),
     [[640, 60, "NORMAL"], [860, 60, "NORMAL"], [600, 240, "SPITTER"], [1400, 60, "NORMAL"]],
-    ["bomb", "dummy", "dummy"], 760);
+    ["dummy", "bomb", "dummy"], 760);
 
 // 4: stone keep - lob over the wall
 siegeLevel(3, "Stone Keep",
@@ -73,8 +74,73 @@ siegeLevel(4, "King of the Hill",
      { type: "box", name: "Hilltop", x: 1050, y: 150, w: 700, h: 300, color: "#5d8a3a", texture: "grass_dirt", kind: "block" },
      { type: "ramp", name: "Hill Slope", x: 1600, y: 150, w: 400, h: 300, dir: "left", color: "#5d8a3a", texture: "grass_dirt" }]
         .concat(sgTower(850, 300, 4), sgTower(1250, 300, 4), [sgPlank(1050, 636, 520)], sgTower(1050, 650, 2), [sgTNT(1050, 336)]),
-    [[1050, 900, "BOSS_KING", 140], [950, 360, "NORMAL"], [1150, 360, "NORMAL"], [1700, 60, "TANK", 90], [400, 60, "NORMAL"]],
+    [[1050, 900, "BOSS_KING", 100], [950, 360, "NORMAL"], [1150, 360, "NORMAL"], [1700, 60, "TANK", 70], [400, 60, "NORMAL"]],
     ["heavy", "bomb", "dummy", "heavy", "bomb"], 1050);
+
+// ---- Fort pieces sleep until something actually disturbs them (rock-solid stacks, cheap physics) ----
+var SiegeSleep = {
+    crates: function() {
+        var out = [];
+        for (let i = 0; i < movingObjects.length; i++) { var o = movingObjects[i]; if (o.movable && !o.dead && !o.heldBy) out.push(o); }
+        return out;
+    },
+    init: function() {
+        var cs = this.crates();
+        for (let i = 0; i < cs.length; i++) {
+            cs[i].maxspeed = 12;            // fort pieces tumble rather than rocket away
+            cs[i].slower = slower * 1.4;    // and grind to a halt instead of skating across the field
+            this.sleep(cs[i]);
+        }
+    },
+    sleep: function(o) { o.siegeSleep = true; o.restX = o.x; o.restY = o.y; o.xspeed = o.yspeed = 0; o.calm = 0; },
+    wake: function(o) { if (o.siegeSleep) { o.siegeSleep = false; o.calm = 0; } },
+    near: function(o, l, b, r, t, pad) {
+        return o.x + o.w / 2 + pad > l && o.x - o.w / 2 - pad < r && o.y + o.h / 2 + pad > b && o.y - o.h / 2 - pad < t;
+    },
+    wakeAround: function(x, y, radius) {
+        var cs = this.crates();
+        for (let i = 0; i < cs.length; i++) if (Math.hypot(cs[i].x - x, cs[i].y - y) < radius) this.wake(cs[i]);
+    },
+    update: function() {
+        var cs = this.crates();
+        if (cs.length === 0) return;
+        // 1) moving bodies wake what they touch
+        for (let i = 0; i < Ragdolls.list.length; i++) {
+            var rd = Ragdolls.list[i];
+            if (Math.abs(rd.velX()) + Math.abs(rd.velY()) < 1.5) continue;
+            var bb = rd.bounds(6);
+            for (let j = 0; j < cs.length; j++) if (cs[j].siegeSleep && this.near(cs[j], bb.l, bb.b, bb.r, bb.t, 0)) this.wake(cs[j]);
+        }
+        for (let i = 0; i < zombies.length; i++) {
+            var z = zombies[i];
+            if (z.dead || Math.hypot(z.xspeed, z.yspeed) < 6) continue;
+            for (let j = 0; j < cs.length; j++) if (cs[j].siegeSleep && this.near(cs[j], z.x - z.s1 / 2, z.y - z.s2 / 2, z.x + z.s1 / 2, z.y + z.s2 / 2, 6)) this.wake(cs[j]);
+        }
+        // 2) moving crates wake their neighbours (including whatever rests on them)
+        for (let pass = 0; pass < 3; pass++) {
+            var changed = false;
+            for (let i = 0; i < cs.length; i++) {
+                var a = cs[i];
+                if (a.siegeSleep || Math.hypot(a.xspeed, a.yspeed) < 0.8) continue;
+                for (let j = 0; j < cs.length; j++) {
+                    var s = cs[j];
+                    if (!s.siegeSleep) continue;
+                    if (this.near(s, a.x - a.w / 2, a.y - a.h / 2, a.x + a.w / 2, a.y + a.h / 2, 4)) { this.wake(s); s.yspeed = -0.5; changed = true; }
+                }
+            }
+            if (!changed) break;
+        }
+        // 3) sleepers stay exactly where they were built; calm crates fall asleep again
+        for (let i = 0; i < cs.length; i++) {
+            var o = cs[i];
+            if (o.siegeSleep) { o.x = o.restX; o.y = o.restY; o.xspeed = o.yspeed = 0; continue; }
+            var sp = Math.hypot(o.xspeed, o.yspeed);
+            if (sp > 15) { o.xspeed *= 15 / sp; o.yspeed *= 15 / sp; }   // forts crumble, they don't explode
+            if (Math.hypot(o.xspeed, o.yspeed) < 0.3) { if (++o.calm > 45) this.sleep(o); }
+            else o.calm = 0;
+        }
+    }
+};
 
 function siegeLaunchVel() {
     var a = Siege.angle * Math.PI / 180, s = Siege.power * SIEGE_MAX_PULL * SIEGE_POWER;
@@ -83,8 +149,8 @@ function siegeLaunchVel() {
 
 // The pouch position for the current pull
 function siegePouch() {
-    var a = Siege.angle * Math.PI / 180, d = Siege.power * SIEGE_MAX_PULL;
-    return [SIEGE_ANCHOR.x - Math.cos(a) * d, SIEGE_ANCHOR.y - Math.sin(a) * d];
+    var a = Siege.angle * Math.PI / 180, d = Siege.power * SIEGE_MAX_PULL * 0.6;
+    return [SIEGE_ANCHOR.x - Math.cos(a) * d, Math.max(225, SIEGE_ANCHOR.y - Math.sin(a) * d)];
 }
 
 function siegeEnemiesLeft() { var n = 0; for (let i = 0; i < zombies.length; i++) if (!zombies[i].dead) n++; return n; }
@@ -92,7 +158,7 @@ function siegeEnemiesLeft() { var n = 0; for (let i = 0; i < zombies.length; i++
 function siegeFire() {
     var type = Siege.shots[Siege.shotIdx];
     if (!type || Siege.phase !== "aim") return;
-    var v = siegeLaunchVel(), pp = siegePouch();
+    var v = siegeLaunchVel(), pp = [SIEGE_ANCHOR.x, SIEGE_ANCHOR.y + 10];   // released at the fork
     // a throw-away character only used to dress the ragdoll
     var box = Math.makeHitbox(s1, s2);
     var tmp;
@@ -108,6 +174,8 @@ function siegeFire() {
     rd.thrownBy = redGuy;
     rd.projectileTimer = 400;
     rd.siegeShot = type;
+    rd.gScale = SIEGE_GRAV; rd.drag = 0.999;   // flies true until its first impact
+    rd._lastSp = Math.hypot(v[0], v[1]);
     Siege.rd = rd; Siege.rdType = type;
     Siege.phase = "flight"; Siege.flightT = 0; Siege.settleT = 0;
     Siege.shotIdx++;
@@ -147,12 +215,14 @@ GameModes.register({
         for (let i = 0; i < sg.enemies.length; i++) {
             var e = sg.enemies[i];
             var z = spawnZombie(e[2], e[0], e[1]);
+            z.x = e[0]; z.y = e[1]; z.yspeed = 0;   // exact placement (forts are built around them)
             z.hunter = false; z.siegeEnemy = true;
-            z.health = z.maxHealth = e[3] || (e[2] === "KNIGHT" ? 70 : 42);
+            z.health = z.maxHealth = e[3] || (e[2] === "KNIGHT" ? 60 : 30);   // a direct body-slam (34) pops a normal zombie
             z.lastFacing = -1; z.xspeed = 0;
-            z._pvx = 0; z._pvy = 0; z._hitCd = 30;
+            z._pvx = 0; z._pvy = 0; z._hitCd = 120;   // let the fort settle before impacts count
         }
         Siege.enemyTotal = sg.enemies.length;
+        SiegeSleep.init();
     },
 
     createPlayers: function() {
@@ -163,37 +233,25 @@ GameModes.register({
     },
 
     preUpdate: function() {
-        // enemy impact damage: falls, crushing crates, being slammed into things
-        var crates = [];
-        for (let i = 0; i < movingObjects.length; i++) {
-            var o = movingObjects[i];
-            if (!o.dead && o.movable && Math.hypot(o.xspeed, o.yspeed) > 6.5) crates.push(o);
-        }
+        // enemy impact damage: falls and being slammed into things (flying crates already SMASH via the engine)
         for (let i = 0; i < zombies.length; i++) {
             var z = zombies[i];
             if (z.dead) continue;
             if (z._hitCd > 0) z._hitCd--;
             var dv = Math.hypot(z.xspeed - (z._pvx || 0), z.yspeed - (z._pvy || 0));
-            if (dv > 11 && z._hitCd <= 0 && !z.liveRagdoll) {
+            if (dv > 13 && z._hitCd <= 0 && !z.liveRagdoll) {
                 z._hitCd = 20;
-                z.takeDamage(-(dv - 7) * 5, 0, 0, redGuy);
+                z.takeDamage(-(dv - 9) * 6, 0, 0, redGuy);
                 Components.addFloatingText("CRUNCH!", z.x, z.y + 90, "#ffb703", 16);
-            }
-            for (let j = 0; j < crates.length; j++) {
-                var c = crates[j];
-                if (z._hitCd > 0) break;
-                if (Math.abs(c.x - z.x) < (c.w + z.s1) / 2 + 8 && Math.abs(c.y - z.y) < (c.h + z.s2) / 2 + 8) {
-                    var sp = Math.hypot(c.xspeed, c.yspeed);
-                    z._hitCd = 20;
-                    z.takeDamage(-sp * 4.5, Math.sign(c.xspeed) * 5, 4, redGuy);
-                    Components.addFloatingText("CRUSHED!", z.x, z.y + 90, "#ffb703", 16);
-                }
             }
             if (z.y < -300 || z.x > 2350) z.takeDamage(-999, 0, 0, redGuy);
         }
     },
 
+    onExplosion: function(x, y, radius) { SiegeSleep.wakeAround(x, y, radius * 1.3); },
+
     update: function() {
+        SiegeSleep.update();
         // remember enemy velocities for next frame's impact check
         for (let i = 0; i < zombies.length; i++) { zombies[i]._pvx = zombies[i].xspeed; zombies[i]._pvy = zombies[i].yspeed; }
         var alive = siegeEnemiesLeft();
@@ -236,6 +294,12 @@ GameModes.register({
                 if (--rd._fuse <= 0) siegeDetonate();
             }
             rd = Siege.rd;
+            // first impact: the body becomes a normal floppy ragdoll again
+            if (rd && rd.gScale) {
+                var spNow = Math.hypot(rd.velX(), rd.velY());
+                if (Siege.flightT > 6 && (rd.grounded || spNow < rd._lastSp * 0.7 - 1)) { rd.gScale = 0; rd.drag = 0; }
+                rd._lastSp = spNow;
+            }
             var still = !rd || Ragdolls.list.indexOf(rd) === -1 || (Math.abs(rd.velX()) + Math.abs(rd.velY()) < 0.6);
             Siege.settleT = still ? Siege.settleT + 1 : 0;
             if (Siege.settleT > 70 || Siege.flightT > 480) Siege.phase = "settle";
@@ -296,6 +360,10 @@ GameModes.register({
         return false;
     },
 
+    overSub: function() {
+        return "Fort " + (SIEGE_LEVELS.indexOf(LevelManager.currentLevelKey) + 1) + "  ·  Score " + Siege.score + "  ·  " + (Siege.won ? "★".repeat(Siege.stars || 0) + "☆".repeat(3 - (Siege.stars || 0)) : siegeEnemiesLeft() + " zombies left");
+    },
+
     onDamage: function(ch) { return ch.isPlayer; },
     onRestart: function() { LevelManager.selectLevel(LevelManager.currentLevelKey); },
 
@@ -322,14 +390,14 @@ GameModes.register({
             ctx.strokeStyle = "#3b2414"; ctx.lineWidth = 6 * k;
             ctx.beginPath(); ctx.moveTo(wsx(ax - 26), wsy(ay + 10)); ctx.lineTo(wsx(pp[0]), wsy(pp[1])); ctx.stroke();
             // trajectory preview (verlet-matched: 0.993 drag, ragdoll gravity)
-            var v = siegeLaunchVel(), x = pp[0], y = pp[1], vx = v[0], vy = v[1], gg = gravity * 0.95;
+            var v = siegeLaunchVel(), x = ax, y = ay + 10, vx = v[0], vy = v[1], gg = gravity * 0.95 * SIEGE_GRAV;
             ctx.fillStyle = "rgba(255,255,255,0.85)";
-            for (let i = 1; i <= 75; i++) {
-                vx *= 0.993; vy = vy * 0.993 - gg; x += vx; y += vy;
+            for (let i = 1; i <= 110; i++) {
+                vx *= 0.999; vy = vy * 0.999 - gg; x += vx; y += vy;
                 if (y < 0) break;
-                if (i % 4 === 0) {
-                    var r = Math.max(2, (5 - i / 25)) * Math.max(0.6, k);
-                    ctx.globalAlpha = 1 - i / 90;
+                if (i % 5 === 0) {
+                    var r = Math.max(2, (5 - i / 35)) * Math.max(0.6, k);
+                    ctx.globalAlpha = 1 - i / 130;
                     ctx.beginPath(); ctx.arc(wsx(x), wsy(y), r, 0, Math.PI * 2); ctx.fill();
                 }
             }
@@ -369,13 +437,13 @@ GameModes.register({
     drawHUD: function() {
         var key = LevelManager.currentLevelKey, lvl = LevelManager.getCurrentLevel();
         var n = SIEGE_LEVELS.indexOf(key);
-        uiPanel(14, 14, 420, 104, "#f97316");
+        uiPanel(14, 14, 460, 130, "#f97316");
         uiText("RAGDOLL SIEGE", 30, 46, 24, "#fdba74", "left", "900");
         uiText("FORT " + (n + 1) + "/" + SIEGE_LEVELS.length + "  ·  " + (lvl.title || ""), 30, 70, 14, "#e2e8f0", "left", "800");
         var best = siegeStarsFor(key);
         uiText("score " + Siege.score + "   🧟 " + siegeEnemiesLeft() + " left   best " + "★".repeat(best) + "☆".repeat(3 - best), 30, 94, 13, "#94a3b8", "left", "700");
         // ammo tray
-        var tx = 30, ty = 108;
+        var tx = 30, ty = 130;
         for (let i = 0; i < Siege.shots.length; i++) {
             var t = Siege.shots[i], used = i < Siege.shotIdx, cur = i === Siege.shotIdx && Siege.phase === "aim";
             ctx.globalAlpha = used ? 0.25 : 1;

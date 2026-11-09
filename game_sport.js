@@ -199,6 +199,7 @@ GameModes.register({
     color: "#4ade80",
     firstLevel: "zb_stadium",
     flags: { waves: false, revive: false, jetpack: false, shooting: false, ability: true, ammo: false, noBedrock: true, scenery: false, coopToggle: false, playerControl: true, airJumps: 1 },
+    overSub: function() { return TEAM_NAMES[0] + " " + Sport.score[0] + "  -  " + Sport.score[1] + " " + TEAM_NAMES[1]; },
     overTitle: "FULL TIME",
     againLabel: "Rematch",
 

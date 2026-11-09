@@ -574,8 +574,9 @@ class CollisionDetector {
             if (blockedByStatic) {
                 anyBlockedByWall = true;
                 // Convert trapped normal momentum into perpendicular squeeze/escape velocity!
-                if (Math.abs(dy) > 0.5) {
+                if (Math.abs(dy) > 0.5 && imp > 3) {
                     // Blocked vertically (e.g. sitting on floor and hit from above) -> squeeze sideways
+                    // (only on a real impact: resting weight must not make stacks walk apart)
                     var offX = curr.x - source.x;
                     var sideSign = Math.abs(offX) > 2 ? Math.sign(offX) : (Math.abs(source.xspeed) > 0.2 ? Math.sign(source.xspeed) : ((curr.id % 2 === 0) ? 1 : -1));
                     var squeezeX = sideSign * Math.min(14, imp * 0.6) + source.xspeed * 0.55;

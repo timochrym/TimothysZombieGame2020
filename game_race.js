@@ -274,6 +274,12 @@ GameModes.register({
         showBanner(t !== undefined ? ("FINISH!  " + raceFmt(t)) : "TIME!", (m ? MEDAL_NAMES[m] + " MEDAL" : "No medal - keep practising") + (Race.newBest ? "  ·  NEW BEST!" : ""), MEDAL_COLORS[m]);
     },
 
+    overSub: function() {
+        var key = LevelManager.currentLevelKey, t = Race.finish[0];
+        var m = t !== undefined ? raceMedal(key, t) : 0;
+        return "Course " + (RACE_COURSES.indexOf(key) + 1) + "  ·  " + (t !== undefined ? raceFmt(t) + "s" : "DNF") + (m ? "  ·  " + MEDAL_NAMES[m] : "") + "  ·  best " + raceFmt(raceSave.best[key]) + (Race.newBest ? "  ·  NEW BEST!" : "");
+    },
+
     onDamage: function(ch, amount, kx, ky) { return true; },
 
     onKey: function(code) {

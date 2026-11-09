@@ -393,6 +393,10 @@ GameModes.register({
         return false;
     },
 
+    overSub: function(over) {
+        return over ? ("All " + PORTAL_CHAMBERS.length + " test chambers complete. The cake is still a lie.") : ("Test chamber " + (portalState.chamber + 1) + " / " + PORTAL_CHAMBERS.length);
+    },
+
     onRestart: function() { portalState.chamber = 0; LevelManager.selectLevel(PORTAL_CHAMBERS[0]); },
 
     drawWorld: function() { Portals.draw(); },
