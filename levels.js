@@ -494,6 +494,10 @@ class WorldGenerator {
         this.chunkBoundaryY = { 0: 40 }; // Left edge surface Y of chunk 0 starts at y = 40
         this.currentBiomeTitle = "🌾 Frontier Trailhead";
         this.maxMilesTraveled = 0;
+        this.visitedChunks = {};
+        this.nextRewardMiles = 5;
+        this.rewardsEarned = 0;
+        try { this.bestMiles = this.bestMiles || parseInt(localStorage.getItem("timsZombieBestMiles") || "0", 10) || 0; } catch (e) { this.bestMiles = this.bestMiles || 0; }
         this.activeBuildChunk = null;
         if (typeof worldOriginOffsetX !== "undefined") {
             worldOriginOffsetX = 0;
@@ -709,6 +713,10 @@ class WorldGenerator {
             true,
             power
         );
+        z.hunter = false;                       // guardians wait at their post...
+        z.homeX = x; z.homeY = y;               // ...patrol around it...
+        z.aggroR = (power == "BOSS_KING") ? 1500 : 1000; // ...and engage when a hero gets close, shoots, or hits them
+        z.health = z.maxHealth = Math.round(cfg.hp * (1 + (this.distanceMult() - 1) * 0.5));
         zombies.push(z);
     }
 
@@ -779,14 +787,31 @@ class WorldGenerator {
         if (this.generatedChunks[centerChunk]) {
             this.currentBiomeTitle = this.generatedChunks[centerChunk].title;
         }
-        var miles = Math.floor(Math.abs(trueWorldX) / 240);
-        if (miles > this.maxMilesTraveled) {
-            if (miles % 15 === 0 && miles > 0 && redGuy) {
-                coins += 5;
-                heroXP += 35;
-                Components.addFloatingText("🗺️ TRAIL MILESTONE: " + miles + " MILES! (+5 🪙, +35 XP)", redGuy.x, redGuy.y + 95, "#ffdd00", 20);
+        // ---------------- TRAVEL REWARDS ----------------
+        // Distance is measured by whichever hero has gone furthest from the trailhead.
+        var farthest = 0;
+        for (let hI = 0; hI < characters.length; hI++) farthest = Math.max(farthest, Math.abs(characters[hI].x + originNow));
+        var miles = Math.floor(farthest / 240);
+        // New biome discovered: instant bonus
+        for (let ci = 0; ci < centers.length; ci++) {
+            var cc = centers[ci];
+            if (!this.visitedChunks[cc] && this.generatedChunks[cc] && cc !== 0) {
+                this.visitedChunks[cc] = true;
+                var info = this.generatedChunks[cc];
+                score += 500;
+                coins += 10;
+                heroXP += 60;
+                if (typeof showBanner === "function") showBanner("NEW AREA DISCOVERED", info.title + "   +500 score  +10 coins  +60 XP", "#7ff0ff");
             }
+        }
+        this.visitedChunks[centerChunk] = true;
+        if (miles > this.maxMilesTraveled) {
+            for (let m = this.maxMilesTraveled + 1; m <= miles; m++) this.awardMile(m);
             this.maxMilesTraveled = miles;
+            if (miles > this.bestMiles) {
+                this.bestMiles = miles;
+                try { localStorage.setItem("timsZombieBestMiles", String(miles)); } catch (e) {}
+            }
         }
 
         if (addedAny || unloadedAny) {
@@ -797,6 +822,56 @@ class WorldGenerator {
             if (typeof SummonManager !== "undefined" && SummonManager.isOpen) {
                 SummonManager.refreshObjectList();
             }
+        }
+    }
+
+    // Enemies get tougher (and pay out more) the further you travel
+    static distanceMult() {
+        if (typeof LevelManager === "undefined" || LevelManager.currentLevelKey !== "infinite_frontier") return 1;
+        return 1 + Math.min(2.0, (this.maxMilesTraveled || 0) * 0.03);
+    }
+
+    // Milestone rewards: every mile pays a little, every 5 miles a supply drop, every 10 a cache, every 25 a legendary haul
+    static awardMile(m) {
+        var anchor = redGuy;
+        for (let i = 0; i < characters.length; i++) if (!characters[i].isZombie && !characters[i].dead) anchor = characters[i];
+        if (!anchor) return;
+        score += 40 + m * 6;
+        coins += 1;
+        Components.spawnCoins(anchor.x, anchor.y + 120, 2);
+        var drop = function(type, dx) { return spawnPowerUp(anchor.x + dx, anchor.y + 150, type); };
+        if (m % 25 === 0) {
+            score += 2500;
+            coins += 40;
+            heroXP += 400;
+            for (let i = 0; i < characters.length; i++) {
+                var h = characters[i];
+                if (h.isZombie) h.reviveAsHuman(0.8, "TRAIL LEGEND!");
+                h.health = h.maxHealth;
+                h.jetpackFuel = h.jetpackMaxFuel;
+                h.ammoReserve = h.ammoReserveMax;
+            }
+            drop(null, -260); drop(null, 0); drop(null, 260);
+            Components.spawnChest(anchor.x + 120, anchor.y - anchor.s2 / 2, "Trail Legend's Hoard");
+            Components.spawnCoins(anchor.x, anchor.y + 150, 14);
+            if (typeof showBanner === "function") showBanner("★ " + m + " MILES - TRAIL LEGEND ★", "+2500 score · +40 coins · full heal · 3 power-ups · treasure chest", "#ffd23f");
+        } else if (m % 10 === 0) {
+            score += 800;
+            coins += 12;
+            heroXP += 150;
+            for (let i = 0; i < characters.length; i++) {
+                characters[i].health = characters[i].maxHealth;
+                characters[i].addAmmo(120);
+            }
+            drop(null, -140); drop("AMMO", 140);
+            Components.spawnChest(anchor.x - 140, anchor.y - anchor.s2 / 2, "Pathfinder's Cache");
+            if (typeof showBanner === "function") showBanner(m + " MILES - PATHFINDER'S CACHE", "+800 score · +12 coins · full heal · ammo · power-up · chest", "#7ff0ff");
+        } else if (m % 5 === 0) {
+            score += 300;
+            coins += 4;
+            heroXP += 60;
+            drop(null, -100); drop("AMMO", 100);
+            if (typeof showBanner === "function") showBanner(m + " MILES - SUPPLY DROP", "+300 score · +4 coins · power-up + ammo", "#a7f3d0");
         }
     }
 

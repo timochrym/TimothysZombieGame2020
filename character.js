@@ -363,6 +363,19 @@ class Character {
             knockX = Math.max(-4.5, Math.min(4.5, knockX));
             knockY = Math.max(-2, Math.min(3, knockY));
         }
+        // Enemies hit by a hero immediately know where they are; knights block frontal chip damage with the shield
+        if (!this.isPlayer && attacker && attacker.isPlayer) {
+            this.alertTimer = 600;
+            if (this.zombiePower == "KNIGHT" && amount > -40 && this.dashTimer <= 0) {
+                var facingToward = ((attacker.x - this.x) * (this.lastFacing || 1)) > 0;
+                if (facingToward) {
+                    amount *= 0.4;
+                    knockX *= 0.3;
+                    Components.spawnSparks(this.x + (this.lastFacing || 1) * 30, this.y, "#e5e7eb", 4);
+                    if (Math.random() < 0.35) Components.addFloatingText("BLOCK", this.x, this.y + 70, "#e5e7eb", 13);
+                }
+            }
+        }
         // Enemies reel back harder when a hero lands a hit
         if (!this.isPlayer && amount < 0 && attacker && attacker.isPlayer) {
             this.staggerTimer = 10;
@@ -435,7 +448,8 @@ class Character {
                     pc.addHumanity(humanityGain * (pc === killer ? 1.5 : 0.6));
                 }
             }
-            var earned = basePts * combo;
+            var dMult = (typeof WorldGenerator !== "undefined" && WorldGenerator.distanceMult) ? WorldGenerator.distanceMult() : 1;
+            var earned = Math.round(basePts * combo * dMult);
             score += earned;
             if (score > highScore) {
                 highScore = score;
@@ -480,7 +494,7 @@ class Character {
                 Components.spawnChest(this.x, this.y, "Boss King's Royal Hoard");
                 Components.addFloatingText("👑 CITADEL BOSS DEFEATED!", this.x, this.y + 90, "#ffdd00", 24);
             } else {
-                var coinCount = (this.zombiePower == "TANK" || this.zombiePower == "KNIGHT") ? 5 : 2;
+                var coinCount = ((this.zombiePower == "TANK" || this.zombiePower == "KNIGHT") ? 5 : 2) + Math.floor((dMult - 1) * 2);
                 Components.spawnCoins(this.x, this.y + 20, coinCount);
             }
 
@@ -847,8 +861,8 @@ class Character {
                 life: 10,
                 maxLife: 10
             });
-            // Slice through nearby zombies during dash!
-            for (let z = 0; z < zombies.length; z++) {
+            // Slice through nearby zombies during dash! (heroes only - enemy lunges must not hurt each other)
+            for (let z = 0; this.isPlayer && z < zombies.length; z++) {
                 var zom = zombies[z];
                 if (!zom.dead && Math.hypot(zom.x - this.x, zom.y - this.y) < this.s1 + 35) {
                     var slashDmg = Math.round(-45 * rpgDamageMult * devOpts.playerDamage);
@@ -1231,7 +1245,10 @@ class Character {
         var bully = this.isPlayer ? other : this;
         if (bully.frozenTimer > 0) return;
         var mult = victim.isZombie ? 0.5 : 1;
-        victim.takeDamage(-9 * mult, (victim.x > bully.x ? 3 : -3), 1.5, bully);
+        var dmg = -9, kx = 3;
+        if (bully.dashTimer > 0 && bully.zombiePower == "TANK") { dmg = -26; kx = 7; }
+        else if (bully.dashTimer > 0 && bully.zombiePower == "KNIGHT") { dmg = -16; kx = 5; }
+        victim.takeDamage(dmg * mult, (victim.x > bully.x ? kx : -kx), 1.5, bully);
     }
 
     createCharacter() {

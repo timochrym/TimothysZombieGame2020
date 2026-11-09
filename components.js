@@ -389,7 +389,7 @@ class Components {
             if (hero && object.isZombie) {
                 object.lazerCooldown = 14;
             } else if (object.isZombie) {
-                object.lazerCooldown = Math.round(((object.zombiePower == "ARCHER") ? 48 : (object.zombiePower == "MAGE" ? 68 : (object.zombiePower == "BOSS_KING" ? 52 : 58))) / Math.max(0.3, devOpts.timeScale > 0 ? 1 : 1));
+                object.lazerCooldown = Math.round(((object.zombiePower == "ARCHER") ? 48 : (object.zombiePower == "MAGE" ? 68 : (object.zombiePower == "BOSS_KING" ? (object.enraged ? 34 : 52) : 58))));
             } else {
                 object.lazerCooldown = godMode ? 3 : (isRapid ? 4 : lazerCooldownMax);
                 if (berserk) object.lazerCooldown = Math.max(3, Math.round(object.lazerCooldown * 0.8));
@@ -979,136 +979,285 @@ class Components {
         }
     }
 
+    // ====================================================================================
+    // ENEMY AI
+    //   - smart target choice (spreads across heroes, favours the wounded), flanking from both sides
+    //   - guardians idle at their post until a hero gets close, shoots or hits them; wave enemies always hunt
+    //   - ranged enemies check line-of-sight, lead their shots, kite and dodge; low-HP casters retreat
+    //   - telegraphed specials: leaper pounce, tank charge, exploder fuse, bat dive-bombs, knight shield-lunge
+    //   - the Boss King enrages at 50% HP and calls guards at 66% / 33%
+    // ====================================================================================
+    static hasLOS(x1, y1, x2, y2) {
+        for (let s = 1; s < 9; s++) {
+            var t = s / 9;
+            var px = x1 + (x2 - x1) * t, py = y1 + (y2 - y1) * t;
+            for (let i = 0; i < staticObjects.length; i++) {
+                var st = staticObjects[i];
+                if (st.isRamp || st.isBumper || st.dead || st.noCollide) continue;
+                if (st.kind === "platform") continue;
+                if (Math.abs(px - st.x) < st.w / 2 && Math.abs(py - st.y) < st.h / 2) return false;
+            }
+        }
+        return true;
+    }
+
+    static leadAim(z, t, projSpeed) {
+        var d = Math.hypot(t.x - z.x, t.y - z.y);
+        var tt = d / Math.max(4, projSpeed);
+        var px = t.x + (t.xspeed || 0) * tt * 0.8;
+        var py = t.y + (t.yspeed || 0) * tt * 0.35;
+        z.degree = (Math.degrees(Math.atan2(px - z.x, py - z.y)) + 360) % 360;
+    }
+
+    static pickTarget(z) {
+        var best = null, bestScore = Infinity;
+        for (let pass = 0; pass < 2 && !best; pass++) {
+            for (let i = 0; i < characters.length; i++) {
+                var c = characters[i];
+                if (c.dead) continue;
+                if (pass === 0 && c.isZombie) continue;
+                var d = Math.hypot(c.x - z.x, c.y - z.y);
+                var crowd = 0;
+                for (let k = 0; k < zombies.length; k++) if (zombies[k] !== z && zombies[k].target === c && !zombies[k].dead) crowd++;
+                var woundedBonus = (1 - c.health / Math.max(1, c.maxHealth)) * 260;
+                var score = d + crowd * 140 - woundedBonus;
+                if (z.target === c) score -= 120; // stickiness so they don't dither
+                if (score < bestScore) { bestScore = score; best = c; }
+            }
+        }
+        z.target = best;
+    }
+
     static zombieAI(zombie) {
         zombie.upPressed = false;
         zombie.downPressed = false;
         zombie.leftPressed = false;
         zombie.rightPressed = false;
         zombie.shootPressed = false;
+        if (zombie.frozenTimer > 0 || zombie.ragdollTimer > 0 || zombie.staggerTimer > 0) return;
 
-        if (zombie.frozenTimer > 0) return;
+        zombie.aiTick = (zombie.aiTick || 0) + 1;
+        var dec = function(k) { zombie[k] = Math.max(0, (zombie[k] || 0) - 1); };
+        dec("leapCd"); dec("chargeCd"); dec("dodgeCd"); dec("alertTimer"); dec("specialCd");
 
-        var target = null;
-        var bestDist = Infinity;
-        // Hunt living heroes first; once every hero has fallen the horde turns on the undead ones
-        for (let pass = 0; pass < 2 && !target; pass++) {
-            for (let i = 0; i < characters.length; i++) {
-                var c = characters[i];
-                if (c.dead) continue;
-                if (pass === 0 && c.isZombie) continue;
-                var d = Math.hypot(c.x - zombie.x, c.y - zombie.y);
-                if (d < bestDist) {
-                    bestDist = d;
-                    target = c;
-                }
-            }
-        }
-
-        if (!target) {
-            if (Math.random() < 0.02) zombie.aiDir = (Math.random() < 0.5 ? -1 : 1);
-            if (zombie.aiDir < 0) zombie.leftPressed = true;
-            if (zombie.aiDir > 0) zombie.rightPressed = true;
-            return;
-        }
-
-        var dx = target.x - zombie.x;
-        var dy = target.y - zombie.y;
+        // ---- Target selection (re-evaluated every 15 frames) ----
+        if (!zombie.target || zombie.target.dead || (zombie.aiTick + zombie.id) % 15 === 0) Components.pickTarget(zombie);
+        var target = zombie.target;
         var pType = zombie.zombiePower;
 
-        // 1. BAT / GARGOYLE SWOOPER AI (Flies freely through air & caverns!)
-        if (pType == "BAT") {
-            zombie.flies = true;
-            var swoopY = target.y + 25 + Math.sin(Date.now() * 0.008 + zombie.id) * 55;
-            if (dx > 12) zombie.rightPressed = true;
-            else if (dx < -12) zombie.leftPressed = true;
-            if (swoopY > zombie.y + 10) zombie.upPressed = true;
-            else if (swoopY < zombie.y - 10) zombie.downPressed = true;
+        // gunfire alerts nearby enemies
+        for (let h = 0; h < characters.length; h++) {
+            var hh = characters[h];
+            if (!hh.isZombie && Date.now() - (hh.lastShotAt || 0) < 400 && Math.hypot(hh.x - zombie.x, hh.y - zombie.y) < 1800) zombie.alertTimer = 420;
+        }
+
+        // ---- Aggro / patrol (wave spawns always hunt; guardians wait at their post) ----
+        var dxT = target ? target.x - zombie.x : 0, dyT = target ? target.y - zombie.y : 0;
+        var distT = target ? Math.hypot(dxT, dyT) : Infinity;
+        var aggro = !!target && (zombie.hunter || zombie.alertTimer > 0 || distT < (zombie.aggroR || 1150));
+        if (aggro && !zombie.hunter && distT < 1150) zombie.alertTimer = Math.max(zombie.alertTimer, 300);
+        if (!aggro) {
+            if (zombie.homeX === undefined) { zombie.homeX = zombie.x; zombie.homeY = zombie.y; }
+            if (pType == "BAT") {
+                zombie.flies = true;
+                var hy = zombie.homeY + Math.sin(zombie.aiTick * 0.03 + zombie.id) * 50;
+                if (hy > zombie.y + 12) zombie.upPressed = true; else if (hy < zombie.y - 12) zombie.downPressed = true;
+            }
+            if (Math.abs(zombie.x - zombie.homeX) > 260) {
+                if (zombie.x > zombie.homeX) zombie.leftPressed = true; else zombie.rightPressed = true;
+            } else {
+                if (Math.random() < 0.012) zombie.aiDir = (Math.random() < 0.5 ? -1 : 1);
+                if (zombie.aiDir < 0) zombie.leftPressed = true;
+                if (zombie.aiDir > 0 && Math.abs(zombie.x - zombie.homeX) < 240) zombie.rightPressed = true;
+            }
             return;
         }
 
-        // 2. SKELETON ARCHER AI (Keeps sniper distance on towers/bridges & shoots arrows)
-        if (pType == "ARCHER") {
-            if (bestDist < 220) {
-                // Retreat to keep range
-                if (dx > 0) zombie.leftPressed = true;
-                else zombie.rightPressed = true;
-            } else if (bestDist > 480) {
-                if (typeof Pathfinder !== "undefined") Pathfinder.updateZombieNavigation(zombie, target);
-            }
-            if (bestDist < 720 && Math.abs(dy) < 340) {
-                zombie.degree = (Math.degrees(Math.atan2(dx, dy)) + 360) % 360;
-                zombie.shootPressed = true;
-            }
-            return;
-        }
+        var hpPct = zombie.health / Math.max(1, zombie.maxHealth);
+        if (zombie.aiTick % 6 === 0 || zombie.los === undefined) zombie.los = Components.hasLOS(zombie.x, zombie.y, target.x, target.y);
+        var los = zombie.los;
+        var sameLevel = Math.abs(dyT) < 90;
+        var dirT = dxT >= 0 ? 1 : -1;
+        var side = (zombie.id % 2 ? 1 : -1) * (zombie.flipSide ? -1 : 1);
+        // flanking: when close, melee enemies aim for opposite sides of the hero so they surround instead of queueing
+        var navTarget = (distT < 650 && pType != "ARCHER" && pType != "MAGE")
+            ? { x: target.x + side * 130, y: target.y, s2: target.s2 }
+            : target;
+        var navigate = function(tg) {
+            if (typeof Pathfinder !== "undefined") Pathfinder.updateZombieNavigation(zombie, tg);
+            else if (tg.x > zombie.x + 15) zombie.rightPressed = true; else if (tg.x < zombie.x - 15) zombie.leftPressed = true;
+        };
+        var flee = function() {
+            if (dirT > 0) zombie.leftPressed = true; else zombie.rightPressed = true;
+            if (zombie.onGround && Math.random() < 0.01) zombie.upPressed = true;
+        };
 
-        // 3. NECROMANCER MAGE AI (Fires 3-way arcane bolts & teleports when cornered)
-        if (pType == "MAGE") {
-            if (bestDist > 420 && typeof Pathfinder !== "undefined") {
-                Pathfinder.updateZombieNavigation(zombie, target);
-            } else if (bestDist < 160 && zombie.abilityCooldown <= 0) {
-                // Arcane Blink Teleport!
-                var blinkX = (dx > 0 ? -200 : 200);
-                if (!CollisionDetector.hitsStatic(zombie, blinkX, 40, staticObjects)) {
-                    Components.spawnSparks(zombie.x, zombie.y, "#c77dff", 10);
-                    zombie.x += blinkX;
-                    zombie.y += 40;
-                    zombie.abilityCooldown = 140;
+        // ---- Dodge: hop or sidestep incoming hero bullets (agile types only) ----
+        if (zombie.dodgeCd <= 0 && zombie.onGround && (pType == "ARCHER" || pType == "MAGE" || pType == "LEAPER" || pType == "SPITTER" || pType == "BOSS_KING")) {
+            for (let li = 0; li < lazers.length; li++) {
+                var lz = lazers[li];
+                if (lz.team !== 1) continue;
+                var lx = zombie.x - lz.x, ly = zombie.y - lz.y;
+                var ld = Math.hypot(lx, ly);
+                if (ld < 280 && ld > 40) {
+                    var lv = Math.hypot(lz.xspeed, lz.yspeed) || 1;
+                    if ((lx * lz.xspeed + ly * lz.yspeed) / (ld * lv) > 0.93 && Math.random() < 0.55) {
+                        zombie.upPressed = true;
+                        zombie.xspeed += (lz.xspeed > 0 ? 1 : -1) * 2.5;
+                        zombie.dodgeCd = 70;
+                        break;
+                    }
                 }
             }
-            if (bestDist < 680) {
-                zombie.degree = (Math.degrees(Math.atan2(dx, dy)) + 360) % 360;
-                zombie.shootPressed = true;
+        }
+
+        // ---- Soft separation so groups spread out instead of stacking ----
+        for (let zi = 0; zi < zombies.length; zi++) {
+            var oz = zombies[zi];
+            if (oz === zombie || oz.dead) continue;
+            var sx = zombie.x - oz.x;
+            if (Math.abs(sx) < 46 && Math.abs(zombie.y - oz.y) < 60) { zombie.xspeed += (sx >= 0 ? 1 : -1) * 0.22; break; }
+        }
+
+        // ============================ per-type behaviour ============================
+        if (pType == "BAT") {
+            zombie.flies = true;
+            zombie.batState = zombie.batState || "hover";
+            zombie.batTimer = (zombie.batTimer || 0) + 1;
+            if (zombie.batState == "hover") {
+                var hx = target.x + Math.sin(zombie.aiTick * 0.02 + zombie.id) * 160, hyy = target.y + 190 + Math.sin(zombie.aiTick * 0.05 + zombie.id) * 30;
+                if (hx > zombie.x + 14) zombie.rightPressed = true; else if (hx < zombie.x - 14) zombie.leftPressed = true;
+                if (hyy > zombie.y + 12) zombie.upPressed = true; else if (hyy < zombie.y - 12) zombie.downPressed = true;
+                if (zombie.batTimer > 90 && Math.abs(dxT) < 190 && dyT < -80 && !zombie.specialCd) {
+                    zombie.batState = "dive"; zombie.batTimer = 0;
+                    Components.addFloatingText("!", zombie.x, zombie.y + 50, "#ff4d5e", 20);
+                }
+            } else if (zombie.batState == "dive") {
+                zombie.yspeed = -9; zombie.xspeed += dirT * 0.9;
+                if (zombie.batTimer > 38 || zombie.y < target.y + 20) { zombie.batState = "retreat"; zombie.batTimer = 0; zombie.specialCd = 150; }
+            } else {
+                zombie.upPressed = true; zombie.xspeed += -dirT * 0.25;
+                if (zombie.batTimer > 50) { zombie.batState = "hover"; zombie.batTimer = 0; }
             }
             return;
         }
 
-        // Standard A* Pathfinding for ground enemies (ZOMBIE, SLIME, KNIGHT, BOSS_KING, etc.)
-        if (typeof Pathfinder !== "undefined") {
-            Pathfinder.updateZombieNavigation(zombie, target);
-        } else {
-            if (dx > 15) zombie.rightPressed = true;
-            else if (dx < -15) zombie.leftPressed = true;
-        }
-
-        // 4. ACID / MAGMA SLIME AI (Rhythmic high-arcing bounds)
-        if (pType == "SLIME" || pType == "MINI_SLIME") {
-            if (zombie.onGround && ((Date.now() + zombie.id * 90) % 600 < 80)) {
-                zombie.upPressed = true;
+        if (pType == "ARCHER" || pType == "MAGE") {
+            var wounded = hpPct < 0.35;
+            var keep = pType == "ARCHER" ? [300, 520] : [330, 560];
+            var range = pType == "ARCHER" ? 760 : 700;
+            if (wounded || distT < keep[0]) flee();
+            else if (distT > keep[1] || !los) navigate(target);
+            if (pType == "MAGE" && distT < 190 && zombie.abilityCooldown <= 0) {
+                var blinkX = (dxT > 0 ? -220 : 220);
+                if (!CollisionDetector.hitsStatic(zombie, blinkX, 40, staticObjects)) {
+                    Components.spawnSparks(zombie.x, zombie.y, "#c77dff", 10);
+                    zombie.x += blinkX; zombie.y += 40; zombie.abilityCooldown = 150;
+                    Components.spawnSparks(zombie.x, zombie.y, "#c77dff", 10);
+                }
             }
-        }
-
-        // 5. DARK ARMORED KNIGHT AI (Executes a fast horizontal Shield/Sword Lunge!)
-        if (pType == "KNIGHT") {
-            if (zombie.onGround && Math.abs(dx) < 300 && Math.abs(dy) < 70 && zombie.dashCooldown <= 0) {
-                zombie.dashVX = (dx >= 0 ? 1 : -1) * 16;
-                zombie.dashVY = 2;
-                zombie.dashTimer = 10;
-                zombie.dashCooldown = 95;
-                Components.spawnSparks(zombie.x, zombie.y, "#e0fbfc", 6);
-            }
-        }
-
-        // 6. CITADEL BOSS KING AI (5-way royal fireballs + heavy slam jumps)
-        if (pType == "BOSS_KING") {
-            if (bestDist < 780) {
-                zombie.degree = (Math.degrees(Math.atan2(dx, dy)) + 360) % 360;
+            if (distT < range && los && Math.abs(dyT) < 420) {
+                Components.leadAim(zombie, target, lazerSpeed * (pType == "ARCHER" ? 0.88 : 0.55));
                 zombie.shootPressed = true;
             }
-            if (zombie.onGround && Math.abs(dx) < 340 && Math.random() < 0.03) {
-                zombie.upPressed = true;
-            }
+            Components.antiStuck(zombie);
+            return;
         }
 
-        if (pType == "LEAPER" && zombie.onGround && Math.abs(dx) < 280 && dy > 25) {
-            zombie.upPressed = true;
+        if (pType == "SPITTER") {
+            if (distT < 260) flee(); else if (distT > 520 || !los) navigate(navTarget);
+            if (distT < 650 && los) { Components.leadAim(zombie, target, lazerSpeed * 0.65); zombie.shootPressed = true; }
+            Components.antiStuck(zombie);
+            return;
         }
-        if (pType == "SPITTER" && bestDist < 650) {
-            zombie.degree = (Math.degrees(Math.atan2(dx, dy)) + 360) % 360;
-            zombie.shootPressed = true;
+
+        // ---- melee / charger family: approach first ----
+        var committed = false;
+
+        if (pType == "TANK") {
+            if (zombie.chargeState == "wind") {
+                committed = true;
+                zombie.chargeWind--;
+                zombie.scaleX = 1 + Math.sin(zombie.aiTick * 1.2) * 0.05;
+                if (zombie.chargeWind <= 0) {
+                    zombie.chargeState = "go";
+                    zombie.dashVX = dirT * 13; zombie.dashVY = -0.5; zombie.dashTimer = 30; zombie.dashCooldown = 0;
+                    zombie.chargeCd = 220;
+                    screenShake = Math.max(screenShake, 4);
+                }
+            } else {
+                if (zombie.chargeState == "go" && zombie.dashTimer <= 0) zombie.chargeState = null;
+                if (zombie.chargeCd <= 0 && zombie.onGround && sameLevel && distT > 220 && distT < 760 && los && !zombie.chargeState) {
+                    zombie.chargeState = "wind"; zombie.chargeWind = 36;
+                    Components.addFloatingText("CHARGE!", zombie.x, zombie.y + 90, "#ff6b6b", 20);
+                    zombie.hitFlashTimer = 6;
+                }
+            }
+        } else if (pType == "LEAPER") {
+            if (zombie.leapWind > 0) {
+                committed = true;
+                zombie.leapWind--;
+                zombie.scaleY = 0.78; zombie.scaleX = 1.2;
+                if (zombie.leapWind === 0 && zombie.onGround) {
+                    zombie.yspeed = 12.8; zombie.xspeed = dirT * 11;
+                    zombie.onGround = false; zombie.leapCd = 120;
+                }
+            } else if (zombie.leapCd <= 0 && zombie.onGround && distT > 200 && distT < 540 && Math.abs(dyT) < 200) {
+                zombie.leapWind = 18;
+            }
+        } else if (pType == "EXPLODER") {
+            if (zombie.fuse > 0) {
+                zombie.fuse--;
+                zombie.hitFlashTimer = (zombie.fuse % 8 < 4) ? 2 : 0;
+                if (zombie.fuse === 0) { zombie.takeDamage(-999, 0, 0); return; }
+            } else if (distT < 135) {
+                zombie.fuse = 46;
+                Components.addFloatingText("TICK... TICK...", zombie.x, zombie.y + 80, "#fbbf24", 16);
+            }
+            if (zombie.fuse > 0) { if (dirT > 0) zombie.rightPressed = true; else zombie.leftPressed = true; committed = true; }
+        } else if (pType == "KNIGHT") {
+            if (zombie.onGround && sameLevel && distT > 150 && distT < 400 && zombie.dashCooldown <= 0 && los) {
+                zombie.dashVX = dirT * 16; zombie.dashVY = 1; zombie.dashTimer = 10; zombie.dashCooldown = 100;
+                Components.spawnSparks(zombie.x, zombie.y, "#e0fbfc", 6);
+            }
+        } else if (pType == "SLIME" || pType == "MINI_SLIME") {
+            // rhythmic bounding hops toward the hero
+            zombie.hopT = (zombie.hopT || 0) + 1;
+            if (zombie.onGround && zombie.hopT > 38) { zombie.hopT = 0; zombie.upPressed = true; }
+        } else if (pType == "BOSS_KING") {
+            if (hpPct < 0.5 && !zombie.enraged) {
+                zombie.enraged = true; zombie.speed *= 1.3;
+                Components.addFloatingText("THE KING IS ENRAGED!", zombie.x, zombie.y + 130, "#ff4d5e", 26);
+                screenShake = Math.max(screenShake, 8);
+            }
+            if (hpPct < 0.66 && !zombie.summon1) { zombie.summon1 = true; Components.summonGuards(zombie); }
+            if (hpPct < 0.33 && !zombie.summon2) { zombie.summon2 = true; Components.summonGuards(zombie); }
+            if (distT < 780 && los) { Components.leadAim(zombie, target, lazerSpeed * 0.72); zombie.shootPressed = true; }
+            if (zombie.onGround && Math.abs(dxT) < 360 && Math.random() < (zombie.enraged ? 0.05 : 0.03)) zombie.upPressed = true;
         }
-        if (pType == "EXPLODER" && bestDist < 85) {
-            zombie.takeDamage(-999, 0, 0);
+
+        if (!committed) navigate(navTarget);
+        Components.antiStuck(zombie);
+    }
+
+    static summonGuards(boss) {
+        Components.addFloatingText("THE KING CALLS HIS GUARDS!", boss.x, boss.y + 130, "#fbbf24", 24);
+        screenShake = Math.max(screenShake, 6);
+        for (let g = -1; g <= 1; g += 2) {
+            if (zombies.length > 24) break;
+            var m = spawnZombie(g < 0 ? "KNIGHT" : "NORMAL", boss.x + g * 170, boss.y + 40);
+            m.hunter = true;
         }
+    }
+
+    // Enemies that push against something without moving hop, then switch sides
+    static antiStuck(z) {
+        if (z.aiLastX === undefined) { z.aiLastX = z.x; z.aiStuck = 0; }
+        var pushing = z.leftPressed !== z.rightPressed;
+        if (pushing && Math.abs(z.x - z.aiLastX) < 0.5 && z.onGround) z.aiStuck++;
+        else z.aiStuck = Math.max(0, z.aiStuck - 2);
+        z.aiLastX = z.x;
+        if (z.aiStuck > 45) z.upPressed = true;
+        if (z.aiStuck > 100) { z.aiStuck = 0; z.flipSide = !z.flipSide; z.navPath = []; }
     }
 }

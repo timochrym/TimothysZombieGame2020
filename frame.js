@@ -188,7 +188,8 @@ function spawnZombie(forcePower, forceX, forceY) {
 
     var power = forcePower || pickEnemyType();
     var spec = enemySpec(power);
-    var zHealth = Math.round(spec.hp * devOpts.enemyHealth * (multiplayer ? 1.25 : 1));
+    var distScale = (typeof WorldGenerator !== "undefined" && WorldGenerator.distanceMult) ? WorldGenerator.distanceMult() : 1;
+    var zHealth = Math.round(spec.hp * devOpts.enemyHealth * (multiplayer ? 1.25 : 1) * (1 + (distScale - 1) * 0.5));
     var zBox = Math.makeHitbox(spec.size, spec.size);
     var z = new Character(
         "Enemy_" + power, zBox, zBox, spec.color, [spawnX, spawnY],
@@ -205,6 +206,7 @@ function spawnZombie(forcePower, forceX, forceY) {
         z.y += 90;
     }
     z.collidedWith = null;
+    z.hunter = true; // wave enemies always hunt the heroes
     zombies.push(z);
     return z;
 }
@@ -260,6 +262,35 @@ function pickPowerUpType() {
         if (r <= 0) return entries[i][0];
     }
     return "RAPID";
+}
+
+// Wave enemies actively hunt; guardians idle at their posts and must not block the wave counter
+function countHunters() {
+    var n = 0;
+    for (let i = 0; i < zombies.length; i++) if (!zombies[i].dead && zombies[i].hunter) n++;
+    return n;
+}
+
+// ---- Big announcement banners (distance rewards etc.) ----
+var banners = [];
+function showBanner(title, sub, color) {
+    banners.push({ title: title, sub: sub, color: color || "#ffd23f", life: 190, max: 190 });
+    if (banners.length > 3) banners.shift();
+}
+
+function drawBanners() {
+    if (banners.length === 0) return;
+    var b = banners[0];
+    b.life--;
+    var a = Math.min(1, b.life / 30, (b.max - b.life) / 14);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, a);
+    var bw = Math.min(w - 40, 760), bx = w / 2 - bw / 2, by = 120;
+    uiPanel(bx, by, bw, 78, b.color, 0.92);
+    uiText(b.title, w / 2, by + 36, 26, b.color, "center", "900");
+    uiText(b.sub, w / 2, by + 62, 14, "#dbe7f0", "center", "700");
+    ctx.restore();
+    if (b.life <= 0) banners.shift();
 }
 
 function spawnPowerUp(x, y, forceType) {
@@ -759,14 +790,20 @@ function drawHUD() {
     uiText("◈ " + coins, 250, 119, 15, "#ffd60a", "left", "800");
     if (godMode) uiText("⚡ GOD MODE", 250, 98, 12, "#ffdd00", "right", "900");
 
-    // ---------- Frontier banner ----------
+    // ---------- Frontier banner (distance, bonus, next reward) ----------
     if (typeof LevelManager !== "undefined" && LevelManager.currentLevelKey === "infinite_frontier" && typeof WorldGenerator !== "undefined") {
-        var totalWorldX = (redGuy ? redGuy.x : 0) + (typeof worldOriginOffsetX !== "undefined" ? worldOriginOffsetX : 0);
-        var miles = Math.floor(Math.abs(totalWorldX) / 240);
-        var dirLabel = (totalWorldX < -60) ? "WEST" : "EAST";
-        var bx = 360, bw = Math.min(520, w - 360 - 700);
-        uiPanel(bx, 14, Math.max(300, bw), 46, "#00f5d4");
-        uiText(WorldGenerator.currentBiomeTitle.replace(/^\S+\s/, "") + "  ·  " + miles + " MI " + dirLabel, bx + Math.max(300, bw) / 2, 44, 14, "#ffd23f", "center", "800");
+        var farthestX = 0;
+        for (let hI = 0; hI < characters.length; hI++) farthestX = Math.max(farthestX, Math.abs(characters[hI].x + worldOriginOffsetX));
+        var milesNow = Math.floor(farthestX / 240);
+        var nextR = (Math.floor(milesNow / 5) + 1) * 5;
+        var rewardName = (nextR % 25 === 0) ? "TRAIL LEGEND" : ((nextR % 10 === 0) ? "CACHE" : "SUPPLY DROP");
+        var bx = 360, bw = Math.max(330, Math.min(520, w - 360 - 700));
+        uiPanel(bx, 14, bw, 92, "#00f5d4");
+        uiText(WorldGenerator.currentBiomeTitle.replace(/^\S+\s/, ""), bx + bw / 2, 38, 14, "#ffd23f", "center", "800");
+        uiText(milesNow + " MI  ·  BEST " + WorldGenerator.bestMiles + " MI  ·  REWARDS x" + WorldGenerator.distanceMult().toFixed(2), bx + bw / 2, 58, 13, "#dbe7f0", "center", "700");
+        var frac = ((farthestX / 240) - (nextR - 5)) / 5;
+        uiBar(bx + 18, 70, bw - 36, 8, frac, "#00f5d4");
+        uiText("Next: " + rewardName + " at " + nextR + " MI", bx + bw / 2, 96, 12, "#7ff0ff", "center", "700");
     }
 
     // ---------- Last stand banner ----------
@@ -776,6 +813,8 @@ function drawHUD() {
         uiBar(w / 2 - 220, 106, 440, 10, lastStandTimer / lastStandTimerMax, "#ff4d5e");
         uiText(Math.ceil(lastStandTimer / 60) + "s", w / 2 + 232, 116, 12, "#fff", "left", "800");
     }
+
+    drawBanners();
 
     // ---------- Hero cards ----------
     var cardY = h - 166;
@@ -884,12 +923,12 @@ function frame() {
     if (!wavesPaused) {
         if (zombiesRemainingToSpawn > 0) {
             zombieSpawnTimer--;
-            if (zombieSpawnTimer <= 0 && zombies.length < devOpts.maxEnemies && !gameOver) {
+            if (zombieSpawnTimer <= 0 && countHunters() < devOpts.maxEnemies && !gameOver) {
                 spawnZombie();
                 zombiesRemainingToSpawn--;
                 zombieSpawnTimer = Math.max(24, (100 - level * 8) / Math.max(0.1, devOpts.spawnRate));
             }
-        } else if (zombies.length == 0 && !gameOver) {
+        } else if (countHunters() == 0 && !gameOver) {
             startLevel(level + 1);
         }
     }
