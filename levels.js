@@ -530,6 +530,7 @@ class WorldGenerator {
         shiftList(coinOrbs);
         shiftList(floatingTexts);
         shiftList(afterImages);
+        shiftList(Components.corpses);
         if (typeof treasureChests !== "undefined") {
             shiftList(treasureChests);
         }

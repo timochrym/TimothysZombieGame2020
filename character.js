@@ -135,6 +135,10 @@ class Character {
         this.reloadTimer = 0;
         this.noAmmoMsg = 0;
         this.emergencyTimer = 0;
+        this.ragdollTimer = 0;       // >0 = limp ragdoll: no control, tumbling
+        this.ragdollAngle = 0;
+        this.ragdollSpin = 0;
+        this.ragdollImmune = 0;
         this.stairsGrip = 0;         // >0 while this hero is climbing stairs (hold Up)
         this.stairsIgnore = 0;
         this.onStairs = false;
@@ -197,6 +201,33 @@ class Character {
     }
 
     hasPower(type) { return (this.powers[type] || 0) > 0; }
+
+    // Big hits turn a character into a limp ragdoll for a moment (heroes AND enemies)
+    ragdollThreshold() {
+        if (this.isPlayer) return Math.max(16, this.maxHealth * 0.18);
+        var p = this.zombiePower;
+        if (p == "BOSS_KING") return 9999;
+        if (p == "TANK") return 60;
+        if (p == "KNIGHT") return 42;
+        return Math.max(26, this.maxHealth * 0.3);
+    }
+
+    startRagdoll(kx, ky, dur) {
+        if (this.ragdollTimer > 0 || this.ragdollImmune > 0 || this.dead) return;
+        this.ragdollTimer = dur || 55;
+        var dir = Math.abs(kx) > 0.5 ? Math.sign(kx) : (Math.random() < 0.5 ? -1 : 1);
+        this.ragdollSpin = dir * (0.2 + Math.random() * 0.16);
+        this.ragdollAngle = 0;
+        this.xspeed += dir * 5;
+        this.yspeed = Math.max(this.yspeed, 6.5);
+        this.onGround = false;
+        this.jump = false;
+        if (this.heldObject) {
+            this.heldObject.heldBy = null;
+            this.heldObject.noCollide = false;
+            this.heldObject = null;
+        }
+    }
 
     recomputeStats() {
         var lvlMult = this.isZombie ? 1.15 : (1 + (heroLevel - 1) * 0.04);
@@ -361,6 +392,9 @@ class Character {
         this.xspeed += knockX;
         this.yspeed += knockY;
         this.hitFlashTimer = 5;
+        if (amount < 0 && -amount >= this.ragdollThreshold() && this.health > 0) {
+            this.startRagdoll(knockX, knockY, this.isPlayer ? 55 : 60);
+        }
 
         if (amount <= -5) {
             Components.addFloatingText(Math.round(amount).toString(), this.x, this.y + this.s2 / 2 + 15, this.isZombie ? "#ffdd44" : "#ff4444", 15);
@@ -381,6 +415,7 @@ class Character {
 
         if (this.moveType == "ZOMBIE") {
             this.dead = true;
+            if (typeof Components !== "undefined" && Components.addCorpse) Components.addCorpse(this);
 
             var basePts = (this.zombiePower == "BOSS_KING" ? 1500 : (this.zombiePower == "TANK" || this.zombiePower == "KNIGHT" ? 300 : (this.zombiePower == "NORMAL" ? 100 : 200)));
             if (comboTimer > 0) {
@@ -470,6 +505,8 @@ class Character {
             this.health = 120;
             this.humanity = 0;
             this.reviveProgress = 0;
+            this.ragdollImmune = 0;
+            this.startRagdoll(this.xspeed, 6, 80);
             this.powers = {};
             this.shield = 0;
             this.zombiePower = "SPITTER";
@@ -607,6 +644,22 @@ class Character {
         }
         if (powersChanged) this.recomputeStats();
         this.updateAmmo();
+        if (this.ragdollImmune > 0) this.ragdollImmune--;
+        if (this.ragdollTimer > 0) {
+            this.ragdollTimer--;
+            this.ragdollAngle += this.ragdollSpin;
+            if (this.onGround) { this.ragdollSpin *= 0.9; this.xspeed *= 0.95; } else this.ragdollSpin *= 0.995;
+            this.leftPressed = this.rightPressed = this.upPressed = this.downPressed = false;
+            this.dashTimer = 0;
+            this.fastFalling = false;
+            if (this.ragdollTimer === 0) {
+                this.ragdollAngle = 0;
+                this.ragdollSpin = 0;
+                this.ragdollImmune = this.isPlayer ? 150 : 90;
+                this.scaleX = 1.25;
+                this.scaleY = 0.78; // spring back up
+            }
+        }
         if (this.invulnTimer > 0) this.invulnTimer--;
         if (this.hitCooldown > 0) this.hitCooldown--;
         if (this.staggerTimer > 0) {
@@ -946,7 +999,7 @@ class Character {
 
             // Jetpack Joyride Machine-Gun Jetpack! (Hold Space in 1P or Up while airborne)
             this.jetpackFiring = false;
-            var wantJetpack = !this.isZombie && jetpackEnabled && (this.input.jet || (godMode && this.upPressed && !this.onGround));
+            var wantJetpack = !this.isZombie && this.ragdollTimer <= 0 && jetpackEnabled && (this.input.jet || (godMode && this.upPressed && !this.onGround));
             if (wantJetpack && (this.jetpackFuel > 0 || godMode)) {
                 this.jetpackFiring = true;
                 this.fastFalling = false;
@@ -1202,9 +1255,21 @@ class Character {
         // Soft ground shadow + team aura (makes every character pop against the background)
         this.drawAura(drawX, drawY, drawW, drawH);
 
+        // Ragdoll: the whole body tumbles around its centre
+        var ragRot = this.ragdollTimer > 0 || this.corpse;
+        if (ragRot) {
+            ctx.save();
+            ctx.translate(drawX + drawW / 2, drawY + drawH / 2);
+            ctx.rotate(this.ragdollAngle);
+            ctx.translate(-(drawX + drawW / 2), -(drawY + drawH / 2));
+        }
+        var isEnemyChar = this.isZombie && !this.isPlayer && typeof drawEnemySkin === "function";
+
         // Custom Distinct Artwork for Non-Zombie Enemy Archetypes (Bats, Slimes, Archers, Knights, Mages, Bosses)
         var customEnemyTypes = ["BAT", "SLIME", "MINI_SLIME", "ARCHER", "KNIGHT", "MAGE", "BOSS_KING"];
-        if (this.isZombie && customEnemyTypes.indexOf(this.zombiePower) !== -1) {
+        if (isEnemyChar) {
+            this.drawEnemyChar(drawX, drawY, drawW, drawH);
+        } else if (this.isZombie && customEnemyTypes.indexOf(this.zombiePower) !== -1) {
             ctx.save();
             var cx = this.x * cameraScaleX + xc;
             var cy = -visualY * cameraScaleY + yc;
@@ -1322,6 +1387,9 @@ class Character {
             this.drawModernBody(drawX, drawY, drawW, drawH, drawColor);
         }
 
+        if (ragRot) ctx.restore();
+
+        if (this.corpse) return;
         this.drawOverlays(drawX, drawY, drawW, drawH);
 
         Components.healthBar(this);
@@ -1393,6 +1461,35 @@ class Character {
         ctx.restore();
     }
 
+    // Distinct animated character for every enemy archetype
+    drawEnemyChar(x, y, w, h) {
+        var rad = Math.radians(this.degree || 0);
+        var firing = (Date.now() - (this.lastShotAt || 0)) < 260;
+        var airborne = !this.onGround && this.zombiePower != "BAT";
+        if (this.onGround && !this.frozenTimer) this.animPhase = (this.animPhase || 0) + Math.min(0.4, Math.abs(this.xspeed) * 0.06);
+        var facing = this.xspeed > 0.3 ? 1 : (this.xspeed < -0.3 ? -1 : (this.lastFacing || 1));
+        var aimX = Math.sin(rad), aimY = -Math.cos(rad);
+        if (firing || this.zombiePower == "ARCHER" || this.zombiePower == "BOSS_KING") {
+            if (Math.abs(aimX) > 0.2) facing = aimX > 0 ? 1 : -1;
+        }
+        this.lastFacing = facing;
+        var skinKey = this.zombiePower;
+        drawEnemySkin(skinKey, x + w / 2, y + h / 2, Math.max(w, h), {
+            id: this.id,
+            facing: facing,
+            phase: this.animPhase || 0,
+            moving: (this.onGround && !this.ragdollTimer) ? Math.min(1, Math.abs(this.xspeed) / 2.5) : 0,
+            air: airborne,
+            rising: this.yspeed > 0,
+            aimX: aimX, aimY: aimY,
+            color: this.originalColor || this.color,
+            firing: firing,
+            flash: this.hitFlashTimer > 0,
+            t: Date.now(),
+            ragdoll: this.ragdollTimer > 0 || this.corpse
+        });
+    }
+
     skinId() { return (typeof heroSkins !== "undefined" && heroSkins[this.playerIndex]) || "original"; }
 
     // Alternate playable characters (stick figure / street brawler / cap hero) - animated, same hitbox
@@ -1414,6 +1511,7 @@ class Character {
             color: this.playerIndex === 0 ? "#ff5a5f" : "#3da5ff",
             firing: firing,
             flash: this.hitFlashTimer > 0,
+            ragdoll: this.ragdollTimer > 0,
             t: Date.now(),
             label: "P" + (this.playerIndex + 1)
         });

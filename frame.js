@@ -430,6 +430,7 @@ function resetGame() {
     zombies = [];
     Components.rings = [];
     Components.bolts = [];
+    Components.corpses = [];
     score = 0;
     combo = 1;
     comboTimer = 0;
@@ -967,6 +968,7 @@ function frame() {
     // Update & Draw Lazers, Particles & Floating Arcade Texts
     Components.updateLazers();
     Components.updateParticles();
+    Components.updateCorpses();
     Components.drawEffects();
     Components.updateFloatingTexts();
 

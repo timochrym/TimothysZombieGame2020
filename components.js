@@ -306,7 +306,7 @@ class Components {
         if (object.abilityCooldown > 0) {
             object.abilityCooldown--;
         }
-        if (object.frozenTimer > 0 || object.staggerTimer > 0) return;
+        if (object.frozenTimer > 0 || object.staggerTimer > 0 || object.ragdollTimer > 0) return;
 
         // Shockwave (suppressed while the key is being used to revive a teammate)
         if (object.abilityPressed && !object.suppressAbility && (object.abilityCooldown == 0 || godMode || devOpts.infiniteAmmo) && object.isPlayer && !object.isZombie) {
@@ -448,7 +448,7 @@ class Components {
                 }
             }
 
-            if (hero) object.lastShotAt = Date.now();
+            object.lastShotAt = Date.now();
             var visW = living ? (berserk ? 22 : 14) : projW;
             for (var a = 0; a < angles.length; a++) {
                 var ang = baseAngle + Math.radians(angles[a]);
@@ -825,6 +825,51 @@ class Components {
                     }
                 }
             }
+        }
+    }
+
+    // ---- Ragdoll corpses: slain enemies tumble away limp and fade out ----
+    static addCorpse(ch) {
+        if (!Components.corpses) Components.corpses = [];
+        if (Components.corpses.length > 14) Components.corpses.shift();
+        ch.corpse = true;
+        ch.ragdollTimer = 99999;
+        ch.ragdollAngle = 0;
+        ch.ragdollSpin = (ch.xspeed >= 0 ? 1 : -1) * (0.22 + Math.random() * 0.15);
+        ch.yspeed = Math.max(ch.yspeed, 7);
+        ch.xspeed += (ch.xspeed >= 0 ? 1 : -1) * 3;
+        ch.hitFlashTimer = 0;
+        ch.corpseLife = 85;
+        Components.corpses.push(ch);
+    }
+
+    static updateCorpses() {
+        if (!Components.corpses) return;
+        for (let i = Components.corpses.length - 1; i >= 0; i--) {
+            var c = Components.corpses[i];
+            c.corpseLife--;
+            c.yspeed -= gravity * 0.9;
+            if (c.yspeed < -18) c.yspeed = -18;
+            if (CollisionDetector.collision(c, [0, c.yspeed], staticObjects)) {
+                c.y += c.yspeed + c.yOver;
+                c.yspeed *= -0.3;
+                if (Math.abs(c.yspeed) < 1.5) c.yspeed = 0;
+                c.xspeed *= 0.72;
+                c.ragdollSpin *= 0.7;
+            } else {
+                c.y += c.yspeed;
+            }
+            if (CollisionDetector.collision(c, [c.xspeed, 0], staticObjects)) {
+                c.xspeed *= -0.3;
+            } else {
+                c.x += c.xspeed;
+            }
+            c.ragdollAngle += c.ragdollSpin;
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, Math.min(1, c.corpseLife / 30));
+            c.createCharacter();
+            ctx.restore();
+            if (c.corpseLife <= 0) Components.corpses.splice(i, 1);
         }
     }
 
