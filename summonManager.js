@@ -110,7 +110,9 @@ class SummonManager {
         if (!sel || typeof LevelManager === "undefined") return;
         var all = LevelManager.getAllLevels();
         var html = "";
+        var modeId = (typeof GameModes !== "undefined" && GameModes.current) ? GameModes.current.id : "survival";
         for (var k in all) {
+            if (typeof GameModes !== "undefined" && GameModes.modeOf(all[k]) !== modeId) continue;
             var selected = (k === LevelManager.currentLevelKey) ? "selected" : "";
             html += `<option value="${k}" ${selected}>${all[k].name}</option>`;
         }

@@ -562,6 +562,7 @@ SummonManager.buildUI = function() {
     mk("coop-btn", "👤 Solo", "Toggle 2-player co-op (restarts the run)", function() { toggleMultiplayer(); DevUI.sync(); });
     mk("", "🌲 Frontier", "Procedural frontier with the giant castle", function() { LevelManager.selectLevel("infinite_frontier"); });
     mk("god-mode-btn", "⚡ God Mode [V]", "Invincible + unlimited everything", function() { SummonManager.toggleGodMode(); DevUI.sync(); }, true);
+    mk("", "🕹 Arcade", "Switch to another game made with this engine", function() { if (typeof paused !== "undefined" && paused) closePause(); Hub.openHub(false); });
     mk("summon-toggle-btn", "🛠️ Dev Mode [B]", "Open the developer tools", function() { SummonManager.togglePanel(); });
     document.body.appendChild(topBar);
 

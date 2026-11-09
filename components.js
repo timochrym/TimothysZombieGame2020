@@ -63,7 +63,12 @@ class Components {
         object.mouseShooting = false;
 
         if (object.isPlayer && object.isCPU) {
-            Brawl.cpuThink(object);
+            if (GameModes.has("cpuThink")) GameModes.call("cpuThink", object);
+            else Brawl.cpuThink(object);
+            return;
+        }
+        if (object.isPlayer && GameModes.flag("playerControl", true) === false) {
+            object.leftPressed = object.rightPressed = object.upPressed = object.downPressed = false;
             return;
         }
         if (object.isPlayer && typeof brawl !== "undefined" && brawl.active && brawl.phase !== "fight") {
@@ -369,7 +374,7 @@ class Components {
         if (object.frozenTimer > 0 || object.staggerTimer > 0 || object.ragdollTimer > 0 || object.hitstun > 0) return;
 
         // Shockwave (suppressed while the key is being used to revive a teammate)
-        if (object.abilityPressed && !object.suppressAbility && (object.abilityCooldown == 0 || godMode || devOpts.infiniteAmmo) && object.isPlayer && !object.isZombie) {
+        if (object.abilityPressed && !object.suppressAbility && GameModes.flag("ability", true) && (object.abilityCooldown == 0 || godMode || devOpts.infiniteAmmo) && object.isPlayer && !object.isZombie) {
             Components.addFloatingText("SHOCKWAVE!", object.x, object.y + 60, "#ffaa00", 20);
             if (typeof SFX !== "undefined") SFX.play("shockwave", object.x, object.y);
             Components.addRing(object.x, object.y, 320, "#ffaa33", 22);
@@ -377,6 +382,7 @@ class Components {
             object.abilityCooldown = (godMode || devOpts.infiniteAmmo) ? 10 : 150;
         }
 
+        if (object.isPlayer && !GameModes.flag("shooting", true)) return;
         var canEnemyShoot = (object.isPlayer || object.zombiePower == "SPITTER" || object.zombiePower == "ARCHER" || object.zombiePower == "MAGE" || object.zombiePower == "BOSS_KING");
         if (object.isZombie && !canEnemyShoot && object.moveType == "ZOMBIE") {
             return;
@@ -636,18 +642,27 @@ class Components {
         ctx.save();
         ctx.translate(sx, sy);
         ctx.rotate(ang);
-        ctx.shadowColor = l.color;
-        ctx.shadowBlur = 14;
-        var grad = ctx.createLinearGradient(-tail, 0, 0, 0);
-        grad.addColorStop(0, "rgba(255,255,255,0)");
-        grad.addColorStop(1, l.color);
-        ctx.fillStyle = grad;
+        // cheap glow: a soft halo + a fading tail (no shadowBlur / gradients -> fast with 100+ bullets)
+        ctx.fillStyle = l.color;
+        ctx.globalAlpha = 0.22;
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 0.35;
         ctx.beginPath();
         ctx.moveTo(-tail, 0);
         ctx.lineTo(0, -size * 0.55);
         ctx.lineTo(0, size * 0.55);
         ctx.closePath();
         ctx.fill();
+        ctx.globalAlpha = 0.75;
+        ctx.beginPath();
+        ctx.moveTo(-tail * 0.5, 0);
+        ctx.lineTo(0, -size * 0.4);
+        ctx.lineTo(0, size * 0.4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
         if (hostile) {
             ctx.fillStyle = l.color;
             ctx.beginPath();
@@ -858,6 +873,8 @@ class Components {
         screenShake = Math.min(9, screenShake + 5);
         Components.addRing(x, y, Math.min(radius, 420), color, 20);
         if (typeof Ragdolls !== "undefined") Ragdolls.explode(x, y, radius * 1.15, Math.min(17, 4 + Math.abs(damage) * 0.28));
+        GameModes.call("onExplosion", x, y, radius, Math.min(17, 4 + Math.abs(damage) * 0.28));
+        if (typeof Gadgets !== "undefined") Gadgets.onExplosion(x, y, radius);
         if (typeof SFX !== "undefined") SFX.play(Math.abs(damage) >= 20 ? "explode" : "kill", x, y, Math.min(1, radius / 300));
 
         for (let i = 0; i < count; i++) {
@@ -1080,6 +1097,7 @@ class Components {
         zombie.rightPressed = false;
         zombie.shootPressed = false;
         if (zombie.frozenTimer > 0 || zombie.ragdollTimer > 0 || zombie.staggerTimer > 0) return;
+        if (GameModes.flag("enemiesPassive", false)) return;
 
         zombie.aiTick = (zombie.aiTick || 0) + 1;
         var dec = function(k) { zombie[k] = Math.max(0, (zombie[k] || 0) - 1); };

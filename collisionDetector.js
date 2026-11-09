@@ -1,3 +1,59 @@
+// ============================================================================
+// STATIC SPATIAL HASH (broad-phase): rebuilt once per frame, so collision queries only test the
+// handful of level pieces near an entity instead of every object in the level.
+// ============================================================================
+var StaticGrid = {
+    cell: 320,
+    map: new Map(),
+    stamp: 1,
+    bufA: [], bufB: [], bufC: [],
+    key: function(cx, cy) { return (cx + 50000) * 100000 + (cy + 50000); },
+    build: function() {
+        this.map.clear();
+        var cs = this.cell;
+        for (let i = 0; i < staticObjects.length; i++) {
+            var s = staticObjects[i];
+            if (!s || s.dead) continue;
+            var hw = (s.w || 40) / 2, hh = (s.h || 40) / 2;
+            var x0 = Math.floor((s.x - hw) / cs), x1 = Math.floor((s.x + hw) / cs);
+            var y0 = Math.floor((s.y - hh) / cs), y1 = Math.floor((s.y + hh) / cs);
+            for (let cx = x0; cx <= x1; cx++) {
+                for (let cy = y0; cy <= y1; cy++) {
+                    var k = this.key(cx, cy);
+                    var arr = this.map.get(k);
+                    if (!arr) { arr = []; this.map.set(k, arr); }
+                    arr.push(s);
+                }
+            }
+        }
+        this.built = true;
+    },
+    // Statics overlapping the box (+ every dynamic object when withDynamic) into `out`
+    query: function(l, b, r, t, withDynamic, out) {
+        out.length = 0;
+        if (!this.built) this.build();
+        var cs = this.cell;
+        var st = ++this.stamp;
+        var x0 = Math.floor(l / cs), x1 = Math.floor(r / cs), y0 = Math.floor(b / cs), y1 = Math.floor(t / cs);
+        for (let cx = x0; cx <= x1; cx++) {
+            for (let cy = y0; cy <= y1; cy++) {
+                var arr = this.map.get(this.key(cx, cy));
+                if (!arr) continue;
+                for (let i = 0; i < arr.length; i++) {
+                    var o = arr[i];
+                    if (o._gs !== st) { o._gs = st; out.push(o); }
+                }
+            }
+        }
+        if (withDynamic) {
+            for (let i = 0; i < movingObjects.length; i++) if (!movingObjects[i].dead) out.push(movingObjects[i]);
+            for (let i = 0; i < characters.length; i++) out.push(characters[i]);
+            for (let i = 0; i < zombies.length; i++) if (!zombies[i].dead) out.push(zombies[i]);
+        }
+        return out;
+    }
+};
+
 class CollisionDetector {
 
     static getBounds(obj, xyAdd = [0, 0]) {
@@ -274,6 +330,11 @@ class CollisionDetector {
 
         var bA = this.getBounds(objectToTest, xyAdd);
         var bCurr = this.getBounds(objectToTest, [0, 0]);
+        // Broad-phase: only test level pieces near the swept box
+        if (objects === allObjects || objects === staticObjects) {
+            objects = StaticGrid.query(Math.min(bA.left, bCurr.left) - 60, Math.min(bA.bottom, bCurr.bottom) - 60,
+                Math.max(bA.right, bCurr.right) + 60, Math.max(bA.top, bCurr.top) + 60, objects === allObjects, StaticGrid.bufA);
+        }
         var centerA = (bA.left + bA.right) * 0.5;
         var activeRampInfo = (objectToTest.movable) ? this.getActiveRampAtCenter(objectToTest, xyAdd, objects) : null;
 
@@ -434,6 +495,7 @@ class CollisionDetector {
     // Checks if shifting entity by (dx, dy) would intersect any blocking static wall/floor
     static hitsStatic(entity, dx, dy, staticList, ignoreObj = null) {
         var bA = this.getBounds(entity, [dx, dy]);
+        if (staticList === staticObjects) staticList = StaticGrid.query(bA.left - 10, bA.bottom - 10, bA.right + 10, bA.top + 10, false, StaticGrid.bufC);
         for (let i = 0; i < staticList.length; i++) {
             var s = staticList[i];
             if (s == entity || s == ignoreObj || s.dead || s.noCollide) continue;
@@ -607,10 +669,15 @@ class CollisionDetector {
             for (let i = 0; i < dynamicList.length; i++) {
                 var d = dynamicList[i];
                 if (d.dead || d.noCollide) continue;
-                var activeRampInfo = this.getActiveRampAtCenter(d, [0, 0], staticList);
+                var nearList = staticList;
+                if (staticList === staticObjects) {
+                    var hwD = (d.w || d.s1 || 40) / 2 + 40, hhD = (d.h || d.s2 || 40) / 2 + 40;
+                    nearList = StaticGrid.query(d.x - hwD, d.y - hhD, d.x + hwD, d.y + hhD, false, StaticGrid.bufB);
+                }
+                var activeRampInfo = this.getActiveRampAtCenter(d, [0, 0], nearList);
 
-                for (let s = 0; s < staticList.length; s++) {
-                    var st = staticList[s];
+                for (let s = 0; s < nearList.length; s++) {
+                    var st = nearList[s];
                     if (st.dead || st.noCollide) continue;
 
                     var hit = this.satTest(d, [0, 0], st);

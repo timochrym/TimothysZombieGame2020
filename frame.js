@@ -20,7 +20,8 @@ function createMap() {
         BackgroundMosaic.bgWalls = [];
     }
 
-    var brawlStage = (typeof LevelManager !== "undefined") && LevelManager.getCurrentLevel() && LevelManager.getCurrentLevel().isBrawl;
+    var brawlStage = ((typeof LevelManager !== "undefined") && LevelManager.getCurrentLevel() && LevelManager.getCurrentLevel().isBrawl) || GameModes.flag("noBedrock", false);
+    if (typeof Gadgets !== "undefined") Gadgets.clear();
 
     // Always add the Infinite Subterranean Bedrock Base Floor ~2 screens down (top = -1600, bottom = -2400)
     // plus return Mega-Bounce Geysers so falling off any level lands on a playable deep floor!
@@ -62,10 +63,11 @@ function createMap() {
     if (lw && rw && !(currentLvl && currentLvl.isProcedural)) {
         levelBounds = { minX: lw.x + lw.w / 2, maxX: rw.x - rw.w / 2, topY: lw.y + lw.h / 2 - 40, floorY: -1500 };
     }
+    GameModes.call("setupLevel", currentLvl);
     if (currentLvl && currentLvl.isProcedural && typeof WorldGenerator !== "undefined") {
         WorldGenerator.reset();
         WorldGenerator.update(0);
-    } else if (typeof BackgroundMosaic !== "undefined" && !brawlStage) {
+    } else if (typeof BackgroundMosaic !== "undefined" && !brawlStage && GameModes.flag("scenery", true)) {
         // Populate scenic non-colliding background trees across arena levels
         var treePositions = [-1280, -920, -520, -160, 200, 560, 920, 1280];
         for (let i = 0; i < treePositions.length; i++) {
@@ -76,6 +78,7 @@ function createMap() {
 
 
 function createPlayers() {
+    if (GameModes.has("createPlayers")) { characters = []; GameModes.call("createPlayers"); return; }
     if (brawl.active) { createBrawlFighters(); return; }
     characters = [];
     var charBox = Math.makeHitbox(s1, s2);
@@ -106,6 +109,7 @@ function createPlayers() {
 }
 
 function rebuildAllObjects() {
+    if (typeof StaticGrid !== "undefined") StaticGrid.build();
     allObjects = [];
     for (let i = 0; i < staticObjects.length; i++) {
         if (!staticObjects[i].dead) allObjects.push(staticObjects[i]);
@@ -486,7 +490,7 @@ function resetGame() {
     helpTimer = devOpts.showHelp ? 60 * 12 : 0;
     createMap();
     createPlayers();
-    if (!brawl.active) startLevel(1);
+    if (!brawl.active && GameModes.flag("waves", true)) startLevel(1);
     else { levelTransitionTimer = 0; zombiesRemainingToSpawn = 0; }
     rebuildAllObjects();
     if (typeof Pathfinder !== "undefined") {
@@ -496,6 +500,7 @@ function resetGame() {
         SummonManager.selectObject(null);
         SummonManager.refreshObjectList();
     }
+    GameModes.call("onReset");
 }
 
 // Partner revive: hold your interact key next to a fallen (undead) teammate
@@ -553,7 +558,9 @@ function updateLastStand() {
 
 function updateCamera() {
     var heroes = [];
-    for (let i = 0; i < characters.length; i++) if (!characters[i].dead) heroes.push(characters[i]);
+    var modeTargets = GameModes.call("cameraTargets");
+    if (modeTargets && modeTargets.length) heroes = modeTargets;
+    else for (let i = 0; i < characters.length; i++) if (!characters[i].dead) heroes.push(characters[i]);
     if (heroes.length === 0) heroes.push(redGuy);
 
     var focusX = 0, focusY = 0, wTotal = 0;
@@ -629,14 +636,27 @@ function drawCrosshair() {
 // ============================================================================
 var UI_FONT = "'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
 
+// Rounded-rect path that does not depend on any game object (usable from menus / the arcade hub)
+function uiRoundRect(x, y, w2, h2, r) {
+    r = Math.min(r, w2 / 2, h2 / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w2, y, x + w2, y + h2, r);
+    ctx.arcTo(x + w2, y + h2, x, y + h2, r);
+    ctx.arcTo(x, y + h2, x, y, r);
+    ctx.arcTo(x, y, x + w2, y, r);
+    ctx.closePath();
+}
+
 function uiPanel(x, y, pw, ph, accent, alpha) {
     ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = 14;
-    ctx.fillStyle = "rgba(9, 14, 22, " + (alpha || 0.86) + ")";
-    redGuy.roundRectPath(x, y, pw, ph, 14);
+    // cheap drop shadow (offset dark panel instead of shadowBlur)
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    uiRoundRect(x + 3, y + 5, pw, ph, 14);
     ctx.fill();
-    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(9, 14, 22, " + (alpha || 0.86) + ")";
+    uiRoundRect(x, y, pw, ph, 14);
+    ctx.fill();
     ctx.lineWidth = 2;
     ctx.strokeStyle = accent || "rgba(120, 170, 200, 0.45)";
     ctx.stroke();
@@ -647,11 +667,11 @@ function uiBar(x, y, bw, bh, pct, color, bg) {
     pct = Math.max(0, Math.min(1, pct));
     ctx.save();
     ctx.fillStyle = bg || "rgba(255,255,255,0.10)";
-    redGuy.roundRectPath(x, y, bw, bh, bh / 2);
+    uiRoundRect(x, y, bw, bh, bh / 2);
     ctx.fill();
     if (pct > 0.001) {
         ctx.fillStyle = color;
-        redGuy.roundRectPath(x, y, Math.max(bh, bw * pct), bh, bh / 2);
+        uiRoundRect(x, y, Math.max(bh, bw * pct), bh, bh / 2);
         ctx.fill();
         ctx.fillStyle = "rgba(255,255,255,0.22)";
         ctx.fillRect(x + bh / 2, y + 1, Math.max(0, bw * pct - bh), bh * 0.3);
@@ -799,6 +819,7 @@ function drawHeroCard(ch, x, y) {
 
 function drawHUD() {
     if (!redGuy) return;
+    if (GameModes.has("drawHUD")) { GameModes.call("drawHUD"); drawBanners(); drawCrosshair(); return; }
     if (brawl.active) { drawBrawlHUD(); return; }
     ctx.textBaseline = "alphabetic";
 
@@ -948,7 +969,7 @@ function frame() {
     }
 
     var wavesPaused = (typeof SummonManager !== "undefined" && SummonManager.pauseWaves);
-    if (!wavesPaused && !brawl.active) {
+    if (!wavesPaused && !brawl.active && GameModes.flag("waves", true)) {
         if (zombiesRemainingToSpawn > 0) {
             zombieSpawnTimer--;
             if (zombieSpawnTimer <= 0 && countHunters() < devOpts.maxEnemies && !gameOver) {
@@ -975,7 +996,7 @@ function frame() {
         }
     }
 
-    if (!brawl.active) {
+    if (!brawl.active && GameModes.flag("revive", true)) {
         updateRevive();
         updateLastStand();
     }
@@ -988,6 +1009,8 @@ function frame() {
 
     // Verlet ragdolls step first so knocked-down characters follow their bodies this frame
     if (typeof Ragdolls !== "undefined") Ragdolls.update();
+    if (typeof Gadgets !== "undefined") Gadgets.preUpdate();
+    GameModes.call("preUpdate");
 
     for (let i = 0; i < characters.length; i++) {
         if (!characters[i].dead) {
@@ -1012,11 +1035,16 @@ function frame() {
     CollisionDetector.enforceNonPenetration(staticObjects, dynamicList);
     enforceContainment();
     updateBrawl();
+    if (typeof Gadgets !== "undefined") Gadgets.update();
+    GameModes.call("update");
 
     // Draw Static Map Objects
     for (let i = 0; i < staticObjects.length; i++) {
         staticObjects[i].staticObject();
     }
+
+    if (typeof Gadgets !== "undefined") Gadgets.draw();
+    GameModes.call("drawWorld");
 
     // Draw Stick Ninja Afterimages
     Components.updateAfterImages();
@@ -1051,6 +1079,7 @@ function frame() {
     Components.updateLazers();
     Components.updateParticles();
     Components.drawEffects();
+    GameModes.call("drawFront");
     Components.updateFloatingTexts();
 
     if (devOpts.showHitboxes) drawHitboxes();
@@ -1102,7 +1131,7 @@ function openPause(fromGameOver) {
     pauseSnap.getContext("2d").drawImage(canvas, 0, 0);
     pauseLevelKeys = [];
     var all = LevelManager.getAllLevels();
-    for (var k in all) if (!all[k].isBrawl) pauseLevelKeys.push(k);
+    for (var k in all) if (GameModes.modeOf(all[k]) === GameModes.current.id) pauseLevelKeys.push(k);
     pauseLevelIdx = Math.max(0, pauseLevelKeys.indexOf(LevelManager.currentLevelKey));
     paused = true;
     for (let i = 0; i < PlayerInput.length; i++) PlayerInput[i].shoot = PlayerInput[i].jet = PlayerInput[i].interact = false;
@@ -1129,6 +1158,7 @@ function pauseItems() {
             { id: "sshake", label: "Screen shake:  ◀  " + Math.round(settings.shake * 100) + "%  ▶", hint: "◀ ▶ adjust (0% = off)" },
             { id: "shit", label: "Hit-stop on big hits:  " + (settings.hitStop ? "ON" : "OFF"), hint: "Freezes a few frames on heavy impacts" },
             { id: "shidpi", label: "Sharp hi-DPI graphics:  " + (settings.hiDPI ? (renderScaleAutoReduced ? "ON (auto-reduced for speed)" : "ON") : "OFF"), hint: "Turn off if the game runs slowly" },
+            { id: "sglow", label: "Glow effects:  " + (settings.glow ? (glowAutoDisabled ? "ON (auto-reduced for speed)" : "ON") : "OFF"), hint: "Turn off for more FPS on slower computers" },
             { id: "help", label: "Controls help:  " + (devOpts.showHelp ? "ON" : "OFF"), hint: "Shows the key cheat-sheet" },
             { id: "back", label: "◀  Back", hint: "Esc" }
         ];
@@ -1142,8 +1172,9 @@ function pauseItems() {
     var items = [];
     var inBrawl = brawl.active;
     if (!pauseFromGameOver) items.push({ id: "resume", label: "Resume", hint: "Esc" });
-    else items.push({ id: "again", label: inBrawl ? "Rematch" : "Play again", hint: inBrawl ? "Applies the settings below" : "Start a fresh run" });
-    items.push({ id: "gmode", label: "Game mode:  " + (inBrawl ? "Brawl (Smash-style)" : "Survival") + "   ▶  " + (inBrawl ? "Survival" : "Brawl"), hint: "Enter switches mode (restarts)" });
+    else items.push({ id: "again", label: GameModes.current.againLabel || (inBrawl ? "Rematch" : "Play again"), hint: inBrawl ? "Applies the settings below" : "Start a fresh run" });
+    items.push({ id: "arcade", label: "🕹  Arcade - switch game  (" + (GameModes.current ? GameModes.current.title : "") + ")", hint: "Pick any game made with this engine" });
+    if (GameModes.has("menuItems")) { GameModes.call("menuItems", items); }
     if (inBrawl) {
         var sName = LevelManager.getAllLevels()[brawlCfg.stage];
         items.push({ id: "bopp", label: "Opponents:  ◀  " + brawlOpponentLabel() + "  ▶", hint: "Applies on Rematch - PvP or CPU fighters" });
@@ -1151,12 +1182,12 @@ function pauseItems() {
         items.push({ id: "bstk", label: "Stocks:  ◀  " + brawlCfg.stocks + "  ▶", hint: "Lives per fighter - applies on Rematch" });
         items.push({ id: "bstage", label: "Stage:  ◀  " + (sName ? sName.name.replace(/^[^A-Za-z]+/, "") : "?") + "  ▶", hint: "Applies on Rematch" });
         if (!pauseFromGameOver) items.push({ id: "again", label: "Rematch", hint: "Start a new match with these settings" });
-    } else {
+    } else if (GameModes.flag("coopToggle", true)) {
         items.push({ id: "mode", label: "Players:  " + (multiplayer ? "2-player co-op" : "Solo") + "   ▶  " + (multiplayer ? "Solo" : "Co-op"), hint: "Enter switches mode (restarts the run)" });
     }
     items.push({ id: "skin0", label: "Player 1 character:  ◀  " + skinName(heroSkins[0]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
     if (multiplayer && (!inBrawl || (brawlCfg.opponents.indexOf("p2") === 0))) items.push({ id: "skin1", label: "Player 2 character:  ◀  " + skinName(heroSkins[1]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
-    if (!inBrawl) {
+    if (!inBrawl && !GameModes.has("menuItems") && pauseLevelKeys.length > 1) {
         var lvlName = LevelManager.getAllLevels()[pauseLevelKeys[pauseLevelIdx]];
         items.push({ id: "level", label: "Level:  ◀  " + (lvlName ? lvlName.name : "?") + "  ▶", hint: "◀ ▶ choose, Enter loads it (restarts the run)" });
         if (!pauseFromGameOver) items.push({ id: "restart", label: "Restart run", hint: "Asks for confirmation" });
@@ -1172,11 +1203,15 @@ function pauseActivate(id, dir) {
     if (id === "back") { pauseSub = null; pauseIndex = 0; return; }
     if (id === "svol") { SFX.setVolume(Math.round((settings.volume + (dir || 1) * 0.1) * 10) / 10); if (settings.volume > 1) SFX.setVolume(1); return; }
     if (id === "sshake") { settings.shake = Math.max(0, Math.min(1, Math.round((settings.shake + (dir || 1) * 0.25) * 4) / 4)); saveSettings(); return; }
+    if (id === "sglow") { settings.glow = !settings.glow; glowAutoDisabled = false; saveSettings(); return; }
     if (id === "shit") { settings.hitStop = !settings.hitStop; saveSettings(); return; }
     if (id === "shidpi") { settings.hiDPI = !settings.hiDPI; renderScaleAutoReduced = false; saveSettings(); applyCanvasSize(); xcMaster = w / 2; ycMaster = h / 2; return; }
+    if (GameModes.call("onMenu", id, dir)) return;
+    if (id === "arcade") { closePause(); Hub.openHub(false); return; }
     if (id === "resume") closePause();
     else if (id === "again" || id === "yes") {
         closePause();
+        if (GameModes.has("onRestart")) { GameModes.call("onRestart"); return; }
         if (brawl.active && LevelManager.currentLevelKey !== brawlCfg.stage) LevelManager.selectLevel(brawlCfg.stage);
         else resetGame();
     }
@@ -1208,8 +1243,8 @@ function pauseKey(e) {
     if (typeof SFX !== "undefined" && (c === "ArrowUp" || c === "ArrowDown" || c === "KeyW" || c === "KeyS")) SFX.play("ui");
     if (c === "ArrowUp" || c === "KeyW") pauseIndex = (pauseIndex - 1 + items.length) % items.length;
     else if (c === "ArrowDown" || c === "KeyS") pauseIndex = (pauseIndex + 1) % items.length;
-    else if (c === "ArrowLeft" || c === "KeyA") { var li = items[pauseIndex].id; if (PAUSE_CYCLE_IDS.indexOf(li) !== -1) pauseActivate(li, -1); }
-    else if (c === "ArrowRight" || c === "KeyD") { var ri = items[pauseIndex].id; if (PAUSE_CYCLE_IDS.indexOf(ri) !== -1) pauseActivate(ri, 1); }
+    else if (c === "ArrowLeft" || c === "KeyA") { var li = items[pauseIndex].id; if (PAUSE_CYCLE_IDS.indexOf(li) !== -1 || items[pauseIndex].cycle) pauseActivate(li, -1); }
+    else if (c === "ArrowRight" || c === "KeyD") { var ri = items[pauseIndex].id; if (PAUSE_CYCLE_IDS.indexOf(ri) !== -1 || items[pauseIndex].cycle) pauseActivate(ri, 1); }
     else if (c === "Enter" || c === "NumpadEnter" || c === "Space") pauseActivate(items[pauseIndex].id, 0);
     e.preventDefault();
 }
@@ -1228,7 +1263,7 @@ function pauseClick(mx, my) {
         if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
             pauseIndex = i;
             var dir = 0;
-            if (PAUSE_CYCLE_IDS.indexOf(items[i].id) !== -1) dir = (mx > r.x + r.w / 2) ? 1 : -1;
+            if (PAUSE_CYCLE_IDS.indexOf(items[i].id) !== -1 || items[i].cycle) dir = (mx > r.x + r.w / 2) ? 1 : -1;
             pauseActivate(items[i].id, dir);
             return true;
         }
@@ -1249,7 +1284,7 @@ function drawPauseMenu() {
     var ph = 150 + items.length * rowH;
     var px = w / 2 - pw / 2, py = Math.max(20, h / 2 - ph / 2);
     uiPanel(px, py, pw, ph, pauseFromGameOver ? "#ff4d5e" : "#22d3ee", 0.96);
-    uiText(pauseSub === "settings" ? "SETTINGS" : pauseConfirm ? "RESTART?" : (pauseFromGameOver ? (brawl.active ? "GAME!" : "OVERRUN") : "PAUSED"), w / 2, py + 62, 44, pauseFromGameOver ? "#ff4d5e" : "#ffd23f", "center", "900");
+    uiText(pauseSub === "settings" ? "SETTINGS" : pauseConfirm ? "RESTART?" : (pauseFromGameOver ? (GameModes.current.overTitle || (brawl.active ? "GAME!" : "OVERRUN")) : "PAUSED"), w / 2, py + 62, 44, pauseFromGameOver ? "#ff4d5e" : "#ffd23f", "center", "900");
     uiText(brawl.active ? ("Brawl  ·  " + (brawl.stage ? brawl.stage.name.replace(/^[^A-Za-z]+/, "") : "")) : ("Wave " + level + "  ·  Score " + score + "  ·  " + (multiplayer ? "Co-op" : "Solo")), w / 2, py + 92, 15, "#a8c0d0", "center", "700");
 
     pauseRects = [];
@@ -1258,7 +1293,7 @@ function drawPauseMenu() {
         var sel = (i === pauseIndex);
         ctx.save();
         ctx.fillStyle = sel ? "rgba(34, 211, 238, 0.22)" : "rgba(255,255,255,0.05)";
-        redGuy.roundRectPath(px + 24, ry, pw - 48, rowH - 8, 12);
+        uiRoundRect(px + 24, ry, pw - 48, rowH - 8, 12);
         ctx.fill();
         ctx.lineWidth = 2;
         ctx.strokeStyle = sel ? "#22d3ee" : "rgba(255,255,255,0.08)";
@@ -1298,6 +1333,7 @@ var tickAccumulator = 0;
 var lowFpsSeconds = 0;
 function tick() {
     if (typeof Pads !== "undefined") Pads.poll();
+    if (typeof Hub !== "undefined" && Hub.isOpen) { Hub.draw(); return; }
     if (paused) { drawPauseMenu(); return; }
     if (hitStopFrames > 0) { hitStopFrames--; return; }   // impact freeze: hold the last image
     if (gameOver) {
@@ -1323,10 +1359,10 @@ function tick() {
         framesThisSecond = 0;
         lastSecondStamp = nowT;
         // Automatically drop to 1x resolution if hi-DPI rendering is too slow on this machine
-        if (renderScale > 1 && measuredFPS < 45 && devOpts.timeScale >= 1 && slowMoFrames <= 0 && !paused) {
+        if ((renderScale > 1 || (settings.glow && !glowAutoDisabled)) && measuredFPS < 45 && devOpts.timeScale >= 1 && slowMoFrames <= 0 && !paused) {
             if (++lowFpsSeconds >= 3) {
-                renderScaleAutoReduced = true;
-                applyCanvasSize();
+                if (!glowAutoDisabled && settings.glow) glowAutoDisabled = true;   // step 1: drop glows
+                else { renderScaleAutoReduced = true; applyCanvasSize(); }           // step 2: drop resolution
                 lowFpsSeconds = 0;
             }
         } else lowFpsSeconds = 0;
@@ -1349,3 +1385,6 @@ function gameLoop(now) {
     requestAnimationFrame(gameLoop);
 }
 requestAnimationFrame(gameLoop);
+
+// Boot into the Arcade game-select screen
+if (typeof Hub !== "undefined") Hub.openHub(true);

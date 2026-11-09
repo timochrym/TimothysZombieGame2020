@@ -382,8 +382,11 @@ var Ragdolls = {
                     else if (m === dl) { p.x = L - p.r; nx = -1; }
                     else { p.x = R + p.r; nx = 1; }
                     if (o.movable && !o.heldBy) {
-                        // bodies shove crates a little
-                        o.xspeed += -nx * 0.15;
+                        // bodies slam crates with real momentum (towers topple in Ragdoll Siege!)
+                        var mass = rd.k * rd.k * (rd.style.thick || 1);
+                        var pvx = p.x - p.px, pvy = p.y - p.py;
+                        o.xspeed = Math.max(-24, Math.min(24, o.xspeed + pvx * 0.22 * mass - nx * 0.15));
+                        o.yspeed = Math.max(-24, Math.min(24, o.yspeed + pvy * 0.12 * mass));
                     }
                 }
 

@@ -42,6 +42,7 @@ class Object {
         else if (this.h <= 100 && this.w >= 80) this.kind = "platform";
         else if (this.h > this.w || /wall|pillar|divider|cage/i.test(nm)) this.kind = "wall";
         else this.kind = "block";
+        this.portalable = !!options.portalable;
         this.texture = options.texture !== undefined ? options.texture : (movable && !this.explosive ? "crate_plank" : null);
         this.health = options.health || (this.explosive ? 25 : 9999);
         this.dead = false;

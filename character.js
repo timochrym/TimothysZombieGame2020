@@ -151,7 +151,7 @@ class Character {
     // In Brawl mode every fighter is its own team (free-for-all)
     get team() { return this.fighterTeam !== undefined ? this.fighterTeam : (this.isPlayer ? 1 : 0); }
 
-    accent() { return (typeof FIGHTER_COLORS !== "undefined" && FIGHTER_COLORS[this.playerIndex]) || "#ff5a5f"; }
+    accent() { return this.accentColor || (typeof FIGHTER_COLORS !== "undefined" && FIGHTER_COLORS[this.playerIndex]) || "#ff5a5f"; }
 
     get input() { return this.isCPU ? this.cpuIn : (PlayerInput[this.playerIndex] || PlayerInput[0]); }
 
@@ -162,7 +162,7 @@ class Character {
     }
 
     // ---- Ammo ------------------------------------------------------------
-    unlimitedAmmo() { return godMode || devOpts.infiniteAmmo || this.isZombie || (typeof brawl !== "undefined" && brawl.active); }
+    unlimitedAmmo() { return godMode || devOpts.infiniteAmmo || this.isZombie || (typeof brawl !== "undefined" && brawl.active) || !GameModes.flag("ammo", true); }
 
     totalAmmo() { return this.ammoMag + this.ammoReserve; }
 
@@ -408,6 +408,7 @@ class Character {
 
     triggerNinjaDash() {
         if (this.dashCooldown > 0 && !godMode) return;
+        if (this.isPlayer && !GameModes.flag("dash", true)) return;
         var mPos = Components.getMouseWorldPos();
         var dx = mPos[0] - this.x;
         var dy = mPos[1] - this.y;
@@ -435,6 +436,7 @@ class Character {
             return;
         }
         if (attacker && attacker.team === this.team && attacker !== this && !devOpts.friendlyFire) return;
+        if (this.isPlayer && GameModes.has("onDamage") && GameModes.call("onDamage", this, amount, knockX, knockY, attacker)) return;
 
         // Brawl mode: damage becomes a percent and knockback grows with it (no health, no death)
         if (typeof brawl !== "undefined" && brawl.active && this.isPlayer) {
@@ -934,7 +936,7 @@ class Character {
 
         // Stick Ninja Wall-Slide Detection
         this.wallSliding = 0;
-        if (!this.onGround && !this.isZombie) {
+        if (!this.onGround && !this.isZombie && GameModes.flag("wallJump", true)) {
             if (this.leftPressed && CollisionDetector.hitsStatic(this, -4, 0, staticObjects)) {
                 this.wallSliding = -1;
             } else if (this.rightPressed && CollisionDetector.hitsStatic(this, 4, 0, staticObjects)) {
@@ -1033,7 +1035,7 @@ class Character {
                 } else if (this.xspeed > -capNow) {
                     this.xspeed = Math.max(-capNow, this.xspeed - accel);
                 }
-            } else if (this.xspeed != 0) {
+            } else if (this.xspeed != 0 && !(this.flingTimer > 0 && !this.onGround)) {
                 var stopFriction = this.onGround ? this.slower * (this.onSlide ? 0.12 : 0.95) : this.slower * 0.3;
                 if (Math.abs(this.xspeed) < stopFriction) {
                     this.xspeed = 0;
@@ -1199,7 +1201,8 @@ class Character {
         var curMaxSpeed = (this.hasPower("SPEED") || godMode || this.dashTimer > 0) ? this.maxspeed * 1.45 : this.maxspeed;
         // Calmer run speed: a soft cap that bleeds off excess (wall-jumps / wavedash / knockback still feel punchy)
         var runCap = this.runCapNow();
-        if (this.dashTimer <= 0 && !godMode && Math.abs(this.xspeed) > runCap && !this.onSlide) {
+        if (this.flingTimer > 0) this.flingTimer--;
+        if (this.dashTimer <= 0 && !godMode && Math.abs(this.xspeed) > runCap && !this.onSlide && !(this.flingTimer > 0)) {
             this.xspeed = Math.sign(this.xspeed) * (runCap + (Math.abs(this.xspeed) - runCap) * 0.9);
         }
         if (this.xspeed > curMaxSpeed) this.xspeed = curMaxSpeed;

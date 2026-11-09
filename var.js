@@ -1,5 +1,6 @@
 var canvas = document.getElementById("screen");
 var ctx = canvas.getContext("2d");
+if (typeof installGlowSwitch === "function") installGlowSwitch(ctx);
 var w = window.innerWidth;
 var h = window.innerHeight;
 // Logical drawing size in CSS pixels (all game/HUD code uses these). The backing store is

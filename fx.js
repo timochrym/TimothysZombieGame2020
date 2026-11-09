@@ -3,7 +3,7 @@
 // ============================================================================
 
 // ---- Persisted player settings (Pause menu -> Settings) ----
-var settings = { volume: 0.6, shake: 1, hitStop: true, hiDPI: true };
+var settings = { volume: 0.6, shake: 1, hitStop: true, hiDPI: true, glow: true };
 try {
     var savedSettings = JSON.parse(localStorage.getItem("timsZombieGameSettings") || "null");
     if (savedSettings) {
@@ -11,6 +11,7 @@ try {
         if (typeof savedSettings.shake === "number") settings.shake = Math.max(0, Math.min(1, savedSettings.shake));
         if (typeof savedSettings.hitStop === "boolean") settings.hitStop = savedSettings.hitStop;
         if (typeof savedSettings.hiDPI === "boolean") settings.hiDPI = savedSettings.hiDPI;
+        if (typeof savedSettings.glow === "boolean") settings.glow = savedSettings.glow;
     }
 } catch (e) {}
 
@@ -180,6 +181,30 @@ var SFX = {
             case "ui": this.tone(620, 620, 0.04, "square", 0.05 * vol, pan); break;
             case "select": this.tone(740, 990, 0.08, "square", 0.06 * vol, pan); break;
             case "grab": this.tone(240, 160, 0.08, "triangle", 0.15 * vol, pan); break;
+            case "portal": this.tone(300 * p, 1100 * p, 0.18, "sine", 0.14 * vol, pan); this.noise(0.18, 0.08 * vol, 3000, 800, "bandpass", pan); break;
+            case "warp": this.tone(900, 220, 0.2, "triangle", 0.12 * vol, pan); this.noise(0.15, 0.1 * vol, 6000, 1500, "highpass", pan); break;
+            case "fizzle": this.noise(0.25, 0.14 * vol, 5000, 900, "bandpass", pan, 0, 2); break;
+            case "kick": this.tone(140, 70, 0.08, "sine", 0.35 * vol, pan); this.noise(0.05, 0.2 * vol, 1500, 500, "bandpass", pan); break;
+            case "whistle": this.tone(2100, 2100, 0.12, "sine", 0.09 * vol, pan); this.tone(2100, 2100, 0.3, "sine", 0.09 * vol, pan, 0.16); break;
+            case "goal": this.noise(1.2, 0.35 * vol, 800, 2600, "bandpass", pan, 0, 0.6); [523, 659, 784, 1046, 1318].forEach(function(f, i) { SFX.tone(f, f, 0.18, "square", 0.08 * vol, pan, i * 0.08); }); break;
+            case "sling": this.tone(120, 420, 0.25, "sawtooth", 0.08 * vol, pan); break;
+            case "clear": [523, 659, 784, 1046, 784, 1046].forEach(function(f, i) { SFX.tone(f, f, 0.14, "square", 0.08 * vol, pan, i * 0.09); }); break;
         }
     }
 };
+
+// ---- Glow switch: canvas shadowBlur is very expensive; when "Glow effects" is off (or auto-disabled
+// because the game is running slowly) every shadowBlur assignment in the codebase becomes a no-op.
+var glowAutoDisabled = false;
+function installGlowSwitch(context) {
+    try {
+        var proto = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
+        var desc = proto && window.Object.getOwnPropertyDescriptor(proto, "shadowBlur");
+        if (!desc || !desc.set) return;
+        window.Object.defineProperty(context, "shadowBlur", {
+            configurable: true,
+            get: function() { return desc.get.call(context); },
+            set: function(v) { desc.set.call(context, (settings.glow && !glowAutoDisabled) ? v : 0); }
+        });
+    } catch (e) {}
+}

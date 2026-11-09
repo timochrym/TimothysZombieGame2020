@@ -17,6 +17,7 @@ function queueDash(idx) {
 function queueGrab(idx) {
     var ch = (idx === 0) ? redGuy : blueGuy;
     if (!ch || ch.dead) return;
+    if (GameModes.call("onSecondary", ch)) return;
     if (idx === 0 && useMouseAim) {
         var mPos = Components.getMouseWorldPos();
         ch.tryGrabOrThrow(mPos[0], mPos[1]);
@@ -33,12 +34,14 @@ function keyDownHandler(e) {
     var c = e.code;
 
     // Pause menu owns the keyboard while it is open (restart / co-op / levels live there)
+    if (typeof Hub !== "undefined" && Hub.isOpen) { Hub.key(e); return; }
     if (c == "Escape") {
         if (!e.repeat) { if (paused && pauseSub) { pauseSub = null; pauseIndex = 0; } else togglePause(); }
         e.preventDefault();
         return;
     }
     if (paused) { pauseKey(e); return; }
+    if (GameModes.call("onKey", c, e)) { e.preventDefault(); return; }
 
     if (k == "ArrowRight") { ULDRrightPressed = true; e.preventDefault(); }
     if (k == "ArrowLeft") { ULDRleftPressed = true; e.preventDefault(); }
@@ -119,6 +122,7 @@ function mouseMoveHandler(e) {
     var rect = canvas.getBoundingClientRect();
     mouseX = e.clientX - rect.left;
     mouseY = e.clientY - rect.top;
+    if (typeof Hub !== "undefined" && Hub.isOpen) { Hub.hover(mouseX, mouseY); return; }
     if (paused) { pauseHover(mouseX, mouseY); return; }
     useMouseAim = true;
     if (typeof SummonManager !== "undefined") SummonManager.handleCanvasMouseMove(e);
@@ -129,6 +133,7 @@ function mouseDownHandler(e) {
     mouseX = e.clientX - rect.left;
     mouseY = e.clientY - rect.top;
     if (typeof SFX !== "undefined") SFX.unlock();
+    if (typeof Hub !== "undefined" && Hub.isOpen) { if (e.button === 0) Hub.click(mouseX, mouseY); return; }
     if (paused) { if (e.button === 0) pauseClick(mouseX, mouseY); return; }
     useMouseAim = true;
 
@@ -138,6 +143,7 @@ function mouseDownHandler(e) {
         mouseDown = true;
     } else if (e.button === 2) {
         rightMouseDown = true;
+        if (redGuy && !redGuy.dead && GameModes.call("onSecondary", redGuy)) return;
         if (redGuy && !redGuy.dead) {
             var mPos = Components.getMouseWorldPos();
             redGuy.tryGrabOrThrow(mPos[0], mPos[1]);
@@ -193,7 +199,14 @@ var Pads = {
                 var edge = function(key) { return now[key] && !prev[key]; };
                 if (now[0] || now[7] || now[9]) { if (typeof SFX !== "undefined") SFX.unlock(); }
 
-                if (typeof paused !== "undefined" && paused) {
+                if (typeof Hub !== "undefined" && Hub.isOpen) {
+                    var hk = function(code) { Hub.key({ code: code, preventDefault: function() {} }); };
+                    if (edge(12) || edge("su")) hk("ArrowUp");
+                    if (edge(13) || edge("sd")) hk("ArrowDown");
+                    if (edge(14) || edge("sl")) hk("ArrowLeft");
+                    if (edge(15) || edge("sr")) hk("ArrowRight");
+                    if (edge(0) || edge(9)) hk("Enter");
+                } else if (typeof paused !== "undefined" && paused) {
                     var fake = function(code) { pauseKey({ code: code, preventDefault: function() {} }); };
                     if (edge(12) || edge("su")) fake("ArrowUp");
                     if (edge(13) || edge("sd")) fake("ArrowDown");

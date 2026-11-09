@@ -264,6 +264,11 @@ class LevelManager {
             this.scaleLevel(this.builtInLevels[lk], STRUCT_SCALE);
         }
 
+        // Levels contributed by other games built on this engine (see modes.js / ENGINE.md)
+        if (typeof EXTRA_LEVELS !== "undefined") {
+            for (var ek in EXTRA_LEVELS) this.builtInLevels[ek] = EXTRA_LEVELS[ek];
+        }
+
         this.customLevels = {};
         try {
             var saved = localStorage.getItem("timsZombieGameCustomLevels");
@@ -336,7 +341,8 @@ class LevelManager {
         if (!brawl.active && nowBrawl) brawl.prevMP = multiplayer;
         if (brawl.active && !nowBrawl) multiplayer = !!brawl.prevMP;
         brawl.active = nowBrawl;
-        jetpackEnabled = !nowBrawl;
+        GameModes.activate(GameModes.modeOf(lvl));
+        jetpackEnabled = GameModes.flag("jetpack", true);
         if (nowBrawl) { brawlCfg.stage = key; saveBrawlCfg(); }
 
         resetGame();
