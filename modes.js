@@ -1,7 +1,7 @@
 // ============================================================================
 // GAME MODES - the plug-in layer that turns this engine into many games.
 //
-// Every game (Zombie Survival, Brawl, Zombie Ball, Crate Lab, Portal Lab, Ragdoll Siege, Parkour Rush ...)
+// Every game (Zombie Survival, Brawl, Zombie Ball, Crate Lab, Portal Lab, Ragdoll Siege, Parkour Rush, Creative ...)
 // is a "mode" object registered with GameModes.register({...}). The core engine (physics, characters,
 // ragdolls, rendering, input, audio, menus) calls the optional hooks below at the right moments.
 // Levels choose their game with `mode: "<id>"` in their level definition. See ENGINE.md.
@@ -9,7 +9,7 @@
 //   id, title, tagline, color, firstLevel        identity + which level to load from the Arcade
 //   flags: {                                      engine features to switch on/off for this game
 //     waves, revive, jetpack, shooting, ability, ammo, playerControl, noBedrock, scenery, enemiesPassive,
-//     coopToggle, dash, wallJump, airJumps, bigPads
+//     coopToggle, dash, wallJump, airJumps, bigPads, flight
 //   }
 //   onActivate() / onDeactivate()                 entering / leaving this game
 //   setupLevel(lvl)                               after the level geometry loads (build gadgets, balls ...)

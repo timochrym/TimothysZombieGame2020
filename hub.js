@@ -5,10 +5,11 @@
 var HUB_ICONS = {
     survival: { s: ["..gggggg..", ".gggggggg.", "gg.rr.rr.g", "gg.rr.rr.g", "gggggggggg", "gg.wwwww.g", "gg.w.w.w.g", ".gggggggg.", "..g....g..", ".ggg..ggg."], p: { g: "#4d9a36", r: "#ff3b4a", w: "#f1f5f9" } },
     brawl: { s: ["..yy..yy..", ".yyyyyyyy.", "yyyyyyyyyy", "yyyyyyyyyy", "yyyyyyyyyy", ".yyyyyyyy.", "..ssssss..", "..ssssss..", "..ssssss..", "..ssssss.."], p: { y: "#ffd23f", s: "#f2c9a0" } },
-    soccer: { s: ["...wwww...", ".wwkkkkww.", ".wkkkkkkw.", "wwwkkkkwww", "wkwwwwwwkw", "wkkwkkwkkw", "wwwkkkkwww", ".wkwwwwkw.", ".wwkkkkww.", "...wwww..."], p: { w: "#f8fafc", k: "#1f2937" } },
+    sport: { s: ["...wwww...", ".wwkkkkww.", ".wkkkkkkw.", "wwwkkkkwww", "wkwwwwwwkw", "wkkwkkwkkw", "wwwkkkkwww", ".wkwwwwkw.", ".wwkkkkww.", "...wwww..."], p: { w: "#f8fafc", k: "#1f2937" } },
     puzzle: { s: ["oooooooooo", "o..o..o..o", "oooooooooo", "o.o....o.o", "o..o..o..o", "o...oo...o", "o..o..o..o", "o.o....o.o", "oooooooooo", "oooooooooo"], p: { o: "#d9a05b", ".": "#7c4a1e" } },
     portal: { s: ["...bbbb...", "..b....b..", ".b......b.", ".b..oo..b.", ".b.o..o.b.", ".b.o..o.b.", ".b..oo..b.", ".b......b.", "..b....b..", "...bbbb..."], p: { b: "#38bdf8", o: "#fb923c" } },
     siege: { s: ["w.......w.", "w.......w.", ".w.....w..", ".w.....w..", "..wsssw...", "...www....", "....w.....", "....w.....", "....w.....", "...www...."], p: { w: "#9c6644", s: "#e5e7eb" } },
+    creative: { s: ["....ww....", "...wwww...", "....ww....", "c...ww...c", "cccwwwwccc", "c..wwww..c", "....ww....", "...wwww...", "gggggggggg", "dddddddddd"], p: { w: "#e0f2fe", c: "#7dd3fc", g: "#4ade80", d: "#92400e" } },
     race: { s: ["pkwkwkwk..", "pwkwkwkw..", "pkwkwkwk..", "pwkwkwkw..", "p.........", "p.........", "p.........", "p.........", "p.........", "pp........"], p: { p: "#e5e7eb", k: "#111827", w: "#f8fafc" } }
 };
 

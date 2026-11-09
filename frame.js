@@ -127,13 +127,13 @@ function rebuildAllObjects() {
 function startLevel(lvl) {
     level = lvl;
     var coopBonus = multiplayer ? Math.ceil(level * 1.5) : 0;
-    zombiesRemainingToSpawn = 4 + level * 2 + coopBonus;
+    zombiesRemainingToSpawn = 5 + level * 3 + coopBonus;
     zombieSpawnTimer = 35;
     levelTransitionTimer = 110;
 
     if (lvl > 1 && typeof SFX !== "undefined") SFX.play("wave");
     if (lvl > 1) {
-        var waveBonus = (lvl - 1) * 250;
+        var waveBonus = (lvl - 1) * 120;
         score += waveBonus;
         if (score > highScore) {
             highScore = score;
@@ -148,12 +148,12 @@ function startLevel(lvl) {
         if (characters[i].isZombie) {
             characters[i].reviveAsHuman(0.6, "WAVE CLEARED - BACK FROM THE DEAD!");
         } else {
-            characters[i].health = Math.min(characters[i].maxHealth, characters[i].health + 30);
+            characters[i].health = Math.min(characters[i].maxHealth, characters[i].health + 12);
         }
     }
     lastStandTimer = -1;
 
-    spawnPowerUp((Math.random() < 0.5 ? -620 : 620) * STRUCT_SCALE * 0.6, 280);
+    if (lvl % 2 === 0) spawnPowerUp((Math.random() < 0.5 ? -620 : 620) * STRUCT_SCALE * 0.6, 280);   // a power-up every other wave
     if (lvl > 1 && redGuy) spawnPowerUp(redGuy.x + (Math.random() < 0.5 ? -260 : 260), redGuy.y + 160, "AMMO");
 }
 
@@ -173,19 +173,21 @@ function enemySpec(power) {
         SPITTER:   { color: "#4d9a36", size: 80,  spd: 0.62, hp: 70 + L * 8 },
         BOSS_KING: { color: "#9b2226", size: 136, spd: 0.46, hp: 260 + L * 35 }
     };
-    return t[power] || t.NORMAL;
+    var s = t[power] || t.NORMAL;
+    return { color: s.color, size: s.size, spd: s.spd * BALANCE.enemySpd, hp: Math.round(s.hp * BALANCE.enemyHp) };
 }
 
 function pickEnemyType() {
     var roll = Math.random();
-    if (roll < 0.16) return "SLIME";
-    if (roll < 0.30) return "BAT";
-    if (roll < 0.44) return "ARCHER";
-    if (level >= 2 && roll < 0.58) return "KNIGHT";
-    if (level >= 2 && roll < 0.70) return "MAGE";
-    if (level >= 2 && roll < 0.80) return "LEAPER";
-    if (level >= 3 && roll < 0.90) return "EXPLODER";
-    if (level >= 3) return "TANK";
+    if (roll < 0.14) return "SLIME";
+    if (roll < 0.26) return "BAT";
+    if (roll < 0.40) return "ARCHER";
+    if (roll < 0.52) return "LEAPER";
+    if (level >= 2 && roll < 0.64) return "KNIGHT";
+    if (level >= 2 && roll < 0.75) return "MAGE";
+    if (level >= 2 && roll < 0.86) return "EXPLODER";
+    if (level >= 3 && roll < 0.95) return "TANK";
+    if (level >= 3) return "SPITTER";
     return "NORMAL";
 }
 

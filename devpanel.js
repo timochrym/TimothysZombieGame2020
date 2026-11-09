@@ -695,6 +695,7 @@ SummonManager.buildUI = function() {
                     ${devToggle("Co-op", "", "Two players (restarts the run)", "coop")}
                     ${devToggle("Waves running", "", "Pause enemy waves", "waves")}
                     ${devToggle("Jetpack", "", "Enable jetpacks", "jetpack")}
+                    ${devToggle("Creative flight", "flight", "Double-tap jump to fly (W/S up and down) in any game")}
                     ${devToggle("Infinite ammo", "infiniteAmmo", "Unlimited bullets, no fuel drain or cooldowns")}
                     ${devToggle("Friendly fire", "friendlyFire", "Heroes can hurt each other")}
                     ${devToggle("Show hitboxes", "showHitboxes", "")}

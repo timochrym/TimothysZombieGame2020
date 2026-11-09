@@ -498,6 +498,7 @@ class LevelManager {
             spawnP1: redGuy ? [Math.round(redGuy.x), Math.round(redGuy.y)] : [-80, 120],
             spawnP2: blueGuy ? [Math.round(blueGuy.x), Math.round(blueGuy.y)] : [80, 120],
             wavesEnabled: !(typeof SummonManager !== "undefined" && SummonManager.pauseWaves),
+            mode: (typeof GameModes !== "undefined" && GameModes.current && GameModes.current.id === "creative") ? "creative" : undefined,
             layout: this.serializeCurrentMap()
         };
         try {
@@ -738,7 +739,7 @@ class WorldGenerator {
 
     static addChest(x, bottomY) {
         if (typeof Components !== "undefined" && Components.spawnChest) {
-            Components.spawnChest(this.tx(x), this.ty(bottomY), "Royal Treasure Chest", this.activeBuildChunk);
+            if (Math.random() < BALANCE.chunkChest) Components.spawnChest(this.tx(x), this.ty(bottomY), "Royal Treasure Chest", this.activeBuildChunk);
         }
     }
 
@@ -756,6 +757,7 @@ class WorldGenerator {
             "BOSS_KING": { color: "#9b2226", size: 136, hp: 260 + level * 35, spd: speed * 0.46 }
         };
         var cfg = specs[power] || { color: "#2d6e32", size: 80, hp: 55, spd: speed * 0.6 };
+        cfg = { color: cfg.color, size: cfg.size, hp: Math.round(cfg.hp * BALANCE.enemyHp), spd: cfg.spd * BALANCE.enemySpd };
         var zBox = Math.makeHitbox(cfg.size, cfg.size);
         var z = new Character(
             "Enemy_" + power,
@@ -859,10 +861,10 @@ class WorldGenerator {
             if (!this.visitedChunks[cc] && this.generatedChunks[cc] && cc !== 0) {
                 this.visitedChunks[cc] = true;
                 var info = this.generatedChunks[cc];
-                score += 500;
-                coins += 10;
-                heroXP += 60;
-                if (typeof showBanner === "function") showBanner("NEW AREA DISCOVERED", info.title + "   +500 score  +10 coins  +60 XP", "#7ff0ff");
+                score += 150;
+                coins += 3;
+                heroXP += 20;
+                if (typeof showBanner === "function") showBanner("NEW AREA DISCOVERED", info.title + "   +150 score  +3 coins  +20 XP", "#7ff0ff");
             }
         }
         this.visitedChunks[centerChunk] = true;
@@ -897,42 +899,39 @@ class WorldGenerator {
         var anchor = redGuy;
         for (let i = 0; i < characters.length; i++) if (!characters[i].isZombie && !characters[i].dead) anchor = characters[i];
         if (!anchor) return;
-        score += 40 + m * 6;
-        coins += 1;
-        Components.spawnCoins(anchor.x, anchor.y + 120, 2);
+        score += 15 + m * 3;
+        if (m % 3 === 0) { coins += 1; Components.spawnCoins(anchor.x, anchor.y + 120, 1); }
         var drop = function(type, dx) { return spawnPowerUp(anchor.x + dx, anchor.y + 150, type); };
         if (m % 25 === 0) {
-            score += 2500;
-            coins += 40;
-            heroXP += 400;
-            for (let i = 0; i < characters.length; i++) {
-                var h = characters[i];
-                if (h.isZombie) h.reviveAsHuman(0.8, "TRAIL LEGEND!");
-                h.health = h.maxHealth;
-                h.jetpackFuel = h.jetpackMaxFuel;
-                h.ammoReserve = h.ammoReserveMax;
-            }
-            drop(null, -260); drop(null, 0); drop(null, 260);
-            Components.spawnChest(anchor.x + 120, anchor.y - anchor.s2 / 2, "Trail Legend's Hoard");
-            Components.spawnCoins(anchor.x, anchor.y + 150, 14);
-            if (typeof showBanner === "function") showBanner("★ " + m + " MILES - TRAIL LEGEND ★", "+2500 score · +40 coins · full heal · 3 power-ups · treasure chest", "#ffd23f");
-        } else if (m % 10 === 0) {
-            score += 800;
-            coins += 12;
+            score += 1200;
+            coins += 15;
             heroXP += 150;
             for (let i = 0; i < characters.length; i++) {
-                characters[i].health = characters[i].maxHealth;
-                characters[i].addAmmo(120);
+                var h = characters[i];
+                if (h.isZombie) h.reviveAsHuman(0.6, "TRAIL LEGEND!");
+                h.health = h.maxHealth;
+                h.addAmmo(60);
             }
-            drop(null, -140); drop("AMMO", 140);
-            Components.spawnChest(anchor.x - 140, anchor.y - anchor.s2 / 2, "Pathfinder's Cache");
-            if (typeof showBanner === "function") showBanner(m + " MILES - PATHFINDER'S CACHE", "+800 score · +12 coins · full heal · ammo · power-up · chest", "#7ff0ff");
-        } else if (m % 5 === 0) {
-            score += 300;
-            coins += 4;
+            drop(null, 0);
+            Components.spawnChest(anchor.x + 120, anchor.y - anchor.s2 / 2, "Trail Legend's Hoard");
+            Components.spawnCoins(anchor.x, anchor.y + 150, 5);
+            if (typeof showBanner === "function") showBanner("★ " + m + " MILES - TRAIL LEGEND ★", "+1200 score · +15 coins · full heal · power-up · treasure chest", "#ffd23f");
+        } else if (m % 10 === 0) {
+            score += 400;
+            coins += 5;
             heroXP += 60;
-            drop(null, -100); drop("AMMO", 100);
-            if (typeof showBanner === "function") showBanner(m + " MILES - SUPPLY DROP", "+300 score · +4 coins · power-up + ammo", "#a7f3d0");
+            for (let i = 0; i < characters.length; i++) {
+                characters[i].health = Math.min(characters[i].maxHealth, characters[i].health + characters[i].maxHealth * 0.35);
+                characters[i].addAmmo(50);
+            }
+            drop(null, 0);
+            if (typeof showBanner === "function") showBanner(m + " MILES - PATHFINDER'S CACHE", "+400 score · +5 coins · some health · ammo · power-up", "#7ff0ff");
+        } else if (m % 5 === 0) {
+            score += 150;
+            coins += 2;
+            heroXP += 25;
+            drop("AMMO", 100);
+            if (typeof showBanner === "function") showBanner(m + " MILES - SUPPLY DROP", "+150 score · +2 coins · ammo", "#a7f3d0");
         }
     }
 

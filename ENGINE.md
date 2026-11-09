@@ -1,6 +1,6 @@
 # Tim's Arcade engine
 
-One engine, seven games. Physics, characters, ragdolls, rendering, input, audio, menus and the
+One engine, eight games. Physics, characters, ragdolls, rendering, input, audio, menus and the
 dev tools are shared. Each game is a **mode**: a plain object that switches engine features on or off
 with flags and adds its own rules through hooks.
 
@@ -13,6 +13,7 @@ with flags and adds its own rules through hooks.
 | Portal Lab | `portal` | `game_portal.js` | A two-portal gun with momentum-preserving teleports |
 | Parkour Rush | `race` | `game_race.js` | Speedrun courses, medals, saved ghost replays, 2-player races |
 | Ragdoll Siege | `siege` | `game_siege.js` | A slingshot that launches ragdolls into sleeping crate forts |
+| Creative | `creative` | `game_creative.js` | Flight, noclip, invincibility and the dev build tools in a sky sandbox |
 
 The Arcade menu (`hub.js`) lists every registered mode. The pause menu always has
 **🕹 Arcade - switch game**.
@@ -66,6 +67,7 @@ Flags switch shared engine features. A flag you leave out keeps the engine defau
 | `wallJump` | on | Wall slide and wall jump |
 | `airJumps` | 1 | Extra jumps in the air (0 = no double jump) |
 | `bigPads` | off | Bounce pads and portal flings may exceed the normal vertical speed cap |
+| `flight` | off | Double-tap jump to fly (W/S rise and sink). Also available in any game via the dev panel's **Creative flight** toggle |
 
 A mode can change its own flags at runtime. For example, Zombie Ball sets
 `this.flags.playerControl = (Sport.phase === "play")` during kick-off.
@@ -152,6 +154,12 @@ Activators power every gadget whose `id` is in their `links`.
   `sling`, `clear`, `whistle` and `fizzle`.
 - **Saving**: each game keeps its own `localStorage` key (`timsCrateLab`, `timsPortalLab`,
   `timsZombieBallCfg`, `timsParkourRush`, `timsRagdollSiege`).
+
+## Difficulty and rewards
+
+Zombie Survival's balance lives in one table, `BALANCE` in `var.js`: enemy health, damage, speed and
+fire rate, the hero's post-hit invulnerability, and the drop chances for power-ups, ammo and frontier
+chests. The dev panel's sliders (enemy damage, enemy health, power-up rate) multiply on top of it.
 
 ## Performance notes
 

@@ -457,7 +457,7 @@ class Components {
             if (hero && object.isZombie) {
                 object.lazerCooldown = 14;
             } else if (object.isZombie) {
-                object.lazerCooldown = Math.round(((object.zombiePower == "ARCHER") ? 48 : (object.zombiePower == "MAGE" ? 68 : (object.zombiePower == "BOSS_KING" ? (object.enraged ? 34 : 52) : 58))));
+                object.lazerCooldown = Math.round(((object.zombiePower == "ARCHER") ? 48 : (object.zombiePower == "MAGE" ? 68 : (object.zombiePower == "BOSS_KING" ? (object.enraged ? 34 : 52) : 58))) * BALANCE.enemyFireDelay);
             } else {
                 object.lazerCooldown = godMode ? 3 : (isRapid ? 4 : lazerCooldownMax);
                 if (berserk) object.lazerCooldown = Math.max(3, Math.round(object.lazerCooldown * 0.8));
@@ -762,18 +762,18 @@ class Components {
                         break;
                     }
                     coins++;
-                    heroXP += 25;
+                    heroXP += 12;
                     if (typeof SFX !== "undefined") SFX.play("coin", c.x, c.y);
-                    score += 50;
+                    score += 25;
                     if (heroXP >= heroXPNext) {
                         heroXP -= heroXPNext;
                         heroLevel++;
-                        heroXPNext = Math.round(heroXPNext * 1.35);
-                        rpgDamageMult = 1 + (heroLevel - 1) * 0.18;
+                        heroXPNext = Math.round(heroXPNext * 1.5);
+                        rpgDamageMult = 1 + (heroLevel - 1) * 0.08;
                         for (let q = 0; q < characters.length; q++) {
                             var hh = characters[q];
                             if (hh.isZombie) continue;
-                            hh.maxHealth += 20;
+                            hh.maxHealth += 10;
                             hh.health = hh.maxHealth;
                             hh.jetpackMaxFuel += 15;
                             hh.jetpackFuel = hh.jetpackMaxFuel;
@@ -784,7 +784,7 @@ class Components {
                         Components.addRing(ch.x, ch.y, 360, "#00f5d4", 26);
                         Components.spawnSparks(ch.x, ch.y, "#00f5d4", 16);
                     } else {
-                        Components.addFloatingText("+25 XP", c.x, c.y + 20, "#ffdd00", 14);
+                        Components.addFloatingText("+12 XP", c.x, c.y + 20, "#ffdd00", 14);
                     }
                     break;
                 }
@@ -1014,26 +1014,26 @@ class Components {
 
             if (triggeredBy) {
                 ch.opened = true;
-                Components.spawnCoins(ch.x, ch.y + 15, 9);
+                Components.spawnCoins(ch.x, ch.y + 15, 4);
                 Components.spawnSparks(ch.x, ch.y, "#ffdd44", 18);
-                score += 400;
-                heroXP += 65;
+                score += 150;
+                heroXP += 30;
 
                 // Grant a permanent RPG Relic Upgrade!
                 var roll = Math.floor(Math.random() * 4);
                 if (roll === 0) {
-                    rpgDamageMult += 0.18;
-                    Components.addFloatingText("💎 CHEST: +18% WEAPON DAMAGE!", ch.x, ch.y + 65, "#ffdd44", 20);
+                    rpgDamageMult += 0.07;
+                    Components.addFloatingText("💎 CHEST: +7% WEAPON DAMAGE", ch.x, ch.y + 65, "#ffdd44", 20);
                 } else if (roll === 1) {
-                    triggeredBy.maxHealth += 30;
-                    triggeredBy.health = triggeredBy.maxHealth;
-                    Components.addFloatingText("💎 CHEST: +30 MAX HP & FULL HEAL!", ch.x, ch.y + 65, "#55ff88", 20);
+                    triggeredBy.maxHealth += 12;
+                    triggeredBy.health = Math.min(triggeredBy.maxHealth, triggeredBy.health + 25);
+                    Components.addFloatingText("💎 CHEST: +12 MAX HP", ch.x, ch.y + 65, "#55ff88", 20);
                 } else if (roll === 2) {
-                    triggeredBy.baseSpeed *= 1.08;
+                    triggeredBy.baseSpeed *= 1.03;
                     triggeredBy.speed = triggeredBy.baseSpeed;
-                    Components.addFloatingText("💎 CHEST: +8% SWIFT BOOTS!", ch.x, ch.y + 65, "#00f5d4", 20);
+                    Components.addFloatingText("💎 CHEST: +3% SWIFT BOOTS", ch.x, ch.y + 65, "#00f5d4", 20);
                 } else {
-                    triggeredBy.maxAirJumps = Math.min(3, (triggeredBy.maxAirJumps || 1) + 1);
+                    triggeredBy.maxAirJumps = Math.min(2, (triggeredBy.maxAirJumps || 1) + 1);
                     triggeredBy.airJumps = triggeredBy.maxAirJumps;
                     Components.addFloatingText("💎 CHEST: SKY RELIC (+1 AIR JUMP)!", ch.x, ch.y + 65, "#c77dff", 20);
                 }

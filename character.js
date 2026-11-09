@@ -2,18 +2,18 @@
 // POWER-UP CATALOGUE  (duration in frames @60fps, 0 = instant)
 // ============================================================================
 var PowerUpDefs = {
-    RAPID:   { label: "TRIPLE LASER",  icon: "✦", color: "#ffdd33", duration: 600, weight: 10, desc: "3-way rapid fire" },
-    SPEED:   { label: "MEGA SPEED",    icon: "»", color: "#33ddff", duration: 600, weight: 10, desc: "Faster + higher jump" },
-    HEAL:    { label: "MEDKIT",        icon: "+", color: "#33ff88", duration: 0,   weight: 8,  desc: "+55 HP & full fuel" },
+    RAPID:   { label: "TRIPLE LASER",  icon: "✦", color: "#ffdd33", duration: 420, weight: 10, desc: "3-way rapid fire" },
+    SPEED:   { label: "MEGA SPEED",    icon: "»", color: "#33ddff", duration: 420, weight: 10, desc: "Faster + higher jump" },
+    HEAL:    { label: "MEDKIT",        icon: "+", color: "#33ff88", duration: 0,   weight: 8,  desc: "+35 HP & full fuel" },
     BLOWUP:  { label: "MEGA BLAST",    icon: "✹", color: "#ff7722", duration: 0,   weight: 6,  desc: "Huge explosion" },
-    SHIELD:  { label: "ENERGY SHIELD", icon: "◉", color: "#6ee7ff", duration: 900, weight: 9,  desc: "Absorbs 90 damage" },
+    SHIELD:  { label: "ENERGY SHIELD", icon: "◉", color: "#6ee7ff", duration: 630, weight: 9,  desc: "Absorbs 60 damage" },
     FREEZE:  { label: "FROST NOVA",    icon: "❄", color: "#bdeaff", duration: 0,   weight: 7,  desc: "Freezes all nearby enemies" },
-    MAGNET:  { label: "COIN MAGNET",   icon: "⊛", color: "#f9a8d4", duration: 900, weight: 6,  desc: "Pulls in coins & drops" },
-    BERSERK: { label: "BERSERK",       icon: "♨", color: "#ff5a1f", duration: 540, weight: 7,  desc: "Double damage, big shots" },
-    ORBIT:   { label: "BLADE ORBIT",   icon: "✧", color: "#d946ef", duration: 720, weight: 7,  desc: "3 spinning blades shred foes" },
-    HOMING:  { label: "HOMING SHOTS",  icon: "◎", color: "#a3e635", duration: 720, weight: 7,  desc: "Bullets seek enemies" },
-    CHAIN:   { label: "CHAIN LIGHTNING", icon: "ϟ", color: "#fde047", duration: 720, weight: 6, desc: "Shots arc between enemies" },
-    AMMO:    { label: "AMMO PACK",    icon: "▮", color: "#fbbf24", duration: 0,   weight: 14, desc: "+90 reserve ammo" },
+    MAGNET:  { label: "COIN MAGNET",   icon: "⊛", color: "#f9a8d4", duration: 630, weight: 6,  desc: "Pulls in coins & drops" },
+    BERSERK: { label: "BERSERK",       icon: "♨", color: "#ff5a1f", duration: 380, weight: 7,  desc: "Double damage, big shots" },
+    ORBIT:   { label: "BLADE ORBIT",   icon: "✧", color: "#d946ef", duration: 500, weight: 7,  desc: "3 spinning blades shred foes" },
+    HOMING:  { label: "HOMING SHOTS",  icon: "◎", color: "#a3e635", duration: 500, weight: 7,  desc: "Bullets seek enemies" },
+    CHAIN:   { label: "CHAIN LIGHTNING", icon: "ϟ", color: "#fde047", duration: 500, weight: 6, desc: "Shots arc between enemies" },
+    AMMO:    { label: "AMMO PACK",    icon: "▮", color: "#fbbf24", duration: 0,   weight: 14, desc: "+60 reserve ammo" },
     SERUM:   { label: "LIFE SERUM",    icon: "♥", color: "#ff4d8d", duration: 0,   weight: 0,  desc: "Revives fallen heroes" }
 };
 
@@ -158,6 +158,7 @@ class Character {
     // Calm top running speed (px/frame); knockback, dashes and wall-jumps can briefly exceed it
     runCapNow() {
         if (!this.isPlayer) return this.maxspeed * 0.4;
+        if (this.creativeFlying) return this.maxspeed * 0.75;   // flying is quick
         return this.maxspeed * (this.hasPower("SPEED") ? 0.62 : 0.48);
     }
 
@@ -447,7 +448,7 @@ class Character {
         // Heroes get brief i-frames after every hit and only a small nudge, so enemies can't juggle you
         if (this.isPlayer && amount < 0) {
             if (this.hitCooldown > 0) return;
-            this.hitCooldown = 42;
+            this.hitCooldown = BALANCE.heroIframes;
             knockX = Math.max(-4.5, Math.min(4.5, knockX));
             knockY = Math.max(-2, Math.min(3, knockY));
         }
@@ -471,7 +472,7 @@ class Character {
             knockY += 1.5;
         }
 
-        if (amount < 0 && this.isPlayer && attacker && !attacker.isPlayer) amount *= devOpts.enemyDamage;
+        if (amount < 0 && this.isPlayer && attacker && !attacker.isPlayer) amount *= devOpts.enemyDamage * BALANCE.enemyDmg;
         if (amount < 0 && this.frozenTimer > 0) amount *= 1.25;
         if (attacker) this.lastHitBy = attacker;
 
@@ -586,7 +587,7 @@ class Character {
                 Components.addFloatingText("👑 CITADEL BOSS DEFEATED!", this.x, this.y + 90, "#ffdd00", 24);
                 if (typeof Juice !== "undefined") { Juice.hitStop(10); Juice.slowMo(100, 0.3); }
             } else {
-                var coinCount = ((this.zombiePower == "TANK" || this.zombiePower == "KNIGHT") ? 5 : 2) + Math.floor((dMult - 1) * 2);
+                var coinCount = ((this.zombiePower == "TANK" || this.zombiePower == "KNIGHT") ? 3 : 1) + Math.floor(dMult - 1);
                 Components.spawnCoins(this.x, this.y + 20, coinCount);
             }
 
@@ -594,13 +595,13 @@ class Character {
             var blastDamage = (this.zombiePower == "EXPLODER") ? -35 : -8;
             Components.blowUp(this.x, this.y, this.color, 14, blastRadius, blastDamage, this);
 
-            if (Math.random() < 0.25 * devOpts.powerUpRate && typeof spawnPowerUp === "function") {
+            if (Math.random() < BALANCE.killPowerUp * devOpts.powerUpRate && typeof spawnPowerUp === "function") {
                 spawnPowerUp(this.x, this.y + 20);
             }
             // Ammo drops: far more likely when somebody is running low
             var lowest = 999;
             for (let ai = 0; ai < characters.length; ai++) if (!characters[ai].isZombie) lowest = Math.min(lowest, characters[ai].totalAmmo());
-            if (lowest < 999 && typeof spawnPowerUp === "function" && Math.random() < (lowest < 40 ? 0.6 : 0.2)) {
+            if (lowest < 999 && typeof spawnPowerUp === "function" && Math.random() < (lowest < 40 ? BALANCE.killAmmoLow : BALANCE.killAmmo)) {
                 spawnPowerUp(this.x + (Math.random() - 0.5) * 60, this.y + 40, "AMMO");
             }
         } else if (!this.isZombie) {
@@ -686,16 +687,16 @@ class Character {
 
         if (type == "HEAL") {
             if (typeof brawl !== "undefined" && brawl.active) this.damagePct = Math.max(0, (this.damagePct || 0) - 35);
-            this.health = Math.min(this.maxHealth, this.health + 55);
+            this.health = Math.min(this.maxHealth, this.health + 35);
             this.jetpackFuel = this.jetpackMaxFuel;
         } else if (type == "BLOWUP") {
             Components.blowUp(this.x, this.y, "#ffaa00", 28, 420, -55 * rpgDamageMult, this);
         } else if (type == "FREEZE") {
             Components.freezeBlast(this.x, this.y, 1100, 300);
         } else if (type == "AMMO") {
-            this.addAmmo(90);
+            this.addAmmo(60);
             for (let i = 0; i < characters.length; i++) {
-                if (characters[i] !== this && !characters[i].isZombie) characters[i].addAmmo(35);
+                if (characters[i] !== this && !characters[i].isZombie) characters[i].addAmmo(25);
             }
             if (this.ammoMag < this.ammoMagMax) this.startReload();
         } else if (type == "SERUM") {
@@ -703,7 +704,7 @@ class Character {
         } else {
             this.powers[type] = def.duration;
             if (type == "SHIELD") {
-                this.shield = this.shieldMax = 90;
+                this.shield = this.shieldMax = 60;
             }
             this.recomputeStats();
         }
@@ -935,9 +936,31 @@ class Character {
             this.jumpBufferTimer--;
         }
 
+        // Creative flight: double-tap jump to take off / land (Creative game, or the dev-panel cheat)
+        if (this.isPlayer) {
+            var canFly = !this.isZombie && !this.dead && (GameModes.flag("flight", false) || devOpts.flight);
+            if (!canFly) this.creativeFlying = false;
+            else if (freshJumpPress) {
+                if (this.flyTapTimer > 0) {
+                    this.creativeFlying = !this.creativeFlying;
+                    this.flyTapTimer = 0;
+                    this.jumpBufferTimer = 0;
+                    this.jump = false;
+                    if (this.creativeFlying) { this.yspeed = Math.max(this.yspeed, 4); this.onGround = false; }
+                    Components.addFloatingText(this.creativeFlying ? "✈ FLYING" : "WALKING", this.x, this.y + 80, "#7dd3fc", 16);
+                    if (typeof SFX !== "undefined") SFX.play(this.creativeFlying ? "jump" : "select", this.x, this.y, 0.7, 1.4);
+                } else this.flyTapTimer = 16;
+            }
+            if (this.flyTapTimer > 0) this.flyTapTimer--;
+            // touching down while holding Down lands you
+            if (this.creativeFlying && this.onGround && this.downPressed) this.creativeFlying = false;
+            this.flies = !!this.creativeFlying;
+            this.noCollide = !!(this.creativeFlying && this.noclip);
+        }
+
         // Stick Ninja Wall-Slide Detection
         this.wallSliding = 0;
-        if (!this.onGround && !this.isZombie && GameModes.flag("wallJump", true)) {
+        if (!this.onGround && !this.isZombie && !this.creativeFlying && GameModes.flag("wallJump", true)) {
             if (this.leftPressed && CollisionDetector.hitsStatic(this, -4, 0, staticObjects)) {
                 this.wallSliding = -1;
             } else if (this.rightPressed && CollisionDetector.hitsStatic(this, 4, 0, staticObjects)) {
@@ -1047,11 +1070,12 @@ class Character {
 
             // Flying Enemy Movement (Bats / Gargoyles ignore gravity and swoop smoothly!)
             if (this.flies || this.zombiePower == "BAT") {
-                if (this.upPressed) this.yspeed += this.speed * 0.9;
-                else if (this.downPressed) this.yspeed -= this.speed * 0.9;
+                var flyCap = this.isPlayer ? 12 : 8;
+                if (this.upPressed) this.yspeed += this.speed * (this.isPlayer ? 1.3 : 0.9);
+                else if (this.downPressed) this.yspeed -= this.speed * (this.isPlayer ? 1.3 : 0.9);
                 else this.yspeed *= 0.85;
-                if (this.yspeed > 8) this.yspeed = 8;
-                if (this.yspeed < -8) this.yspeed = -8;
+                if (this.yspeed > flyCap) this.yspeed = flyCap;
+                if (this.yspeed < -flyCap) this.yspeed = -flyCap;
             } else {
                 // 1. Stick Ninja Wall-Jump!
                 if ((this.jumpBufferTimer > 0 || (this.isZombie && this.upPressed)) && this.wallSliding !== 0) {
@@ -1156,7 +1180,7 @@ class Character {
 
             // Jetpack Joyride Machine-Gun Jetpack! (Hold Space in 1P or Up while airborne)
             this.jetpackFiring = false;
-            var wantJetpack = !this.isZombie && this.ragdollTimer <= 0 && jetpackEnabled && (this.input.jet || (godMode && this.upPressed && !this.onGround));
+            var wantJetpack = !this.isZombie && !this.creativeFlying && this.ragdollTimer <= 0 && jetpackEnabled && (this.input.jet || (godMode && this.upPressed && !this.onGround));
             if (wantJetpack && (this.jetpackFuel > 0 || godMode)) {
                 this.jetpackFiring = true;
                 this.fastFalling = false;

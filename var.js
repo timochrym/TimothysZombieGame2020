@@ -197,7 +197,21 @@ var devOpts = {
     friendlyFire: false,
     powerUpRate: 1.0,        // drop chance multiplier
     gravityMult: 1.0,        // world gravity (characters, crates, ragdolls)
-    bouncyRagdolls: false    // super-bouncy bodies
+    bouncyRagdolls: false,   // super-bouncy bodies
+    flight: false            // creative flight in any game (double-tap jump)
+};
+
+// ---- Difficulty & reward tuning (one place to rebalance Zombie Survival) ----
+var BALANCE = {
+    enemyHp: 1.35,        // enemy health
+    enemyDmg: 1.35,       // damage enemies deal to heroes (contact + projectiles)
+    enemySpd: 1.1,        // enemy move speed
+    enemyFireDelay: 0.8,  // ranged enemies shoot 25% more often
+    heroIframes: 30,      // frames of invulnerability after a hero is hit (was 42)
+    killPowerUp: 0.10,    // chance a kill drops a random power-up (was 0.25)
+    killAmmo: 0.10,       // chance a kill drops ammo (0.40 while someone is nearly dry)
+    killAmmoLow: 0.40,
+    chunkChest: 0.45      // chance each treasure-chest spot in the frontier really has a chest
 };
 
 var helpTimer = 60 * 14; // controls cheat-sheet fades after 14 seconds (toggle with H)
