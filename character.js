@@ -13,6 +13,7 @@ var PowerUpDefs = {
     ORBIT:   { label: "BLADE ORBIT",   icon: "✧", color: "#d946ef", duration: 720, weight: 7,  desc: "3 spinning blades shred foes" },
     HOMING:  { label: "HOMING SHOTS",  icon: "◎", color: "#a3e635", duration: 720, weight: 7,  desc: "Bullets seek enemies" },
     CHAIN:   { label: "CHAIN LIGHTNING", icon: "ϟ", color: "#fde047", duration: 720, weight: 6, desc: "Shots arc between enemies" },
+    AMMO:    { label: "AMMO PACK",    icon: "▮", color: "#fbbf24", duration: 0,   weight: 14, desc: "+90 reserve ammo" },
     SERUM:   { label: "LIFE SERUM",    icon: "♥", color: "#ff4d8d", duration: 0,   weight: 0,  desc: "Revives fallen heroes" }
 };
 
@@ -127,6 +128,13 @@ class Character {
         this.powerHitTimers = {};
         this.invulnTimer = 0;
         this.spawnPulse = 0;
+        this.ammoMag = 24;           // rounds in the magazine
+        this.ammoMagMax = 24;
+        this.ammoReserve = 150;      // spare rounds
+        this.ammoReserveMax = 300;
+        this.reloadTimer = 0;
+        this.noAmmoMsg = 0;
+        this.emergencyTimer = 0;
         this.hitCooldown = 0;        // i-frames after a hero is hit (no more chain-bounces)
         this.staggerTimer = 0;       // enemies reel back when a hero hits them
         this.onSlide = false;
@@ -140,6 +148,49 @@ class Character {
     runCapNow() {
         if (!this.isPlayer) return this.maxspeed * 0.4;
         return this.maxspeed * (this.hasPower("SPEED") ? 0.56 : 0.42);
+    }
+
+    // ---- Ammo ------------------------------------------------------------
+    unlimitedAmmo() { return godMode || devOpts.infiniteAmmo || this.isZombie; }
+
+    totalAmmo() { return this.ammoMag + this.ammoReserve; }
+
+    startReload() {
+        if (this.reloadTimer > 0 || this.ammoMag >= this.ammoMagMax || this.ammoReserve <= 0) return;
+        this.reloadTimer = 70;
+        Components.addFloatingText("RELOADING", this.x, this.y + 78, "#fbbf24", 14);
+    }
+
+    addAmmo(n) {
+        this.ammoReserve = Math.min(this.ammoReserveMax, this.ammoReserve + n);
+    }
+
+    updateAmmo() {
+        if (!this.isPlayer || this.isZombie) return;
+        if (this.input.reloadQueued) { this.input.reloadQueued = false; this.startReload(); }
+        if (this.reloadTimer > 0) {
+            this.reloadTimer--;
+            if (this.reloadTimer === 0) {
+                var take = Math.min(this.ammoMagMax - this.ammoMag, this.ammoReserve);
+                this.ammoMag += take;
+                this.ammoReserve -= take;
+                Components.spawnSparks(this.x, this.y, "#fbbf24", 4);
+            }
+        } else if (this.ammoMag <= 0 && this.ammoReserve > 0) {
+            this.startReload();
+        }
+        if (this.noAmmoMsg > 0) this.noAmmoMsg--;
+        // Scraping the barrel: with nothing left you slowly salvage a few rounds so you are never fully soft-locked
+        if (this.totalAmmo() <= 0) {
+            this.emergencyTimer++;
+            if (this.emergencyTimer > 240) {
+                this.emergencyTimer = 0;
+                this.ammoReserve += 4;
+                Components.addFloatingText("+4 SCRAPPED AMMO", this.x, this.y + 78, "#fbbf24", 13);
+            }
+        } else {
+            this.emergencyTimer = 0;
+        }
     }
 
     hasPower(type) { return (this.powers[type] || 0) > 0; }
@@ -402,6 +453,12 @@ class Character {
             if (Math.random() < 0.25 * devOpts.powerUpRate && typeof spawnPowerUp === "function") {
                 spawnPowerUp(this.x, this.y + 20);
             }
+            // Ammo drops: far more likely when somebody is running low
+            var lowest = 999;
+            for (let ai = 0; ai < characters.length; ai++) if (!characters[ai].isZombie) lowest = Math.min(lowest, characters[ai].totalAmmo());
+            if (lowest < 999 && typeof spawnPowerUp === "function" && Math.random() < (lowest < 40 ? 0.6 : 0.2)) {
+                spawnPowerUp(this.x + (Math.random() - 0.5) * 60, this.y + 40, "AMMO");
+            }
         } else if (!this.isZombie) {
             this.death = true;
             this.isZombie = true;
@@ -486,6 +543,12 @@ class Character {
             Components.blowUp(this.x, this.y, "#ffaa00", 28, 420, -55 * rpgDamageMult, this);
         } else if (type == "FREEZE") {
             Components.freezeBlast(this.x, this.y, 1100, 300);
+        } else if (type == "AMMO") {
+            this.addAmmo(90);
+            for (let i = 0; i < characters.length; i++) {
+                if (characters[i] !== this && !characters[i].isZombie) characters[i].addAmmo(35);
+            }
+            if (this.ammoMag < this.ammoMagMax) this.startReload();
         } else if (type == "SERUM") {
             this.reviveAllies();
         } else {
@@ -540,6 +603,7 @@ class Character {
             }
         }
         if (powersChanged) this.recomputeStats();
+        this.updateAmmo();
         if (this.invulnTimer > 0) this.invulnTimer--;
         if (this.hitCooldown > 0) this.hitCooldown--;
         if (this.staggerTimer > 0) {
@@ -934,6 +998,8 @@ class Character {
                             this.xspeed = 0;
                             stepX = 0;
                         }
+                    } else if (this.tryStepUp(hitX, stepX)) {
+                        // glided up onto a small ledge / stair lip instead of snagging
                     } else {
                         this.x += stepX + this.xOver;
                         if (hitX && hitX.movable) {
@@ -1020,10 +1086,57 @@ class Character {
             this.yspeed = 0;
         }
 
+        if (this.isPlayer) this.checkStuck();
+
         this.yspeed = Math.round(this.yspeed * rounder) / rounder;
         this.xspeed = Math.round(this.xspeed * rounder) / rounder;
         this.x = Math.round(this.x * rounder) / rounder;
         this.y = Math.round(this.y * rounder) / rounder;
+    }
+
+    // Auto step-up: walking into a ledge/stair lip up to ~90px tall hops onto it instead of getting stuck
+    tryStepUp(hitX, stepX) {
+        if (!hitX || hitX.movable || hitX instanceof Character || hitX.isBumper || hitX.isRamp) return false;
+        if (this.dashTimer > 0 || !(this.onGround || this.coyoteTimer > 0)) return false;
+        var bh = CollisionDetector.getBounds(hitX, [0, 0]);
+        var rise = bh.top - (this.y - this.s2 / 2);
+        if (rise <= 0 || rise > 90) return false;
+        var oy = this.y;
+        this.y += rise + 2;
+        if (!CollisionDetector.collision(this, [stepX, 0], allObjects)) {
+            this.x += stepX;
+            if (this.yspeed < 0) this.yspeed = 0;
+            this.onGround = true;
+            return true;
+        }
+        this.y = oy;
+        return false;
+    }
+
+    // Safety net: a hero pushing against something for 1.5s without moving gets popped free
+    checkStuck() {
+        var pushing = (this.leftPressed !== this.rightPressed);
+        var moved = Math.abs(this.x - (this._px === undefined ? this.x : this._px)) + Math.abs(this.y - (this._py === undefined ? this.y : this._py));
+        this._px = this.x; this._py = this.y;
+        if (pushing && moved < 0.6 && this.dashTimer <= 0 && !this.heldObject && !this.jetpackFiring) this.stuckTimer = (this.stuckTimer || 0) + 1;
+        else this.stuckTimer = Math.max(0, (this.stuckTimer || 0) - 2);
+        if (this.stuckTimer > 90) {
+            this.stuckTimer = 0;
+            var dir = this.rightPressed ? 1 : -1;
+            var tries = [[0, 110], [dir * 70, 110], [dir * 130, 40], [0, 230], [dir * 120, 230]];
+            for (let t = 0; t < tries.length; t++) {
+                var ox = this.x, oy = this.y;
+                this.x += tries[t][0];
+                this.y += tries[t][1];
+                if (!CollisionDetector.hitsStatic(this, 0, 0, staticObjects)) {
+                    this.yspeed = 4;
+                    Components.addFloatingText("UNSTUCK!", this.x, this.y + 80, "#7ff0ff", 16);
+                    Components.spawnSparks(this.x, this.y, "#7ff0ff", 8);
+                    return;
+                }
+                this.x = ox; this.y = oy;
+            }
+        }
     }
 
     handleCharacterCollision(other) {

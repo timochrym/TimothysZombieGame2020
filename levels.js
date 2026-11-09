@@ -514,6 +514,7 @@ class WorldGenerator {
         };
 
         shiftList(characters);
+        for (let ci = 0; ci < characters.length; ci++) { if (characters[ci].lastSafeX !== undefined) characters[ci].lastSafeX -= shiftX; }
         shiftList(zombies);
         shiftList(movingObjects);
         shiftList(lazers);
@@ -547,14 +548,18 @@ class WorldGenerator {
     }
 
     // Unloads chunks far behind/ahead of the player so object count stays tiny & lag-free forever!
-    static unloadDistantChunks(centerChunk) {
-        var minKeep = centerChunk - 2;
-        var maxKeep = centerChunk + 2;
+    static unloadDistantChunks(centerChunks) {
+        // Keep every chunk within 2 of ANY hero, so a partner who wanders off never loses the ground beneath them
+        var centers = Array.isArray(centerChunks) ? centerChunks : [centerChunks];
+        var keepFn = function(idx) {
+            for (let i = 0; i < centers.length; i++) if (Math.abs(idx - centers[i]) <= 2) return true;
+            return false;
+        };
         var removedAny = false;
 
         for (var k in this.generatedChunks) {
             var cIdx = parseInt(k, 10);
-            if (cIdx < minKeep || cIdx > maxKeep) {
+            if (!keepFn(cIdx)) {
                 delete this.generatedChunks[k];
                 removedAny = true;
             }
@@ -564,7 +569,7 @@ class WorldGenerator {
         for (let i = staticObjects.length - 1; i >= 0; i--) {
             var s = staticObjects[i];
             if (s.chunkIdx !== undefined && s.chunkIdx !== null) {
-                if (s.chunkIdx < minKeep || s.chunkIdx > maxKeep) {
+                if (!keepFn(s.chunkIdx)) {
                     staticObjects.splice(i, 1);
                 }
             }
@@ -573,7 +578,7 @@ class WorldGenerator {
             var m = movingObjects[i];
             if (m.heldBy) continue;
             if (m.chunkIdx !== undefined && m.chunkIdx !== null) {
-                if (m.chunkIdx < minKeep || m.chunkIdx > maxKeep) {
+                if (!keepFn(m.chunkIdx)) {
                     movingObjects.splice(i, 1);
                 }
             }
@@ -582,7 +587,7 @@ class WorldGenerator {
             for (let i = treasureChests.length - 1; i >= 0; i--) {
                 var ch = treasureChests[i];
                 if (ch.chunkIdx !== undefined && ch.chunkIdx !== null) {
-                    if (ch.chunkIdx < minKeep || ch.chunkIdx > maxKeep) {
+                    if (!keepFn(ch.chunkIdx)) {
                         treasureChests.splice(i, 1);
                     }
                 }
@@ -593,7 +598,7 @@ class WorldGenerator {
                 for (let i = BackgroundMosaic.bgProps.length - 1; i >= 0; i--) {
                     var bp = BackgroundMosaic.bgProps[i];
                     if (bp.chunkIdx !== undefined && bp.chunkIdx !== null) {
-                        if (bp.chunkIdx < minKeep || bp.chunkIdx > maxKeep) {
+                        if (!keepFn(bp.chunkIdx)) {
                             BackgroundMosaic.bgProps.splice(i, 1);
                         }
                     }
@@ -603,7 +608,7 @@ class WorldGenerator {
                 for (let i = BackgroundMosaic.bgWalls.length - 1; i >= 0; i--) {
                     var bw = BackgroundMosaic.bgWalls[i];
                     if (bw.chunkIdx !== undefined && bw.chunkIdx !== null) {
-                        if (bw.chunkIdx < minKeep || bw.chunkIdx > maxKeep) {
+                        if (!keepFn(bw.chunkIdx)) {
                             BackgroundMosaic.bgWalls.splice(i, 1);
                         }
                     }
@@ -726,15 +731,25 @@ class WorldGenerator {
         var trueWorldX = (redGuy ? redGuy.x : focusX) + (typeof worldOriginOffsetX !== "undefined" ? worldOriginOffsetX : 0);
         var centerChunk = Math.floor(trueWorldX / this.chunkWidth);
 
-        // 2. Unload distant chunks outside [centerChunk - 2, centerChunk + 2]
-        var unloadedAny = this.unloadDistantChunks(centerChunk);
+        // Chunks stream around EVERY hero (not just Player 1)
+        var originNow = (typeof worldOriginOffsetX !== "undefined") ? worldOriginOffsetX : 0;
+        var centers = [centerChunk];
+        for (let hI = 0; hI < characters.length; hI++) {
+            var hc = Math.floor((characters[hI].x + originNow) / this.chunkWidth);
+            if (centers.indexOf(hc) === -1) centers.push(hc);
+        }
 
-        // 3. Stream in nearby chunks within [centerChunk - 1, centerChunk + 1]
+        // 2. Unload distant chunks outside [center - 2, center + 2] of every hero
+        var unloadedAny = this.unloadDistantChunks(centers);
+
+        // 3. Stream in nearby chunks within [center - 1, center + 1] of every hero
         var addedAny = false;
-        for (let c = centerChunk - 1; c <= centerChunk + 1; c++) {
-            if (!this.generatedChunks[c]) {
-                this.generateChunk(c);
-                addedAny = true;
+        for (let ci = 0; ci < centers.length; ci++) {
+            for (let c = centers[ci] - 1; c <= centers[ci] + 1; c++) {
+                if (!this.generatedChunks[c]) {
+                    this.generateChunk(c);
+                    addedAny = true;
+                }
             }
         }
 
@@ -1143,40 +1158,62 @@ class WorldGenerator {
         this.activeBuildChunk = null;
     }
 
-    // Builds an enterable multi-story Frontier Building with 100% flush floors (bottom = floorTopY - 40, h = 40) & stairs!
+    // Builds an enterable multi-story house (design units; everything is scaled 2x by the grid helpers).
+    //   - Ground-floor DOOR on the west side, WINDOWS on every level (jump out onto balconies!)
+    //   - Alternating switchback staircases, one-way floors, sloped slide-roof with a chimney
     static buildTownBuilding(houseLeftX, groundTopY, houseW = 640, stories = 3, hasChest = true) {
         var storyH = 160;
-        var totalH = stories * storyH;
-        this.addInteriorWall(houseLeftX, groundTopY, houseW, totalH, "wood");
+        var wallT = 40;
+        var houseRightX = houseLeftX + houseW;
+        var floorTop = function(L) { return groundTopY + L * storyH; };
+        this.addInteriorWall(houseLeftX, groundTopY, houseW, stories * storyH + 120, "wood");
 
-        for (let s = 1; s <= stories; s++) {
-            var floorTopY = groundTopY + s * storyH;
-            var slabBotY = floorTopY - 40;
-            var prevTopY = groundTopY + (s - 1) * storyH;
-            var stairsOnLeft = (s % 2 === 1);
+        for (let L = 0; L <= stories; L++) {
+            var base = floorTop(L);
+            var top = (L === stories);
 
-            // Full continuous semi-solid floor across the building (pass-through when climbing stairs from below!)
-            this.addGridBox(houseLeftX + 40, slabBotY, houseW - 80, 40, "#bc4749", { name: "Building Floor " + (s + 1), texture: "brick" });
-
-            if (stairsOnLeft) {
-                this.addGridRamp(houseLeftX + 80, prevTopY, 200, storyH, "right", "#9c6644", { name: "Building Stairs /", texture: "dojo_wood" });
+            // ---- West wall: door on the ground floor, windows above ----
+            if (L === 0) {
+                this.addGridBox(houseLeftX, base + 120, wallT, 40, "#7a4b2a", { name: "Door Lintel", texture: "dojo_wood", kind: "wall" });
             } else {
-                this.addGridRamp(houseLeftX + houseW - 280, prevTopY, 200, storyH, "left", "#9c6644", { name: "Building Stairs \\", texture: "dojo_wood" });
+                this.addGridBox(houseLeftX, base, wallT, 40, "#9c6644", { name: "West Window Sill", texture: "dojo_wood", kind: "wall" });
+                if (!top) this.addGridBox(houseLeftX, base + 120, wallT, 40, "#9c6644", { name: "West Window Lintel", texture: "dojo_wood", kind: "wall" });
+            }
+            // ---- East wall: windows on every level ----
+            this.addGridBox(houseRightX - wallT, base, wallT, 40, "#9c6644", { name: "East Window Sill", texture: "dojo_wood", kind: "wall" });
+            if (!top) this.addGridBox(houseRightX - wallT, base + 120, wallT, 40, "#9c6644", { name: "East Window Lintel", texture: "dojo_wood", kind: "wall" });
+
+            // ---- Balcony outside the windows (alternating sides, flush with the sill) ----
+            if (L >= 1) {
+                if (L % 2 === 1) this.addGridBox(houseLeftX - 120, base, 120, 40, "#bc4749", { name: "West Balcony", texture: "brick", kind: "platform" });
+                else this.addGridBox(houseRightX, base, 120, 40, "#bc4749", { name: "East Balcony", texture: "brick", kind: "platform" });
             }
 
-            // Upper story exterior side pillars (leaving 160px ground doorways completely open!)
-            this.addGridBox(houseLeftX, floorTopY, 40, 120, "#9c6644", { name: "Building West Wall", texture: "dojo_wood" });
-            this.addGridBox(houseLeftX + houseW - 40, floorTopY, 40, 120, "#9c6644", { name: "Building East Wall", texture: "dojo_wood" });
+            if (L < stories) {
+                var nextTop = floorTop(L + 1);
+                // One-way floor above this level (jump up through it, stand on it)
+                this.addGridBox(houseLeftX + wallT, nextTop - 40, houseW - 2 * wallT, 40, "#bc4749", { name: "House Floor " + (L + 2), texture: "brick", kind: "platform" });
+                // Switchback stairs: even levels on the west side, odd levels on the east side
+                if (L % 2 === 0) {
+                    this.addGridRamp(houseLeftX + 80, base, 200, storyH, "right", "#9c6644", { name: "House Stairs /", texture: "dojo_wood", kind: "stairs" });
+                } else {
+                    this.addGridRamp(houseRightX - 280, base, 200, storyH, "left", "#9c6644", { name: "House Stairs \\", texture: "dojo_wood", kind: "stairs" });
+                }
+            }
         }
 
-        // Pitched Roof on top of the highest story
-        var roofBaseY = groundTopY + totalH + 120;
+        // Ground-floor furniture to shoot, grab and throw
+        this.addGridCrate(houseLeftX + Math.round(houseW * 0.6 / 40) * 40, groundTopY, 80, "#d9a05b", { name: "House Crate", texture: "crate_plank" });
+
+        // Pitched slide-roof with eaves + a chimney
+        var roofBaseY = floorTop(stories) + 120;
         var halfSpan = Math.floor((houseW / 2) / 40) * 40;
-        this.addGridRamp(houseLeftX, roofBaseY, halfSpan, 80, "right", "#bc4749", { name: "Building Roof /", texture: "brick" });
-        this.addGridRamp(houseLeftX + halfSpan, roofBaseY, houseW - halfSpan, 80, "left", "#bc4749", { name: "Building Roof \\", texture: "brick" });
+        this.addGridRamp(houseLeftX - 40, roofBaseY, halfSpan + 40, 80, "right", "#bc4749", { name: "Roof Slide /", texture: "brick", kind: "slide" });
+        this.addGridRamp(houseLeftX + halfSpan, roofBaseY, houseW - halfSpan + 40, 80, "left", "#bc4749", { name: "Roof Slide \\", texture: "brick", kind: "slide" });
+        this.addGridBox(houseLeftX + Math.round(houseW * 0.72 / 40) * 40, roofBaseY, 40, 120, "#7f1d1d", { name: "Chimney", texture: "brick", kind: "wall" });
 
         if (hasChest) {
-            this.addChest(houseLeftX + houseW / 2, groundTopY + totalH);
+            this.addChest(houseLeftX + houseW / 2, floorTop(stories));
         }
     }
 }

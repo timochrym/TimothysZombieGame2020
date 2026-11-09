@@ -144,6 +144,7 @@ function startLevel(lvl) {
     lastStandTimer = -1;
 
     spawnPowerUp((Math.random() < 0.5 ? -620 : 620) * STRUCT_SCALE * 0.6, 280);
+    if (lvl > 1 && redGuy) spawnPowerUp(redGuy.x + (Math.random() < 0.5 ? -260 : 260), redGuy.y + 160, "AMMO");
 }
 
 // Enemy archetype table (stats scale with the wave number)
@@ -219,6 +220,17 @@ function enforceContainment() {
             if (c.x < levelBounds.minX + half) { c.x = levelBounds.minX + half; if (c.xspeed < 0) c.xspeed = 0; }
             if (c.x > levelBounds.maxX - half) { c.x = levelBounds.maxX - half; if (c.xspeed > 0) c.xspeed = 0; }
             if (c.y > levelBounds.topY) { c.y = levelBounds.topY; if (c.yspeed > 0) c.yspeed = 0; }
+        }
+        // Heroes: remember the last safe standing spot, and rescue them if they ever fall beneath the world
+        if (c.isPlayer) {
+            if (c.onGround && c.y > -1250) { c.lastSafeX = c.x; c.lastSafeY = c.y; }
+            if (c.y < -1350 && c.lastSafeX !== undefined) {
+                c.x = c.lastSafeX;
+                c.y = c.lastSafeY + 60;
+                c.xspeed = c.yspeed = 0;
+                c.invulnTimer = 60;
+                Components.addFloatingText("RESCUED!", c.x, c.y + 90, "#7ff0ff", 20);
+            }
         }
         if (c.y < -1700 && !c.isPlayer) {
             // fell through the world: put the enemy back on the battlefield near a hero
@@ -613,14 +625,14 @@ function drawKeyLegend(ch, x, y) {
     var p2 = ch.playerIndex === 1;
     var accent = p2 ? "#3da5ff" : "#ff5a5f";
     var items = p2 ?
-        [["← ↑ ↓ →", "move"], ["ENTER", "shoot"], [".", "jetpack"], ["R-SHIFT", "dash"], ["/", "revive"]] :
-        [["W A S D", "move"], ["F", "shoot"], ["SPACE", "jetpack"], ["L-SHIFT", "dash"], ["E", "revive"]];
+        [["← ↑ ↓ →", "move"], ["ENTER", "shoot"], ["'", "reload"], [".", "jetpack"], ["R-SHIFT", "dash"], ["/", "revive"]] :
+        [["W A S D", "move"], ["F", "shoot"], ["X", "reload"], ["SPACE", "jetpack"], ["L-SHIFT", "dash"], ["E", "revive"]];
     var widths = [];
     ctx.save();
     ctx.font = "800 11px " + UI_FONT;
     var total = 0;
     for (let i = 0; i < items.length; i++) {
-        widths[i] = Math.max(26, ctx.measureText(items[i][0]).width + 14);
+        widths[i] = Math.max(46, ctx.measureText(items[i][0]).width + 14);
         total += widths[i] + 6;
     }
     var bx = x;
@@ -644,7 +656,7 @@ function drawKeyLegend(ch, x, y) {
 }
 
 function drawHeroCard(ch, x, y) {
-    var cw = 330, chh = 132;
+    var cw = 330, chh = 150;
     var accent = ch.playerIndex === 0 ? "#ff5a5f" : "#3da5ff";
     uiPanel(x, y, cw, chh, ch.isZombie ? "#c77dff" : accent, 0.88);
 
@@ -684,8 +696,22 @@ function drawHeroCard(ch, x, y) {
         uiBar(x + 240, y + 78, 70, 7, dc, "#00f5d4");
         uiText("DASH", x + 240, y + 96, 10, "#7ffbe9", "left", "700");
 
+        // Ammo: magazine pips + reserve count
+        var pipW = (cw - 94 - (ch.ammoMagMax - 1) * 2) / ch.ammoMagMax;
+        var lowAmmo = ch.totalAmmo() <= 30 && !ch.unlimitedAmmo();
+        for (let ap = 0; ap < ch.ammoMagMax; ap++) {
+            var filled = ap < ch.ammoMag;
+            ctx.fillStyle = ch.unlimitedAmmo() ? "#ffd23f" : (filled ? (lowAmmo && Math.floor(Date.now() / 250) % 2 ? "#ff6b6b" : "#fbbf24") : "rgba(255,255,255,0.12)");
+            ctx.fillRect(x + 78 + ap * (pipW + 2), y + 104, pipW, 9);
+        }
+        if (ch.reloadTimer > 0) {
+            uiBar(x + 78, y + 104, cw - 94, 9, 1 - ch.reloadTimer / 70, "#fbbf24", "rgba(0,0,0,0.6)");
+            uiText("RELOADING", x + 78 + (cw - 94) / 2, y + 112, 10, "#1a1205", "center", "900");
+        }
+        uiText(ch.unlimitedAmmo() ? "AMMO ∞" : ("AMMO " + ch.ammoMag + " / " + ch.ammoReserve + (ch.totalAmmo() <= 0 ? "  OUT!" : "")), x + 78, y + 128, 11, lowAmmo ? "#ff9b9b" : "#fde68a", "left", "800");
+
         // active power chips
-        var cx = x + 14, cy = y + 124;
+        var cx = x + 14, cy = y + 142;
         var shown = 0;
         for (var pk in ch.powers) {
             var def = PowerUpDefs[pk];
@@ -747,7 +773,7 @@ function drawHUD() {
     }
 
     // ---------- Hero cards ----------
-    var cardY = h - 148;
+    var cardY = h - 166;
     drawHeroCard(redGuy, 14, cardY);
     if (multiplayer && blueGuy) drawHeroCard(blueGuy, w - 344, cardY);
     if (multiplayer) {

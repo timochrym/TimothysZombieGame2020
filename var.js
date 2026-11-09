@@ -160,8 +160,8 @@ window.addEventListener("resize", function() {
 // Per-player input (P1 = WASD cluster, P2 = Arrow cluster). Filled by keyHandler.js
 // ---------------------------------------------------------------------------
 var PlayerInput = [
-    { shoot: false, jet: false, interact: false, dashQueued: false, grabQueued: false },
-    { shoot: false, jet: false, interact: false, dashQueued: false, grabQueued: false }
+    { shoot: false, jet: false, interact: false, dashQueued: false, grabQueued: false, reloadQueued: false },
+    { shoot: false, jet: false, interact: false, dashQueued: false, grabQueued: false, reloadQueued: false }
 ];
 
 // ---------------------------------------------------------------------------

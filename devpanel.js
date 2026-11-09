@@ -102,6 +102,10 @@ var DevActions = {
             characters[i].recomputeStats();
         }
     },
+    refillAmmo: function() {
+        for (let i = 0; i < characters.length; i++) { characters[i].ammoMag = characters[i].ammoMagMax; characters[i].ammoReserve = characters[i].ammoReserveMax; characters[i].reloadTimer = 0; }
+        DevUI.toast("Ammo refilled");
+    },
     healAll: function() {
         for (let i = 0; i < characters.length; i++) {
             var c = characters[i];
@@ -652,7 +656,7 @@ SummonManager.buildUI = function() {
                     ${devToggle("Co-op [M]", "", "Two players", "coop")}
                     ${devToggle("Waves running", "", "Pause enemy waves", "waves")}
                     ${devToggle("Jetpack", "", "Enable jetpacks", "jetpack")}
-                    ${devToggle("Infinite ammo", "infiniteAmmo", "No fuel drain / cooldowns")}
+                    ${devToggle("Infinite ammo", "infiniteAmmo", "Unlimited bullets, no fuel drain or cooldowns")}
                     ${devToggle("Friendly fire", "friendlyFire", "Heroes can hurt each other")}
                     ${devToggle("Show hitboxes", "showHitboxes", "")}
                     ${devToggle("FPS counter", "showFPS", "")}
@@ -696,6 +700,7 @@ SummonManager.buildUI = function() {
                     <button class="dp-btn good" data-act="healAll">❤ Heal all</button>
                     <button class="dp-btn good" data-act="reviveAll">✚ Revive all</button>
                     <button class="dp-btn" data-act="clearPowers">Clear powers</button>
+                    <button class="dp-btn good" data-act="refillAmmo">▮ Refill ammo</button>
                     <button class="dp-btn warn" data-act="downP1">Down P1</button>
                     <button class="dp-btn warn" data-act="downP2">Down P2</button>
                     <button class="dp-btn" data-act="bringP2">Bring P2</button>

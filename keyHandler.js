@@ -1,7 +1,7 @@
 // ============================================================================
 // INPUT
-//   Player 1 :  WASD move | F shoot | Space jetpack | Left-Shift dash | E shockwave / hold to REVIVE | G grab
-//   Player 2 :  Arrows move | Enter shoot | . jetpack | Right-Shift dash | / shockwave / hold to REVIVE | , grab
+//   Player 1 :  WASD move | F shoot | X reload | Space jetpack | Left-Shift dash | E shockwave / hold to REVIVE | G grab
+//   Player 2 :  Arrows move | Enter shoot | ' reload | . jetpack | Right-Shift dash | / shockwave / hold to REVIVE | , grab
 //   Solo     :  Arrow keys also fire twin-stick style, mouse aims & shoots.
 // ============================================================================
 function isTypingTarget(e) {
@@ -45,6 +45,7 @@ function keyDownHandler(e) {
     if (c == "KeyE" || c == "KeyQ") { PlayerInput[0].interact = true; EPressed = true; }
     if (c == "ShiftLeft" && !e.repeat) { ShiftPressed = true; queueDash(0); }
     if (c == "KeyG" && !e.repeat) queueGrab(0);
+    if (c == "KeyX" && !e.repeat) PlayerInput[0].reloadQueued = true;
 
     // ----- Player 2 actions -----
     if (c == "Enter" || c == "NumpadEnter") { PlayerInput[1].shoot = true; e.preventDefault(); }
@@ -52,6 +53,7 @@ function keyDownHandler(e) {
     if (c == "Slash" || c == "Numpad1") { PlayerInput[1].interact = true; e.preventDefault(); }
     if (c == "ShiftRight" && !e.repeat) { queueDash(1); }
     if ((c == "Comma" || c == "Numpad2") && !e.repeat) queueGrab(1);
+    if ((c == "Quote" || c == "Numpad3") && !e.repeat) { PlayerInput[1].reloadQueued = true; e.preventDefault(); }
 
     if (e.repeat) return;
 

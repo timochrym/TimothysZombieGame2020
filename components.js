@@ -370,6 +370,20 @@ class Components {
 
             var hero = object.isPlayer;
             var living = hero && !object.isZombie;
+            // --- Ammo: finite magazine + reserve; auto-reload when dry ---
+            var ammoLimited = living && !object.unlimitedAmmo();
+            if (ammoLimited) {
+                if (object.reloadTimer > 0) return;
+                if (object.ammoMag <= 0) {
+                    if (object.ammoReserve > 0) object.startReload();
+                    else if (object.noAmmoMsg <= 0) {
+                        object.noAmmoMsg = 60;
+                        Components.addFloatingText("OUT OF AMMO!", object.x, object.y + 78, "#ff6b6b", 16);
+                    }
+                    return;
+                }
+                object.ammoMag--;
+            }
             var isRapid = (hero && object.hasPower("RAPID")) || (living && godMode);
             var berserk = hero && object.hasPower("BERSERK");
             if (hero && object.isZombie) {
