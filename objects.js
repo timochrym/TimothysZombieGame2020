@@ -342,7 +342,7 @@ class Object {
     drawDecorations() {
         var sx = this.x * cameraScaleX + xc;
         var sy = -this.y * cameraScaleY + yc;
-        if (sx < -160 || sx > canvas.width + 160 || sy < -160 || sy > canvas.height + 160) {
+        if (sx < -160 || sx > cssW + 160 || sy < -160 || sy > cssH + 160) {
             if (!this.heldBy) return;
         }
         if (this.explosive) {

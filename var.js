@@ -2,8 +2,26 @@ var canvas = document.getElementById("screen");
 var ctx = canvas.getContext("2d");
 var w = window.innerWidth;
 var h = window.innerHeight;
-canvas.width = w;
-canvas.height = h;
+// Logical drawing size in CSS pixels (all game/HUD code uses these). The backing store is
+// renderScale x larger on hi-DPI screens so everything is razor sharp.
+var cssW = w;
+var cssH = h;
+var renderScale = 1;
+var renderScaleAutoReduced = false;
+
+function applyCanvasSize() {
+    w = window.innerWidth;
+    h = window.innerHeight;
+    cssW = w;
+    cssH = h;
+    var want = (typeof settings !== "undefined" && settings.hiDPI && !renderScaleAutoReduced) ? Math.min(2, window.devicePixelRatio || 1) : 1;
+    renderScale = Math.max(1, want);
+    canvas.width = Math.round(w * renderScale);
+    canvas.height = Math.round(h * renderScale);
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+}
+applyCanvasSize();
 
 let xcMaster = w / 2;
 let ycMaster = h / 2;
@@ -147,10 +165,7 @@ var rightMouseDown = false;
 var useMouseAim = false;
 
 window.addEventListener("resize", function() {
-    w = window.innerWidth;
-    h = window.innerHeight;
-    canvas.width = w;
-    canvas.height = h;
+    applyCanvasSize();
     xcMaster = w / 2;
     ycMaster = h / 2;
 });
@@ -160,8 +175,8 @@ window.addEventListener("resize", function() {
 // Per-player input (P1 = WASD cluster, P2 = Arrow cluster). Filled by keyHandler.js
 // ---------------------------------------------------------------------------
 var PlayerInput = [
-    { shoot: false, jet: false, interact: false, dashQueued: false, grabQueued: false, reloadQueued: false },
-    { shoot: false, jet: false, interact: false, dashQueued: false, grabQueued: false, reloadQueued: false }
+    { shoot: false, jet: false, interact: false, kbShoot: false, kbJet: false, kbInteract: false, dashQueued: false, grabQueued: false, reloadQueued: false },
+    { shoot: false, jet: false, interact: false, kbShoot: false, kbJet: false, kbInteract: false, dashQueued: false, grabQueued: false, reloadQueued: false }
 ];
 
 // ---------------------------------------------------------------------------
@@ -179,7 +194,9 @@ var devOpts = {
     showFPS: false,
     showHelp: true,
     friendlyFire: false,
-    powerUpRate: 1.0         // drop chance multiplier
+    powerUpRate: 1.0,        // drop chance multiplier
+    gravityMult: 1.0,        // world gravity (characters, crates, ragdolls)
+    bouncyRagdolls: false    // super-bouncy bodies
 };
 
 var helpTimer = 60 * 14; // controls cheat-sheet fades after 14 seconds (toggle with H)

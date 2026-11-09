@@ -169,6 +169,7 @@ class Character {
     startReload() {
         if (this.reloadTimer > 0 || this.ammoMag >= this.ammoMagMax || this.ammoReserve <= 0) return;
         this.reloadTimer = 70;
+        if (typeof SFX !== "undefined") SFX.play("reload", this.x, this.y);
         Components.addFloatingText("RELOADING", this.x, this.y + 78, "#fbbf24", 14);
     }
 
@@ -219,6 +220,7 @@ class Character {
     startRagdoll(kx, ky, dur, noImpulse) {
         if (this.ragdollTimer > 0 || this.ragdollImmune > 0 || this.dead) return;
         this.ragdollTimer = dur || 55;
+        this.ragdollExtend = 0;
         var dir = Math.abs(kx) > 0.5 ? Math.sign(kx) : (Math.random() < 0.5 ? -1 : 1);
         this.ragdollSpin = dir * (0.2 + Math.random() * 0.16);
         this.ragdollAngle = 0;
@@ -228,11 +230,44 @@ class Character {
         }
         this.onGround = false;
         this.jump = false;
+        this.dashTimer = 0;
         if (this.heldObject) {
             this.heldObject.heldBy = null;
             this.heldObject.noCollide = false;
             this.heldObject = null;
         }
+        if (this.heldRagdoll) { this.heldRagdoll.heldBy = null; this.heldRagdoll = null; }
+        // Hand the body over to the Verlet ragdoll until it comes to rest
+        if (typeof Ragdolls !== "undefined") {
+            if (this.liveRagdoll) Ragdolls.remove(this.liveRagdoll);
+            this.liveRagdoll = Ragdolls.spawnFrom(this, {});
+            this.liveRagdoll.owner = this;
+        }
+        if (typeof Juice !== "undefined") {
+            Juice.hitStop(this.isPlayer ? 4 : 3);
+            if (Math.random() < 0.6) Juice.comic(this.x, this.y + 110);
+        }
+    }
+
+    // Stand back up where the ragdoll came to rest
+    endLiveRagdoll() {
+        var rd = this.liveRagdoll;
+        this.liveRagdoll = null;
+        this.ragdollExtend = 0;
+        if (!rd) return;
+        Ragdolls.remove(rd);
+        this.x = rd.centerX();
+        this.y = rd.lowestY() + this.s2 / 2 + 2;
+        for (let i = 0; i < 14; i++) {
+            if (!CollisionDetector.collision(this, [0, 0], staticObjects)) break;
+            this.y += 30;
+        }
+        this.collidedWith = null;
+        this.xspeed = rd.velX() * 0.4;
+        this.yspeed = 3.5;
+        this.dizzyTimer = 80;
+        this.scaleX = 0.8;
+        this.scaleY = 1.25;
     }
 
     recomputeStats() {
@@ -252,6 +287,10 @@ class Character {
     }
 
     tryGrabOrThrow(cursorWorldX, cursorWorldY) {
+        if (this.heldRagdoll) {
+            this.throwHeldRagdoll(cursorWorldX, cursorWorldY);
+            return true;
+        }
         if (this.heldObject && !this.heldObject.dead) {
             this.throwHeldObject(cursorWorldX, cursorWorldY);
             return true;
@@ -294,9 +333,42 @@ class Character {
             bestCrate.xspeed = 0;
             bestCrate.yspeed = 0;
             Components.addFloatingText("GRABBED! [Click to Throw]", this.x, this.y + 70, "#00f5d4", 16);
+            if (typeof SFX !== "undefined") SFX.play("grab", this.x, this.y);
             return true;
         }
+
+        // No crate in reach? Pick up a body instead - and throw it at the horde!
+        if (typeof Ragdolls !== "undefined" && !this.isZombie) {
+            var body = Ragdolls.nearestCorpse(this.x, this.y, godMode ? 900 : 280);
+            if (body) {
+                this.heldRagdoll = body;
+                body.heldBy = this;
+                body.wake();
+                body.life = Math.max(body.life, 900);
+                Components.addFloatingText("GRABBED A BODY! [Throw it!]", this.x, this.y + 70, "#ffd23f", 16);
+                if (typeof SFX !== "undefined") SFX.play("grab", this.x, this.y);
+                return true;
+            }
+        }
         return false;
+    }
+
+    throwHeldRagdoll(cursorWorldX, cursorWorldY) {
+        var rd = this.heldRagdoll;
+        this.heldRagdoll = null;
+        if (!rd) return;
+        rd.heldBy = null;
+        var dx = cursorWorldX - this.x, dy = cursorWorldY - this.y;
+        var len = Math.hypot(dx, dy);
+        if (len < 0.01) { var rad = Math.radians(this.degree); dx = Math.sin(rad); dy = Math.cos(rad); }
+        else { dx /= len; dy /= len; }
+        rd.setVelocity(dx * 27 + this.xspeed * 0.4, dy * 27 + 4);
+        rd.pts[0].px += dx * 6; // head-first for extra tumble
+        rd.thrownBy = this;
+        rd.lastAttacker = this;
+        rd.projectileTimer = 70;
+        Components.addFloatingText("YEET!", this.x, this.y + 90, "#ffd23f", 20);
+        if (typeof SFX !== "undefined") SFX.play("dash", this.x, this.y);
     }
 
     throwHeldObject(cursorWorldX, cursorWorldY) {
@@ -339,7 +411,7 @@ class Character {
         var mPos = Components.getMouseWorldPos();
         var dx = mPos[0] - this.x;
         var dy = mPos[1] - this.y;
-        if (this.playerIndex !== 0 || !useMouseAim || Math.hypot(dx, dy) < 10) {
+        if (this.playerIndex !== 0 || !useMouseAim || this.padAiming || Math.hypot(dx, dy) < 10) {
             var rad = Math.radians(this.degree);
             dx = Math.sin(rad);
             dy = Math.cos(rad);
@@ -353,6 +425,7 @@ class Character {
         this.scaleX = 1.22;
         this.scaleY = 0.82;
         Components.spawnSparks(this.x, this.y, "#00f5d4", 6);
+        if (typeof SFX !== "undefined") SFX.play("dash", this.x, this.y);
     }
 
     takeDamage(amount, knockX = 0, knockY = 0, attacker = null) {
@@ -418,6 +491,8 @@ class Character {
         this.xspeed += knockX;
         this.yspeed += knockY;
         this.hitFlashTimer = 5;
+        if (this.liveRagdoll && amount < 0) this.liveRagdoll.addVelocity(knockX * 0.8, knockY * 0.6 + 1.5);
+        if (typeof SFX !== "undefined" && amount <= -4) SFX.play(this.isPlayer ? "hurt" : "hit", this.x, this.y, Math.min(1, -amount / 25));
         if (amount < 0 && -amount >= this.ragdollThreshold() && this.health > 0) {
             this.startRagdoll(knockX, knockY, this.isPlayer ? 55 : 60);
         }
@@ -442,6 +517,7 @@ class Character {
         if (this.moveType == "ZOMBIE") {
             this.dead = true;
             if (typeof Components !== "undefined" && Components.addCorpse) Components.addCorpse(this);
+            if (typeof SFX !== "undefined") SFX.play("kill", this.x, this.y);
 
             var basePts = (this.zombiePower == "BOSS_KING" ? 1500 : (this.zombiePower == "TANK" || this.zombiePower == "KNIGHT" ? 300 : (this.zombiePower == "NORMAL" ? 100 : 200)));
             if (comboTimer > 0) {
@@ -506,6 +582,7 @@ class Character {
                 Components.spawnCoins(this.x, this.y + 30, 14);
                 Components.spawnChest(this.x, this.y, "Boss King's Royal Hoard");
                 Components.addFloatingText("👑 CITADEL BOSS DEFEATED!", this.x, this.y + 90, "#ffdd00", 24);
+                if (typeof Juice !== "undefined") { Juice.hitStop(10); Juice.slowMo(100, 0.3); }
             } else {
                 var coinCount = ((this.zombiePower == "TANK" || this.zombiePower == "KNIGHT") ? 5 : 2) + Math.floor((dMult - 1) * 2);
                 Components.spawnCoins(this.x, this.y + 20, coinCount);
@@ -588,6 +665,7 @@ class Character {
         this.recomputeStats();
         this.jetpackFuel = this.jetpackMaxFuel;
         if (wasUndead) {
+            if (typeof SFX !== "undefined") SFX.play("revive", this.x, this.y);
             Components.addFloatingText(label, this.x, this.y + 70, "#44ffaa", 24);
             Components.spawnSparks(this.x, this.y, "#44ffaa", 22);
             Components.blowUp(this.x, this.y, "#44ffaa", 14, 220, -10, this);
@@ -600,6 +678,7 @@ class Character {
     applyPowerUp(type) {
         var def = PowerUpDefs[type];
         if (!def) return;
+        if (typeof SFX !== "undefined") SFX.play(type == "FREEZE" ? "freeze" : "pickup", this.x, this.y);
         Components.addFloatingText(def.icon + " " + def.label, this.x, this.y + 70, def.color, 20);
         Components.spawnSparks(this.x, this.y, def.color, 14);
 
@@ -677,6 +756,31 @@ class Character {
             this.hitstun--;
             this.leftPressed = this.rightPressed = this.upPressed = this.downPressed = false;
             this.dashTimer = 0;
+        }
+        if (this.dizzyTimer > 0) this.dizzyTimer--;
+        if (this.ragdollTimer > 0 && this.liveRagdoll) {
+            // Body is a ragdoll: follow it, no control until it settles
+            this.ragdollTimer--;
+            var lrd = this.liveRagdoll;
+            this.x = lrd.centerX();
+            this.y = lrd.centerY();
+            this.xspeed = lrd.velX();
+            this.yspeed = lrd.velY();
+            this.onGround = false;
+            this.leftPressed = this.rightPressed = this.upPressed = this.downPressed = false;
+            this.dashTimer = 0;
+            // keep tumbling while still flying fast (up to 1.5 extra seconds)
+            if (this.ragdollTimer === 0 && Math.hypot(this.xspeed, this.yspeed) > 6 && this.ragdollExtend < 90) {
+                this.ragdollTimer = 1;
+                this.ragdollExtend++;
+            }
+            if (this.ragdollTimer > 0) {
+                if (this.invulnTimer > 0) this.invulnTimer--;
+                if (this.hitCooldown > 0) this.hitCooldown--;
+                return;
+            }
+            this.endLiveRagdoll();
+            this.ragdollImmune = this.isPlayer ? 150 : 90;
         }
         if (this.ragdollTimer > 0) {
             this.ragdollTimer--;
@@ -807,6 +911,7 @@ class Character {
 
             if (this.collidedWith && this.collidedWith.isBumper && !(this.isPlayer && this.downPressed)) {
                 this.yspeed = this.collidedWith.bounceForce;
+                if (typeof SFX !== "undefined") SFX.play("boing", this.x, this.y);
                 this.onGround = false;
                 this.jump = false;
                 this.scaleX = 0.78;
@@ -955,6 +1060,7 @@ class Character {
                     this.scaleX = 0.85;
                     this.scaleY = 1.18;
                     Components.spawnSparks(this.x, this.y, "#ffffff", 5);
+                    if (this.isPlayer && typeof SFX !== "undefined") SFX.play("jump", this.x, this.y, 0.9, 1.15);
                 }
                 // 2. Ground / Coyote-Time / Tech-Bounce Jump! (Smooth, controlled platformer jump arc)
                 else if ((this.jumpBufferTimer > 0 || (this.isZombie && this.upPressed && !this.jumpCoolDown)) && (this.onGround || this.coyoteTimer > 0)) {
@@ -975,6 +1081,7 @@ class Character {
                     this.yspeed = Math.max(this.yspeed, launchY);
                     this.scaleX = 0.86;
                     this.scaleY = 1.16;
+                    if (this.isPlayer && typeof SFX !== "undefined") SFX.play("jump", this.x, this.y);
                 }
                 // 3. Tactile Mid-Air Double Jump!
                 else if (!this.isZombie && freshJumpPress && !this.onGround && this.coyoteTimer <= 0 && this.wallSliding === 0 && this.airJumps > 0) {
@@ -989,6 +1096,7 @@ class Character {
                     this.scaleX = 0.85;
                     this.scaleY = 1.18;
                     Components.spawnSparks(this.x, this.y - this.s2 / 2, "#00f5d4", 6);
+                    if (this.isPlayer && typeof SFX !== "undefined") SFX.play("jump", this.x, this.y, 0.9, 1.35);
                 }
 
                 // Fast-Fall / Dive Slam (Down in Mid-Air) OR Drop-Through Semi-Solid Interior Floor (Press Down on Ground)
@@ -1161,6 +1269,7 @@ class Character {
 
                     if (hitY && hitY.isBumper && this.yspeed <= 0 && !(this.isPlayer && this.downPressed)) {
                         this.yspeed = hitY.bounceForce;
+                        if (typeof SFX !== "undefined") SFX.play("boing", this.x, this.y);
                         this.jump = false;
                         Components.spawnSparks(this.x, this.y - this.s2 / 2, "#ff2e63", 8);
                     } else if (this.collidedRamp) {
@@ -1285,6 +1394,11 @@ class Character {
     }
 
     createCharacter() {
+        if (this.liveRagdoll && typeof Ragdolls !== "undefined") {
+            Ragdolls.draw(this.liveRagdoll);
+            Components.healthBar(this);
+            return;
+        }
         var sx = this.scaleX || 1.0;
         var sy = this.scaleY || 1.0;
         var visualW = this.s1 * sx;
@@ -1298,7 +1412,7 @@ class Character {
         var drawH = visualH * cameraScaleY;
 
         // Viewport culling for off-screen characters/enemies
-        if (drawX + drawW < -80 || drawX > canvas.width + 80 || drawY + drawH < -80 || drawY > canvas.height + 80) {
+        if (drawX + drawW < -80 || drawX > cssW + 80 || drawY + drawH < -80 || drawY > cssH + 80) {
             return;
         }
 
@@ -1730,7 +1844,7 @@ class Character {
                 ctx.lineTo(-bs * 0.6, 0);
                 ctx.closePath();
                 ctx.fill();
-                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
             }
             ctx.restore();
         }
@@ -1769,6 +1883,18 @@ class Character {
             ctx.beginPath();
             ctx.arc(cx, cy, Math.max(w, h) * 0.95, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * this.reviveProgress);
             ctx.stroke();
+            ctx.restore();
+        }
+
+        // Still seeing stars after getting back up
+        if (this.dizzyTimer > 0 && typeof Ragdolls !== "undefined") {
+            var dt = Date.now() * 0.007;
+            ctx.save();
+            ctx.globalAlpha = Math.min(1, this.dizzyTimer / 25);
+            for (let i = 0; i < 3; i++) {
+                var da = dt + i * 2.1;
+                Ragdolls.star(cx + Math.cos(da) * w * 0.55, y - 8 + Math.sin(da) * 6, Math.max(4, 7 * cameraScaleX));
+            }
             ctx.restore();
         }
 

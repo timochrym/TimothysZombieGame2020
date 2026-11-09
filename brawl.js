@@ -123,6 +123,13 @@ function brawlLoseStock(ch) {
     var ey = Math.max(st.minY, Math.min(st.maxY, ch.y));
     ch.stocks--;
     screenShake = Math.max(screenShake, 9);
+    if (ch.liveRagdoll && typeof Ragdolls !== "undefined") { Ragdolls.remove(ch.liveRagdoll); ch.liveRagdoll = null; }
+    if (typeof SFX !== "undefined") SFX.play("ko", ex, ey);
+    if (typeof Juice !== "undefined") {
+        Juice.hitStop(7);
+        var left = characters.filter(function(c) { return !c.eliminated && c !== ch; }).length + (ch.stocks > 0 ? 1 : 0);
+        if (left <= 1) Juice.slowMo(110, 0.3);
+    }
     Components.addRing(ex, ey, 420, FIGHTER_COLORS[ch.playerIndex], 30);
     Components.spawnSparks(ex, ey, FIGHTER_COLORS[ch.playerIndex], 16);
     Components.addFloatingText(ch.stocks > 0 ? "KO!" : "ELIMINATED!", ex, ey + (ey > 0 ? -60 : 80), "#ffffff", 34);
@@ -160,7 +167,9 @@ function updateBrawl() {
     var st = brawl.stage;
     if (brawl.phase === "countdown") {
         brawl.timer--;
+        if (brawl.timer % 60 === 0 && brawl.timer > 0 && typeof SFX !== "undefined") SFX.play("beep");
         if (brawl.timer <= 0) {
+            if (typeof SFX !== "undefined") SFX.play("go");
             brawl.phase = "fight";
             Components.addFloatingText("GO!", cameraTargetX, cameraTargetY + 200, "#ffd23f", 48);
         }
@@ -238,6 +247,13 @@ function brawlApplyHit(victim, amount, kx, ky, attacker) {
         victim.ragdollImmune = 0;
         victim.startRagdoll(nx, 0, Math.min(70, Math.round(launch * 3)), true);
     }
+    if (victim.liveRagdoll) {
+        // already tumbling: the new hit re-launches the body
+        victim.liveRagdoll.setVelocity(victim.xspeed, victim.yspeed);
+        victim.ragdollTimer = Math.max(victim.ragdollTimer, 30);
+    }
+    if (typeof SFX !== "undefined") SFX.play(launch > 14 ? "bonk" : "hit", victim.x, victim.y, Math.min(1, launch / 20));
+    if (launch > 18 && typeof Juice !== "undefined") Juice.hitStop(5);
     var pctNow = Math.round(victim.damagePct);
     Components.addFloatingText(pctNow + "%", victim.x, victim.y + 70, brawlPercentColor(victim.damagePct), 18 + Math.min(14, pct));
     Components.spawnSparks(victim.x, victim.y, "#ffffff", 5);

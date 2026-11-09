@@ -127,6 +127,7 @@ function startLevel(lvl) {
     zombieSpawnTimer = 35;
     levelTransitionTimer = 110;
 
+    if (lvl > 1 && typeof SFX !== "undefined") SFX.play("wave");
     if (lvl > 1) {
         var waveBonus = (lvl - 1) * 250;
         score += waveBonus;
@@ -321,11 +322,11 @@ function drawEdgeIndicator(wx, wy, color, label) {
     var sx = wx * cameraScaleX + xc;
     var sy = -wy * cameraScaleY + yc;
     var m = 46;
-    if (sx > m && sx < canvas.width - m && sy > m && sy < canvas.height - m) return;
-    var cx = canvas.width / 2, cy = canvas.height / 2;
+    if (sx > m && sx < cssW - m && sy > m && sy < cssH - m) return;
+    var cx = cssW / 2, cy = cssH / 2;
     var ang = Math.atan2(sy - cy, sx - cx);
-    var ex = Math.max(m, Math.min(canvas.width - m, sx));
-    var ey = Math.max(m + 40, Math.min(canvas.height - m - 70, sy));
+    var ex = Math.max(m, Math.min(cssW - m, sx));
+    var ey = Math.max(m + 40, Math.min(cssH - m - 70, sy));
     ctx.save();
     ctx.translate(ex, ey);
     ctx.rotate(ang);
@@ -349,8 +350,8 @@ function drawEdgeIndicator(wx, wy, color, label) {
         ctx.textAlign = "center";
         ctx.lineWidth = 4;
         ctx.strokeStyle = "rgba(5,8,14,0.9)";
-        var ly = ey + (ey < canvas.height / 2 ? 30 : -22);
-        var lx = Math.max(70, Math.min(canvas.width - 70, ex));
+        var ly = ey + (ey < cssH / 2 ? 30 : -22);
+        var lx = Math.max(70, Math.min(cssW - 70, ex));
         ctx.strokeText(label, lx, ly);
         ctx.fillStyle = color;
         ctx.fillText(label, lx, ly);
@@ -383,7 +384,7 @@ function updatePowerUps() {
         var sy = -(p.y + bob) * cameraScaleY + yc;
         var blink = (p.life < 220 && Math.floor(p.life / 8) % 2 === 0);
 
-        if (sx > -80 && sx < canvas.width + 80 && sy > -200 && sy < canvas.height + 80 && !blink) {
+        if (sx > -80 && sx < cssW + 80 && sy > -200 && sy < cssH + 80 && !blink) {
             var sz = Math.max(30, 50 * Math.max(0.85, cameraScaleX * 1.3));
             ctx.save();
             // light beam so power-ups are visible from far away
@@ -473,6 +474,9 @@ function resetGame() {
     Components.rings = [];
     Components.bolts = [];
     Components.corpses = [];
+    if (typeof Ragdolls !== "undefined") Ragdolls.clear();
+    hitStopFrames = 0;
+    slowMoFrames = 0;
     score = 0;
     combo = 1;
     comboTimer = 0;
@@ -572,7 +576,7 @@ function updateCamera() {
         }
         var ddx = maxHX - minHX;
         var ddy = maxHY - minHY;
-        var fit = Math.min((canvas.width * 0.74) / (ddx + 520), (canvas.height * 0.62) / (ddy + 420));
+        var fit = Math.min((cssW * 0.74) / (ddx + 520), (cssH * 0.62) / (ddy + 420));
         desired = Math.min(desired, Math.max(0.3, fit));
     }
     cameraScaleX += (desired - cameraScaleX) * 0.05;
@@ -584,8 +588,8 @@ function updateCamera() {
     var shakeX = 0;
     var shakeY = 0;
     if (screenShake > 0) {
-        shakeX = (Math.random() - 0.5) * screenShake * 2;
-        shakeY = (Math.random() - 0.5) * screenShake * 2;
+        shakeX = (Math.random() - 0.5) * screenShake * 2 * settings.shake;
+        shakeY = (Math.random() - 0.5) * screenShake * 2 * settings.shake;
         screenShake *= 0.85;
         if (screenShake < 0.4) screenShake = 0;
     }
@@ -880,10 +884,10 @@ function drawHUD() {
             uiText("R-Shift dash   / shockwave / hold: revive   , grab", hx + 340, hy + 68, 12, "#dbe7f0", "left", "600");
         } else {
             uiText("WASD move/jump   Mouse aim + click or F shoot   Arrows: twin-stick fire", hx + 24, hy + 28, 12, "#dbe7f0", "left", "700");
-            uiText("Space jetpack   L-Shift dash   E shockwave   R-click/G grab & throw", hx + 24, hy + 50, 12, "#dbe7f0", "left", "700");
+            uiText("Space jetpack   L-Shift dash   E shockwave   R-click/G grab & throw crates or BODIES", hx + 24, hy + 50, 12, "#dbe7f0", "left", "700");
             uiText("Stairs: hold UP to climb, DOWN to step off.   Esc: pause menu (character, co-op, restart, levels)", hx + 24, hy + 72, 12, "#ffd23f", "left", "800");
         }
-        uiText("Esc pause menu (restart · co-op · levels) · H hide · V god mode · B dev mode · +/- zoom", hx + hw / 2, hy + 116, 11, "#8ba2b4", "center", "600");
+        uiText("Esc pause menu (restart · co-op · levels · settings) · 🎮 controllers supported · H hide · B dev mode · +/- zoom", hx + hw / 2, hy + 116, 11, "#8ba2b4", "center", "600");
         ctx.restore();
     } else {
         uiText("H: controls", w / 2, h - 12, 11, "rgba(200,220,235,0.55)", "center", "600");
@@ -928,7 +932,8 @@ function drawHUD() {
 }
 
 function frame() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
 
     // Draw Multi-Layer Repeating Parallax Background Mosaic & Non-Colliding Background Trees
     if (typeof BackgroundMosaic !== "undefined") {
@@ -975,6 +980,15 @@ function frame() {
         updateLastStand();
     }
 
+    // Live gravity tuning (dev mode "Gravity" slider) applies to everyone
+    var gNow = gravity * (devOpts.gravityMult || 1);
+    for (let i = 0; i < characters.length; i++) characters[i].gravity = gNow;
+    for (let i = 0; i < zombies.length; i++) zombies[i].gravity = gNow;
+    for (let i = 0; i < movingObjects.length; i++) movingObjects[i].gravity = gNow;
+
+    // Verlet ragdolls step first so knocked-down characters follow their bodies this frame
+    if (typeof Ragdolls !== "undefined") Ragdolls.update();
+
     for (let i = 0; i < characters.length; i++) {
         if (!characters[i].dead) {
             Components.moveTypeFinder(characters[i]);
@@ -1015,6 +1029,9 @@ function frame() {
         }
     }
 
+    // Ragdoll bodies lie behind the living
+    if (typeof Ragdolls !== "undefined") Ragdolls.drawCorpses();
+
     // Update & Draw Power-Ups, Treasure Chests & RPG Gold Coins
     updatePowerUps();
     if (typeof Components.updateChests === "function") {
@@ -1033,7 +1050,6 @@ function frame() {
     // Update & Draw Lazers, Particles & Floating Arcade Texts
     Components.updateLazers();
     Components.updateParticles();
-    Components.updateCorpses();
     Components.drawEffects();
     Components.updateFloatingTexts();
 
@@ -1071,6 +1087,7 @@ var pauseConfirm = false;
 var pauseRects = [];
 var pauseSnap = null;
 var pauseFromGameOver = false;
+var pauseSub = null; // null = main menu, "settings" = settings page
 var pauseLevelKeys = [];
 var pauseLevelIdx = 0;
 var gameOverTimer = 0;
@@ -1093,6 +1110,7 @@ function openPause(fromGameOver) {
 
 function closePause() {
     paused = false;
+    pauseSub = null;
     pauseSnap = null;
     pauseConfirm = false;
 }
@@ -1102,9 +1120,19 @@ function togglePause() {
     else openPause(false);
 }
 
-var PAUSE_CYCLE_IDS = ["level", "skin0", "skin1", "bopp", "blvl", "bstk", "bstage"];
+var PAUSE_CYCLE_IDS = ["level", "skin0", "skin1", "bopp", "blvl", "bstk", "bstage", "svol", "sshake"];
 
 function pauseItems() {
+    if (pauseSub === "settings") {
+        return [
+            { id: "svol", label: "Sound volume:  ◀  " + (settings.volume <= 0 ? "OFF" : Math.round(settings.volume * 100) + "%") + "  ▶", hint: "◀ ▶ adjust" },
+            { id: "sshake", label: "Screen shake:  ◀  " + Math.round(settings.shake * 100) + "%  ▶", hint: "◀ ▶ adjust (0% = off)" },
+            { id: "shit", label: "Hit-stop on big hits:  " + (settings.hitStop ? "ON" : "OFF"), hint: "Freezes a few frames on heavy impacts" },
+            { id: "shidpi", label: "Sharp hi-DPI graphics:  " + (settings.hiDPI ? (renderScaleAutoReduced ? "ON (auto-reduced for speed)" : "ON") : "OFF"), hint: "Turn off if the game runs slowly" },
+            { id: "help", label: "Controls help:  " + (devOpts.showHelp ? "ON" : "OFF"), hint: "Shows the key cheat-sheet" },
+            { id: "back", label: "◀  Back", hint: "Esc" }
+        ];
+    }
     if (pauseConfirm) {
         return [
             { id: "yes", label: "Yes - restart the run", hint: "Score and wave progress are lost" },
@@ -1133,12 +1161,19 @@ function pauseItems() {
         items.push({ id: "level", label: "Level:  ◀  " + (lvlName ? lvlName.name : "?") + "  ▶", hint: "◀ ▶ choose, Enter loads it (restarts the run)" });
         if (!pauseFromGameOver) items.push({ id: "restart", label: "Restart run", hint: "Asks for confirmation" });
     }
-    items.push({ id: "help", label: "Controls help:  " + (devOpts.showHelp ? "ON" : "OFF"), hint: "Shows the key cheat-sheet" });
+    items.push({ id: "settings", label: "Settings  ▸", hint: "Sound, screen shake, hit-stop, graphics, help" });
     items.push({ id: "dev", label: "Developer Mode panel", hint: "Same as pressing B" });
     return items;
 }
 
 function pauseActivate(id, dir) {
+    if (typeof SFX !== "undefined") SFX.play("select");
+    if (id === "settings") { pauseSub = "settings"; pauseIndex = 0; return; }
+    if (id === "back") { pauseSub = null; pauseIndex = 0; return; }
+    if (id === "svol") { SFX.setVolume(Math.round((settings.volume + (dir || 1) * 0.1) * 10) / 10); if (settings.volume > 1) SFX.setVolume(1); return; }
+    if (id === "sshake") { settings.shake = Math.max(0, Math.min(1, Math.round((settings.shake + (dir || 1) * 0.25) * 4) / 4)); saveSettings(); return; }
+    if (id === "shit") { settings.hitStop = !settings.hitStop; saveSettings(); return; }
+    if (id === "shidpi") { settings.hiDPI = !settings.hiDPI; renderScaleAutoReduced = false; saveSettings(); applyCanvasSize(); xcMaster = w / 2; ycMaster = h / 2; return; }
     if (id === "resume") closePause();
     else if (id === "again" || id === "yes") {
         closePause();
@@ -1170,6 +1205,7 @@ function pauseActivate(id, dir) {
 function pauseKey(e) {
     var items = pauseItems();
     var c = e.code;
+    if (typeof SFX !== "undefined" && (c === "ArrowUp" || c === "ArrowDown" || c === "KeyW" || c === "KeyS")) SFX.play("ui");
     if (c === "ArrowUp" || c === "KeyW") pauseIndex = (pauseIndex - 1 + items.length) % items.length;
     else if (c === "ArrowDown" || c === "KeyS") pauseIndex = (pauseIndex + 1) % items.length;
     else if (c === "ArrowLeft" || c === "KeyA") { var li = items[pauseIndex].id; if (PAUSE_CYCLE_IDS.indexOf(li) !== -1) pauseActivate(li, -1); }
@@ -1202,17 +1238,18 @@ function pauseClick(mx, my) {
 
 function drawPauseMenu() {
     if (!pauseSnap) return;
-    ctx.drawImage(pauseSnap, 0, 0);
+    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+    ctx.drawImage(pauseSnap, 0, 0, cssW, cssH);
     ctx.fillStyle = "rgba(4, 8, 14, 0.72)";
     ctx.fillRect(0, 0, w, h);
 
     var items = pauseItems();
     if (pauseIndex >= items.length) pauseIndex = 0;
-    var pw = 560, rowH = 58;
+    var pw = 560, rowH = Math.max(40, Math.min(58, Math.floor((h - 190) / items.length)));
     var ph = 150 + items.length * rowH;
     var px = w / 2 - pw / 2, py = Math.max(20, h / 2 - ph / 2);
     uiPanel(px, py, pw, ph, pauseFromGameOver ? "#ff4d5e" : "#22d3ee", 0.96);
-    uiText(pauseConfirm ? "RESTART?" : (pauseFromGameOver ? (brawl.active ? "GAME!" : "OVERRUN") : "PAUSED"), w / 2, py + 62, 44, pauseFromGameOver ? "#ff4d5e" : "#ffd23f", "center", "900");
+    uiText(pauseSub === "settings" ? "SETTINGS" : pauseConfirm ? "RESTART?" : (pauseFromGameOver ? (brawl.active ? "GAME!" : "OVERRUN") : "PAUSED"), w / 2, py + 62, 44, pauseFromGameOver ? "#ff4d5e" : "#ffd23f", "center", "900");
     uiText(brawl.active ? ("Brawl  ·  " + (brawl.stage ? brawl.stage.name.replace(/^[^A-Za-z]+/, "") : "")) : ("Wave " + level + "  ·  Score " + score + "  ·  " + (multiplayer ? "Co-op" : "Solo")), w / 2, py + 92, 15, "#a8c0d0", "center", "700");
 
     pauseRects = [];
@@ -1249,7 +1286,7 @@ function drawHitboxes() {
             if (!o || o.dead) continue;
             var sx = (o.x - o.w / 2) * cameraScaleX + xc;
             var sy = (-o.y - o.h / 2) * cameraScaleY + yc;
-            if (sx > canvas.width || sy > canvas.height || sx + o.w * cameraScaleX < 0 || sy + o.h * cameraScaleY < 0) continue;
+            if (sx > cssW || sy > cssH || sx + o.w * cameraScaleX < 0 || sy + o.h * cameraScaleY < 0) continue;
             ctx.strokeRect(sx, sy, o.w * cameraScaleX, o.h * cameraScaleY);
         }
     }
@@ -1258,15 +1295,20 @@ function drawHitboxes() {
 
 // Fixed-rate loop with a time-scale accumulator (dev slow-mo / fast-forward) and FPS meter
 var tickAccumulator = 0;
+var lowFpsSeconds = 0;
 function tick() {
+    if (typeof Pads !== "undefined") Pads.poll();
     if (paused) { drawPauseMenu(); return; }
+    if (hitStopFrames > 0) { hitStopFrames--; return; }   // impact freeze: hold the last image
     if (gameOver) {
         gameOverTimer++;
         if (gameOverTimer > 150) { gameOverTimer = 0; openPause(true); return; }
     } else {
         gameOverTimer = 0;
     }
-    tickAccumulator += devOpts.timeScale;
+    var slow = 1;
+    if (slowMoFrames > 0) { slowMoFrames--; slow = slowMoScale; }
+    tickAccumulator += devOpts.timeScale * slow;
     var guard = 0;
     while (tickAccumulator >= 1 && guard < 4) {
         tickAccumulator -= 1;
@@ -1280,7 +1322,30 @@ function tick() {
         measuredFPS = framesThisSecond;
         framesThisSecond = 0;
         lastSecondStamp = nowT;
+        // Automatically drop to 1x resolution if hi-DPI rendering is too slow on this machine
+        if (renderScale > 1 && measuredFPS < 45 && devOpts.timeScale >= 1 && slowMoFrames <= 0 && !paused) {
+            if (++lowFpsSeconds >= 3) {
+                renderScaleAutoReduced = true;
+                applyCanvasSize();
+                lowFpsSeconds = 0;
+            }
+        } else lowFpsSeconds = 0;
     }
 }
 
-setInterval(tick, 1000 / fps);
+// Fixed 60 Hz simulation driven by requestAnimationFrame (vsync-smooth, pauses in background tabs)
+var loopLast = performance.now();
+var loopAcc = 0;
+function gameLoop(now) {
+    loopAcc += Math.min(100, now - loopLast);
+    loopLast = now;
+    var steps = 0;
+    while (loopAcc >= 1000 / fps && steps < 4) {
+        loopAcc -= 1000 / fps;
+        tick();
+        steps++;
+    }
+    if (steps >= 4) loopAcc = 0;
+    requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);

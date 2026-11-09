@@ -199,23 +199,23 @@ class BackgroundMosaic {
                           (typeof worldOriginOffsetX !== "undefined" ? worldOriginOffsetX : 0);
 
         // 0. Clean Cached Atmospheric Sky Gradient (zero per-frame allocation!)
-        if (!this._skyGrad || this._skyGradH !== canvas.height) {
-            this._skyGradH = canvas.height;
-            this._skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        if (!this._skyGrad || this._skyGradH !== cssH) {
+            this._skyGradH = cssH;
+            this._skyGrad = ctx.createLinearGradient(0, 0, 0, cssH);
             this._skyGrad.addColorStop(0, "#0d1b2a");
             this._skyGrad.addColorStop(0.65, "#1b2e3c");
             this._skyGrad.addColorStop(1, "#0f1e26");
         }
         ctx.fillStyle = this._skyGrad;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, cssW, cssH);
 
-        var horizonScreenY = Math.min(canvas.height - 40, Math.max(200, yc + 40 * cameraScaleY));
+        var horizonScreenY = Math.min(cssH - 40, Math.max(200, yc + 40 * cameraScaleY));
 
         // 1. Far Mountains (0.12x parallax rate)
         var mtnTile = this.layers.farMountains;
         var mtnOffX = -((totalWorldX * 0.12) % mtnTile.width + mtnTile.width) % mtnTile.width;
         var mtnY = Math.round(horizonScreenY - mtnTile.height + 60);
-        for (let x = mtnOffX; x < canvas.width; x += mtnTile.width) {
+        for (let x = mtnOffX; x < cssW; x += mtnTile.width) {
             ctx.drawImage(mtnTile, Math.round(x), mtnY);
         }
 
@@ -223,14 +223,14 @@ class BackgroundMosaic {
         var midTile = this.layers.midHills;
         var midOffX = -((totalWorldX * 0.28) % midTile.width + midTile.width) % midTile.width;
         var midY = Math.round(horizonScreenY - midTile.height + 70);
-        for (let x = midOffX; x < canvas.width; x += midTile.width) {
+        for (let x = midOffX; x < cssW; x += midTile.width) {
             ctx.drawImage(midTile, Math.round(x), midY);
         }
 
         // 3. Fill below horizon with dark subterranean cavern backdrop so going underground feels deep!
-        if (horizonScreenY < canvas.height) {
+        if (horizonScreenY < cssH) {
             ctx.fillStyle = "#0a121a";
-            ctx.fillRect(0, horizonScreenY, canvas.width, canvas.height - horizonScreenY);
+            ctx.fillRect(0, horizonScreenY, cssW, cssH - horizonScreenY);
         }
 
         // 4. Draw World-Anchored Background Trees (muted tones so they never clutter gameplay)
@@ -271,16 +271,16 @@ class BackgroundMosaic {
             var bw = this.bgWalls[i];
             var sx = (bw.x - bw.w / 2) * cameraScaleX + xc;
             var sw = bw.w * cameraScaleX;
-            if (sx + sw < -40 || sx > canvas.width + 40) continue;
+            if (sx + sw < -40 || sx > cssW + 40) continue;
 
             var sy = (-bw.y - bw.h / 2) * cameraScaleY + yc;
             var sh = bw.h * cameraScaleY;
-            if (sy + sh < -40 || sy > canvas.height + 40) continue;
+            if (sy + sh < -40 || sy > cssH + 40) continue;
 
             var visX = Math.max(0, sx);
             var visY = Math.max(0, sy);
-            var visW = Math.min(canvas.width, sx + sw) - visX;
-            var visH = Math.min(canvas.height, sy + sh) - visY;
+            var visW = Math.min(cssW, sx + sw) - visX;
+            var visH = Math.min(cssH, sy + sh) - visY;
             if (visW <= 0 || visH <= 0) continue;
 
             if (bw.style === "castle") {
@@ -319,7 +319,7 @@ class BackgroundMosaic {
             var t = this.bgProps[i];
             var sc = t.sc || 1;
             var sx = t.x * cameraScaleX + xc;
-            if (sx < -300 * sc || sx > canvas.width + 300 * sc) continue;
+            if (sx < -300 * sc || sx > cssW + 300 * sc) continue;
 
             var baseSy = -t.y * cameraScaleY + yc;
             var trunkW = 28 * sc * cameraScaleX;
@@ -373,7 +373,7 @@ class Polygon {
         var screenRight = (ox + halfW) * cameraScaleX + xc;
         var screenTop = (-oy - halfH - offsetY) * cameraScaleY + yc;
         var screenBottom = (-oy + halfH - offsetY) * cameraScaleY + yc;
-        if (screenRight < -60 || screenLeft > canvas.width + 60 || screenBottom < -60 || screenTop > canvas.height + 60) {
+        if (screenRight < -60 || screenLeft > cssW + 60 || screenBottom < -60 || screenTop > cssH + 60) {
             return;
         }
 

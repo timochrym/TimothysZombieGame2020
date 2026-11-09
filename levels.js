@@ -588,7 +588,7 @@ class WorldGenerator {
         shiftList(coinOrbs);
         shiftList(floatingTexts);
         shiftList(afterImages);
-        shiftList(Components.corpses);
+        if (typeof Ragdolls !== "undefined") Ragdolls.shift(shiftX);
         if (typeof treasureChests !== "undefined") {
             shiftList(treasureChests);
         }

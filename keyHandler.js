@@ -28,11 +28,16 @@ function queueGrab(idx) {
 
 function keyDownHandler(e) {
     if (isTypingTarget(e)) return;
+    if (typeof SFX !== "undefined") SFX.unlock();
     var k = e.key;
     var c = e.code;
 
     // Pause menu owns the keyboard while it is open (restart / co-op / levels live there)
-    if (c == "Escape") { if (!e.repeat) togglePause(); e.preventDefault(); return; }
+    if (c == "Escape") {
+        if (!e.repeat) { if (paused && pauseSub) { pauseSub = null; pauseIndex = 0; } else togglePause(); }
+        e.preventDefault();
+        return;
+    }
     if (paused) { pauseKey(e); return; }
 
     if (k == "ArrowRight") { ULDRrightPressed = true; e.preventDefault(); }
@@ -45,17 +50,17 @@ function keyDownHandler(e) {
     if (c == "KeyS") WASDdownPressed = true;
 
     // ----- Player 1 actions -----
-    if (c == "Space") { PlayerInput[0].jet = true; SpacePressed = true; e.preventDefault(); }
-    if (c == "KeyF") { PlayerInput[0].shoot = true; EnterPressed = true; }
-    if (c == "KeyE" || c == "KeyQ") { PlayerInput[0].interact = true; EPressed = true; }
+    if (c == "Space") { PlayerInput[0].kbJet = true; SpacePressed = true; e.preventDefault(); }
+    if (c == "KeyF") { PlayerInput[0].kbShoot = true; EnterPressed = true; }
+    if (c == "KeyE" || c == "KeyQ") { PlayerInput[0].kbInteract = true; EPressed = true; }
     if (c == "ShiftLeft" && !e.repeat) { ShiftPressed = true; queueDash(0); }
     if (c == "KeyG" && !e.repeat) queueGrab(0);
     if (c == "KeyX" && !e.repeat) PlayerInput[0].reloadQueued = true;
 
     // ----- Player 2 actions -----
-    if (c == "Enter" || c == "NumpadEnter") { PlayerInput[1].shoot = true; e.preventDefault(); }
-    if (c == "Period" || c == "Numpad0") { PlayerInput[1].jet = true; e.preventDefault(); }
-    if (c == "Slash" || c == "Numpad1") { PlayerInput[1].interact = true; e.preventDefault(); }
+    if (c == "Enter" || c == "NumpadEnter") { PlayerInput[1].kbShoot = true; e.preventDefault(); }
+    if (c == "Period" || c == "Numpad0") { PlayerInput[1].kbJet = true; e.preventDefault(); }
+    if (c == "Slash" || c == "Numpad1") { PlayerInput[1].kbInteract = true; e.preventDefault(); }
     if (c == "ShiftRight" && !e.repeat) { queueDash(1); }
     if ((c == "Comma" || c == "Numpad2") && !e.repeat) queueGrab(1);
     if ((c == "Quote" || c == "Numpad3") && !e.repeat) { PlayerInput[1].reloadQueued = true; e.preventDefault(); }
@@ -88,14 +93,14 @@ function keyUpHandler(e) {
     if (c == "KeyW") WASDupPressed = false;
     if (c == "KeyS") WASDdownPressed = false;
 
-    if (c == "Space") { PlayerInput[0].jet = false; SpacePressed = false; }
-    if (c == "KeyF") { PlayerInput[0].shoot = false; EnterPressed = false; }
-    if (c == "KeyE" || c == "KeyQ") { PlayerInput[0].interact = false; EPressed = false; }
+    if (c == "Space") { PlayerInput[0].kbJet = false; SpacePressed = false; }
+    if (c == "KeyF") { PlayerInput[0].kbShoot = false; EnterPressed = false; }
+    if (c == "KeyE" || c == "KeyQ") { PlayerInput[0].kbInteract = false; EPressed = false; }
     if (c == "ShiftLeft") ShiftPressed = false;
 
-    if (c == "Enter" || c == "NumpadEnter") PlayerInput[1].shoot = false;
-    if (c == "Period" || c == "Numpad0") PlayerInput[1].jet = false;
-    if (c == "Slash" || c == "Numpad1") PlayerInput[1].interact = false;
+    if (c == "Enter" || c == "NumpadEnter") PlayerInput[1].kbShoot = false;
+    if (c == "Period" || c == "Numpad0") PlayerInput[1].kbJet = false;
+    if (c == "Slash" || c == "Numpad1") PlayerInput[1].kbInteract = false;
 }
 
 // Releasing every key when the window loses focus avoids "stuck" movement
@@ -106,6 +111,7 @@ window.addEventListener("blur", function() {
     mouseDown = false;
     for (var i = 0; i < PlayerInput.length; i++) {
         PlayerInput[i].shoot = PlayerInput[i].jet = PlayerInput[i].interact = false;
+        PlayerInput[i].kbShoot = PlayerInput[i].kbJet = PlayerInput[i].kbInteract = false;
     }
 });
 
@@ -122,6 +128,7 @@ function mouseDownHandler(e) {
     var rect = canvas.getBoundingClientRect();
     mouseX = e.clientX - rect.left;
     mouseY = e.clientY - rect.top;
+    if (typeof SFX !== "undefined") SFX.unlock();
     if (paused) { if (e.button === 0) pauseClick(mouseX, mouseY); return; }
     useMouseAim = true;
 
@@ -145,3 +152,71 @@ function mouseUpHandler(e) {
 }
 
 window.addEventListener("contextmenu", function(e) { e.preventDefault(); });
+
+// ============================================================================
+// GAMEPADS (standard mapping) - pad 1 drives Player 1, pad 2 drives Player 2. Keyboard keeps working.
+//   Left stick / D-pad move   A jump   RT (or push the right stick) shoot   right stick aims
+//   RB / LT jetpack   B dash   Y shockwave / hold to revive   LB grab & throw   X reload   Start pause
+// ============================================================================
+var Pads = {
+    state: [{ active: false }, { active: false }],
+    prev: [{}, {}],
+    announced: {},
+
+    poll: function() {
+        var gps = (navigator.getGamepads && navigator.getGamepads()) || [];
+        var list = [];
+        for (let i = 0; i < gps.length; i++) if (gps[i] && gps[i].connected) list.push(gps[i]);
+        for (let i = 0; i < 2; i++) {
+            var g = list[i];
+            var st = { active: false };
+            var prev = this.prev[i];
+            if (g) {
+                if (!this.announced[g.index]) {
+                    this.announced[g.index] = true;
+                    if (typeof showBanner === "function") showBanner("🎮 CONTROLLER " + (i + 1) + " CONNECTED", "It now controls Player " + (i + 1) + (i === 1 ? " (turn on co-op / PvP in the pause menu)" : ""), "#7ff0ff");
+                }
+                var B = function(n) { var b = g.buttons[n]; return !!(b && (b.pressed || b.value > 0.5)); };
+                var ax = g.axes[0] || 0, ay = g.axes[1] || 0, rx = g.axes[2] || 0, ry = g.axes[3] || 0;
+                st.active = true;
+                st.left = ax < -0.35 || B(14);
+                st.right = ax > 0.35 || B(15);
+                st.down = ay > 0.6 || B(13);
+                st.up = B(0) || B(12);
+                st.aim = Math.hypot(rx, ry) > 0.3 ? [rx, ry] : null;
+                st.shoot = B(7) || Math.hypot(rx, ry) > 0.8;
+                st.jet = B(5) || B(6);
+                st.interact = B(3);
+                var now = {};
+                for (let b = 0; b < 17; b++) now[b] = B(b);
+                now.su = ay < -0.6; now.sd = ay > 0.6; now.sl = ax < -0.6; now.sr = ax > 0.6;
+                var edge = function(key) { return now[key] && !prev[key]; };
+                if (now[0] || now[7] || now[9]) { if (typeof SFX !== "undefined") SFX.unlock(); }
+
+                if (typeof paused !== "undefined" && paused) {
+                    var fake = function(code) { pauseKey({ code: code, preventDefault: function() {} }); };
+                    if (edge(12) || edge("su")) fake("ArrowUp");
+                    if (edge(13) || edge("sd")) fake("ArrowDown");
+                    if (edge(14) || edge("sl")) fake("ArrowLeft");
+                    if (edge(15) || edge("sr")) fake("ArrowRight");
+                    if (edge(0)) fake("Enter");
+                    if (edge(1) || edge(9)) { if (pauseSub) { pauseSub = null; pauseIndex = 0; } else if (!pauseFromGameOver) closePause(); }
+                } else {
+                    if (edge(9)) togglePause();
+                    if (edge(1)) queueDash(i);
+                    if (edge(4)) queueGrab(i);
+                    if (edge(2)) PlayerInput[i].reloadQueued = true;
+                }
+                this.prev[i] = now;
+            } else {
+                this.prev[i] = {};
+            }
+            this.state[i] = st;
+            // Compose final action buttons = keyboard OR controller
+            var inp = PlayerInput[i];
+            inp.shoot = inp.kbShoot || !!st.shoot;
+            inp.jet = inp.kbJet || !!st.jet;
+            inp.interact = inp.kbInteract || !!st.interact;
+        }
+    }
+};

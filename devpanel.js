@@ -148,12 +148,49 @@ var DevActions = {
         DevUI.toast("Collect any coin to level up!");
         Components.spawnCoins(redGuy.x, redGuy.y + 60, 1);
     },
-    jolt: function() { LevelManager.joltAllObjects(); },
+    jolt: function() { LevelManager.joltAllObjects(); if (typeof Ragdolls !== "undefined") Ragdolls.list.forEach(function(r) { r.addVelocity((Math.random() - 0.5) * 20, 8 + Math.random() * 12); }); },
+    _dummy: function(type, x, y, vx, vy) {
+        var z = spawnZombie(type, x, y);
+        var idx = zombies.indexOf(z);
+        if (idx !== -1) zombies.splice(idx, 1);
+        z.xspeed = vx; z.yspeed = vy;
+        var rd = Ragdolls.spawnFrom(z, { corpse: true, life: 1500, vx: vx, vy: vy });
+        rd.style.dead = true;
+        rd.lastAttacker = redGuy;
+        rd.thrownBy = redGuy;
+        rd.projectileTimer = 50;
+        return rd;
+    },
+    ragdollCannon: function() {
+        var m = Components.getMouseWorldPos();
+        var dx = m[0] - redGuy.x, dy = m[1] - redGuy.y, l = Math.hypot(dx, dy) || 1;
+        var types = ["NORMAL", "KNIGHT", "ARCHER", "TANK", "MAGE", "BAT", "SLIME", "LEAPER"];
+        for (let i = 0; i < 6; i++) {
+            DevActions._dummy(types[Math.floor(Math.random() * types.length)], redGuy.x + dx / l * 120, redGuy.y + 60 + i * 10, dx / l * (22 + i * 2), dy / l * (22 + i * 2) + 6);
+        }
+        if (typeof SFX !== "undefined") SFX.play("explode", redGuy.x, redGuy.y, 0.6);
+    },
+    ragdollEveryone: function() {
+        for (let i = 0; i < zombies.length; i++) {
+            var z = zombies[i];
+            z.ragdollImmune = 0;
+            z.xspeed += (Math.random() - 0.5) * 18; z.yspeed += 12 + Math.random() * 8;
+            z.startRagdoll(z.xspeed, z.yspeed, 120, true);
+        }
+        DevUI.toast("Everybody fall down!");
+    },
+    ragdollRain: function() {
+        var types = ["NORMAL", "KNIGHT", "ARCHER", "TANK", "MAGE", "BAT", "SLIME", "BOSS_KING", "EXPLODER", "SPITTER"];
+        for (let i = 0; i < 12; i++) {
+            var rd = DevActions._dummy(types[i % types.length], cameraTargetX + (Math.random() - 0.5) * 1400, cameraTargetY + 900 + i * 90, (Math.random() - 0.5) * 6, 0);
+            rd.projectileTimer = 0;
+        }
+    },
     rain: function() { LevelManager.rainStressCrates(18); },
     clearCrates: function() { SummonManager.clearCrates(); },
     resetTuning: function() {
         devOpts.timeScale = 1; devOpts.spawnRate = 1; devOpts.enemyDamage = 1; devOpts.enemyHealth = 1;
-        devOpts.playerDamage = 1; devOpts.maxEnemies = 11; devOpts.powerUpRate = 1;
+        devOpts.playerDamage = 1; devOpts.maxEnemies = 11; devOpts.powerUpRate = 1; devOpts.gravityMult = 1; devOpts.bouncyRagdolls = false;
         userZoom = 1;
         DevUI.sync();
     },
@@ -663,6 +700,7 @@ SummonManager.buildUI = function() {
                     ${devToggle("FPS counter", "showFPS", "")}
                     ${devToggle("Nav paths [P]", "", "Enemy pathfinding debug", "paths")}
                     ${devToggle("Controls help [H]", "showHelp", "")}
+                    ${devToggle("Bouncy ragdolls", "bouncyRagdolls", "Bodies bounce like rubber")}
                 </div>
             </div>
             <div class="dp-section">
@@ -675,6 +713,7 @@ SummonManager.buildUI = function() {
                 ${devSlider("Enemy damage", "enemyDamage", 0, 4, 0.25, "x")}
                 ${devSlider("Player damage", "playerDamage", 0.25, 6, 0.25, "x")}
                 ${devSlider("Power-up drops", "powerUpRate", 0, 4, 0.25, "x")}
+                ${devSlider("Gravity", "gravityMult", 0.15, 2, 0.05, "x", "Low = moon jumps & floaty bodies")}
             </div>
             <div class="dp-section">
                 <div class="dp-title"><span>Waves</span></div>
@@ -708,6 +747,14 @@ SummonManager.buildUI = function() {
                     <button class="dp-btn" data-act="tpToCursor">⌖ P1 → cursor</button>
                     <button class="dp-btn" data-act="addCoins">+1000 🪙</button>
                     <button class="dp-btn" data-act="levelUp">⭐ Level up</button>
+                </div>
+            </div>
+            <div class="dp-section">
+                <div class="dp-title"><span>Ragdoll toys</span></div>
+                <div class="dp-grid3">
+                    <button class="dp-btn" data-act="ragdollCannon" title="Fires bodies from the hero toward the cursor">💥 Body cannon</button>
+                    <button class="dp-btn" data-act="ragdollEveryone" title="Every enemy gets launched into a ragdoll">🤸 Launch all</button>
+                    <button class="dp-btn" data-act="ragdollRain" title="Drops a pile of dummies from the sky">🌧 Body rain</button>
                 </div>
             </div>
             <div class="dp-section">

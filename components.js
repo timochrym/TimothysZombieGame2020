@@ -81,9 +81,9 @@ class Components {
                 object.abilityPressed = inp.interact;
                 var isDraggingPalette = (typeof SummonManager !== "undefined" && SummonManager.paletteDragging);
                 if (mouseDown && !isDraggingPalette && (typeof SummonManager === "undefined" || SummonManager.toolMode == "shoot")) {
-                    if (object.heldObject && !object.heldObject.dead) {
+                    if ((object.heldObject && !object.heldObject.dead) || object.heldRagdoll) {
                         var mPos = Components.getMouseWorldPos();
-                        object.throwHeldObject(mPos[0], mPos[1]);
+                        object.tryGrabOrThrow(mPos[0], mPos[1]);
                         mouseDown = false;
                     } else {
                         object.mouseShooting = true;
@@ -99,6 +99,17 @@ class Components {
                 object.rightPressed = ULDRrightPressed;
                 object.shootPressed = inp.shoot;
                 object.abilityPressed = inp.interact;
+            }
+            // Controller (if connected): OR its stick/buttons into this hero's input
+            var pad = (typeof Pads !== "undefined") ? Pads.state[object.playerIndex] : null;
+            object.padAiming = false;
+            if (pad && pad.active) {
+                object.leftPressed = object.leftPressed || pad.left;
+                object.rightPressed = object.rightPressed || pad.right;
+                object.upPressed = object.upPressed || pad.up;
+                object.downPressed = object.downPressed || pad.down;
+                object.shootPressed = object.shootPressed || pad.shoot;
+                object.abilityPressed = object.abilityPressed || pad.interact;
             }
         } else if (object.moveType == "ZOMBIE") {
             Components.zombieAI(object);
@@ -129,6 +140,13 @@ class Components {
 
         if (object.isPlayer) {
             Components.directionArrow(object);
+            // Right stick aims directly (twin-stick)
+            var padA = (typeof Pads !== "undefined") ? Pads.state[object.playerIndex] : null;
+            if (padA && padA.active && padA.aim) {
+                object.degree = (Math.degrees(Math.atan2(padA.aim[0], -padA.aim[1])) + 360) % 360;
+                object.degreeToGoCW = object.degree;
+                object.padAiming = true;
+            }
         }
     }
 
@@ -353,6 +371,7 @@ class Components {
         // Shockwave (suppressed while the key is being used to revive a teammate)
         if (object.abilityPressed && !object.suppressAbility && (object.abilityCooldown == 0 || godMode || devOpts.infiniteAmmo) && object.isPlayer && !object.isZombie) {
             Components.addFloatingText("SHOCKWAVE!", object.x, object.y + 60, "#ffaa00", 20);
+            if (typeof SFX !== "undefined") SFX.play("shockwave", object.x, object.y);
             Components.addRing(object.x, object.y, 320, "#ffaa33", 22);
             Components.blowUp(object.x, object.y, "#ff9922", 24, 320, -45 * rpgDamageMult * devOpts.playerDamage, object);
             object.abilityCooldown = (godMode || devOpts.infiniteAmmo) ? 10 : 150;
@@ -421,6 +440,7 @@ class Components {
                     else if (object.noAmmoMsg <= 0) {
                         object.noAmmoMsg = 60;
                         Components.addFloatingText("OUT OF AMMO!", object.x, object.y + 78, "#ff6b6b", 16);
+                        if (typeof SFX !== "undefined") SFX.play("empty", object.x, object.y);
                     }
                     return;
                 }
@@ -496,6 +516,10 @@ class Components {
                 object.lazerCooldown = Math.max(object.lazerCooldown, berserk ? 10 : 15);
             }
             var visW = living ? (berserk ? 22 : 14) : projW;
+            if (typeof SFX !== "undefined") {
+                if (hero) SFX.play(object.isZombie ? "spit" : "shoot", object.x, object.y, isRapid ? 0.7 : 1, 1 + object.playerIndex * 0.12 + (berserk ? -0.25 : 0));
+                else SFX.play("enemyShoot", object.x, object.y);
+            }
             for (var a = 0; a < angles.length; a++) {
                 var ang = baseAngle + Math.radians(angles[a]);
                 var vx = Math.cos(ang) * projSpeed;
@@ -548,6 +572,7 @@ class Components {
             l.life--;
 
             Components.drawProjectile(l);
+            if (typeof Ragdolls !== "undefined" && Ragdolls.list.length) Ragdolls.bulletHit(l);
 
             var removeLazer = (l.life <= 0);
             var lteam = (l.team !== undefined) ? l.team : (l.fromZombie ? 0 : 1);
@@ -603,7 +628,7 @@ class Components {
     static drawProjectile(l) {
         var sx = l.x * cameraScaleX + xc;
         var sy = -l.y * cameraScaleY + yc;
-        if (sx < -60 || sx > canvas.width + 60 || sy < -60 || sy > canvas.height + 60) return;
+        if (sx < -60 || sx > cssW + 60 || sy < -60 || sy > cssH + 60) return;
         var ang = Math.atan2(-l.yspeed, l.xspeed);
         var size = Math.max(7, (l.vw || l.w || 14) * 0.75 * Math.max(0.8, cameraScaleX * 1.2));
         var tail = size * 3.2;
@@ -723,6 +748,7 @@ class Components {
                     }
                     coins++;
                     heroXP += 25;
+                    if (typeof SFX !== "undefined") SFX.play("coin", c.x, c.y);
                     score += 50;
                     if (heroXP >= heroXPNext) {
                         heroXP -= heroXPNext;
@@ -739,6 +765,7 @@ class Components {
                             hh.recomputeStats();
                         }
                         Components.addFloatingText("LEVEL UP! LVL " + heroLevel + "!", ch.x, ch.y + 85, "#00f5d4", 26);
+                        if (typeof SFX !== "undefined") SFX.play("levelup", ch.x, ch.y);
                         Components.addRing(ch.x, ch.y, 360, "#00f5d4", 26);
                         Components.spawnSparks(ch.x, ch.y, "#00f5d4", 16);
                     } else {
@@ -830,6 +857,8 @@ class Components {
     static blowUp(x, y, color, count = 18, radius = 230, damage = -30, source = null) {
         screenShake = Math.min(9, screenShake + 5);
         Components.addRing(x, y, Math.min(radius, 420), color, 20);
+        if (typeof Ragdolls !== "undefined") Ragdolls.explode(x, y, radius * 1.15, Math.min(17, 4 + Math.abs(damage) * 0.28));
+        if (typeof SFX !== "undefined") SFX.play(Math.abs(damage) >= 20 ? "explode" : "kill", x, y, Math.min(1, radius / 300));
 
         for (let i = 0; i < count; i++) {
             if (particles.length >= 90) particles.shift();
@@ -876,48 +905,18 @@ class Components {
 
     // ---- Ragdoll corpses: slain enemies tumble away limp and fade out ----
     static addCorpse(ch) {
-        if (!Components.corpses) Components.corpses = [];
-        if (Components.corpses.length > 14) Components.corpses.shift();
-        ch.corpse = true;
-        ch.ragdollTimer = 99999;
-        ch.ragdollAngle = 0;
-        ch.ragdollSpin = (ch.xspeed >= 0 ? 1 : -1) * (0.22 + Math.random() * 0.15);
-        ch.yspeed = Math.max(ch.yspeed, 7);
-        ch.xspeed += (ch.xspeed >= 0 ? 1 : -1) * 3;
-        ch.hitFlashTimer = 0;
-        ch.corpseLife = 85;
-        Components.corpses.push(ch);
+        if (typeof Ragdolls === "undefined") return;
+        if (ch.liveRagdoll) {
+            // already tumbling: the ragdoll simply goes limp for good
+            Ragdolls.toCorpse(ch.liveRagdoll, 900);
+            ch.liveRagdoll = null;
+            return;
+        }
+        var dir = (ch.xspeed >= 0) ? 1 : -1;
+        Ragdolls.spawnFrom(ch, { corpse: true, life: 900, vx: ch.xspeed + dir * 3, vy: Math.max(ch.yspeed, 7) });
     }
 
-    static updateCorpses() {
-        if (!Components.corpses) return;
-        for (let i = Components.corpses.length - 1; i >= 0; i--) {
-            var c = Components.corpses[i];
-            c.corpseLife--;
-            c.yspeed -= gravity * 0.9;
-            if (c.yspeed < -18) c.yspeed = -18;
-            if (CollisionDetector.collision(c, [0, c.yspeed], staticObjects)) {
-                c.y += c.yspeed + c.yOver;
-                c.yspeed *= -0.3;
-                if (Math.abs(c.yspeed) < 1.5) c.yspeed = 0;
-                c.xspeed *= 0.72;
-                c.ragdollSpin *= 0.7;
-            } else {
-                c.y += c.yspeed;
-            }
-            if (CollisionDetector.collision(c, [c.xspeed, 0], staticObjects)) {
-                c.xspeed *= -0.3;
-            } else {
-                c.x += c.xspeed;
-            }
-            c.ragdollAngle += c.ragdollSpin;
-            ctx.save();
-            ctx.globalAlpha = Math.max(0, Math.min(1, c.corpseLife / 30));
-            c.createCharacter();
-            ctx.restore();
-            if (c.corpseLife <= 0) Components.corpses.splice(i, 1);
-        }
-    }
+    static updateCorpses() { /* replaced by Ragdolls.update/drawCorpses */ }
 
     static updateParticles() {
         for (let i = particles.length - 1; i >= 0; i--) {
@@ -961,7 +960,7 @@ class Components {
             var sw = ch.w * cameraScaleX;
             var sh = ch.h * cameraScaleY;
 
-            if (sx + sw > -40 && sx < canvas.width + 40) {
+            if (sx + sw > -40 && sx < cssW + 40) {
                 ctx.save();
                 // Ornate RPG wooden & gold chest
                 ctx.fillStyle = "#8c4a27";
