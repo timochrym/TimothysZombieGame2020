@@ -212,9 +212,55 @@ class LevelManager {
             }
         };
 
+
+        // ===== BRAWL STAGES (Smash-style): floating stages, no floor, blast zones on every side =====
+        // Authored directly at final scale (not auto-scaled).
+        this.builtInLevels["brawl_battlefield"] = {
+            name: "⚔ Brawl: Battlefield", isBrawl: true, _scaled: true, wavesEnabled: false,
+            spawnP1: [-600, 160], spawnP2: [600, 160],
+            stageTopY: 80, stageCenterX: 0,
+            blast: { minX: -3400, maxX: 3400, minY: -1300, maxY: 2600 },
+            brawlSpawns: [[-600, 160], [600, 160], [-200, 160], [200, 160]],
+            layout: [
+                { type: "box", name: "Main Stage", x: 0, y: -100, w: 2200, h: 360, color: "#4a5568", texture: "castle_stone", kind: "block" },
+                { type: "box", name: "Left Platform", x: -760, y: 420, w: 600, h: 60, color: "#b84a27", texture: "brick", kind: "platform" },
+                { type: "box", name: "Right Platform", x: 760, y: 420, w: 600, h: 60, color: "#b84a27", texture: "brick", kind: "platform" },
+                { type: "box", name: "Top Platform", x: 0, y: 760, w: 640, h: 60, color: "#f4a261", texture: "question_gold", kind: "platform" }
+            ]
+        };
+        this.builtInLevels["brawl_plaza"] = {
+            name: "⚔ Brawl: Final Plaza", isBrawl: true, _scaled: true, wavesEnabled: false,
+            spawnP1: [-700, 160], spawnP2: [700, 160],
+            stageTopY: 80, stageCenterX: 0,
+            blast: { minX: -3800, maxX: 3800, minY: -1300, maxY: 2600 },
+            brawlSpawns: [[-800, 160], [800, 160], [-300, 160], [300, 160]],
+            layout: [
+                { type: "box", name: "Plaza Floor", x: 0, y: -110, w: 3000, h: 380, color: "#3d5a80", texture: "lab_metal", kind: "block" },
+                { type: "bumper", name: "West Spring", x: -1300, y: 100, w: 240, h: 40, bounce: 26, color: "#ff2e63" },
+                { type: "bumper", name: "East Spring", x: 1300, y: 100, w: 240, h: 40, bounce: 26, color: "#ff2e63" },
+                { type: "box", name: "West Ledge", x: -1000, y: 520, w: 560, h: 60, color: "#2b3a4a", texture: "lab_metal", kind: "platform" },
+                { type: "box", name: "East Ledge", x: 1000, y: 520, w: 560, h: 60, color: "#2b3a4a", texture: "lab_metal", kind: "platform" }
+            ]
+        };
+        this.builtInLevels["brawl_skybridge"] = {
+            name: "⚔ Brawl: Skybridge", isBrawl: true, _scaled: true, wavesEnabled: false,
+            spawnP1: [-1500, 160], spawnP2: [1500, 160],
+            stageTopY: 80, stageCenterX: 0,
+            blast: { minX: -3800, maxX: 3800, minY: -1500, maxY: 2700 },
+            brawlSpawns: [[-1500, 160], [1500, 160], [-1250, 160], [1250, 160]],
+            layout: [
+                { type: "box", name: "West Island", x: -1500, y: -110, w: 900, h: 380, color: "#588157", texture: "grass_dirt", kind: "block" },
+                { type: "box", name: "East Island", x: 1500, y: -110, w: 900, h: 380, color: "#588157", texture: "grass_dirt", kind: "block" },
+                { type: "box", name: "Sky Bridge", x: 0, y: 330, w: 1900, h: 60, color: "#9c6644", texture: "dojo_wood", kind: "platform" },
+                { type: "box", name: "Catch Platform", x: 0, y: -330, w: 700, h: 70, color: "#2b3a4a", texture: "lab_metal", kind: "platform" },
+                { type: "box", name: "West Cloud", x: -700, y: 700, w: 420, h: 60, color: "#e0f2fe", texture: "solid", kind: "platform" },
+                { type: "box", name: "East Cloud", x: 700, y: 700, w: 420, h: 60, color: "#e0f2fe", texture: "solid", kind: "platform" }
+            ]
+        };
+
         // Every built-in structure is built at STRUCT_SCALE (2x): scale layouts about the ground line (x = 0, y = 40)
         for (var lk in this.builtInLevels) {
-            if (lk === "infinite_frontier") continue;
+            if (lk === "infinite_frontier" || this.builtInLevels[lk].isBrawl) continue;
             this.scaleLevel(this.builtInLevels[lk], STRUCT_SCALE);
         }
 
@@ -284,6 +330,14 @@ class LevelManager {
             }
             SummonManager.refreshLevelDropdown();
         }
+
+        // Brawl mode bookkeeping (jetpacks are off, fighters are set up by createBrawlFighters)
+        var nowBrawl = !!lvl.isBrawl;
+        if (!brawl.active && nowBrawl) brawl.prevMP = multiplayer;
+        if (brawl.active && !nowBrawl) multiplayer = !!brawl.prevMP;
+        brawl.active = nowBrawl;
+        jetpackEnabled = !nowBrawl;
+        if (nowBrawl) { brawlCfg.stage = key; saveBrawlCfg(); }
 
         resetGame();
 

@@ -139,6 +139,7 @@ class Character {
         this.ragdollAngle = 0;
         this.ragdollSpin = 0;
         this.ragdollImmune = 0;
+        this.hitstun = 0;
         this.stairsGrip = 0;         // >0 while this hero is climbing stairs (hold Up)
         this.stairsIgnore = 0;
         this.onStairs = false;
@@ -147,9 +148,12 @@ class Character {
         this.onSlide = false;
     }
 
-    get team() { return this.isPlayer ? 1 : 0; }
+    // In Brawl mode every fighter is its own team (free-for-all)
+    get team() { return this.fighterTeam !== undefined ? this.fighterTeam : (this.isPlayer ? 1 : 0); }
 
-    get input() { return PlayerInput[this.playerIndex] || PlayerInput[0]; }
+    accent() { return (typeof FIGHTER_COLORS !== "undefined" && FIGHTER_COLORS[this.playerIndex]) || "#ff5a5f"; }
+
+    get input() { return this.isCPU ? this.cpuIn : (PlayerInput[this.playerIndex] || PlayerInput[0]); }
 
     // Calm top running speed (px/frame); knockback, dashes and wall-jumps can briefly exceed it
     runCapNow() {
@@ -158,7 +162,7 @@ class Character {
     }
 
     // ---- Ammo ------------------------------------------------------------
-    unlimitedAmmo() { return godMode || devOpts.infiniteAmmo || this.isZombie; }
+    unlimitedAmmo() { return godMode || devOpts.infiniteAmmo || this.isZombie || (typeof brawl !== "undefined" && brawl.active); }
 
     totalAmmo() { return this.ammoMag + this.ammoReserve; }
 
@@ -212,14 +216,16 @@ class Character {
         return Math.max(26, this.maxHealth * 0.3);
     }
 
-    startRagdoll(kx, ky, dur) {
+    startRagdoll(kx, ky, dur, noImpulse) {
         if (this.ragdollTimer > 0 || this.ragdollImmune > 0 || this.dead) return;
         this.ragdollTimer = dur || 55;
         var dir = Math.abs(kx) > 0.5 ? Math.sign(kx) : (Math.random() < 0.5 ? -1 : 1);
         this.ragdollSpin = dir * (0.2 + Math.random() * 0.16);
         this.ragdollAngle = 0;
-        this.xspeed += dir * 5;
-        this.yspeed = Math.max(this.yspeed, 6.5);
+        if (!noImpulse) {
+            this.xspeed += dir * 5;
+            this.yspeed = Math.max(this.yspeed, 6.5);
+        }
         this.onGround = false;
         this.jump = false;
         if (this.heldObject) {
@@ -342,6 +348,7 @@ class Character {
         this.dashVX = (dx / len) * 23;
         this.dashVY = (dy / len) * 14 + 1;
         this.dashTimer = 8;
+        this.dashHitIds = {};
         this.dashCooldown = (godMode || devOpts.infiniteAmmo) ? 6 : 42;
         this.scaleX = 1.22;
         this.scaleY = 0.82;
@@ -355,6 +362,12 @@ class Character {
             return;
         }
         if (attacker && attacker.team === this.team && attacker !== this && !devOpts.friendlyFire) return;
+
+        // Brawl mode: damage becomes a percent and knockback grows with it (no health, no death)
+        if (typeof brawl !== "undefined" && brawl.active && this.isPlayer) {
+            if (amount < 0) brawlApplyHit(this, amount, knockX, knockY, attacker);
+            return;
+        }
 
         // Heroes get brief i-frames after every hit and only a small nudge, so enemies can't juggle you
         if (this.isPlayer && amount < 0) {
@@ -591,6 +604,7 @@ class Character {
         Components.spawnSparks(this.x, this.y, def.color, 14);
 
         if (type == "HEAL") {
+            if (typeof brawl !== "undefined" && brawl.active) this.damagePct = Math.max(0, (this.damagePct || 0) - 35);
             this.health = Math.min(this.maxHealth, this.health + 55);
             this.jetpackFuel = this.jetpackMaxFuel;
         } else if (type == "BLOWUP") {
@@ -659,6 +673,11 @@ class Character {
         if (powersChanged) this.recomputeStats();
         this.updateAmmo();
         if (this.ragdollImmune > 0) this.ragdollImmune--;
+        if (this.hitstun > 0) {
+            this.hitstun--;
+            this.leftPressed = this.rightPressed = this.upPressed = this.downPressed = false;
+            this.dashTimer = 0;
+        }
         if (this.ragdollTimer > 0) {
             this.ragdollTimer--;
             this.ragdollAngle += this.ragdollSpin;
@@ -869,6 +888,19 @@ class Character {
                     zom.takeDamage(slashDmg, this.dashVX * 0.5, 6, this);
                     this.airJumps = this.maxAirJumps; // Hit-confirm resets air jump!
                     Components.addFloatingText("SLASH! " + slashDmg, zom.x, zom.y + 65, "#00f5d4", 20);
+                }
+            }
+            // Brawl: the dash is an attack on rival fighters too (one hit per dash)
+            if (this.isPlayer && typeof brawl !== "undefined" && brawl.active) {
+                if (!this.dashHitIds) this.dashHitIds = {};
+                for (let f = 0; f < characters.length; f++) {
+                    var rival = characters[f];
+                    if (rival === this || rival.dead || rival.eliminated || this.dashHitIds[rival.id]) continue;
+                    if (Math.hypot(rival.x - this.x, rival.y - this.y) < this.s1 + 30) {
+                        this.dashHitIds[rival.id] = true;
+                        rival.takeDamage(-32, this.dashVX * 0.4, 5, this);
+                        Components.addFloatingText("DASH HIT!", rival.x, rival.y + 95, "#00f5d4", 16);
+                    }
                 }
             }
         } else {
@@ -1173,7 +1205,7 @@ class Character {
             }
         }
 
-        if (this.y < -3200) {
+        if (this.y < -3200 && !(typeof brawl !== "undefined" && brawl.active)) {
             this.takeDamage(-25, 0, 0);
             var anchor = null;
             for (let ci = 0; ci < characters.length; ci++) if (characters[ci] !== this && !characters[ci].dead) anchor = characters[ci];
@@ -1238,6 +1270,7 @@ class Character {
 
     handleCharacterCollision(other) {
         if (!other || !(other instanceof Character)) return;
+        if (typeof brawl !== "undefined" && brawl.active) return;
         if (other.team === this.team) return;
         if (this.frozenTimer > 0) return;
         // Enemy touches hero => hero is hurt (heroes only get a half-strength hit while undead)
@@ -1416,7 +1449,7 @@ class Character {
     // MODERN VISUALS
     // ------------------------------------------------------------------
     teamColor() {
-        if (this.isPlayer) return this.isZombie ? "#c77dff" : (this.playerIndex === 0 ? "#ff5a5f" : "#3da5ff");
+        if (this.isPlayer) return this.isZombie ? "#c77dff" : this.accent();
         return "#ff3b4a";
     }
 
@@ -1525,12 +1558,12 @@ class Character {
             air: !this.onGround,
             rising: this.yspeed > 0,
             aimX: aimX, aimY: aimY,
-            color: this.playerIndex === 0 ? "#ff5a5f" : "#3da5ff",
+            color: this.accent(),
             firing: firing,
             flash: this.hitFlashTimer > 0,
             ragdoll: this.ragdollTimer > 0,
             t: Date.now(),
-            label: "P" + (this.playerIndex + 1)
+            label: this.isCPU ? "C" : "P" + (this.playerIndex + 1)
         });
     }
 
@@ -1559,7 +1592,7 @@ class Character {
         var pw = this.zombiePower;
         if (this.isPlayer && !this.isZombie) {
             // Hero: bright visor with eyes, belt stripe in player colour and gun barrel
-            var accent = this.playerIndex === 0 ? "#ff5a5f" : "#3da5ff";
+            var accent = this.accent();
             this.drawSprite(characterImg, x, y, w, h, r, this.playerIndex === 1 ? "#2f8cff" : null);
             ctx.fillStyle = accent;
             ctx.fillRect(x + 2, y + h * 0.66, w - 4, h * 0.10);

@@ -289,8 +289,8 @@ var DevUI = {
         // top bar mirrors
         var coopBtn = document.getElementById("coop-btn");
         if (coopBtn) {
-            coopBtn.classList.toggle("active", multiplayer);
-            coopBtn.innerHTML = multiplayer ? "👥 Co-op: ON" : "👤 Solo";
+            coopBtn.classList.toggle("active", multiplayer || brawl.active);
+            coopBtn.innerHTML = brawl.active ? (brawlCfg.opponents === "p2" ? "👥 PvP" : "🤖 vs CPU") : (multiplayer ? "👥 Co-op: ON" : "👤 Solo");
         }
         var godBtn = document.getElementById("god-mode-btn");
         if (godBtn) {

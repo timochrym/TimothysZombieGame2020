@@ -62,6 +62,15 @@ class Components {
         object.abilityPressed = false;
         object.mouseShooting = false;
 
+        if (object.isPlayer && object.isCPU) {
+            Brawl.cpuThink(object);
+            return;
+        }
+        if (object.isPlayer && typeof brawl !== "undefined" && brawl.active && brawl.phase !== "fight") {
+            // countdown / game over: nobody can move
+            object.leftPressed = object.rightPressed = object.upPressed = object.downPressed = false;
+            return;
+        }
         if (object.isPlayer) {
             var inp = object.input;
             if (object.playerIndex === 0) {
@@ -160,6 +169,14 @@ class Components {
                 Components.spawnSparks(z.x, z.y, "#bdeaff", 5);
             }
         }
+        if (typeof brawl !== "undefined" && brawl.active) {
+            for (let i = 0; i < characters.length; i++) {
+                var fc = characters[i];
+                if (fc.dead || fc.invulnTimer > 0 || Math.hypot(fc.x - x, fc.y - y) > radius || Math.hypot(fc.x - x, fc.y - y) < 5) continue;
+                fc.frozenTimer = Math.round(frames * 0.5);
+                Components.spawnSparks(fc.x, fc.y, "#bdeaff", 5);
+            }
+        }
     }
 
     static addRing(x, y, radius, color, life = 24) {
@@ -221,6 +238,31 @@ class Components {
     }
 
     static healthBar(object) {
+        if (typeof brawl !== "undefined" && brawl.active && object.isPlayer) {
+            // Brawl: a name tag with the damage percent instead of a health bar
+            var bcx = object.x * cameraScaleX + xc;
+            var btop = (-object.y - object.s2 / 2) * cameraScaleY + yc;
+            var blabel = object.playerLabel + "  " + Math.round(object.damagePct || 0) + "%";
+            ctx.save();
+            ctx.font = "800 13px 'Segoe UI', Arial, sans-serif";
+            var btw = ctx.measureText(blabel).width + 18;
+            var bpy = btop - 34;
+            ctx.fillStyle = object.accent();
+            object.roundRectPath(bcx - btw / 2, bpy, btw, 20, 10);
+            ctx.fill();
+            ctx.lineWidth = 2; ctx.strokeStyle = "#0a0f16"; ctx.stroke();
+            ctx.fillStyle = "#ffffff";
+            ctx.textAlign = "center"; ctx.textBaseline = "middle";
+            ctx.fillText(blabel, bcx, bpy + 10.5);
+            ctx.beginPath(); ctx.moveTo(bcx - 5, bpy + 20); ctx.lineTo(bcx + 5, bpy + 20); ctx.lineTo(bcx, bpy + 27); ctx.closePath();
+            ctx.fillStyle = object.accent(); ctx.fill();
+            if (object.shield > 0 && object.shieldMax > 0) {
+                ctx.fillStyle = "#6ee7ff";
+                ctx.fillRect(bcx - 30, bpy + 30, 60 * Math.min(1, object.shield / object.shieldMax), 3);
+            }
+            ctx.restore();
+            return;
+        }
         var isHero = object.isPlayer;
         var barW = Math.max(isHero ? 84 : 58, object.s1 * cameraScaleX * 1.25);
         var barH = isHero ? 11 : 8;
@@ -263,7 +305,7 @@ class Components {
             }
             // name pill + pointer
             var tag = object.playerLabel || ("P" + (object.playerIndex + 1));
-            var pillCol = object.isZombie ? "#c77dff" : (object.playerIndex === 0 ? "#ff5a5f" : "#3da5ff");
+            var pillCol = object.isZombie ? "#c77dff" : object.accent();
             var label = tag + (object.isZombie ? " · UNDEAD" : "");
             ctx.font = "bold 12px 'Segoe UI', Arial, sans-serif";
             var tw = ctx.measureText(label).width + 16;
@@ -306,7 +348,7 @@ class Components {
         if (object.abilityCooldown > 0) {
             object.abilityCooldown--;
         }
-        if (object.frozenTimer > 0 || object.staggerTimer > 0 || object.ragdollTimer > 0) return;
+        if (object.frozenTimer > 0 || object.staggerTimer > 0 || object.ragdollTimer > 0 || object.hitstun > 0) return;
 
         // Shockwave (suppressed while the key is being used to revive a teammate)
         if (object.abilityPressed && !object.suppressAbility && (object.abilityCooldown == 0 || godMode || devOpts.infiniteAmmo) && object.isPlayer && !object.isZombie) {
@@ -449,6 +491,10 @@ class Components {
             }
 
             object.lastShotAt = Date.now();
+            if (typeof brawl !== "undefined" && brawl.active && hero) {
+                projDmg = berserk ? -16 : -8;      // light chip damage, small knockback
+                object.lazerCooldown = Math.max(object.lazerCooldown, berserk ? 10 : 15);
+            }
             var visW = living ? (berserk ? 22 : 14) : projW;
             for (var a = 0; a < angles.length; a++) {
                 var ang = baseAngle + Math.radians(angles[a]);

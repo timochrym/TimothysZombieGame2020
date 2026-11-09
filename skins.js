@@ -14,14 +14,12 @@ var SKINS = [
     { id: "cap", name: "Cap Hero" }
 ];
 
-var heroSkins = ["original", "original"];
+var heroSkins = ["original", "original", "stick", "brawler"];
 try {
     var savedSkins = JSON.parse(localStorage.getItem("timsZombieGameSkins") || "null");
     if (savedSkins && savedSkins.length === 2) {
-        heroSkins = [
-            SKINS.some(function(s) { return s.id === savedSkins[0]; }) ? savedSkins[0] : "original",
-            SKINS.some(function(s) { return s.id === savedSkins[1]; }) ? savedSkins[1] : "original"
-        ];
+        heroSkins[0] = SKINS.some(function(s) { return s.id === savedSkins[0]; }) ? savedSkins[0] : "original";
+        heroSkins[1] = SKINS.some(function(s) { return s.id === savedSkins[1]; }) ? savedSkins[1] : "original";
     }
 } catch (e) {}
 
@@ -35,7 +33,7 @@ function cycleSkin(playerIdx, dir) {
     for (let i = 0; i < SKINS.length; i++) if (SKINS[i].id === heroSkins[playerIdx]) cur = i;
     cur = (cur + (dir || 1) + SKINS.length) % SKINS.length;
     heroSkins[playerIdx] = SKINS[cur].id;
-    try { localStorage.setItem("timsZombieGameSkins", JSON.stringify(heroSkins)); } catch (e) {}
+    try { localStorage.setItem("timsZombieGameSkins", JSON.stringify(heroSkins.slice(0, 2))); } catch (e) {}
 }
 
 // ---------------------------------------------------------------------------

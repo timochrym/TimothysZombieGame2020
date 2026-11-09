@@ -20,8 +20,11 @@ function createMap() {
         BackgroundMosaic.bgWalls = [];
     }
 
+    var brawlStage = (typeof LevelManager !== "undefined") && LevelManager.getCurrentLevel() && LevelManager.getCurrentLevel().isBrawl;
+
     // Always add the Infinite Subterranean Bedrock Base Floor ~2 screens down (top = -1600, bottom = -2400)
     // plus return Mega-Bounce Geysers so falling off any level lands on a playable deep floor!
+    if (!brawlStage) {
     Object.addBox(0, -2000, 12000, 800, "#2b2d42", {
         name: "Infinite Bedrock Floor",
         texture: "castle_stone",
@@ -43,6 +46,7 @@ function createMap() {
         isInfiniteBase: true,
         baseOffsetX: 960
     });
+    }
 
     var currentLvl = (typeof LevelManager !== "undefined") ? LevelManager.getCurrentLevel() : null;
     if (currentLvl && currentLvl.layout) {
@@ -61,7 +65,7 @@ function createMap() {
     if (currentLvl && currentLvl.isProcedural && typeof WorldGenerator !== "undefined") {
         WorldGenerator.reset();
         WorldGenerator.update(0);
-    } else if (typeof BackgroundMosaic !== "undefined") {
+    } else if (typeof BackgroundMosaic !== "undefined" && !brawlStage) {
         // Populate scenic non-colliding background trees across arena levels
         var treePositions = [-1280, -920, -520, -160, 200, 560, 920, 1280];
         for (let i = 0; i < treePositions.length; i++) {
@@ -72,6 +76,7 @@ function createMap() {
 
 
 function createPlayers() {
+    if (brawl.active) { createBrawlFighters(); return; }
     characters = [];
     var charBox = Math.makeHitbox(s1, s2);
     var currentLvl = (typeof LevelManager !== "undefined") ? LevelManager.getCurrentLevel() : null;
@@ -224,7 +229,7 @@ function enforceContainment() {
             if (c.y > levelBounds.topY) { c.y = levelBounds.topY; if (c.yspeed > 0) c.yspeed = 0; }
         }
         // Heroes: remember the last safe standing spot, and rescue them if they ever fall beneath the world
-        if (c.isPlayer) {
+        if (c.isPlayer && !brawl.active) {
             if (c.onGround && c.y > -1250) { c.lastSafeX = c.x; c.lastSafeY = c.y; }
             if (c.y < -1350 && c.lastSafeX !== undefined) {
                 c.x = c.lastSafeX;
@@ -446,6 +451,12 @@ function updatePowerUps() {
 function SummonManager_isOffscreenIndicatorOn() { return true; }
 
 function toggleMultiplayer() {
+    if (brawl.active) {
+        brawlCfg.opponents = (brawlCfg.opponents === "p2") ? "1cpu" : "p2";
+        saveBrawlCfg();
+        resetGame();
+        return;
+    }
     multiplayer = !multiplayer;
     resetGame();
 }
@@ -471,7 +482,8 @@ function resetGame() {
     helpTimer = devOpts.showHelp ? 60 * 12 : 0;
     createMap();
     createPlayers();
-    startLevel(1);
+    if (!brawl.active) startLevel(1);
+    else { levelTransitionTimer = 0; zombiesRemainingToSpawn = 0; }
     rebuildAllObjects();
     if (typeof Pathfinder !== "undefined") {
         Pathfinder.rebuildGraph(true);
@@ -542,7 +554,7 @@ function updateCamera() {
 
     var focusX = 0, focusY = 0, wTotal = 0;
     for (let i = 0; i < heroes.length; i++) {
-        var wgt = heroes[i].isZombie ? 0.45 : 1;
+        var wgt = (heroes[i].isZombie && !brawl.active) ? 0.45 : 1;
         focusX += heroes[i].x * wgt;
         focusY += heroes[i].y * wgt;
         wTotal += wgt;
@@ -553,8 +565,13 @@ function updateCamera() {
     // Dynamic zoom: zoom out to keep both heroes in frame
     var desired = baseZoom * userZoom;
     if (heroes.length > 1) {
-        var ddx = Math.abs(heroes[0].x - heroes[1].x);
-        var ddy = Math.abs(heroes[0].y - heroes[1].y);
+        var minHX = Infinity, maxHX = -Infinity, minHY = Infinity, maxHY = -Infinity;
+        for (let hi = 0; hi < heroes.length; hi++) {
+            minHX = Math.min(minHX, heroes[hi].x); maxHX = Math.max(maxHX, heroes[hi].x);
+            minHY = Math.min(minHY, heroes[hi].y); maxHY = Math.max(maxHY, heroes[hi].y);
+        }
+        var ddx = maxHX - minHX;
+        var ddy = maxHY - minHY;
         var fit = Math.min((canvas.width * 0.74) / (ddx + 520), (canvas.height * 0.62) / (ddy + 420));
         desired = Math.min(desired, Math.max(0.3, fit));
     }
@@ -659,6 +676,11 @@ function drawKeyLegend(ch, x, y) {
     var items = p2 ?
         [["← ↑ ↓ →", "move"], ["ENTER", "shoot"], ["'", "reload"], [".", "jetpack"], ["R-SHIFT", "dash"], ["/", "revive"]] :
         [["W A S D", "move"], ["F", "shoot"], ["X", "reload"], ["SPACE", "jetpack"], ["L-SHIFT", "dash"], ["E", "revive"]];
+    if (brawl.active) {
+        items = p2 ?
+            [["← ↑ ↓ →", "move/jump"], ["ENTER", "blaster"], ["R-SHIFT", "dash hit"], ["/", "smash"]] :
+            [["W A S D", "move/jump"], ["F", "blaster"], ["L-SHIFT", "dash hit"], ["E", "smash"]];
+    }
     var widths = [];
     ctx.save();
     ctx.font = "800 11px " + UI_FONT;
@@ -773,6 +795,7 @@ function drawHeroCard(ch, x, y) {
 
 function drawHUD() {
     if (!redGuy) return;
+    if (brawl.active) { drawBrawlHUD(); return; }
     ctx.textBaseline = "alphabetic";
 
     // ---------- Top-left: wave / score card ----------
@@ -920,7 +943,7 @@ function frame() {
     }
 
     var wavesPaused = (typeof SummonManager !== "undefined" && SummonManager.pauseWaves);
-    if (!wavesPaused) {
+    if (!wavesPaused && !brawl.active) {
         if (zombiesRemainingToSpawn > 0) {
             zombieSpawnTimer--;
             if (zombieSpawnTimer <= 0 && countHunters() < devOpts.maxEnemies && !gameOver) {
@@ -947,8 +970,10 @@ function frame() {
         }
     }
 
-    updateRevive();
-    updateLastStand();
+    if (!brawl.active) {
+        updateRevive();
+        updateLastStand();
+    }
 
     for (let i = 0; i < characters.length; i++) {
         if (!characters[i].dead) {
@@ -972,6 +997,7 @@ function frame() {
     var dynamicList = [].concat(characters, zombies, movingObjects);
     CollisionDetector.enforceNonPenetration(staticObjects, dynamicList);
     enforceContainment();
+    updateBrawl();
 
     // Draw Static Map Objects
     for (let i = 0; i < staticObjects.length; i++) {
@@ -1059,7 +1085,7 @@ function openPause(fromGameOver) {
     pauseSnap.getContext("2d").drawImage(canvas, 0, 0);
     pauseLevelKeys = [];
     var all = LevelManager.getAllLevels();
-    for (var k in all) pauseLevelKeys.push(k);
+    for (var k in all) if (!all[k].isBrawl) pauseLevelKeys.push(k);
     pauseLevelIdx = Math.max(0, pauseLevelKeys.indexOf(LevelManager.currentLevelKey));
     paused = true;
     for (let i = 0; i < PlayerInput.length; i++) PlayerInput[i].shoot = PlayerInput[i].jet = PlayerInput[i].interact = false;
@@ -1076,6 +1102,8 @@ function togglePause() {
     else openPause(false);
 }
 
+var PAUSE_CYCLE_IDS = ["level", "skin0", "skin1", "bopp", "blvl", "bstk", "bstage"];
+
 function pauseItems() {
     if (pauseConfirm) {
         return [
@@ -1084,14 +1112,27 @@ function pauseItems() {
         ];
     }
     var items = [];
+    var inBrawl = brawl.active;
     if (!pauseFromGameOver) items.push({ id: "resume", label: "Resume", hint: "Esc" });
-    else items.push({ id: "again", label: "Play again", hint: "Start a fresh run" });
-    var lvlName = LevelManager.getAllLevels()[pauseLevelKeys[pauseLevelIdx]];
-    items.push({ id: "mode", label: "Players:  " + (multiplayer ? "2-player co-op" : "Solo") + "   ▶  " + (multiplayer ? "Solo" : "Co-op"), hint: "Enter switches mode (restarts the run)" });
+    else items.push({ id: "again", label: inBrawl ? "Rematch" : "Play again", hint: inBrawl ? "Applies the settings below" : "Start a fresh run" });
+    items.push({ id: "gmode", label: "Game mode:  " + (inBrawl ? "Brawl (Smash-style)" : "Survival") + "   ▶  " + (inBrawl ? "Survival" : "Brawl"), hint: "Enter switches mode (restarts)" });
+    if (inBrawl) {
+        var sName = LevelManager.getAllLevels()[brawlCfg.stage];
+        items.push({ id: "bopp", label: "Opponents:  ◀  " + brawlOpponentLabel() + "  ▶", hint: "Applies on Rematch - PvP or CPU fighters" });
+        items.push({ id: "blvl", label: "CPU skill:  ◀  " + BRAWL_CPU_NAMES[brawlCfg.cpuLevel] + "  ▶", hint: "Applies on Rematch" });
+        items.push({ id: "bstk", label: "Stocks:  ◀  " + brawlCfg.stocks + "  ▶", hint: "Lives per fighter - applies on Rematch" });
+        items.push({ id: "bstage", label: "Stage:  ◀  " + (sName ? sName.name.replace(/^[^A-Za-z]+/, "") : "?") + "  ▶", hint: "Applies on Rematch" });
+        if (!pauseFromGameOver) items.push({ id: "again", label: "Rematch", hint: "Start a new match with these settings" });
+    } else {
+        items.push({ id: "mode", label: "Players:  " + (multiplayer ? "2-player co-op" : "Solo") + "   ▶  " + (multiplayer ? "Solo" : "Co-op"), hint: "Enter switches mode (restarts the run)" });
+    }
     items.push({ id: "skin0", label: "Player 1 character:  ◀  " + skinName(heroSkins[0]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
-    if (multiplayer) items.push({ id: "skin1", label: "Player 2 character:  ◀  " + skinName(heroSkins[1]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
-    items.push({ id: "level", label: "Level:  ◀  " + (lvlName ? lvlName.name : "?") + "  ▶", hint: "◀ ▶ choose, Enter loads it (restarts the run)" });
-    if (!pauseFromGameOver) items.push({ id: "restart", label: "Restart run", hint: "Asks for confirmation" });
+    if (multiplayer && (!inBrawl || (brawlCfg.opponents.indexOf("p2") === 0))) items.push({ id: "skin1", label: "Player 2 character:  ◀  " + skinName(heroSkins[1]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
+    if (!inBrawl) {
+        var lvlName = LevelManager.getAllLevels()[pauseLevelKeys[pauseLevelIdx]];
+        items.push({ id: "level", label: "Level:  ◀  " + (lvlName ? lvlName.name : "?") + "  ▶", hint: "◀ ▶ choose, Enter loads it (restarts the run)" });
+        if (!pauseFromGameOver) items.push({ id: "restart", label: "Restart run", hint: "Asks for confirmation" });
+    }
     items.push({ id: "help", label: "Controls help:  " + (devOpts.showHelp ? "ON" : "OFF"), hint: "Shows the key cheat-sheet" });
     items.push({ id: "dev", label: "Developer Mode panel", hint: "Same as pressing B" });
     return items;
@@ -1099,11 +1140,24 @@ function pauseItems() {
 
 function pauseActivate(id, dir) {
     if (id === "resume") closePause();
-    else if (id === "again" || id === "yes") { closePause(); resetGame(); }
+    else if (id === "again" || id === "yes") {
+        closePause();
+        if (brawl.active && LevelManager.currentLevelKey !== brawlCfg.stage) LevelManager.selectLevel(brawlCfg.stage);
+        else resetGame();
+    }
     else if (id === "no") { pauseConfirm = false; pauseIndex = 0; }
     else if (id === "restart") { pauseConfirm = true; pauseIndex = 1; }
     else if (id === "skin0") cycleSkin(0, dir || 1);
     else if (id === "skin1") cycleSkin(1, dir || 1);
+    else if (id === "gmode") {
+        closePause();
+        if (brawl.active) LevelManager.selectLevel("classic_arena");
+        else LevelManager.selectLevel(brawlCfg.stage);
+    }
+    else if (id === "bopp") cycleBrawlOpponents(dir || 1);
+    else if (id === "blvl") { brawlCfg.cpuLevel = ((brawlCfg.cpuLevel - 1 + (dir || 1) + 3) % 3) + 1; saveBrawlCfg(); }
+    else if (id === "bstk") { brawlCfg.stocks = Math.max(1, Math.min(9, brawlCfg.stocks + (dir || 1))); saveBrawlCfg(); }
+    else if (id === "bstage") cycleBrawlStage(dir || 1);
     else if (id === "mode") { closePause(); toggleMultiplayer(); }
     else if (id === "level") {
         if (dir) pauseLevelIdx = (pauseLevelIdx + dir + pauseLevelKeys.length) % pauseLevelKeys.length;
@@ -1118,8 +1172,8 @@ function pauseKey(e) {
     var c = e.code;
     if (c === "ArrowUp" || c === "KeyW") pauseIndex = (pauseIndex - 1 + items.length) % items.length;
     else if (c === "ArrowDown" || c === "KeyS") pauseIndex = (pauseIndex + 1) % items.length;
-    else if (c === "ArrowLeft" || c === "KeyA") { var li = items[pauseIndex].id; if (li === "level" || li === "skin0" || li === "skin1") pauseActivate(li, -1); }
-    else if (c === "ArrowRight" || c === "KeyD") { var ri = items[pauseIndex].id; if (ri === "level" || ri === "skin0" || ri === "skin1") pauseActivate(ri, 1); }
+    else if (c === "ArrowLeft" || c === "KeyA") { var li = items[pauseIndex].id; if (PAUSE_CYCLE_IDS.indexOf(li) !== -1) pauseActivate(li, -1); }
+    else if (c === "ArrowRight" || c === "KeyD") { var ri = items[pauseIndex].id; if (PAUSE_CYCLE_IDS.indexOf(ri) !== -1) pauseActivate(ri, 1); }
     else if (c === "Enter" || c === "NumpadEnter" || c === "Space") pauseActivate(items[pauseIndex].id, 0);
     e.preventDefault();
 }
@@ -1138,7 +1192,7 @@ function pauseClick(mx, my) {
         if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
             pauseIndex = i;
             var dir = 0;
-            if (items[i].id === "level" || items[i].id === "skin0" || items[i].id === "skin1") dir = (mx > r.x + r.w / 2) ? 1 : -1;
+            if (PAUSE_CYCLE_IDS.indexOf(items[i].id) !== -1) dir = (mx > r.x + r.w / 2) ? 1 : -1;
             pauseActivate(items[i].id, dir);
             return true;
         }
@@ -1158,8 +1212,8 @@ function drawPauseMenu() {
     var ph = 150 + items.length * rowH;
     var px = w / 2 - pw / 2, py = Math.max(20, h / 2 - ph / 2);
     uiPanel(px, py, pw, ph, pauseFromGameOver ? "#ff4d5e" : "#22d3ee", 0.96);
-    uiText(pauseConfirm ? "RESTART?" : (pauseFromGameOver ? "OVERRUN" : "PAUSED"), w / 2, py + 62, 44, pauseFromGameOver ? "#ff4d5e" : "#ffd23f", "center", "900");
-    uiText("Wave " + level + "  ·  Score " + score + "  ·  " + (multiplayer ? "Co-op" : "Solo"), w / 2, py + 92, 15, "#a8c0d0", "center", "700");
+    uiText(pauseConfirm ? "RESTART?" : (pauseFromGameOver ? (brawl.active ? "GAME!" : "OVERRUN") : "PAUSED"), w / 2, py + 62, 44, pauseFromGameOver ? "#ff4d5e" : "#ffd23f", "center", "900");
+    uiText(brawl.active ? ("Brawl  ·  " + (brawl.stage ? brawl.stage.name.replace(/^[^A-Za-z]+/, "") : "")) : ("Wave " + level + "  ·  Score " + score + "  ·  " + (multiplayer ? "Co-op" : "Solo")), w / 2, py + 92, 15, "#a8c0d0", "center", "700");
 
     pauseRects = [];
     for (let i = 0; i < items.length; i++) {
