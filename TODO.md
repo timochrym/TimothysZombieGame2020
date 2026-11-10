@@ -12,6 +12,18 @@ Last updated: after Vehicles (backlog B2), during Terra (B3) and controller supp
       Players & LAN panels, Level Studio basics), pads 3-4 for Brawl/Soccer/Bed Wars slots, and showing which pad
       drives which player in the Players panel.
 
+## Genre-feel pass (your request: "make each game closer to the game it's trying to be")
+Play and feel like the genre's best, with ORIGINAL look (no copied characters, art style, music or levels):
+- [ ] Stomp Squad (platformer): run button with momentum, skid turns, crouch, ground-pound, wall-slide, enemies that
+      turn into kickable shells, power-up pop-out animations, flagpole slide + walk-off, overworld/underground themes,
+      cleaner chunky original sprites for heroes, enemies and blocks.
+- [ ] Terra (sandbox): tools (pickaxe/axe tiers), crafting bench + recipes, torches & real light map, day/night with
+      night enemies, inventory screen, world save/load, ore veins and biomes underground.
+- [ ] Zombie Ball (physics soccer): one-button stiff-legged ragdoll players that swing and flail, bouncy big-head
+      characters, unpredictable physics goals — the "soccer physics" feel — alongside the current mode.
+- [ ] Bed Brawl, Siege (Birds), Wobble Wheels, Crash Lab, Parkour Rush, Crate Lab, Portal Lab, Brawl: same pass —
+      list each genre's core feel features and close the gaps.
+
 ## Your suggestions not built yet (backlog, all original games in the genre — no copied names/art)
 - [ ] B3 — "Lower generated level": make the Survival frontier generate lower / more underground terrain (Terra is a
       separate deep world; the frontier itself is unchanged so far).
@@ -63,3 +75,5 @@ Last updated: after Vehicles (backlog B2), during Terra (B3) and controller supp
 - "A version of the pixels powder game"
 - "all the game pigeon games espcially the soccer tabletop one from the andriod clone (plato)"
 - "Add controller support and push to main"
+- "make sure in the angry birds like clones, after throwing more than 2 dudes, the blocks don't stop randomly and incorrectly bouncing and accidentally killing everything"
+- "Make each game closer to the game it's trying to be both visually, functionally, and in game play. Mario should look more like mario, terraria like terraria, soccer physics like soccer physics"
