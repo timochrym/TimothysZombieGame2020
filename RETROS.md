@@ -6,6 +6,17 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Party Board: two more minigames
+
+**Shipped:** TIMING (a marker sweeps across a bar — press when it's in the green; closest to the middle wins) and
+HOLD IT (hold your button for exactly 3.00 s and let go; closest wins; "never let go" loses). Five minigames now
+rotate; both work for local, CPU and LAN players.
+
+**Measured:** Timing — all four stopped (P1 off by 15, a CPU by 0 won); Hold It — P1 held 3.00 s → off by 0.00 s and
+won +10 coins; no errors.
+
+---
+
 ## Brawl: ledge grab and shield
 
 **Shipped:** falling past the lip of a solid stage block catches it (once per trip through the air, brief

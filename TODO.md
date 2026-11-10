@@ -104,7 +104,7 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       jetpack styles), vehicles to ride, daily missions.
 - [~] B4 — Board party → **Party Board**: 2-4 players (P1 Space, P2 Enter, pads 3-4 join, rest CPUs), 28-space loop,
       blue/red/event spaces, a star that moves after each purchase (20 coins), 5 random events, a minigame every
-      round (Mash, Quick Draw, Stop It), 5-20 rounds, results. STILL TO DO: more minigames (re-use Jet Dash / Worm
+      round (Mash, Quick Draw, Stop It, Timing, Hold It), 5-20 rounds, results. STILL TO DO: more minigames (re-use Jet Dash / Worm
       Arena / Flick Soccer as minigames), items, branching board paths, more boards.
 - [~] B4 — Property board game → **Rent Rush**: 24 spaces, 5 colour groups + 2 transit lines, buy / rent / full-set
       double rent / houses (3 per street), chance cards, city tax into a Lounge pot, detention, doubles, selling to

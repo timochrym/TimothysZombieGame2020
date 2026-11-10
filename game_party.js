@@ -125,10 +125,11 @@ var Party = {
 
     // ---------------- minigames
     startMini: function() {
-        var kinds = ["mash", "draw", "stop"], k = kinds[(this.round + Math.floor(Math.random() * 3)) % 3];
+        var kinds = ["mash", "draw", "stop", "timing", "hold"], k = kinds[(this.round + Math.floor(Math.random() * kinds.length)) % kinds.length];
         this.mini = { k: k, t: 0, score: this.pl.map(function() { return 0; }), done: this.pl.map(function() { return false; }), go: 90 + ((Math.random() * 120) | 0), target: 30 + ((Math.random() * 60) | 0), val: 0 };
         this.phase = "mini"; this.t = 0;
-        this.say("MINIGAME: " + { mash: "MASH! — tap your button as fast as you can", draw: "QUICK DRAW — press on GO, not before!", stop: "STOP IT — stop the counter on the target" }[k]);
+        this.say("MINIGAME: " + { mash: "MASH! — tap your button as fast as you can", draw: "QUICK DRAW — press on GO, not before!", stop: "STOP IT — stop the counter on the target", timing: "TIMING — stop the sweeping marker in the green", hold: "HOLD IT — hold your button for exactly 3 seconds" }[k]);
+        this.mini.hold = this.pl.map(function() { return -1; });
     },
     updateMini: function() {
         var M = this.mini; M.t++;
@@ -144,15 +145,24 @@ var Party = {
             } else if (M.k === "stop") {
                 if (M.done[i]) continue;
                 if (press || t > 600) { M.done[i] = true; M.score[i] = Math.abs(this.counter(t) - M.target); }
+            } else if (M.k === "timing") {
+                if (M.done[i]) continue;
+                if (press || t > 600) { M.done[i] = true; M.score[i] = Math.round(Math.abs(this.sweep(t) - 50)); }
+            } else if (M.k === "hold") {
+                if (M.done[i]) continue;
+                var down = P.cpu ? (t >= (P.holdStart || (P.holdStart = 20 + ((Math.random() * 30) | 0))) && t < P.holdStart + 180 + ((P.i * 37) % 31) - 15) : this.btn(i);
+                if (down && M.hold[i] < 0) M.hold[i] = t;
+                if (!down && M.hold[i] >= 0) { M.done[i] = true; M.score[i] = Math.abs(t - M.hold[i] - 180); P.holdStart = 0; }
+                if (t > 700 && !M.done[i]) { M.done[i] = true; M.score[i] = 999; }
             }
         }
-        var over = M.k === "mash" ? t >= 300 : M.done.every(Boolean) || t > 700;
+        var over = M.k === "mash" ? t >= 300 : M.done.every(Boolean) || t > 720;
         if (over && !M.over) {
             M.over = true;
             var win = [];
             if (M.k === "mash") { var mx = Math.max.apply(null, M.score); M.score.forEach(function(s, i) { if (s === mx) win.push(i); }); }
             else if (M.k === "draw") { var best = 1e9; M.score.forEach(function(s, i) { if (s >= 0 && M.done[i] && s < best) best = s; }); M.score.forEach(function(s, i) { if (s === best && M.done[i]) win.push(i); }); }
-            else { var bd = Math.min.apply(null, M.score); M.score.forEach(function(s, i) { if (s === bd) win.push(i); }); }
+            else { var bd = Math.min.apply(null, M.score); if (bd < 999) M.score.forEach(function(s, i) { if (s === bd) win.push(i); }); }
             var self = this;
             win.forEach(function(i) { self.pl[i].coins += 10; self.pl[i].wins++; });
             this.say("Minigame won by " + (win.length ? win.map(function(i) { return self.pl[i].name; }).join(" & ") : "nobody") + " (+10 coins)");
@@ -162,10 +172,12 @@ var Party = {
         if (M.over && ++M.endT > 110) { this.phase = "results"; this.t = 0; }
     },
     counter: function(t) { return (t * 2) % 100; },
+    sweep: function(t) { var u = (t * 1.6) % 200; return u < 100 ? u : 200 - u; },      // 0..100..0
     cpuPress: function(P, M, t) {
         if (M.k === "mash") return Math.random() < 0.18 + (P.i % 3) * 0.03;
         if (M.k === "draw") { if (!P.react) P.react = M.go + 14 + ((Math.random() * 22) | 0); var r = t >= P.react && !M.done[P.i]; if (r) P.react = 0; return r; }
         if (M.k === "stop") { var v = this.counter(t); return Math.abs(v - M.target) <= 2 + (P.i % 2) * 3 && Math.random() < 0.45; }
+        if (M.k === "timing") { return Math.abs(this.sweep(t) - 50) <= 3 + (P.i % 3) * 3 && Math.random() < 0.4; }
         return false;
     },
 
@@ -231,8 +243,14 @@ var Party = {
     },
     drawMini: function() {
         var M = this.mini, t = M.t - 100, cx = cssW / 2;
-        uiText({ mash: "MASH!", draw: "QUICK DRAW", stop: "STOP IT" }[M.k], cx, 130, 48, "#fde047", "center", "900");
-        uiText({ mash: "tap your button as fast as you can", draw: "press your button the moment it says GO — too early and you're out", stop: "stop the counter on " + M.target }[M.k], cx, 166, 16, "#cbd5e1", "center", "800");
+        uiText({ mash: "MASH!", draw: "QUICK DRAW", stop: "STOP IT", timing: "TIMING", hold: "HOLD IT" }[M.k], cx, 130, 48, "#fde047", "center", "900");
+        uiText({ mash: "tap your button as fast as you can", draw: "press your button the moment it says GO — too early and you're out", stop: "stop the counter on " + M.target, timing: "press when the marker is in the green", hold: "hold your button for exactly 3.00 seconds, then let go" }[M.k], cx, 166, 16, "#cbd5e1", "center", "800");
+        if (M.k === "timing" && t >= 0) {
+            var bw = Math.min(600, cssW - 120), bx = cx - bw / 2, by = cssH / 2 - 60;
+            ctx.fillStyle = "#1e293b"; ctx.fillRect(bx, by, bw, 30); ctx.fillStyle = "#22c55e"; ctx.fillRect(bx + bw * 0.44, by, bw * 0.12, 30);
+            ctx.fillStyle = "#fde047"; ctx.fillRect(bx + bw * this.sweep(t) / 100 - 4, by - 8, 8, 46);
+        }
+        if (M.k === "hold" && t >= 0) uiText("hold… let go at 3.00 s", cx, cssH / 2 - 40, 26, "#fff", "center", "900");
         if (t < 0) uiText("get ready… " + Math.ceil(-t / 30), cx, cssH / 2 - 40, 30, "#fff", "center", "900");
         else if (M.k === "mash") uiText(Math.max(0, Math.ceil((300 - t) / 60)) + "s", cx, cssH / 2 - 40, 40, "#fff", "center", "900");
         else if (M.k === "draw") uiText(t >= M.go ? "GO!" : "wait…", cx, cssH / 2 - 30, t >= M.go ? 90 : 40, t >= M.go ? "#4ade80" : "#94a3b8", "center", "900");
@@ -243,7 +261,7 @@ var Party = {
             var P = this.pl[i], x = cx - (n * (lw + 14)) / 2 + i * (lw + 14), y = cssH / 2 + 30;
             uiPanel(x, y, lw, 120, P.col, 0.9);
             uiText(P.name + (P.cpu ? "" : " (" + this.keyName(P) + ")"), x + lw / 2, y + 26, 15, P.col, "center", "900");
-            var val = M.k === "mash" ? M.score[i] + " taps" : (!M.done[i] ? "…" : (M.k === "draw" ? (M.score[i] < 0 ? "TOO EARLY!" : (M.score[i] / 60).toFixed(2) + " s") : "off by " + M.score[i]));
+            var val = M.k === "mash" ? M.score[i] + " taps" : (!M.done[i] ? (M.k === "hold" && M.hold && M.hold[i] >= 0 ? "holding…" : "…") : (M.k === "draw" ? (M.score[i] < 0 ? "TOO EARLY!" : (M.score[i] / 60).toFixed(2) + " s") : (M.k === "hold" ? (M.score[i] >= 999 ? "never let go" : "off by " + (M.score[i] / 60).toFixed(2) + " s") : "off by " + M.score[i])));
             uiText(val, x + lw / 2, y + 74, 24, "#fff", "center", "900");
             if (M.k === "mash") { ctx.fillStyle = P.col; ctx.fillRect(x + 12, y + 92, (lw - 24) * Math.min(1, M.score[i] / 60), 12); }
         }
@@ -282,7 +300,7 @@ GameModes.register({
         var P = Party;
         return { pl: P.pl.map(function(q) { return { i: q.i, name: q.name, cpu: q.cpu, pid: q.pid || null, pos: q.pos, coins: q.coins, stars: q.stars, hop: q.hop, col: q.col, wins: q.wins }; }),
             sk: P.spaces.map(function(q) { return q.k; }), star: P.star, turn: P.turn, round: P.round, phase: P.phase, t: P.t, die: P.die, steps: P.steps, msg: P.msg, msgT: P.msgT,
-            mini: P.mini ? { k: P.mini.k, t: P.mini.t, score: P.mini.score, done: P.mini.done, go: P.mini.go, target: P.mini.target } : null, win: P.winner ? P.winner.i : -1, rounds: partyCfg.rounds };
+            mini: P.mini ? { k: P.mini.k, t: P.mini.t, score: P.mini.score, done: P.mini.done, go: P.mini.go, target: P.mini.target, hold: P.mini.hold } : null, win: P.winner ? P.winner.i : -1, rounds: partyCfg.rounds };
     },
     applyNetState: function(m) {
         var P = Party;
