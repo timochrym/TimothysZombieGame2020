@@ -3,7 +3,7 @@
 //   Kick (F / Enter / click / RT), dash-tackle opponents (Shift / B), shockwave the ball (E / Y),
 //   jump for headers. 1v1 to 3v3 with CPU teammates/opponents, or P1 vs P2.
 // ============================================================================
-var sportCfg = { format: "1v1", level: 2, minutes: 2, goals: 5 };
+var sportCfg = { format: "1v1", level: 2, minutes: 2, goals: 5, ball: "zombie" };
 try { var _sc = JSON.parse(localStorage.getItem("timsZombieBallCfg") || "null"); if (_sc) { for (var _k in _sc) sportCfg[_k] = _sc[_k]; } } catch (e) {}
 var SPORT_FORMATS = [
     ["1v1", "P1 vs CPU"], ["pvp", "P1 vs P2"], ["2v2", "P1 + CPU vs 2 CPU"], ["coop", "P1 + P2 vs 2 CPU"], ["3v3", "P1 + 2 CPU vs 3 CPU"]
@@ -14,7 +14,37 @@ var TEAM_NAMES = ["RED", "BLUE"];
 var Ball = {
     x: 0, y: 300, vx: 0, vy: 0, r: 44, angle: 0, lastTeam: -1, lastTouch: null,
 
-    reset: function() { this.x = 0; this.y = 420; this.vx = 0; this.vy = 0; this.angle = 0; this.lastTeam = -1; },
+    reset: function() { this.x = 0; this.y = 420; this.vx = 0; this.vy = 0; this.angle = 0; this.lastTeam = -1; this.ensureBody(true); },
+
+    // "Zombie Ball": the ball is a real zombie ragdoll curled around the ball's core. The core keeps the
+    // reliable circle physics (kicks, goals); the zombie's spine follows it and its head and limbs flop with
+    // the same Verlet ragdoll physics every character uses.
+    body: null,
+    ensureBody: function(teleport) {
+        if (sportCfg.ball !== "zombie") { if (this.body) { Ragdolls.remove(this.body); this.body = null; } return; }
+        if (!this.body || Ragdolls.list.indexOf(this.body) === -1) {
+            var fake = { x: this.x, y: this.y, s1: 112, s2: 112, zombiePower: "NORMAL", originalColor: "#2d6e32", lastFacing: 1, xspeed: 0, yspeed: 0 };
+            this.body = Ragdolls.spawnFrom(fake, { vx: 0, vy: 0, spin: 0 });
+            this.body.life = -1;
+            this.body.isBallBody = true;
+        } else if (teleport) {
+            var ox = this.body.centerX(), oy = this.body.centerY();
+            for (let i = 0; i < this.body.pts.length; i++) { var p = this.body.pts[i]; p.x += this.x - ox; p.y += this.y - oy; p.px = p.x; p.py = p.y; }
+        }
+    },
+    syncBody: function() {
+        var rd = this.body;
+        if (!rd) return;
+        var c = Math.cos(this.angle), s = Math.sin(this.angle);
+        var pin = function(i, oy) {
+            var p = rd.pts[i];
+            p.x = Ball.x - s * oy; p.y = Ball.y + c * oy;
+            p.px = p.x - Ball.vx; p.py = p.y - Ball.vy;
+        };
+        pin(1, 22);    // neck
+        pin(2, -10);   // pelvis
+        rd.wake();
+    },
 
     step: function() {
         var g = gravity * (devOpts.gravityMult || 1) * 0.78;
@@ -99,6 +129,13 @@ var Ball = {
         var hgt = Math.max(0, this.y - this.r);
         ctx.fillStyle = "rgba(0,0,0," + Math.max(0.08, 0.35 - hgt / 2500) + ")";
         ctx.beginPath(); ctx.ellipse(sx, floorY, r * Math.max(0.4, 1 - hgt / 1600), r * 0.25, 0, 0, Math.PI * 2); ctx.fill();
+        if (this.body) {
+            // zombie mode: just a faint ring so you can still read the ball's size
+            ctx.strokeStyle = "rgba(248,250,252,0.25)"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
+            if (sx < 0 || sx > cssW || sy < 0 || sy > cssH) drawEdgeIndicator(this.x, this.y, "#86efac", "ZOMBIE");
+            return;
+        }
         ctx.save();
         ctx.translate(sx, sy);
         ctx.rotate(-this.angle);
@@ -266,6 +303,8 @@ GameModes.register({
             Ball.step();
             Ball.collideCharacters();
         }
+        Ball.ensureBody(false);
+        Ball.syncBody();
 
         // Kicks: shoot button near the ball
         if (S.phase === "play") {
@@ -443,6 +482,7 @@ GameModes.register({
         items.push({ id: "zb_lvl", label: "CPU skill:  ◀  " + ["", "Easy", "Normal", "Hard"][sportCfg.level] + "  ▶", hint: "", cycle: true });
         items.push({ id: "zb_min", label: "Match length:  ◀  " + sportCfg.minutes + " min  ▶", hint: "Applies on Rematch", cycle: true });
         items.push({ id: "zb_goals", label: "Goals to win:  ◀  " + sportCfg.goals + "  ▶", hint: "", cycle: true });
+        items.push({ id: "zb_ball", label: "Ball:  ◀  " + (sportCfg.ball === "zombie" ? "Zombie ragdoll" : "Classic ball") + "  ▶", hint: "", cycle: true });
         if (!pauseFromGameOver) items.push({ id: "again", label: "Rematch", hint: "Start a new match" });
     },
 
@@ -457,6 +497,7 @@ GameModes.register({
         if (id === "zb_lvl") { sportCfg.level = ((sportCfg.level - 1 + dir + 3) % 3) + 1; save(); return true; }
         if (id === "zb_min") { sportCfg.minutes = Math.max(1, Math.min(10, sportCfg.minutes + dir)); save(); return true; }
         if (id === "zb_goals") { sportCfg.goals = Math.max(1, Math.min(15, sportCfg.goals + dir)); save(); return true; }
+        if (id === "zb_ball") { sportCfg.ball = sportCfg.ball === "zombie" ? "classic" : "zombie"; save(); Ball.ensureBody(true); return true; }
         return false;
     }
 });
