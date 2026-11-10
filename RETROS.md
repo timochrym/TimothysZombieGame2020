@@ -6,6 +6,21 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Rent Rush: auctions, mortgages, trading
+
+**Shipped:** skipping a street starts an AUCTION (from half price; CPUs bid up to a valuation that rises if the
+street helps their colour; humans press their button to raise $10; 2.5 s without a bid closes it). Short of cash you
+now MORTGAGE before losing streets (half price, you keep the street, no rent while mortgaged, grey "MORTGAGED" tile;
+buy back at 55% with M / UNMORTGAGE). TRADING: on your turn T / TRADE offers to buy the street that best completes
+your colour for ~1.6× its price; CPU owners accept fair offers that don't break their own set, human owners get
+ACCEPT / DECLINE; CPUs make offers too when they're two-thirds of the way to a set. All of it syncs over LAN.
+
+**Measured:** P1 skipped Mud Lane → auction → CPU 2 bought it for $70; P1 with $30 owing $100 mortgaged two streets
+instead of going bankrupt, and landing on a mortgaged street charged no rent; T → "P1 offers CPU 2 $100 for Mud Lane"
+→ accepted, the set completed; the unattended 4-player game still ends with a winner; no errors.
+
+---
+
 ## Party Board: two more minigames
 
 **Shipped:** TIMING (a marker sweeps across a bar — press when it's in the green; closest to the middle wins) and

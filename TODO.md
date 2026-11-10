@@ -106,10 +106,13 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       blue/red/event spaces, a star that moves after each purchase (20 coins), 5 random events, a minigame every
       round (Mash, Quick Draw, Stop It, Timing, Hold It), 5-20 rounds, results. STILL TO DO: more minigames (re-use Jet Dash / Worm
       Arena / Flick Soccer as minigames), items, branching board paths, more boards.
-- [~] B4 — Property board game → **Rent Rush**: 24 spaces, 5 colour groups + 2 transit lines, buy / rent / full-set
+- [x] B4 — Property board game → **Rent Rush**: 24 spaces, 5 colour groups + 2 transit lines, buy / rent / full-set
       double rent / houses (3 per street), chance cards, city tax into a Lounge pot, detention, doubles, selling to
       raise cash, bankruptcy, round limit; 2-4 players (P1/P2 keys + click, pads 3-4, CPUs that buy/build sensibly).
-      STILL TO DO: trading between players, mortgages, auctions.
+      + auctions when a street is skipped (CPUs bid to a valuation, humans press to raise), mortgages (automatic when
+      short of cash before selling; no rent while mortgaged; M / button to buy back at 55%), trading (T / TRADE: offer to
+      buy the street that best completes your colour; CPUs accept fair offers that don't break their own set, humans
+      ACCEPT / DECLINE; CPUs propose too). Done.
 - [x] B4 — Powder toy (falling sand) → **Sand Lab**: sand, water, wall, fire, oil, plant, lava, stone, steam, wood +
       eraser; lava+water → stone & steam, fire spreads through oil/plants/wood, plants grow into water, steam rains back
       down; brush size, pause, fast-forward, save/load. Next: more elements (acid, ice, gunpowder, seeds), gamepad cursor.

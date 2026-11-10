@@ -44,7 +44,7 @@ var Rent = {
             var pad = (typeof Pads !== "undefined") ? Pads.state[i] : null, cpu = i < 2 ? i >= rentCfg.humans : !(pad && pad.active);
             this.pl.push({ i: i, name: cpu ? "CPU " + (i + 1) : "P" + (i + 1), cpu: cpu, pos: 0, cash: 1500, out: false, jail: 0, col: RENT_PCOL[i], hop: 0 });
         }
-        this.turn = 0; this.round = 1; this.phase = "roll"; this.t = 0; this.pot = 0; this.log = []; this.offer = null; this.doubles = 0; this.winner = null;
+        this.turn = 0; this.round = 1; this.phase = "roll"; this.t = 0; this.pot = 0; this.log = []; this.offer = null; this.doubles = 0; this.winner = null; this.auction = null; this.trade = null;
         multiplayer = rentCfg.humans > 1;
         this.say(this.pl[0].name + " goes first");
     },
@@ -84,13 +84,13 @@ var Rent = {
         // sell houses (half price back), priciest first
         var hs = this.owned(p).filter(function(s) { return s.h > 0; }).sort(function(a, b) { return b.price - a.price; });
         for (let i = 0; i < hs.length && p.cash < 0; i++) while (hs[i].h > 0 && p.cash < 0) { hs[i].h--; p.cash += Math.round(hs[i].price / 4); this.say(p.name + " sells a house on " + hs[i].name); }
-        // then sell streets back to the bank at half price
-        var ss = this.owned(p).sort(function(a, b) { return a.price - b.price; });
-        for (let i = 0; i < ss.length && p.cash < 0; i++) { ss[i].owner = -1; p.cash += Math.round(ss[i].price / 2); this.say(p.name + " sells " + ss[i].name); }
+        // then mortgage streets (half price; you keep them but they earn no rent until bought back at 55%)
+        var ms = this.owned(p).filter(function(q) { return !q.mort; }).sort(function(a, b) { return a.price - b.price; });
+        for (let i = 0; i < ms.length && p.cash < 0; i++) { ms[i].mort = true; p.cash += Math.round(ms[i].price / 2); this.say("🏦 " + p.name + " mortgages " + ms[i].name); }
     },
     bankrupt: function(p, to) {
         p.out = true;
-        this.owned(p).forEach(function(s) { s.owner = -1; s.h = 0; });
+        this.owned(p).forEach(function(s) { s.owner = -1; s.h = 0; s.mort = false; });
         this.say("💥 " + p.name + " is BANKRUPT" + (to ? " (owes " + to.name + ")" : ""));
         if (typeof SFX !== "undefined") SFX.play("ko");
         var alive = this.pl.filter(function(q) { return !q.out; });
@@ -114,7 +114,8 @@ var Rent = {
         var s = this.sp[p.pos];
         if (s.k === "p" || s.k === "transit") {
             if (s.owner === -1) { this.offer = s; this.phase = "buy"; this.t = 0; return; }
-            if (s.owner !== p.i && !this.pl[s.owner].out) { var r = this.rentOf(s); this.say(p.name + " pays " + this.pl[s.owner].name + " $" + r + " rent (" + s.name + ")"); this.pay(p, r, this.pl[s.owner]); if (typeof SFX !== "undefined") SFX.play("coin"); }
+            if (s.owner !== p.i && !this.pl[s.owner].out && s.mort) this.say(s.name + " is mortgaged — no rent");
+            else if (s.owner !== p.i && !this.pl[s.owner].out) { var r = this.rentOf(s); this.say(p.name + " pays " + this.pl[s.owner].name + " $" + r + " rent (" + s.name + ")"); this.pay(p, r, this.pl[s.owner]); if (typeof SFX !== "undefined") SFX.play("coin"); }
         } else if (s.k === "tax") { this.say(p.name + " pays $100 city tax (into the Lounge pot)"); this.pot += 100; this.pay(p, 100, null); }
         else if (s.k === "lounge") { if (this.pot) { this.say(p.name + " collects the Lounge pot: $" + this.pot); p.cash += this.pot; this.pot = 0; } }
         else if (s.k === "gotojail") { this.jail(p); }
@@ -167,9 +168,13 @@ var Rent = {
         if (this.phase === "roll") {
             // building happens before the roll
             if (p.cpu) {
+                if (this.t === 10 && p.cash > 400 && this.owned(p).some(function(q) { return q.mort; })) this.unmortgage(p);
+                if (this.t === 15 && p.cash > 500 && !p.tradedRound && Math.random() < 0.35) { p.tradedRound = this.round; var w = this.tradeWish(p); if (w && this.sp.filter(function(x) { return x.g === w.g && x.owner === p.i; }).length === 2) { this.proposeTrade(p); this.click = null; return; } }
                 if (this.t === 20 && p.cash > 450) { var cb = this.canBuild(p); if (cb.length) this.buildOn(p, cb.sort(function(a, b) { return a.h - b.h; })[0]); }
                 if (this.t > 45) this.roll(p);
             } else {
+                if (this.click === "trade" || (p.i === 0 && Rent.k0t)) { Rent.k0t = false; this.proposeTrade(p); this.click = null; return; }
+                if (this.click === "unmort" || (p.i === 0 && Rent.k0m)) { Rent.k0m = false; this.unmortgage(p); }
                 if (e.build) { var opts = this.canBuild(p); if (opts.length) this.buildOn(p, opts.sort(function(a, b) { return a.h - b.h || b.price - a.price; })[0]); else this.say("Build: you need a whole colour set and $"); }
                 if (e.go) this.roll(p);
             }
@@ -178,7 +183,15 @@ var Rent = {
             if (p.cpu) { if (this.t > 40) { if (this.cpuWantsBuy(p, s)) yes = true; else no = true; } }
             else { yes = e.go; no = e.no; }
             if (yes) { if (p.cash >= s.price) { p.cash -= s.price; s.owner = p.i; this.say(p.name + " buys " + s.name + " for $" + s.price); if (typeof SFX !== "undefined") SFX.play("pickup"); } else this.say("Not enough cash for " + s.name); }
-            if (yes || no) { if (no) this.say(p.name + " passes on " + s.name); this.offer = null; this.phase = "after"; this.t = 0; }
+            if (yes) { this.offer = null; this.phase = "after"; this.t = 0; }
+            else if (no) { this.say(p.name + " passes on " + s.name); this.offer = null; this.startAuction(s, p); }
+        } else if (this.phase === "auction") {
+            this.auctionTick();
+        } else if (this.phase === "trade") {
+            var T = this.trade, owner = this.pl[T.to];
+            T.t++;
+            if (owner.cpu) { if (T.t > 50) this.finishTrade(this.cpuAcceptsTrade(owner, this.sp[T.sp], T.cash)); }
+            else { var eo = this.edge(owner); if (eo.go) this.finishTrade(true); else if (eo.no || T.t > 900) this.finishTrade(false); }
         } else if (this.phase === "after") {
             if (this.t > (p.cpu ? 60 : 50)) this.nextTurn();
         }
@@ -192,6 +205,68 @@ var Rent = {
         if (typeof SFX !== "undefined") SFX.play("select");
         this.say(p.name + " rolls " + this.d[0] + " + " + this.d[1]);
         this.move(p, this.d[0] + this.d[1]);
+    },
+    unmortgage: function(p) {
+        var m = this.owned(p).filter(function(q) { return q.mort; }).sort(function(a, b) { return a.price - b.price; })[0];
+        if (!m) { this.say("Nothing mortgaged"); return; }
+        var c = Math.round(m.price * 0.55);
+        if (p.cash < c) { this.say("Need $" + c + " to buy back " + m.name); return; }
+        p.cash -= c; m.mort = false; this.say("🏦 " + p.name + " buys back " + m.name + " for $" + c);
+    },
+    // the street p would most like to buy from someone else: one that completes a colour set, else the one of the
+    // colour p owns most of
+    tradeWish: function(p) {
+        var best = null, bs = -1, self = this;
+        this.sp.forEach(function(q) {
+            if (q.k !== "p" || q.owner < 0 || q.owner === p.i || self.pl[q.owner].out || q.h) return;
+            var grp = self.sp.filter(function(x) { return x.g === q.g; }), mine = grp.filter(function(x) { return x.owner === p.i; }).length;
+            var sc = mine * 10 + (mine === grp.length - 1 ? 100 : 0);
+            if (sc > bs) { bs = sc; best = q; }
+        });
+        return bs >= 10 ? best : null;
+    },
+    proposeTrade: function(p) {
+        var q = this.tradeWish(p);
+        if (!q) { this.say(p.name + ": nothing worth trading for yet"); return; }
+        var offer = Math.min(p.cash - 50, Math.round(q.price * 1.6 / 10) * 10);
+        if (offer < q.price) { this.say(p.name + " can't afford a fair offer for " + q.name); return; }
+        this.trade = { from: p.i, to: q.owner, sp: this.sp.indexOf(q), cash: offer, t: 0 };
+        this.say("🤝 " + p.name + " offers " + this.pl[q.owner].name + " $" + offer + " for " + q.name);
+        this.phase = "trade"; this.t = 0;
+    },
+    cpuAcceptsTrade: function(o, q, cash) {
+        var grp = this.sp.filter(function(x) { return x.g === q.g; });
+        if (grp.every(function(x) { return x.owner === o.i; })) return false;                 // never break up its own set
+        return cash >= q.price * 1.5 || o.cash < 150;
+    },
+    finishTrade: function(ok) {
+        var T = this.trade, q = this.sp[T.sp], a = this.pl[T.from], b = this.pl[T.to];
+        if (ok && a.cash >= T.cash) { a.cash -= T.cash; b.cash += T.cash; q.owner = a.i; this.say("🤝 Deal! " + a.name + " now owns " + q.name); if (typeof SFX !== "undefined") SFX.play("pickup"); }
+        else this.say(b.name + " turns the offer down");
+        this.trade = null; this.phase = "roll"; this.t = 0;
+    },
+    startAuction: function(s, skipper) {
+        this.auction = { sp: this.sp.indexOf(s), price: Math.round(s.price * 0.5 / 10) * 10, lead: -1, t: 0, last: 0, skipper: skipper.i };
+        this.phase = "auction"; this.t = 0;
+        this.say("🔨 AUCTION: " + s.name + " — press your button to bid +$10");
+    },
+    auctionTick: function() {
+        var A = this.auction, s = this.sp[A.sp], self = this;
+        A.t++;
+        this.pl.forEach(function(q) {
+            if (q.out || q.i === A.lead || q.cash < A.price + 10) return;
+            var bid = false;
+            if (q.cpu) {
+                var val = s.price * (0.85 + ((q.i * 37 + A.sp) % 10) / 25) + (self.sp.filter(function(x) { return x.g === s.g && x.owner === q.i; }).length * s.price * 0.3);
+                bid = A.t - A.last > 20 && A.price + 10 <= val && q.cash - (A.price + 10) > 120 && Math.random() < 0.08;
+            } else bid = self.edge(q).go;
+            if (bid) { A.price += 10; A.lead = q.i; A.last = A.t; }
+        });
+        if (A.t - A.last > 150 || A.t > 900) {
+            if (A.lead >= 0) { var w = this.pl[A.lead]; w.cash -= A.price; s.owner = w.i; this.say("🔨 SOLD to " + w.name + " for $" + A.price); if (typeof SFX !== "undefined") SFX.play("coin"); }
+            else this.say("🔨 No bids — " + s.name + " stays with the bank");
+            this.auction = null; this.phase = "after"; this.t = 0;
+        }
     },
     buildOn: function(p, s) {
         var c = Math.round(s.price / 2);
@@ -223,6 +298,7 @@ var Rent = {
             ctx.fillStyle = "#f8fafc"; ctx.fillRect(r[0] + 1, r[1] + 1, r[2] - 2, r[3] - 2);
             if (s.k === "p") { ctx.fillStyle = RENT_GROUPS[s.g].col; ctx.fillRect(r[0] + 1, r[1] + 1, r[2] - 2, r[3] * 0.24); }
             if (s.owner >= 0) { ctx.strokeStyle = this.pl[s.owner].col; ctx.lineWidth = 4; ctx.strokeRect(r[0] + 3, r[1] + 3, r[2] - 6, r[3] - 6); }
+            if (s.mort) { ctx.fillStyle = "rgba(100,116,139,0.45)"; ctx.fillRect(r[0] + 1, r[1] + 1, r[2] - 2, r[3] - 2); this.txt("MORTGAGED", r[0] + r[2] / 2, r[1] + r[3] * 0.82, Math.max(7, r[2] * 0.1), "#334155", "900"); }
             var fs = Math.max(8, r[2] * 0.13);
             var label = s.k === "chance" ? "❓ Chance" : (s.k === "transit" ? "🚆 " + s.name : (s.k === "tax" ? "🏛 Tax $100" : s.name));
             var words = label.split(" ");
@@ -247,9 +323,24 @@ var Rent = {
         var bY = cy + 52;
         if (this.phase === "over") uiText("🏆 " + this.winner.name + " wins! (Space for a new game)", cx, bY + 20, 16, this.winner.col, "center", "900");
         else if (this.mine(P0)) {
-            if (this.phase === "roll") { this.button("ROLL", "go", cx - 120, bY, P0.col); this.button("BUILD", "build", cx + 10, bY, "#16a34a", !this.canBuild(P0).length); }
+            if (this.phase === "roll") {
+                this.button("ROLL", "go", cx - 180, bY, P0.col); this.button("BUILD", "build", cx - 60, bY, "#16a34a", !this.canBuild(P0).length);
+                this.button("TRADE", "trade", cx + 60, bY, "#0ea5e9", !this.tradeWish(P0));
+                if (this.owned(P0).some(function(q) { return q.mort; })) this.button("UNMORTGAGE", "unmort", cx - 60, bY + 42, "#a16207");
+            }
             else if (this.phase === "buy") { this.txt("Buy " + this.offer.name + " for $" + this.offer.price + "?", cx, bY - 2, 14, "#0f172a", "900"); this.button("BUY", "go", cx - 120, bY + 8, P0.col, P0.cash < this.offer.price); this.button("SKIP", "no", cx + 10, bY + 8, "#64748b"); }
-        } else this.txt(P0.name + " is thinking…", cx, bY + 20, 14, "#166534", "900");
+        } else if (this.phase !== "auction" && this.phase !== "trade") this.txt(P0.name + " is thinking…", cx, bY + 20, 14, "#166534", "900");
+        if (this.phase === "auction" && this.auction) {
+            var A = this.auction;
+            this.txt("🔨 AUCTION: " + this.sp[A.sp].name + " — $" + A.price + (A.lead >= 0 ? " (" + this.pl[A.lead].name + ")" : " (no bids)"), cx, bY + 4, 15, "#0f172a", "900");
+            this.txt("press your button (Space / Enter / pad A) to bid +$10", cx, bY + 26, 12, "#166534", "800");
+        }
+        if (this.phase === "trade" && this.trade) {
+            var T2 = this.trade, own = this.pl[T2.to];
+            this.txt("🤝 " + this.pl[T2.from].name + " offers $" + T2.cash + " for " + this.sp[T2.sp].name, cx, bY + 4, 14, "#0f172a", "900");
+            if (this.mine(own)) { this.button("ACCEPT", "go", cx - 120, bY + 16, "#16a34a"); this.button("DECLINE", "no", cx + 10, bY + 16, "#64748b"); }
+            else this.txt(own.name + " is deciding…", cx, bY + 30, 12, "#166534", "800");
+        }
         // side panel: players + log
         var sx = G.x0 + G.size + 20, sw = cssW - sx - 16;
         for (let k = 0; k < this.pl.length; k++) {
@@ -267,7 +358,7 @@ var Rent = {
         uiText("RENT RUSH", 28, 36, 20, "#86efac", "left", "900");
         uiText("Round " + Math.min(this.round, rentCfg.rounds) + " / " + rentCfg.rounds + "  ·  whole colour = 2× rent + houses", 28, 52, 11, "#cbd5e1", "left", "800");
         var lanC = typeof Net !== "undefined" && Net.role === "client";
-        uiText(lanC ? "Your turn when your name is lit: Space roll / buy · S skip · E build" : ("P1: Space roll/buy · X skip · H build" + (multiplayer ? "   P2: Enter roll/buy · ' skip · . build" : "") + "   ·   or click the buttons   ·   LAN players can join   ·   Esc menu"), cssW / 2, cssH - 12, 12, "rgba(220,230,240,0.7)", "center", "700");
+        uiText(lanC ? "Your turn when your name is lit: Space roll / buy · S skip · E build" : ("P1: Space roll/buy/bid · X skip · H build · T trade · M unmortgage" + (multiplayer ? "   P2: Enter roll/buy · ' skip · . build" : "") + "   ·   or click the buttons   ·   LAN players can join   ·   Esc menu"), cssW / 2, cssH - 12, 12, "rgba(220,230,240,0.7)", "center", "700");
     },
     // plain (un-outlined) text for the light board surface
     txt: function(t, x, y, size, col, weight) { ctx.font = (weight || "800") + " " + Math.round(size) + "px " + UI_FONT; ctx.textAlign = "center"; ctx.fillStyle = col; ctx.fillText(t, x, y); },
@@ -307,12 +398,13 @@ GameModes.register({
     screenFrame: function() { Rent.update(); Rent.draw(); },
     screenDraw: function() { Rent.draw(); },
     netState: function() {
-        return { sp: Rent.sp.map(function(q) { return [q.owner === undefined ? -2 : q.owner, q.h || 0]; }), pl: Rent.pl.map(function(q) { return { i: q.i, name: q.name, cpu: q.cpu, pid: q.pid || null, pos: q.pos, cash: q.cash, out: q.out, jail: q.jail, col: q.col, hop: q.hop }; }),
+        return { sp: Rent.sp.map(function(q) { return [q.owner === undefined ? -2 : q.owner, q.h || 0, q.mort ? 1 : 0]; }), au: Rent.auction, tr: Rent.trade, pl: Rent.pl.map(function(q) { return { i: q.i, name: q.name, cpu: q.cpu, pid: q.pid || null, pos: q.pos, cash: q.cash, out: q.out, jail: q.jail, col: q.col, hop: q.hop }; }),
             turn: Rent.turn, round: Rent.round, phase: Rent.phase, d: Rent.d, pot: Rent.pot, log: Rent.log, msg: Rent.msg, msgT: Rent.msgT, offer: Rent.offer ? Rent.sp.indexOf(Rent.offer) : -1, win: Rent.winner ? Rent.winner.i : -1, players: rentCfg.players, rounds: rentCfg.rounds };
     },
     applyNetState: function(m) {
         if (!Rent.sp.length) Rent.build();
-        m.sp.forEach(function(a, i) { if (Rent.sp[i] && a[0] !== -2) { Rent.sp[i].owner = a[0]; Rent.sp[i].h = a[1]; } });
+        m.sp.forEach(function(a, i) { if (Rent.sp[i] && a[0] !== -2) { Rent.sp[i].owner = a[0]; Rent.sp[i].h = a[1]; Rent.sp[i].mort = !!a[2]; } });
+        Rent.auction = m.au; Rent.trade = m.tr;
         Rent.pl = m.pl; Rent.turn = m.turn; Rent.round = m.round; Rent.phase = m.phase; Rent.d = m.d; Rent.pot = m.pot; Rent.log = m.log; Rent.msg = m.msg; Rent.msgT = m.msgT;
         Rent.offer = m.offer >= 0 ? Rent.sp[m.offer] : null; Rent.winner = m.win >= 0 ? Rent.pl[m.win] : null; rentCfg.rounds = m.rounds;
     },
@@ -325,6 +417,8 @@ GameModes.register({
     onKey: function(code) {
         var flag = function(n) { Rent[n] = true; setTimeout(function() { Rent[n] = false; }, 90); return true; };
         if (code === "KeyX") return flag("k0no");
+        if (code === "KeyT") { Rent.k0t = true; return true; }
+        if (code === "KeyM") { Rent.k0m = true; return true; }
         if (code === "KeyH") return flag("k0b");
         if (code === "Quote") return flag("k1no");
         if (code === "Period") return flag("k1b");
