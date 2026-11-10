@@ -286,7 +286,7 @@ class Pathfinder {
         if (bd.top < reg.b || bd.top > reg.t) return;
         var L = Math.max(bd.left, this.bounds.l), R = Math.min(bd.right, this.bounds.r);
         if (R <= L) return;
-        var base = { platLeft: bd.left, platRight: bd.right, isBumper: !!s.isBumper, sourceId: s.id };
+        var base = { platLeft: bd.left, platRight: bd.right, isBumper: !!s.isBumper, bounceForce: s.bounceForce || 0, sourceId: s.id };
         var push = function(x, y, extra) {
             if (x < reg.l || x > reg.r) return;
             var n = { x: x, y: y, edges: [], inEdges: [], isRamp: false, isLeftEdge: false, isRightEdge: false };
@@ -364,20 +364,19 @@ class Pathfinder {
         a.edges = [];
         var self = this;
         var ALL = (1 << NAV_PROFILE_LIST.length) - 1;
+        if (a.isBumper) { this.buildBounceEdges(a, ALL); return; }
         this.forNodesIn(a.x - 420, a.y - 1100, a.x + 420, a.y + 560, function(b) {
             if (b === a) return;
             var dx = b.x - a.x, adx = Math.abs(dx), dy = b.y - a.y;
             var dist = Math.hypot(dx, dy);
+            // stepping onto a bounce pad always launches you: only worth it when the bounce helps
+            var padCost = b.isBumper ? 90 : 0;
             // 1. walk / ramp
             if (adx <= 160 && Math.abs(dy) <= 130 && (Math.abs(dy) <= 44 || a.isRamp || b.isRamp)) {
                 if (self.hasLineClearance(a.x, a.y, b.x, b.y) && !self.segmentHitsHazard(a.x, a.y, b.x, b.y)) {
-                    self.addEdge(a, b, "walk", dist * (dy > 10 ? 1.1 : 1.0), ALL);
+                    self.addEdge(a, b, "walk", dist * (dy > 10 ? 1.1 : 1.0) + padCost, ALL);
                     return;
                 }
-            }
-            // 2. bounce pad launch
-            if (a.isBumper && adx <= 420 && dy > 90 && dy <= 560) {
-                if (self.hasJumpClearance(a.x, a.y, b.x, b.y)) { self.addEdge(a, b, "bounce", dist * 0.9, ALL); return; }
             }
             // 3. drop off a ledge
             if (dy < -28 && adx >= 24 && adx <= 300) {
@@ -397,7 +396,7 @@ class Pathfinder {
                 if (sameSurface) return;
                 var mask = self.jumpMask(adx, dy);
                 if (mask && self.hasJumpClearance(a.x, a.y, b.x, b.y) && !self.inHazard(b.x, b.y + 2)) {
-                    self.addEdge(a, b, "jump", dist * 1.35 + 30 + Math.max(0, dy) * 0.4, mask, { dy: dy, adx: adx });
+                    self.addEdge(a, b, "jump", dist * 1.35 + 30 + Math.max(0, dy) * 0.4 + padCost, mask, { dy: dy, adx: adx });
                 }
             }
         });
@@ -419,6 +418,25 @@ class Pathfinder {
             if (!self.hasLineClearance(a.x, a.y, a.x, b.y + 20)) return;
             var blocks = Math.ceil(dy / 40);
             self.addEdge(a, b, "tower", dy * 1.6 + blocks * 25, 0, { build: true, blocks: blocks });
+        });
+    }
+
+    // A pad launches everyone straight up (~F^2/1.6 px for bounce force F); in the air an agent can steer
+    // ~400px sideways, so every landing spot inside that envelope is a bounce edge. Nothing else leaves a pad.
+    static buildBounceEdges(a, ALL) {
+        var self = this;
+        var F = a.bounceForce || 24;
+        var H = F * F / 1.6;
+        if (!this.hasLineClearance(a.x, a.y, a.x, a.y + Math.max(60, H - 60))) H = 140;   // low ceiling over the pad
+        this.forNodesIn(a.x - 460, a.y - 420, a.x + 460, a.y + H, function(b) {
+            if (b === a || b.isBumper && Math.abs(b.y - a.y) < 30) return;
+            var dx = b.x - a.x, dy = b.y - a.y, adx = Math.abs(dx);
+            if (dy > H - 30) return;
+            var reach = 120 + 330 * Math.min(1, (H - Math.max(0, dy)) / H + 0.3);
+            if (adx > reach) return;
+            var apexX = a.x + dx * 0.35, apexY = Math.max(a.y, b.y) + 60;
+            if (!self.hasLineClearance(apexX, apexY - 40, b.x, b.y + 10)) return;
+            self.addEdge(a, b, "bounce", Math.hypot(dx, dy) * 0.8 + 20, ALL);
         });
     }
 
@@ -588,6 +606,17 @@ class Pathfinder {
         this.forNodesIn(wx - 400, wy - 700, wx + 400, wy + 260, scan);
         if (!best) for (let i = 0; i < this.nodes.length; i++) if (this.nodes[i]) scan(this.nodes[i]);
         return best;
+    }
+
+    // goal lookups are shared by every enemy chasing the same spot this frame
+    static goalNode(x, y) {
+        if (this._goalFrame !== this.frameNo) { this._goalFrame = this.frameNo; this._goalCache = new Map(); }
+        var key = Math.round(x / 30) * 100003 + Math.round(y / 30);
+        var hit = this._goalCache.get(key);
+        if (hit !== undefined) return hit;
+        var n = this.findClosestNode(x, y);
+        this._goalCache.set(key, n);
+        return n;
     }
 
     static profileOf(ch) {
@@ -786,9 +815,10 @@ class Pathfinder {
         else { z.lastNavX = z.x; z.stuckTimer = 0; }
 
         // current node: re-pick while grounded (mid-air we keep the edge we committed to)
-        if (z.onGround || z.navNodeId === undefined || !this.nodes[z.navNodeId]) {
+        if ((z.onGround && (Math.abs(z.x - (z.navLookX || 1e9)) > 18 || Math.abs(footY - z.navLookY) > 18)) || z.navNodeId === undefined || !this.nodes[z.navNodeId]) {
             var cn = this.findClosestNode(z.x, footY);
             z.navNodeId = cn ? cn.id : undefined;
+            z.navLookX = z.x; z.navLookY = footY;
         }
         var cur = this.nodes[z.navNodeId];
         if (!cur) { this.fallbackSteer(z, target.x, tFoot); return; }
@@ -802,7 +832,7 @@ class Pathfinder {
         }
 
         // re-plan when the node changes or every ~12 frames
-        var goal = this.findClosestNode(target.x, tFoot);
+        var goal = this.goalNode(target.x, tFoot);
         z.navReplan = (z.navReplan || 0) - 1;
         if (z.onGround && (z.navReplan <= 0 || z.navPlannedFrom !== cur.id || z.navGoalId !== (goal && goal.id))) {
             z.navReplan = 10 + (z.id % 6);
@@ -852,6 +882,8 @@ class Pathfinder {
     static follow(z, goalX, goalY) {
         var footY = z.y - z.s2 / 2;
         var path = z.navPath || [];
+        // launched by a pad: the pad waypoint is done, steer for the landing
+        if (!z.onGround && path.length > 1 && path[1].action === "bounce" && footY > path[0].y + 30) path.shift();
         // advance past reached waypoints
         while (path.length > 1) {
             var w0 = path[0];

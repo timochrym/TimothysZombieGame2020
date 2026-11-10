@@ -25,6 +25,10 @@ Engine gotchas:
 Each new game: register a mode, add a HUB_ICONS pixel icon, update ENGINE.md, and verify it in
 headless Chromium before committing.
 
+## Also done (outside the numbered sections)
+
+- LAN multiplayer: `node server.js`, then 📡 LAN -> Host / Join. See ENGINE.md "LAN multiplayer". [DONE]
+
 ## Sections (build in order)
 
 ### 1. Head stomps (engine-wide) [DONE]
@@ -40,7 +44,7 @@ rounded square in the character's color with eyes that look the way it faces (en
 and red pupils), then draw the overlays and health bar. In Ragdolls.draw, draw a square rotated to
 the neck-pelvis angle.
 
-### 3. Better enemy AI pathfinding
+### 3. Better enemy AI pathfinding [DONE]
 Upgrade pathfinder.js in place (keep the Pathfinder API and the P-key / dev-panel debug overlay);
 do not rewrite from scratch. Fix these known defects:
 - Graph only exists in a ~1500x1050 window around the camera (rebuildGraph). Build it for the
