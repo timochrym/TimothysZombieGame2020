@@ -1058,6 +1058,7 @@ function frame() {
     if (typeof Feel !== "undefined") Feel.update();
     if (typeof Vehicles !== "undefined") Vehicles.update();
 
+    GameModes.call("drawBack");          // mode backdrops (behind the level pieces, over the scenery)
     // Draw Static Map Objects (2.5D view: every side face first, then the fronts)
     if (typeof Depth !== "undefined" && Depth.on()) Depth.drawSides(staticObjects.concat(movingObjects));
     for (let i = 0; i < staticObjects.length; i++) {

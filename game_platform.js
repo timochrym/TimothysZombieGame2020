@@ -611,6 +611,27 @@ GameModes.register({
         }
     },
 
+    // course themes: a dark cave with crystals and hanging rocks, or a bright open sky with drifting clouds
+    drawBack: function() {
+        var th = (LevelManager.getCurrentLevel() || {}).theme, t = Plat.tick || 0;
+        if (th === "cave") {
+            ctx.fillStyle = "rgba(8,10,20,0.82)"; ctx.fillRect(0, 0, cssW, cssH);
+            var px = -(cameraTargetX * 0.25) % 220;
+            for (let x = px - 220; x < cssW + 220; x += 220) {
+                ctx.fillStyle = "#1c2233";
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 40, 70 + (x * 7 % 50)); ctx.lineTo(x + 80, 0); ctx.fill();      // stalactites
+                ctx.fillStyle = "rgba(125,211,252," + (0.25 + 0.15 * Math.sin(t * 0.05 + x)) + ")";
+                ctx.beginPath(); ctx.moveTo(x + 130, cssH * 0.72); ctx.lineTo(x + 140, cssH * 0.66); ctx.lineTo(x + 150, cssH * 0.72); ctx.fill();   // crystals
+            }
+        } else if (th === "sky") {
+            var g = ctx.createLinearGradient(0, 0, 0, cssH); g.addColorStop(0, "rgba(56,189,248,0.55)"); g.addColorStop(1, "rgba(186,230,253,0.35)");
+            ctx.fillStyle = g; ctx.fillRect(0, 0, cssW, cssH);
+            var cx0 = -((cameraTargetX * 0.2 + t * 0.3) % 360);
+            ctx.fillStyle = "rgba(255,255,255,0.75)";
+            for (let x = cx0 - 360; x < cssW + 360; x += 360) { var cy = 90 + ((x * 13) % 120 + 120) % 120; ctx.beginPath(); ctx.ellipse(x, cy, 70, 22, 0, 0, 7); ctx.ellipse(x + 40, cy - 14, 46, 20, 0, 0, 7); ctx.fill(); }
+        }
+    },
+
     drawWorld: function() {
         var k = cameraScaleX, t = Plat.tick;
         for (let i = 0; i < Plat.items.length; i++) {

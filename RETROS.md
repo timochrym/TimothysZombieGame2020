@@ -6,6 +6,18 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Stomp Squad course themes (+ engine `drawBack` hook)
+
+**Shipped:** a new `drawBack()` mode hook (drawn behind the level pieces, over the scenery). Stomp Squad uses it so the
+Cavern course is a dark cave with parallax stalactites and glinting crystals and Sky Bridges is a bright sky gradient
+with drifting clouds; Meadow keeps the normal hills. Checked the TODO: wall-slide / wall-jump and power-ups rising out
+of ? blocks were already in, so those entries were stale.
+
+**Measured:** both themed courses render; the platformer regression run (blocks, stomp, pit, goal → next course)
+unchanged; no errors.
+
+---
+
 ## Zombie Ball Flail polish — keepers, modifiers, goal slow-mo
 
 **Shipped:** a third player per side in Flail style — a goalkeeper that slides along its goal line toward the ball's
