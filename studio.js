@@ -63,6 +63,12 @@ var STUDIO_PALETTE = [
         ["Coin", "🪙", { cat: "gadget", type: "coin" }],
         ["Goal pole", "🎌", { cat: "gadget", type: "goalpole", h: 640 }]
     ]],
+    ["Vehicles", [
+        ["Car", "🚗", { cat: "gadget", type: "car", color: "#e11d48" }],
+        ["Rail", "🛤", { cat: "gadget", type: "rail", w: 480, dy: 0 }],
+        ["Minecart", "🛒", { cat: "gadget", type: "minecart", cars: 1 }],
+        ["Train (3 cars)", "🚂", { cat: "gadget", type: "minecart", cars: 3 }]
+    ]],
     ["Enemies", STUDIO_ENEMIES.map(function(p) { return [p.toLowerCase().replace("_", " "), "👾", { cat: "enemy", power: p }]; })
         .concat(STUDIO_PLAT_ENEMIES.map(function(p) { return ["platformer " + p, "🍄", { cat: "enemy", power: p }]; }))],
     ["Items", []],
@@ -285,6 +291,9 @@ var Studio = {
             case "key": return { x: e.x, y: e.y, w: 70, h: 40 };
             case "star": return { x: e.x, y: e.y, w: 60, h: 60 };
             case "coin": return { x: e.x, y: e.y, w: 50, h: 60 };
+            case "car": return { x: e.x, y: e.y + 60, w: 200, h: 120 };
+            case "rail": return { x: e.x, y: e.y + (e.dy || 0) / 2, w: e.w || 480, h: Math.max(24, Math.abs(e.dy || 0)) };
+            case "minecart": return { x: e.x, y: e.y + 40, w: 120, h: 70 };
             default: return { x: e.x, y: e.y, w: e.w || 80, h: e.h || 80 };
         }
     },
@@ -293,7 +302,7 @@ var Studio = {
     resizable: function(e) {
         if (e.cat === "layout") return e.type === "crate" ? "" : "wh";
         if (e.cat !== "gadget") return "";
-        return ({ door: "wh", lockdoor: "wh", mover: "wh", cracked: "wh", fan: "wh", spikes: "w", plate: "w", goalpole: "h", qblock: "wh", brick: "wh" })[e.type] || "";
+        return ({ door: "wh", lockdoor: "wh", mover: "wh", cracked: "wh", fan: "wh", spikes: "w", plate: "w", goalpole: "h", qblock: "wh", brick: "wh", rail: "w" })[e.type] || "";
     },
 
     // write a new box (l, r, b, t) back into the entity respecting its anchor
@@ -305,6 +314,7 @@ var Studio = {
         e.x = cx;
         if (e.cat === "gadget" && (e.type === "fan" || e.type === "goalpole")) e.y = b;
         else if (e.cat === "gadget" && e.type === "spikes") e.y = b;
+        else if (e.cat === "gadget" && e.type === "rail") { e.y = (b + t) / 2 - (e.dy || 0) / 2; }
         else if (e.cat === "gadget" && e.type === "plate") e.y = b + 20;
         else e.y = (b + t) / 2;
     },

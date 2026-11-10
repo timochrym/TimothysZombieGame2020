@@ -165,6 +165,13 @@ Platform gadgets (used by Stomp Squad, available to any game and the editor): `q
 - **Saving**: each game keeps its own `localStorage` key (`timsCrateLab`, `timsPortalLab`,
   `timsZombieBallCfg`, `timsParkourRush`, `timsRagdollSiege`).
 
+## Vehicles (`vehicles.js`)
+
+Gadgets `car { x, y, color }`, `rail { x, y, w, dy }` and `minecart { x, y, cars }` (all in Level Studio → Vehicles).
+E (interact) near one gets in/out (it takes priority over the shockwave there). Cars are Verlet bodies (rolling wheels,
+traction along the surface, run-over damage); the driver can shoot from the window. Rail pieces whose ends meet
+join into one line; carts roll along it, slopes speed them up, A/D push, a train is a cart with `cars > 1`.
+
 ## Feel (`feel.js`)
 
 Z (P1) / M (P2) punch: short-range hit with ragdoll knockback, hit-stop and a camera zoom kick (`Feel.zoomMult()`

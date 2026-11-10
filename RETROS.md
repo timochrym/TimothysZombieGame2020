@@ -6,6 +6,23 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Vehicles — backlog B2
+
+**Shipped:** driveable cars (enter/exit with E, A/D drive, S brake, shoot from the window, run-over damage) and
+rails + minecarts / trains (joined track pieces, slope physics) as gadgets usable in any game and in Level Studio;
+Creative now has a car and a hill track with a 3-car train.
+
+**Measured:** in Creative: enter car → 1,735 px in 2 s → ran a zombie over for 124 damage → exit; minecart train ridden
+over the hill line to the end. No errors.
+
+**Went wrong:** the car first spawned inside the Tower Stairs ramp and got crumpled on frame one, and the ragdoll
+engine treated the driver as someone kicking the car. Both fixed (moved the car; ragdolls ignore riders).
+
+**Left / known:** minecarts and rails don't show on LAN clients yet (cars do); no car HP / wrecking; trains are one
+physics cart with drawn followers.
+
+---
+
 ## Feel & polish — backlog B1
 
 **Shipped (`feel.js` + small engine hooks):** punch (Z / M) with ragdoll knockback, hit-stop and a zoom kick; grab &

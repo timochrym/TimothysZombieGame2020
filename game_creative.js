@@ -31,7 +31,10 @@ function saveCreative() { try { localStorage.setItem("timsCreativeCfg", JSON.str
     ModeKit.addLevel("creative_world", { name: "✈ Creative: Sky Sandbox", mode: "creative", wavesEnabled: false,
         spawnP1: [0, 60], spawnP2: [140, 60], layout: L,
         gadgets: [{ type: "sign", x: -250, y: 0, text: "Double-tap W (jump) to FLY.  W / S rise and sink.\nB opens the build tools.  Esc for creative options." },
-                  { type: "star", x: 0, y: 2400 }, { type: "star", x: 2900, y: 2000 }, { type: "star", x: -1000, y: 3000 }] });
+                  { type: "star", x: 0, y: 2400 }, { type: "star", x: 2900, y: 2000 }, { type: "star", x: -1000, y: 3000 },
+                  { type: "car", x: -3200, y: 0, color: "#e11d48" },
+                  { type: "rail", x: 2400, y: 0, w: 800, dy: 0 }, { type: "rail", x: 3200, y: 0, w: 800, dy: 300 }, { type: "rail", x: 4000, y: 300, w: 800, dy: -300 }, { type: "rail", x: 4800, y: 0, w: 800, dy: 0 },
+                  { type: "minecart", x: 2200, y: 0, cars: 3 }] });
 })();
 
 function creativeHorde() {

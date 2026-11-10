@@ -153,7 +153,7 @@ kind of mechanics. Mark items `[DONE]` as they ship.
   editable in Level Studio.
 - Calmer screens during big waves: cap floating texts / sparks, merge damage numbers, a "reduce effects" setting.
 
-### B2. Vehicles (pairs with section 9)
+### B2. Vehicles (pairs with section 9) [DONE] (vehicles.js)
 - Driveable cars (enter/exit, wheel physics, ramps, crashes).
 - Train / minecart on placeable rails (Level Studio piece), riders and cargo.
 

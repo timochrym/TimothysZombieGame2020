@@ -442,7 +442,7 @@ var Ragdolls = {
 
             for (let a = 0; a < actors.length; a++) {
                 var ch = actors[a];
-                if (ch.dead || ch === rd.owner || ch.liveRagdoll || ch === rd.heldBy) continue;
+                if (ch.dead || ch === rd.owner || ch.liveRagdoll || ch === rd.heldBy || ch.vehicle || ch.noCollide) continue;
                 var hw = ch.s1 / 2, hh = ch.s2 / 2;
                 if (ch.x + hw < b.l || ch.x - hw > b.r || ch.y + hh < b.b || ch.y - hh > b.t) continue;
 

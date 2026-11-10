@@ -18,6 +18,7 @@
 //   qblock     { x, y, item: coin|power|coins5|star|life }    ? block: hit from below -> mode.onBlockHit(ch, g) (default: a coin)
 //   brick      { x, y, item? }                                breaks when mode.canBreak(ch) says so (default yes), else bumps
 //   coin       { x, y }                                       floating coin -> mode.onCoin(ch, g)
+//   car / rail / minecart                                     driveable vehicles (see vehicles.js)
 //   goalpole   { x, y(bottom), h }                            grab it: mode.onGoal(ch, g, heightFraction 0..1), then onExit
 // ============================================================================
 
@@ -59,6 +60,7 @@ var Gadgets = {
     tick: 0,
 
     clear: function() {
+        if (typeof Vehicles !== "undefined") Vehicles.clear();
         this.list = [];
         this.byId = {};
         this.keys = {};
@@ -71,6 +73,7 @@ var Gadgets = {
         this.clear();
         if (!defs) return;
         for (let i = 0; i < defs.length; i++) this.add(defs[i]);
+        if (typeof Vehicles !== "undefined") Vehicles.linkRails();
         if (typeof rebuildAllObjects === "function") rebuildAllObjects();
     },
 
@@ -98,6 +101,11 @@ var Gadgets = {
             if (g.item === "coins5") g.hitsLeft = 5;
         }
         if (g.type === "goalpole") { g.h = g.h || 640; g.flagY = g.h - 40; }
+        if (typeof Vehicles !== "undefined") {
+            if (g.type === "car") Vehicles.spawnCar(g);
+            else if (g.type === "rail") Vehicles.addRail(g);
+            else if (g.type === "minecart") Vehicles.spawnCart(g);
+        }
         if (g.type === "star") this.starsTotal++;
         if (g.id) this.byId[g.id] = g;
         this.list.push(g);

@@ -1020,6 +1020,7 @@ function frame() {
     if (typeof Ragdolls !== "undefined") Ragdolls.update();
     if (typeof Gadgets !== "undefined") Gadgets.preUpdate();
     if (typeof Pathfinder !== "undefined" && Pathfinder.beginFrame) Pathfinder.beginFrame();
+    if (typeof Vehicles !== "undefined") Vehicles.preUpdate();
     GameModes.call("preUpdate");
 
     for (let i = 0; i < characters.length; i++) {
@@ -1049,6 +1050,7 @@ function frame() {
     GameModes.call("update");
     if (typeof Build !== "undefined") Build.update();
     if (typeof Feel !== "undefined") Feel.update();
+    if (typeof Vehicles !== "undefined") Vehicles.update();
 
     // Draw Static Map Objects (2.5D view: every side face first, then the fronts)
     if (typeof Depth !== "undefined" && Depth.on()) Depth.drawSides(staticObjects.concat(movingObjects));
@@ -1058,6 +1060,7 @@ function frame() {
 
     if (typeof Build !== "undefined") Build.drawWorld();
     if (typeof Gadgets !== "undefined") Gadgets.draw();
+    if (typeof Vehicles !== "undefined") Vehicles.drawWorld();
     GameModes.call("drawWorld");
 
     // Draw Stick Ninja Afterimages
