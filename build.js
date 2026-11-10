@@ -142,6 +142,7 @@ var Build = {
 
     damage: function(obj, amount, by) {
         if (obj.buildHP === undefined || obj.dead) return;
+        if (GameModes.has("onPieceDamage") && GameModes.call("onPieceDamage", obj, amount, by)) return;
         obj.buildHP += Math.min(0, amount);
         obj.hitFlash = 6;
         if (obj.buildHP <= 0) this.destroy(obj, by, false);

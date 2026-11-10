@@ -6,6 +6,31 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Bed Brawl (Bed Wars) — ROADMAP section 7
+
+**Shipped:** `game_bedwars.js`: two team islands over the void plus a diamond island; beds with HP (shoot them or
+hold E next to them; your own team can't hurt yours); iron/gold/diamond generators; a walk-up shop of 7 pedestals
+(blocks, stone, heal, blaster upgrade, armor, TNT, diamond armor); respawn while your bed stands, elimination after;
+armor/damage upgrades and knockback in one damage hook; formats 1v1, 2P PvP, 2v2, co-op vs CPUs, 3v3; LAN players
+take CPU slots. Engine: `onPieceDamage` hook, `noHeroContact` flag, camera follows the humans at this screen.
+
+**CPU bots:** farm iron, tap the shop for blocks, bridge across the void one grid cell at a time, hop small holes,
+fight with lead aim, defend their bed, break the enemy bed, then hunt. Stuck detection hops and backs off.
+
+**Measured:** a 3v3 CPU-vs-CPU match (P1 removed) runs to a win on its own: blue bridged ~1750 px, broke the red bed
+at ~80 s and won at ~92 s (simulated at 2x). No errors.
+
+**Went wrong (each found by watching the bot test):**
+- Bots fell, clutch-placed blocks under themselves and stood just above the void line forever → void raised.
+- Bridges got one-block holes (a "+40px retry" landed in the next cell) → bots now fill the first empty cell.
+- Bots holding E never re-triggered a purchase → shop presses are taps.
+- The camera tried to fit six fighters → follows local humans.
+
+**Left / known:** bots don't use the pathfinder's bridge/tower edges yet (direct bridging is enough for this flat
+map); only one map; no team chat/pings; bots are slow to restock at the start.
+
+---
+
 ## Building during play — ROADMAP section 6
 
 **Shipped:** `build.js`: build mode, block / wall / floor / ramp, wood / stone / metal, grid-snapped green/red ghost,

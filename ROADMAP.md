@@ -120,7 +120,7 @@ A build toggle with a grid-snapped ghost preview at the cursor, piece picker (bl
 ramp/stairs), materials that cost resources, breaking blocks by hitting or shooting them, and fast
 Fortnite-style piece placement. Placing/breaking calls Pathfinder.invalidateRect.
 
-### 7. Bed Wars (uses the building system)
+### 7. Bed Wars (uses the building system) [DONE] (BED BRAWL, game_bedwars.js)
 Teams on islands over the void, each with a bed. Resource generators (iron, gold, plus diamonds in
 the middle) feed a shop for blocks, weapons and armor. You respawn while your bed stands; break the
 enemy bed, then eliminate them. 2-player local PvP plus CPU bots that bridge toward the enemy,

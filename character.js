@@ -1422,6 +1422,7 @@ class Character {
         if (typeof brawl !== "undefined" && brawl.active) return;
         if (other.team === this.team) return;
         if (this.frozenTimer > 0) return;
+        if (this.isPlayer && other.isPlayer && GameModes.flag("noHeroContact", false)) return;
         // Enemy touches hero => hero is hurt (heroes only get a half-strength hit while undead)
         var victim = this.isPlayer ? this : other;
         var bully = this.isPlayer ? other : this;
