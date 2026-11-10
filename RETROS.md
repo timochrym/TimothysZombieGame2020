@@ -6,6 +6,25 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Blob Arena (new game, B4 — agar-style)
+
+**Shipped:** `game_cells.js` (ownScreen): a 5200² arena with 2000 pellets, 14 viruses and 14 CPU blobs. You eat pellets
+and any blob at least 25% smaller once it's mostly inside you; mass makes you slower; Space splits every piece toward
+the cursor (they push apart, then merge back after 9 s); W ejects mass you can feed or bait with; viruses burst a blob
+over 130 mass into up to 8 pieces. CPU blobs flee anything 25% bigger (and steer off walls), chase prey, split-lunge
+at small targets, and big ones avoid viruses. Camera zooms with your mass (and to fit your pieces / P2), leaderboard,
+best mass, death card + respawn, local P2 (arrows / Enter / "/") and pads.
+
+**Measured:** 0.17–0.25 ms per step with 16 players; split → 2 pieces, virus → 9 pieces, all merged back to 1 after
+the timer; P1 grows 20 → 33 in 10 s just wandering.
+
+**Went wrong:** the bottom hint was dark-outlined text on the light floor — unreadable → dark strip behind it.
+1100 pellets were too sparse (CPUs gained ~1.5/s) → 2000.
+
+**Left / known:** LAN, team mode, feeding viruses to shoot them (TODO.md).
+
+---
+
 ## Worm Arena (new game, B4 — slither-style)
 
 **Shipped:** `game_snake.js` on the new `ownScreen` path: a round arena with 1400 glowing pellets and 11 CPU worms.

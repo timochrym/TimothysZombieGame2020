@@ -67,7 +67,9 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       separate deep world; the frontier itself is unchanged so far).
 - [ ] ⏸ PAUSED by you — B3 — Terraria-like generation + block-game capabilities → Terra (above). Next: save/load worlds, crafting
       (planks from wood, torches), lighting from torches, enemies at night / in caves, LAN sync of the tile grid.
-- [ ] B4 — Cell arena (agar-style): eat pellets & smaller cells, split, eject mass.
+- [x] B4 — Cell arena (agar-style) → **Blob Arena**: eat pellets and blobs 25% smaller, bigger = slower, split to lunge
+      (pieces merge back after 9 s), eject mass, spiky viruses pop big blobs into pieces, 14 CPU blobs that flee /
+      chase / lunge / dodge viruses, leaderboard, best mass, local P2 + pads. Next: LAN, teams, feeding viruses.
 - [ ] B4 — Tank arena (diep-style): shoot shapes for XP, level up, upgrades, tank classes.
 - [x] B4 — Snake arena (slither-style) → **Worm Arena**: round arena, mouse / A-D steering, boost burns length and drops
       food, head-into-body kills and bursts into pellets, 11 CPU worms that hunt food and cut smaller worms off,
