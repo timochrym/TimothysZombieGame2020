@@ -410,12 +410,13 @@ var Ragdolls = {
                 var vn = vx * nx + vy * ny;
                 if (vn < 0) {
                     var tx = vx - vn * nx, ty = vy - vn * ny;
-                    var fr = ny > 0.5 ? 0.78 : 0.92;
+                    var fr = p.roll ? 0.996 : (ny > 0.5 ? 0.78 : 0.92);     // wheels roll, bodies scrape
                     var nvx = tx * fr - vn * nx * bounce, nvy = ty * fr - vn * ny * bounce;
                     p.px = p.x - nvx; p.py = p.y - nvy;
                     if (-vn > maxImpact) maxImpact = -vn;
                 }
                 if (ny > 0.5) rd.grounded = true;
+                p.contact = 3; p.cnx = nx; p.cny = ny;              // which way the surface faces (vehicles drive along it)
             }
         }
         if (finalPass && maxImpact > 9 && rd.bonkCd <= 0) {

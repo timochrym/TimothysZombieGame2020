@@ -6,6 +6,38 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Bigger physics, Crash Lab, Wobble Wheels — ROADMAP section 9
+
+**Shipped:**
+- Physics scale: per-tick spatial hash for moving objects (`DynGrid`), sort-and-sweep in the non-penetration solver
+  and ragdoll pile-ups, sleeping pairs skipped, ragdoll level lookups through `StaticGrid`, ragdoll cap 30 → 60
+  (auto 30 under 40 FPS). Breakable joints, custom ragdoll drawing, rolling-wheel friction and contact normals.
+- CRASH LAB (`game_dummy.js`): a crash-test dummy and 9 tools (blaster, grab & fling, TNT, bomb, cannon, bounce pad,
+  spike block, heavy weight, wrecking ball); damage scored from each body part's sudden change in velocity (head
+  2.5x), bone cracks, combos, saved best.
+- WOBBLE WHEELS (`game_wheels.js`): bike / wheelchair / cart as one Verlet body with the ragdoll rider on breakable
+  joints (rider flies off on big hits, no gore), whole-body traction along the surface, lean/flip control, three
+  courses with spikes (flat tyres), mines, swinging logs, pads and crates, checkpoints, best times per vehicle, 2P.
+
+**Measured:** 122 crates + 102 ragdolls + ~30 enemies: 12.3 → 6.8 ms JS per tick (crate moves 5.7 → 1.8 ms,
+solver 1.9 → 0.5 ms), headless FPS 35 → 50. Crash Lab: resting dummy scores 0; cannon ~900, bomb ~400, blaster ~35,
+fling ~430. Wobble Wheels: bike climbs the first hill and reaches the checkpoint (~4,000 px in 5 s); cart ~2,400 px
+in 3 s; trap course crashes and restarts from the checkpoint as designed. No errors anywhere.
+
+**Went wrong (all caught by the tests):**
+- The dummy spawned above a bounce pad and "scored" ~670 per bounce while doing nothing → spawn moved, pad bounces
+  don't count, short grace after spawning.
+- Dragging the dummy counted as damage (and a flick could throw at engine max speed) → no scoring while held,
+  throw speed capped.
+- Driving only the wheel points couldn't climb a slope (2 of 15 points pushed against gravity on all 15) → traction
+  pushes the whole body along the surface in proportion to wheels with grip.
+- A restart reset the crash counter, hiding crashes.
+
+**Left / known:** the 60 FPS target with 60+ enemies is met for the JS budget but headless software rendering still
+drops below 60; the rider pose on the bike is crude; wheelchair is the weakest climber; LAN players don't get vehicles.
+
+---
+
 ## 2.5D view — ROADMAP section 8
 
 **Shipped:** `depth.js` + Settings → "3D view (2.5D)". Every level piece and crate gets side faces extruded toward a

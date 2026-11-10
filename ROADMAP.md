@@ -131,7 +131,7 @@ Render-only "2.5D". Each static box/ramp polygon gets side faces extruded toward
 at screen centre, shaded by face normal. Draw all side faces first, then all front faces.
 Characters stay billboards. Gameplay stays 2D. Be honest that true 3D would need a new engine.
 
-### 9. Bigger physics and two new physics games
+### 9. Bigger physics and two new physics games [DONE] (grids + CRASH LAB + WOBBLE WHEELS)
 - Scale up physics: more ragdolls and crates at once, sleeping, cheaper broad-phase, a
   stress-tested 60 FPS budget.
 - Flakboy-style sandbox: launch and abuse a crash-test-dummy ragdoll with weapons, explosives and
