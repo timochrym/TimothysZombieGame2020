@@ -19,15 +19,24 @@ var BW_SHOP = [
     { id: "blaster", label: "Blaster +", icon: "🔫", cost: { gold: 6 } },
     { id: "armor", label: "Armor +", icon: "🛡", cost: { gold: 10 } },
     { id: "tnt", label: "TNT", icon: "🧨", cost: { gold: 4 } },
-    { id: "diamond", label: "Diamond armor", icon: "💎", cost: { diamond: 3 } }
+    { id: "forge", label: "Team Forge", icon: "⚒", cost: { diamond: 2 } },       // team upgrades: diamonds from the middle island
+    { id: "sharp", label: "Team Sharp", icon: "🗡", cost: { diamond: 3 } }
 ];
+var BW_SUDDEN = 60 * 60 * 5;      // 5:00 in: every bed still standing breaks (no endless stalemates)
 var BW_RES = { iron: { color: "#e5e7eb", every: 70, cap: 40 }, gold: { color: "#facc15", every: 420, cap: 12 }, diamond: { color: "#22d3ee", every: 1100, cap: 4 } };
 
 var BW = {
     beds: [], gens: [], drops: [], shops: [],
     phase: "fight", winner: -1, endT: 0, tick: 0,
+    up: [], feed: [],
     VOID: -480
 };
+
+// kill feed (top right): kills, final kills, void falls, beds
+function bwFeed(text, color) {
+    BW.feed.push({ text: text, color: color || "#e2e8f0", t: BW.tick });
+    if (BW.feed.length > 6) BW.feed.shift();
+}
 
 // ---------------------------------------------------------------- map: two base islands + a diamond island
 (function() {
@@ -73,6 +82,8 @@ function bwKill(ch, by) {
     if (by && by.isPlayer && by !== ch) { by.bwIron = (by.bwIron || 0) + Math.floor((ch.bwIron || 0) / 2); by.bwGold = (by.bwGold || 0) + Math.floor((ch.bwGold || 0) / 2); by.kills = (by.kills || 0) + 1; }
     ch.bwIron = 0; ch.bwGold = 0;
     var who = (by && by.isPlayer && by !== ch) ? (by.playerLabel + " ⚔ ") : "";
+    var how = who ? (by.playerLabel + " ⚔ " + ch.playerLabel) : (ch.y < BW.VOID ? ch.playerLabel + " fell into the void" : ch.playerLabel + " died");
+    bwFeed(how + (bedAlive ? "" : "  — FINAL KILL"), bedAlive ? BW_TEAMS[team].color : "#fde047");
     Components.addFloatingText(who + ch.playerLabel + (bedAlive ? "" : " — ELIMINATED"), ch.x, Math.max(ch.y, 0) + 120, BW_TEAMS[team].color, 18);
     if (typeof SFX !== "undefined") SFX.play("hurt", ch.x, ch.y, 1, 0.8);
     if (bedAlive) ch.bwDeadT = 240; else ch.bwOut = true;
@@ -92,7 +103,12 @@ function bwCheckWin() {
 }
 
 function bwBuy(ch, item) {
-    var r = bwRes(ch);
+    var r = bwRes(ch), up = BW.up[bwTeamOf(ch)] || (BW.up[bwTeamOf(ch)] = { forge: 0, sharp: 0 });
+    var maxed = (item.id === "forge" && up.forge >= 2) || (item.id === "sharp" && up.sharp >= 1) || (item.id === "armor" && (ch.bwArmor || 0) >= 3) || (item.id === "blaster" && (ch.bwDmg || 0) >= 3);
+    if (maxed) {
+        if ((ch.bwNoCashT || 0) < BW.tick) { Components.addFloatingText("Maxed out", ch.x, ch.y + 110, "#fca5a5", 14); ch.bwNoCashT = BW.tick + 40; }
+        return false;
+    }
     for (var k in item.cost) if ((r[k] || 0) < item.cost[k]) {
         if ((ch.bwNoCashT || 0) < BW.tick) { Components.addFloatingText("Need " + item.cost[k] + " " + k, ch.x, ch.y + 110, "#fca5a5", 14); ch.bwNoCashT = BW.tick + 40; }
         return false;
@@ -103,8 +119,9 @@ function bwBuy(ch, item) {
     else if (item.id === "stone") mats.stone += 8;
     else if (item.id === "heal") ch.health = ch.maxHealth;
     else if (item.id === "blaster") ch.bwDmg = Math.min(3, (ch.bwDmg || 0) + 1);
-    else if (item.id === "armor") ch.bwArmor = Math.min(2, (ch.bwArmor || 0) + 1);
-    else if (item.id === "diamond") ch.bwArmor = 3;
+    else if (item.id === "armor") ch.bwArmor = Math.min(3, (ch.bwArmor || 0) + 1);
+    else if (item.id === "forge") { up.forge++; bwFeed(BW_TEAMS[bwTeamOf(ch)].name + " bought Forge " + up.forge + " (faster generator)", BW_TEAMS[bwTeamOf(ch)].color); }
+    else if (item.id === "sharp") { up.sharp = 1; bwFeed(BW_TEAMS[bwTeamOf(ch)].name + " bought Sharp (+25% team damage)", BW_TEAMS[bwTeamOf(ch)].color); }
     else if (item.id === "tnt") { var t = Object.addCrate(ch.x + (ch.lastFacing || 1) * 90, ch.y + 60, 70, "#e84545", { explosive: true, name: "TNT Barrel" }); t.xspeed = (ch.lastFacing || 1) * 6; t.yspeed = 6; if (typeof rebuildAllObjects === "function") rebuildAllObjects(); }
     Components.addFloatingText("+" + item.label, ch.x, ch.y + 110, "#86efac", 15);
     if (typeof SFX !== "undefined") SFX.play("pickup", ch.x, ch.y);
@@ -134,7 +151,11 @@ function bwBotThink(ch) {
     var blocks = mats.wood + mats.stone;
     if (ch.bwRestock && blocks >= 32) ch.bwRestock = false;
     if (blocks < 6) ch.bwRestock = true;
-    if (ch.bwRestock && (ch.bwIron || 0) >= 4 && onHome) { goalX = BW.shops[team][0].x; mode = "shop"; }
+    var tu = BW.up[team] || {}, upIdx = -1;
+    if ((ch.bwDiamond || 0) >= 2 && (tu.forge || 0) < 2) upIdx = BW_SHOP.findIndex(function(it) { return it.id === "forge"; });
+    else if ((ch.bwDiamond || 0) >= 3 && !tu.sharp) upIdx = BW_SHOP.findIndex(function(it) { return it.id === "sharp"; });
+    if (upIdx >= 0 && onHome) { goalX = BW.shops[team][upIdx].x; mode = "shop"; }
+    else if (ch.bwRestock && (ch.bwIron || 0) >= 4 && onHome) { goalX = BW.shops[team][0].x; mode = "shop"; }
     else if (ch.bwRestock && onHome && blocks < 16) { goalX = BW.gens[team].x; mode = "farm"; }
     else if (ch.bwRestock && !onHome && blocks === 0) { goalX = home; mode = "home"; }
     else if (near && myBed && !myBed.dead && Math.abs(near.x - myBed.x) < 500 && nd < 900) { goalX = near.x; goalY = near.y; mode = "defend"; }
@@ -223,13 +244,13 @@ GameModes.register({
 
     setupLevel: function(lvl) {
         BW.phase = "fight"; BW.winner = -1; BW.tick = 0; BW.drops = [];
-        BW.beds = []; BW.gens = []; BW.shops = [];
+        BW.beds = []; BW.gens = []; BW.shops = []; BW.feed = []; BW.up = [{ forge: 0, sharp: 0 }, { forge: 0, sharp: 0 }];
         for (let t = 0; t < 2; t++) {
             var side = BW_TEAMS[t].side;
             var bed = Object.addBox(side * 2380, 25, 160, 50, BW_TEAMS[t].color, { name: BW_TEAMS[t].name + " Bed", texture: t === 0 ? "wool_red" : "wool_blue", kind: "block" });
             bed.buildHP = bed.buildMaxHP = 160; bed.isBed = true; bed.bedTeam = t;
             BW.beds[t] = bed;
-            BW.gens[t] = { x: side * 3050, y: 0, team: t, t: 0, kinds: ["iron", "gold"] };
+            BW.gens[t] = { x: side * 3110, y: 0, team: t, t: 0, kinds: ["iron", "gold"] };
             BW.shops[t] = BW_SHOP.map(function(it, i) { return { x: side * (2600 + i * 70) - side * 0, y: 0, item: it, team: t }; });
             // lay the pedestals out between the bed and the spawn
             for (let i = 0; i < BW.shops[t].length; i++) BW.shops[t][i].x = side * (2500 + i * 75);
@@ -275,6 +296,7 @@ GameModes.register({
         if (ch.dead || BW.phase !== "fight") return true;
         if (ch.hitCooldown > 0) return true;
         var mult = [1, 0.8, 0.65, 0.5][ch.bwArmor || 0] * (attacker && attacker.bwDmg ? 1 + attacker.bwDmg * 0.3 : 1);
+        if (attacker && attacker.isPlayer && BW.up[bwTeamOf(attacker)] && BW.up[bwTeamOf(attacker)].sharp) mult *= 1.25;
         ch.health += amount * mult;
         ch.hitCooldown = 10;
         ch.hitFlashTimer = 6;
@@ -290,6 +312,7 @@ GameModes.register({
     onBreakPiece: function(obj, by) {
         if (!obj.isBed) return;
         var t = obj.bedTeam;
+        bwFeed("🛏 " + BW_TEAMS[t].name + " bed destroyed" + (by && by.playerLabel ? " by " + by.playerLabel : ""), BW_TEAMS[1 - t].color);
         showBanner(BW_TEAMS[t].name + " BED DESTROYED!", (by && by.playerLabel ? by.playerLabel + " broke it — " : "") + BW_TEAMS[t].name + " can no longer respawn", BW_TEAMS[1 - t].color);
         if (typeof SFX !== "undefined") SFX.play("explode", obj.x, obj.y, 1, 0.7);
         screenShake = Math.max(screenShake, 10);
@@ -308,6 +331,11 @@ GameModes.register({
             if (c.dead && !c.bwOut && c.bwDeadT > 0 && --c.bwDeadT === 0 && BW.phase === "fight") bwRespawn(c);
         }
         if (BW.phase === "over" && --BW.endT <= 0) gameOver = true;
+        if (BW.phase === "fight" && BW.tick === BW_SUDDEN) {
+            bwFeed("⏰ SUDDEN DEATH — all beds break", "#f97316");
+            for (let t = 0; t < BW.beds.length; t++) if (BW.beds[t] && !BW.beds[t].dead) Build.destroy(BW.beds[t], null, false);
+            if (BW.phase === "fight") showBanner("SUDDEN DEATH!", "Every bed is gone — last team standing wins", "#f97316");
+        }
     },
 
     update: function() {
@@ -322,7 +350,8 @@ GameModes.register({
             gen.t++;
             for (let k = 0; k < gen.kinds.length; k++) {
                 var kind = gen.kinds[k], R = BW_RES[kind];
-                if (gen.t % R.every === 0) {
+                var every = gen.team >= 0 && BW.up[gen.team] ? Math.round(R.every / (1 + 0.5 * BW.up[gen.team].forge)) : R.every;
+                if (gen.t % every === 0) {
                     var count = BW.drops.filter(function(d) { return d.kind === kind && Math.abs(d.x - gen.x) < 200; }).length;
                     if (count < R.cap) BW.drops.push({ kind: kind, x: gen.x + (Math.random() - 0.5) * 80, y: 30, t: 0 });
                 }
@@ -398,22 +427,37 @@ GameModes.register({
                 ctx.strokeStyle = BW_TEAMS[tm].color; ctx.lineWidth = 2; ctx.strokeRect(px - 28 * k, py - 26 * k, 56 * k, 26 * k);
                 uiText(sp.item.icon, px, py - 40 * k, Math.max(12, 26 * k), "#fff", "center", "800");
                 var near = characters.some(function(c) { return c.isPlayer && !c.isCPU && !c.dead && bwTeamOf(c) === tm && Math.abs(c.x - sp.x) < 36 && Math.abs((c.y - c.s2 / 2) - sp.y) < 60; });
-                if (near || k > 0.45) {
-                    var cs = []; for (var key in sp.item.cost) cs.push(sp.item.cost[key] + " " + key);
-                    uiText(sp.item.label, px, py - 78 * k - 4, near ? 13 : 10, near ? "#fde047" : "#cbd5e1", "center", "800");
-                    uiText(cs.join(" + ") + (near ? "  — press E" : ""), px, py - 78 * k + 12, near ? 12 : 9, near ? "#e2e8f0" : "#94a3b8", "center", "700");
+                var cs = []; for (var key in sp.item.cost) cs.push(sp.item.cost[key] + " " + key);
+                if (near) {
+                    // only the pedestal you stand on gets the full label (8 side by side would overlap)
+                    uiText(sp.item.label, px, py - 200 * k - 34, 14, "#fde047", "center", "900");
+                    uiText(cs.join(" + ") + "  — press E", px, py - 200 * k - 16, 12, "#e2e8f0", "center", "700");
+                } else if (k > 0.45) {
+                    var ic = { iron: "⬜", gold: "🟨", diamond: "💎" }, short = [];
+                    for (var key2 in sp.item.cost) short.push(sp.item.cost[key2] + ic[key2]);
+                    uiText(short.join(""), px, py - 66 * k - 6, 9, "#94a3b8", "center", "700");
                 }
             }
         }
     },
 
     drawHUD: function() {
-        uiPanel(14, 14, 420, 78, "#ef4444");
+        uiPanel(14, 14, 560, 78, "#ef4444");
         uiText("BED BRAWL", 30, 44, 22, "#fca5a5", "left", "900");
         for (let t = 0; t < 2; t++) {
             var bed = BW.beds[t];
             var alive = characters.filter(function(c) { return c.isPlayer && bwTeamOf(c) === t && !c.bwOut; }).length;
-            uiText(BW_TEAMS[t].name + " " + (bed && !bed.dead ? "🛏 ✔" : "🛏 ✖") + "  " + alive + " left", 180 + t * 130, 44, 14, BW_TEAMS[t].color, "left", "900");
+            var u0 = BW.up[t] || {};
+            uiText(BW_TEAMS[t].name + " " + (bed && !bed.dead ? "🛏 ✔" : "🛏 ✖") + "  " + alive + " left" + (u0.forge ? "  ⚒" + u0.forge : "") + (u0.sharp ? " 🗡" : ""), 180 + t * 180, 44, 14, BW_TEAMS[t].color, "left", "900");
+        }
+        var left = Math.max(0, BW_SUDDEN - BW.tick), anyBed = BW.beds.some(function(b) { return b && !b.dead; });
+        if (anyBed && BW.phase === "fight") uiText("⏰ beds break in " + Math.floor(left / 3600) + ":" + ("0" + Math.floor(left / 60) % 60).slice(-2), 400, 72, 13, left < 1800 ? "#f97316" : "#cbd5e1", "left", "900");
+        for (let i = 0; i < BW.feed.length; i++) {
+            var fe = BW.feed[i], age = BW.tick - fe.t;
+            if (age > 600) continue;
+            ctx.globalAlpha = Math.min(1, (600 - age) / 90);
+            uiText(fe.text, cssW - 20, 110 + i * 20, 13, fe.color, "right", "800");
+            ctx.globalAlpha = 1;
         }
         uiText("Format: " + (BW_FORMATS.filter(function(f) { return f[0] === bwCfg.format; })[0] || ["", ""])[1] + "  ·  Esc to change", 30, 72, 12, "#94a3b8", "left", "700");
         // resources for the people at this screen
@@ -448,11 +492,12 @@ GameModes.register({
     onRestart: function() { LevelManager.selectLevel("bedwars_sky"); },
     overSub: function() { return BW.winner >= 0 ? (BW_TEAMS[BW.winner].name + " team wins") : "Bed Brawl"; },
 
-    netState: function() { return { d: BW.drops.map(function(d) { return [d.kind.charAt(0), Math.round(d.x), Math.round(d.y)]; }), p: BW.phase, w: BW.winner, t: BW.tick, b: BW.beds.map(function(b) { return b ? b._nid : 0; }) }; },
+    netState: function() { return { d: BW.drops.map(function(d) { return [d.kind.charAt(0), Math.round(d.x), Math.round(d.y)]; }), p: BW.phase, w: BW.winner, t: BW.tick, b: BW.beds.map(function(b) { return b ? b._nid : 0; }), f: BW.feed, u: BW.up }; },
     applyNetState: function(s) {
         var map = { i: "iron", g: "gold", d: "diamond" };
         BW.drops = s.d.map(function(a) { return { kind: map[a[0]], x: a[1], y: a[2] }; });
         BW.phase = s.p; BW.winner = s.w; BW.tick = s.t;
+        if (s.f) BW.feed = s.f; if (s.u) BW.up = s.u;
         if (typeof Net !== "undefined") BW.beds = s.b.map(function(id) { return Net.objs.get(id) || { dead: true }; });
     }
 });

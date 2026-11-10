@@ -6,6 +6,43 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Bed Brawl — genre-feel pass (bed defence)
+
+**Shipped:** a kill feed in the top-right (who killed whom, FINAL KILL once a bed is gone, void falls, beds broken,
+upgrades bought; synced over LAN); team upgrades on two new pedestals paid with diamonds from the middle island —
+Forge (2 levels, generator ×1.5 / ×2) and Sharp (+25% damage for the whole team) — and the CPU bots go buy them when
+they carry diamonds; a sudden-death clock (beds break at 5:00, countdown in the HUD) so matches can't stall; armor
+upgrades to level 3 with gold (the diamond-armor pedestal made way for the upgrades); "Maxed out" instead of silently
+taking your resources.
+
+**Measured:** Forge 2 doubles iron (9 vs ~5 drops in 6 s); feed + sudden death verified headless; 3v3 bot match still
+ends with a winner at 82 s, 0 errors.
+
+**Went wrong:** 8 pedestals side by side made every label overlap → only the pedestal you stand on shows its full
+label (above your name tag), the others show a tiny cost. Upgrade icons collided with the format line → moved next
+to each team's name; the clock went to the second line.
+
+**Left / known:** fireball / bridge items, pickaxe tiers, more maps, 4 teams (TODO.md).
+
+---
+
+## Ragdoll Siege Birds — genre-feel pass (slingshot)
+
+**Shipped:** every fort opens with a 2-second fly-by over the fort before the camera pans back to the sling (any
+click/Space skips it); each shot leaves a dotted trail that stays until the next launch, so you can correct your aim;
+in Birds mode the next bird sits in the sling pouch (it showed a ragdoll before); hurt wood and glass blocks show crack
+lines that grow as they near breaking; score pop-ups for broken blocks (+250), popped zombies (+1000) and spare birds
+at the end (+1500 each).
+
+**Measured:** 3-bird run on Fort 2: trail 50–60 dots per shot, no errors; idle-bounce regression (both ammo modes,
+5 forts): 0 bounces at rest, 0 idle deaths — unchanged.
+
+**Went wrong:** nothing broke; the fly-by returns early from the mode's update, so it can't fire shots or end the level.
+
+**Left / known:** breakable stone, helmeted zombies, fort select with stars, score-based stars (TODO.md).
+
+---
+
 ## Stomp Squad — genre-feel pass (platformer)
 
 **Shipped:** hold RUN (Shift for P1, Right-Shift for P2, pad X/B) to build up to ~1.7× walking speed (walk is a touch

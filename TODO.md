@@ -31,7 +31,15 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - [x] Zombie Ball "Flail" style (pause menu → Style): one-button physics soccer — two big-headed, stiff-legged
       ragdoll players per team, tap = jump & kick, hold = tip forward, they stand back up; CPUs time presses.
 - [ ] Flail polish: goalkeepers, wind / big-head / ice modifiers, slow-mo replays of goals, 2-button variants.
-- [ ] Bed Brawl, Siege (Birds), Wobble Wheels, Crash Lab, Parkour Rush, Crate Lab, Portal Lab, Brawl: same pass —
+- [~] Siege Birds: DONE — opening fly-by over the fort (click skips), dotted trail of the last shot, the next bird sits
+      in the sling, crack lines on hurt wood/glass, +250 / +1000 / +1500 score pop-ups (blocks / zombies / spare
+      birds). STILL TO DO: stone blocks that can break, helmeted "boss" zombies, a fort-select screen with stars,
+      score-based star thresholds, a proper mid-flight camera follow on very long shots.
+- [~] Bed Brawl: DONE — kill feed (kills, FINAL KILLs, void falls, beds, upgrades), team upgrades bought with mid-island
+      diamonds (Forge ×2 = faster generator, Sharp = +25% team damage; bots buy them too), sudden death at 5:00 breaks
+      every bed, armor now goes to 3 from gold, cleaner shop labels. STILL TO DO: fireball & bridge-egg style items,
+      pickaxe tiers for breaking defenses, more maps / 4 teams, emerald-tier mid resource.
+- [ ] Wobble Wheels, Crash Lab, Parkour Rush, Crate Lab, Portal Lab, Brawl: same pass —
       list each genre's core feel features and close the gaps.
 
 ## Your suggestions not built yet (backlog, all original games in the genre — no copied names/art)
