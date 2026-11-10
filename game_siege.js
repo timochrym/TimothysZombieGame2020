@@ -109,6 +109,7 @@ function siegeBlockDamage() {
                 for (let k = 0; k < 8; k++) { if (particles.length >= 120) particles.shift(); particles.push({ x: o.x + (Math.random() - 0.5) * o.w, y: o.y + (Math.random() - 0.5) * o.h, w: 14, h: 14, xspeed: (Math.random() - 0.5) * 12, yspeed: 3 + Math.random() * 9, poly: Math.makeHitbox(14, 14), color: col, life: 40 }); }
                 if (typeof SFX !== "undefined") SFX.play(o.sgMat === "glass" ? "fizzle" : "kill", o.x, o.y, 0.6, o.sgMat === "glass" ? 1.6 : 0.9);
                 Siege.score += 250;
+                Components.addFloatingText("+250", o.x, o.y + 20, o.sgMat === "glass" ? "#bae6fd" : "#fde68a", 15);
                 SiegeSleep.wakeAround(o.x, o.y, 220);
             }
         }
@@ -118,7 +119,8 @@ function siegeBlockDamage() {
 var Siege = {
     phase: "aim", shots: [], shotIdx: 0, rd: null, rdType: null, flightT: 0, settleT: 0,
     angle: 40, power: 0.75, dragging: false, wasMouse: false, wasFire: false,
-    score: 0, kills: 0, enemyTotal: 0, resultT: 0, won: false
+    score: 0, kills: 0, enemyTotal: 0, resultT: 0, won: false,
+    trail: [], introT: 0
 };
 
 // ---- building pieces ----
@@ -255,6 +257,7 @@ function siegeFire() {
     var type = Siege.shots[Siege.shotIdx];
     if (!type || Siege.phase !== "aim") return;
     var v = siegeLaunchVel(), pp = [SIEGE_ANCHOR.x, SIEGE_ANCHOR.y + 10];   // released at the fork
+    Siege.trail = [];                                                      // the last shot's dotted path stays until the next one
     if (siegeSave.birds) {
         var bt = siegeBirdFor(type, Siege.shotIdx);
         var brd = siegeMakeBird(bt, pp[0], pp[1], v[0], v[1]);
@@ -315,6 +318,7 @@ GameModes.register({
         Siege.phase = "aim"; Siege.shots = sg.ammo.slice(); Siege.shotIdx = 0; Siege.rd = null;
         Siege.score = 0; Siege.kills = 0; Siege.resultT = 0; Siege.won = false; Siege.dragging = false;
         Siege.angle = 40; Siege.power = 0.75; Siege.wasMouse = mouseDown; Siege.wasFire = true;
+        Siege.trail = []; Siege.introT = 120;                                 // open on the fort, then pan back to the sling
         siegeSave.level = Math.max(0, SIEGE_LEVELS.indexOf(LevelManager.currentLevelKey)); saveSiege();
         zombies.length = 0;
         for (let i = 0; i < sg.enemies.length; i++) {
@@ -369,6 +373,7 @@ GameModes.register({
         var alive = siegeEnemiesLeft();
         var killedNow = Siege.enemyTotal - alive;
         if (killedNow > Siege.kills) { Siege.score += (killedNow - Siege.kills) * 1000; Siege.kills = killedNow; }
+        for (let i = 0; i < zombies.length; i++) { var dz = zombies[i]; if (dz.dead && !dz._sgScored) { dz._sgScored = true; Components.addFloatingText("+1000", dz.x, dz.y + 60, "#86efac", 18); } }
 
         // ---- input ----
         var md = mouseDown, fresh = md && !Siege.wasMouse;
@@ -384,6 +389,15 @@ GameModes.register({
         }
         var fireFresh = fireKey && !Siege.wasFire;
         Siege.wasFire = fireKey;
+        if (Siege.introT > 0) {
+            Siege.introT--;
+            if (fresh || fireFresh) Siege.introT = 0;     // any press skips the fly-by
+            return;
+        }
+        if (Siege.phase === "flight" && Siege.rd && Ragdolls.list.indexOf(Siege.rd) !== -1 && Siege.flightT % 3 === 0 && Siege.trail.length < 220) {
+            var tr = Siege.rd, big = (Siege.flightT / 3) % 3 === 0;
+            Siege.trail.push({ x: tr.pts.length === 1 ? tr.pts[0].x : tr.centerX(), y: tr.pts.length === 1 ? tr.pts[0].y : tr.centerY(), big: big });
+        }
 
         if (Siege.phase === "aim") {
             // keyboard aim
@@ -451,6 +465,7 @@ GameModes.register({
         var stars = 0;
         if (won) {
             Siege.score += left * 1500;
+            for (let b = 0; b < left; b++) Components.addFloatingText("+1500", SIEGE_ANCHOR.x + b * 50, SIEGE_ANCHOR.y + 140 + b * 30, "#fde047", 20);
             stars = left >= 2 ? 3 : (left >= 1 ? 2 : 1);
             siegeSave.stars[key] = Math.max(siegeSave.stars[key] || 0, stars);
             siegeSave.best[key] = Math.max(siegeSave.best[key] || 0, Siege.score);
@@ -491,6 +506,7 @@ GameModes.register({
     cameraTargets: function() {
         var lvl = LevelManager.getCurrentLevel();
         var fx = lvl.siege ? lvl.siege.focusX : 700;
+        if (Siege.introT > 50) return [{ x: fx - 150, y: 200 }, { x: fx + 350, y: 420 }];
         var pts = [{ x: SIEGE_ANCHOR.x - 150, y: 150 }, { x: fx + 350, y: 300 }];
         if (Siege.rd && Ragdolls.list.indexOf(Siege.rd) !== -1) pts.push({ x: Siege.rd.centerX(), y: Math.min(1600, Siege.rd.centerY()) });
         return pts;
@@ -501,6 +517,8 @@ GameModes.register({
         var k = cameraScaleX;
         var ax = SIEGE_ANCHOR.x, ay = SIEGE_ANCHOR.y;
         ctx.save();
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        for (let i = 0; i < Siege.trail.length; i++) { var tp = Siege.trail[i]; ctx.beginPath(); ctx.arc(wsx(tp.x), wsy(tp.y), (tp.big ? 5 : 3) * Math.max(0.6, k), 0, 7); ctx.fill(); }
         ctx.lineCap = "round";
         ctx.strokeStyle = "#5b3a1e"; ctx.lineWidth = 16 * k;
         ctx.beginPath(); ctx.moveTo(wsx(ax), wsy(200)); ctx.lineTo(wsx(ax), wsy(ay - 50)); ctx.lineTo(wsx(ax - 26), wsy(ay + 10)); ctx.stroke();
@@ -535,7 +553,10 @@ GameModes.register({
             var pp = siegePouch();
             var type = Siege.shots[Siege.shotIdx];
             // loaded shot: a little pixel-art body in the pouch
-            if (type) {
+            if (type && siegeSave.birds) {
+                var bt = siegeBirdFor(type, Siege.shotIdx);
+                siegeDrawBird({ pts: [{ x: pp[0], y: pp[1], px: pp[0] - 1, py: pp[1], r: BIRDS[bt].r }], birdType: bt });
+            } else if (type) {
                 var col = AMMO[type].color;
                 PixelArt.draw(PixelArt.sprites.shot, wsx(pp[0]) - 18 * k, wsy(pp[1]) - 18 * k, 4 * k, { b: col, f: "#f2c9a0", e: "#0a0f16", w: type === "bomb" ? "#ffd23f" : col });
             }
@@ -544,6 +565,22 @@ GameModes.register({
         }
         ctx.strokeStyle = "#7a4d26"; ctx.lineWidth = 12 * k;
         ctx.beginPath(); ctx.moveTo(wsx(ax), wsy(ay - 50)); ctx.lineTo(wsx(ax + 26), wsy(ay + 10)); ctx.stroke();
+        // cracks on hurt wood / glass (Birds): more lines the closer the block is to breaking
+        ctx.lineWidth = Math.max(1, 2 * k);
+        for (let i = 0; i < movingObjects.length; i++) {
+            var o = movingObjects[i];
+            if (o.dead || o.sgHP === undefined || o.sgHP >= o.sgMax * 0.8) continue;
+            var n = Math.min(5, 1 + Math.floor((1 - o.sgHP / o.sgMax) * 5)), seed = (o.id || i) * 9301 + 49297;
+            var rnd = function() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+            ctx.strokeStyle = o.sgMat === "glass" ? "rgba(255,255,255,0.85)" : "rgba(40,22,8,0.85)";
+            var cx = wsx(o.x), cy = wsy(o.y), hw = o.w / 2 * k, hh = o.h / 2 * k;
+            for (let c = 0; c < n; c++) {
+                var px = cx + (rnd() - 0.5) * hw * 0.6, py = cy + (rnd() - 0.5) * hh * 0.6, a = rnd() * 6.28;
+                ctx.beginPath(); ctx.moveTo(px, py);
+                for (let s = 0; s < 3; s++) { a += (rnd() - 0.5) * 1.2; px += Math.cos(a) * hw * 0.35; py += Math.sin(a) * hh * 0.35; px = Math.max(cx - hw, Math.min(cx + hw, px)); py = Math.max(cy - hh, Math.min(cy + hh, py)); ctx.lineTo(px, py); }
+                ctx.stroke();
+            }
+        }
         // enemy hp pips
         for (let i = 0; i < zombies.length; i++) {
             var z = zombies[i];
@@ -580,7 +617,8 @@ GameModes.register({
         if (Siege.phase === "aim" && nxt && siegeSave.birds) { var NB = BIRDS[siegeBirdFor(nxt, Siege.shotIdx)]; uiText("NEXT BIRD: " + NB.name.toUpperCase() + " - " + NB.desc, 30 + Siege.shots.length * 30 + 10, ty, 11, NB.color === "#1f2937" || NB.color === "#334155" ? "#cbd5e1" : NB.color, "left", "800"); }
         if (Siege.phase === "flight" && Siege.rdType === "bird" && Siege.rd && !Siege.rd.abilityUsed && Siege.rd.birdType !== "red") uiText("CLICK / SPACE: " + BIRDS[Siege.rd.birdType].desc.replace("Tap: ", "").toUpperCase(), cssW / 2, 110, 22, "#fde047", "center", "900");
         if (Siege.phase === "flight" && Siege.rdType === "bomb" && Siege.rd) uiText("CLICK / SPACE TO DETONATE!", cssW / 2, 110, 24, "#f97316", "center", "900");
-        if (Siege.phase === "aim") uiText("angle " + Math.round(Siege.angle) + "°   power " + Math.round(Siege.power * 100) + "%", cssW / 2, 100, 16, "#e2e8f0", "center", "800");
+        if (Siege.introT > 0) uiText("Fort " + (n + 1) + ": " + (lvl.title || "") + "  ·  " + siegeEnemiesLeft() + " zombies  ·  click to skip", cssW / 2, 110, 20, "#fde68a", "center", "900");
+        else if (Siege.phase === "aim") uiText("angle " + Math.round(Siege.angle) + "°   power " + Math.round(Siege.power * 100) + "%", cssW / 2, 100, 16, "#e2e8f0", "center", "800");
         uiText("Drag the mouse to pull & release to fire · or W/S aim, A/D power, Space fire · right-click/Tab swap shot · R retry · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
     },
 
