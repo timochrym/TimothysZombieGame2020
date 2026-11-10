@@ -138,3 +138,37 @@ Characters stay billboards. Gameplay stays 2D. Be honest that true 3D would need
   props; a damage meter scores it.
 - Happy Wheels-style game: a ragdoll rider on vehicles (bike, wheelchair, cart) with wheel/joint
   constraints over obstacle courses with traps; the rider detaches on big hits (no gore).
+
+## Backlog (added after section 6) — do after sections 7-9 and the three feedback items
+
+All new games are ORIGINAL games in the named genre (own name, art, rules text); the reference is only for the
+kind of mechanics. Mark items `[DONE]` as they ship.
+
+### B1. Feel & polish (engine-wide, cheap, every game benefits)
+- Bouncing bullets: optional ricochet off walls (per-weapon / per-mode flag, max bounces).
+- Grab and throw players (heroes, CPU fighters, ragdolls) with the existing grab key; thrown players ragdoll.
+- Punchy melee: a zoomed-in, ragdoll-driven punch/kick attack with hit-stop and knockback.
+- Faster movement option (speed setting / mode flag).
+- Optional weight factor on every object (`weight`): affects pushing, throwing, explosions and pressure plates;
+  editable in Level Studio.
+- Calmer screens during big waves: cap floating texts / sparks, merge damage numbers, a "reduce effects" setting.
+
+### B2. Vehicles (pairs with section 9)
+- Driveable cars (enter/exit, wheel physics, ramps, crashes).
+- Train / minecart on placeable rails (Level Studio piece), riders and cargo.
+
+### B3. World generation
+- Frontier generates lower (more underground) terrain.
+- Terraria-like generation: layered dirt/stone, caves, ores, surface biomes, trees.
+- Block-game capabilities: dig and place tiles in the generated world (builds on `build.js`).
+
+### B4. New games (original, genre-inspired)
+- Cell arena: grow by eating pellets and smaller cells, split, eject mass (agar-style).
+- Tank arena: shoot shapes for XP, level up, choose upgrades and tank classes (diep-style).
+- Snake arena: steer a growing snake, boost, cut others off (slither-style).
+- Word sandbox: type a noun, it appears with sensible behaviour (scribblenauts-style).
+- Endless jetpack runner: hold to fly, dodge lasers/missiles, collect coins (jetpack-joyride-style).
+- Board party: dice board + quick minigames between turns, stars/coins (party-board-style).
+- Property board game: buy, trade, build, rent (original property-trading game).
+- Powder toy: falling-sand sandbox (sand, water, fire, oil, plants, lava, walls).
+- 2-player minigame pack (gamepigeon-style), led by tabletop flick soccer (turn-based, flick discs into the goal).
