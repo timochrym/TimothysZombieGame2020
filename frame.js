@@ -1106,6 +1106,7 @@ function frame() {
 
     drawHUD();
     if (typeof Build !== "undefined") Build.drawHUD();
+    if (typeof PlayersBadge !== "undefined") PlayersBadge.draw();
     if (typeof Net !== "undefined" && Net.role === "host") Net.hostFrame();
 }
 
@@ -1202,6 +1203,7 @@ function pauseItems() {
     } else if (GameModes.flag("coopToggle", true)) {
         items.push({ id: "mode", label: "Players:  " + (multiplayer ? "2-player co-op" : "Solo") + "   ▶  " + (multiplayer ? "Solo" : "Co-op"), hint: "Enter switches mode (restarts the run)" });
     }
+    if (typeof PlayersUI !== "undefined") items.splice(Math.min(items.length, 2), 0, { id: "players", label: "👥 Players & CPUs…   " + PlayersUI.summary(), hint: "Who is human, who is CPU, teams and controls" });
     items.push({ id: "skin0", label: "Player 1 character:  ◀  " + skinName(heroSkins[0]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
     if (multiplayer && (!inBrawl || (brawlCfg.opponents.indexOf("p2") === 0))) items.push({ id: "skin1", label: "Player 2 character:  ◀  " + skinName(heroSkins[1]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
     if (!inBrawl && !GameModes.has("menuItems") && pauseLevelKeys.length > 1) {
@@ -1229,6 +1231,7 @@ function pauseActivate(id, dir) {
     if (id === "shidpi") { settings.hiDPI = !settings.hiDPI; renderScaleAutoReduced = false; saveSettings(); applyCanvasSize(); xcMaster = w / 2; ycMaster = h / 2; return; }
     if (GameModes.call("onMenu", id, dir)) return;
     if (id === "arcade") { closePause(); Hub.openHub(false); return; }
+    if (id === "players") { closePause(); PlayersUI.open(); return; }
     if (id === "resume") closePause();
     else if (id === "again" || id === "yes") {
         closePause();

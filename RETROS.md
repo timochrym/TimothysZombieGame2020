@@ -6,6 +6,25 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Players panel — "better multiplayer and CPU toggles, make it way clearer"
+
+**Shipped:** `players.js`. One **👥 Players** panel (top-bar button, which now reads e.g. "👥 1 player + 3 CPU", and a
+pause-menu row) for every game: line-up cards that spell out each slot (🎮 P1 WASD + mouse, 🎮 P2 arrows, 🤖 CPU) per
+team; CPU skill; the full control map for P1 and P2; connected gamepads; LAN status with a button to the LAN panel;
+and a live roster of who is in the match (human / CPU / LAN, team, down or not). After any change a short
+"P1 + CPU1 vs CPU2 + CPU3" badge shows in-game. Esc now closes this panel and the LAN panel from anywhere.
+
+**Measured:** Soccer 1v1 → 2v2 (roster P1, CPU1 red vs CPU2, CPU3 blue); Survival solo → co-op (button "👥 2 players");
+Brawl → "P1 vs CPU 1 vs CPU 2". No errors.
+
+**Went wrong:** Esc didn't close the panel unless it had keyboard focus (same latent bug in the LAN panel) — fixed
+with a page-level handler.
+
+**Left / known:** per-slot "Human / CPU / Off" toggles for arbitrary custom line-ups aren't possible yet — each game
+still offers its fixed formats; gamepads can't be reassigned to other slots.
+
+---
+
 ## Feedback fixes: Zombie Ball ball, Siege bouncing, Birds mode
 
 **Zombie Ball:** the ball is now a real zombie ragdoll (its spine follows the ball's reliable circle core; head and

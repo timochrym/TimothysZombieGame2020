@@ -327,7 +327,8 @@ var DevUI = {
         var coopBtn = document.getElementById("coop-btn");
         if (coopBtn) {
             coopBtn.classList.toggle("active", multiplayer || brawl.active);
-            coopBtn.innerHTML = brawl.active ? (brawlCfg.opponents === "p2" ? "👥 PvP" : "🤖 vs CPU") : (multiplayer ? "👥 Co-op: ON" : "👤 Solo");
+            var humans = characters.filter(function(c) { return c.isPlayer && !c.isCPU; }).length, cpus = characters.filter(function(c) { return c.isPlayer && c.isCPU; }).length;
+            coopBtn.innerHTML = "👥 " + humans + (humans === 1 ? " player" : " players") + (cpus ? " + " + cpus + " CPU" : "");
         }
         var godBtn = document.getElementById("god-mode-btn");
         if (godBtn) {
@@ -559,7 +560,7 @@ SummonManager.buildUI = function() {
         topBar.appendChild(b);
         return b;
     };
-    mk("coop-btn", "👤 Solo", "Toggle 2-player co-op (restarts the run)", function() { toggleMultiplayer(); DevUI.sync(); });
+    mk("coop-btn", "👥 Players", "Who's playing: humans, CPUs, teams, controls", function() { PlayersUI.open(); });
     mk("", "🌲 Frontier", "Procedural frontier with the giant castle", function() { LevelManager.selectLevel("infinite_frontier"); });
     mk("god-mode-btn", "⚡ God Mode [V]", "Invincible + unlimited everything", function() { SummonManager.toggleGodMode(); DevUI.sync(); }, true);
     mk("lan-btn", "📡 LAN", "Local network multiplayer: host or join a game on the same Wi-Fi", function() { NetUI.open(); });
