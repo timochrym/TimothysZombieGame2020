@@ -6,6 +6,29 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Rent Rush (new game, B4 — property board game) — B4 complete
+
+**Shipped:** `game_property.js` (ownScreen): an original property game on a 7×7 ring of 24 spaces — five colour
+groups of three streets with made-up names, two transit lines (rent doubles per line owned), chance ×3, city tax
+(feeds a pot you win on the Lounge corner), Detention (go-to-detention corner, three doubles, a chance card; you miss a
+turn) and START (+200). Two dice; doubles roll again. Land on an unowned street → BUY / SKIP; others pay rent; a whole
+colour doubles base rent and unlocks houses (1-3, rent ×4 / ×9 / ×16, half the street price each). Short of cash you
+sell houses then streets back at a loss; still short = bankrupt. Ends when one player is left or at the round limit
+(richest net worth wins). Buttons on screen + keys (P1 Space / X / H, P2 Enter / ' / .), pads 3-4 join, CPUs buy
+when it completes a set or keeps a cash cushion and build when rich. Side panel: cash, net worth, colour chips, log.
+
+**Measured:** two unattended games (20 and 10 rounds, 1 human + 3 CPUs) played to a winner; a CPU completed a set
+and built 9 houses; rent, tax pot, chance and detention all fired; no errors.
+
+**Went wrong:** (1) a chance card that moved you back onto a street lost its buy offer, and a bankruptcy that ended
+the game got overwritten — both by an unconditional "after" phase → guarded. (2) Dark HUD-style text with an outline
+was unreadable on the light board → plain text for the board.
+
+**Left / known:** trading, mortgages, auctions (TODO.md). **With this, all nine B4 suggestions exist as games** (some
+marked [~] with follow-ups in TODO.md).
+
+---
+
 ## Party Board (new game, B4 — dice board party)
 
 **Shipped:** `game_party.js` (ownScreen): a 28-space loop on a green island. Each turn the die spins until you hit your

@@ -162,13 +162,14 @@ kind of mechanics. Mark items `[DONE]` as they ship.
 - Terraria-like generation: layered dirt/stone, caves, ores, surface biomes, trees.
 - Block-game capabilities: dig and place tiles in the generated world (builds on `build.js`).
 
-### B4. New games (original, genre-inspired)
-- Cell arena: grow by eating pellets and smaller cells, split, eject mass (agar-style).
-- Tank arena: shoot shapes for XP, level up, choose upgrades and tank classes (diep-style).
-- Snake arena: steer a growing snake, boost, cut others off (slither-style).
-- Word sandbox: type a noun, it appears with sensible behaviour (scribblenauts-style).
-- Endless jetpack runner: hold to fly, dodge lasers/missiles, collect coins (jetpack-joyride-style).
-- Board party: dice board + quick minigames between turns, stars/coins (party-board-style).
-- Property board game: buy, trade, build, rent (original property-trading game).
-- Powder toy: falling-sand sandbox (sand, water, fire, oil, plants, lava, walls).
-- 2-player minigame pack (gamepigeon-style), led by tabletop flick soccer (turn-based, flick discs into the goal).
+### B4. New games (original, genre-inspired) [DONE] — first versions of all nine; follow-ups in TODO.md
+- Cell arena → **Blob Arena** (`game_cells.js`). [DONE]
+- Tank arena → **Tank Arena** (`game_tanks.js`). [DONE]
+- Snake arena → **Worm Arena** (`game_snake.js`). [DONE]
+- Word sandbox → **Word Lab** (`game_words.js`). [DONE] (more nouns / rooms to come)
+- Endless jetpack runner → **Jet Dash** (`game_jetpack.js`). [DONE]
+- Board party → **Party Board** (`game_party.js`). [DONE] (more minigames to come)
+- Property board game → **Rent Rush** (`game_property.js`). [DONE] (no trading yet)
+- Powder toy → **Sand Lab** (`game_powder.js`). [DONE]
+- 2-player minigame pack → **Table Games** (`game_table.js`): Flick Soccer + Four in a Row. [DONE] (more minigames to come)
+- Engine: the `ownScreen` flag lets a game draw the whole screen itself (all of the above except Word Lab use it).

@@ -23,6 +23,7 @@ var HUB_ICONS = {
     table: { s: ["gggggggggg", "gw......wg", "gw..ww..wg", "g.r....b.g", "g...ow...g", "g.r....b.g", "gw..ww..wg", "gw......wg", "gggggggggg", ".........."], p: { g: "#22c55e", w: "#f8fafc", r: "#ef4444", b: "#3b82f6", o: "#0a0f16" } },
     words: { s: ["..........", ".yyyyyyyy.", ".y......y.", ".y.ww.w.y.", ".y......y.", ".y.w.ww.y.", ".y......y.", ".yyyyyyyy.", "....yy....", "...yyyy..."], p: { y: "#fde047", w: "#f8fafc" } },
     party: { s: ["..........", ".wwww.....", ".w..w.yy..", ".w.bw.yy..", ".wwww.....", "....r.....", "..r...b...", ".b..y...r.", "..........", ".........."], p: { w: "#f8fafc", b: "#3b82f6", r: "#ef4444", y: "#fde047" } },
+    property: { s: ["..........", "....rr....", "...rrrr...", "..rrrrrr..", ".rrrrrrrr.", "..wwwwww..", "..wwddww..", "..wwddww..", "..wwddww..", "gggggggggg"], p: { r: "#ef4444", w: "#f8fafc", d: "#92400e", g: "#16a34a" } },
     race: { s: ["pkwkwkwk..", "pwkwkwkw..", "pkwkwkwk..", "pwkwkwkw..", "p.........", "p.........", "p.........", "p.........", "p.........", "pp........"], p: { p: "#e5e7eb", k: "#111827", w: "#f8fafc" } }
 };
 
