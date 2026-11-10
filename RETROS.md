@@ -77,6 +77,11 @@ speed burst), Boulder (tap: slam down), Boomer (tap: explode) — and fort block
 glass shatters (+250 each). Toggle in the Siege pause menu. Verified: shots launch, abilities fire, a zombie was
 knocked out and a block shattered, no errors.
 
+**Follow-up ("after more than 2 throws the blocks bounce and kill everything"):** reproduced on the code from before
+the fix — fort 4 with bodies piled in: 20 bounces while idle, crates moving for the whole 6 s, 2 zombies dying on
+their own. On the fixed code, all 5 forts × ragdolls and birds × 5 bodies each: 0 bounces, 0 movement, 0 idle deaths.
+`main` only got the fix just now, which is likely what you were playing. The check lives in `tests/siege_rest.js`.
+
 **Left / known:** bird abilities are assigned by shot slot, not chosen per level; stone stays unbreakable.
 
 ---
