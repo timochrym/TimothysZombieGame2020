@@ -116,6 +116,35 @@ function siegeBlockDamage() {
     }
 }
 
+// stone: birds that hit it hard (and explosions) wear it down; at 0 it shatters and what it held up falls
+function siegeStoneHit(o, dmg) {
+    if (o.dead || o.sgHP === undefined || dmg <= 0) return;
+    o.sgHP -= dmg; o.hitFlash = 6;
+    if (o.sgHP > 0) return;
+    Build.destroy(o, null, false);
+    Siege.score += 500;
+    Components.addFloatingText("+500", o.x, o.y + 30, "#e5e7eb", 16);
+    SiegeSleep.wakeAround(o.x, o.y, Math.max(o.w, o.h) + 200);
+}
+function siegeStoneDamage() {
+    var stones = staticObjects.filter(function(o) { return o.sgMat === "stone" && !o.dead; });
+    if (!stones.length) return;
+    for (let r = 0; r < Ragdolls.list.length; r++) {
+        var rd = Ragdolls.list[r];
+        if (!rd.birdType) continue;
+        var p = rd.pts[0], sp = Math.hypot(p.x - p.px, p.y - p.py);
+        if (sp < 6 || (rd._stoneCd || 0) > Siege.tick) continue;
+        for (let k = 0; k < stones.length; k++) {
+            var o = stones[k];
+            if (Math.abs(p.x - o.x) < o.w / 2 + p.r + 4 && Math.abs(p.y - o.y) < o.h / 2 + p.r + 4) {
+                siegeStoneHit(o, (sp - 5) * (rd.birdType === "heavy" ? 45 : 14));
+                rd._stoneCd = Siege.tick + 20;
+                break;
+            }
+        }
+    }
+}
+
 var Siege = {
     phase: "aim", shots: [], shotIdx: 0, rd: null, rdType: null, flightT: 0, settleT: 0,
     angle: 40, power: 0.75, dragging: false, wasMouse: false, wasFire: false,
@@ -338,6 +367,12 @@ GameModes.register({
             o.sgHP = o.sgMax = m.hp; o.sgMat = m.name; o._sgCd = 90;
             if (m.name === "glass") { o.color = "#93c5fd"; o.texture = "glass"; }
         }
+        // Birds: fort stone is breakable too (never the stone the slingshot stands on)
+        for (let i = 0; i < staticObjects.length; i++) {
+            var so = staticObjects[i];
+            so.sgHP = undefined;
+            if (siegeSave.birds && so.name === "Stone" && so.x > SIEGE_ANCHOR.x + 300) { so.sgHP = so.sgMax = 240; so.sgMat = "stone"; so._sgCd = 0; }
+        }
     },
 
     createPlayers: function() {
@@ -363,11 +398,14 @@ GameModes.register({
         }
     },
 
-    onExplosion: function(x, y, radius) { SiegeSleep.wakeAround(x, y, radius * 1.3); },
+    onExplosion: function(x, y, radius) {
+        SiegeSleep.wakeAround(x, y, radius * 1.3);
+        staticObjects.slice().forEach(function(o) { if (o.sgMat === "stone" && Math.hypot(o.x - x, o.y - y) < radius + Math.max(o.w, o.h) / 2) siegeStoneHit(o, 160); });
+    },
 
     update: function() {
         SiegeSleep.update();
-        if (siegeSave.birds) siegeBlockDamage();
+        if (siegeSave.birds) { siegeBlockDamage(); Siege.tick = (Siege.tick || 0) + 1; siegeStoneDamage(); }
         // remember enemy velocities for next frame's impact check
         for (let i = 0; i < zombies.length; i++) { zombies[i]._pvx = zombies[i].xspeed; zombies[i]._pvy = zombies[i].yspeed; }
         var alive = siegeEnemiesLeft();
@@ -567,8 +605,9 @@ GameModes.register({
         ctx.beginPath(); ctx.moveTo(wsx(ax), wsy(ay - 50)); ctx.lineTo(wsx(ax + 26), wsy(ay + 10)); ctx.stroke();
         // cracks on hurt wood / glass (Birds): more lines the closer the block is to breaking
         ctx.lineWidth = Math.max(1, 2 * k);
-        for (let i = 0; i < movingObjects.length; i++) {
-            var o = movingObjects[i];
+        var crackList = movingObjects.concat(staticObjects.filter(function(q) { return q.sgMat === "stone"; }));
+        for (let i = 0; i < crackList.length; i++) {
+            var o = crackList[i];
             if (o.dead || o.sgHP === undefined || o.sgHP >= o.sgMax * 0.8) continue;
             var n = Math.min(5, 1 + Math.floor((1 - o.sgHP / o.sgMax) * 5)), seed = (o.id || i) * 9301 + 49297;
             var rnd = function() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };

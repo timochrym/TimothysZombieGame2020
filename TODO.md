@@ -33,10 +33,12 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - [x] Flail polish: goalkeepers (on by default; they hold the goal line and spring straight up), modifiers in the
       pause menu (Wind with gusts that change after goals, Big heads, Ice pitch, Random each match), slow-mo on goals.
       Not done (low value for now): a 2-button variant, full instant replays.
-- [~] Siege Birds: DONE — opening fly-by over the fort (click skips), dotted trail of the last shot, the next bird sits
-      in the sling, crack lines on hurt wood/glass, +250 / +1000 / +1500 score pop-ups (blocks / zombies / spare
-      birds). STILL TO DO: stone blocks that can break, helmeted "boss" zombies, a fort-select screen with stars,
-      score-based star thresholds, a proper mid-flight camera follow on very long shots.
+- [x] Siege Birds: opening fly-by over the fort (click skips), dotted trail of the last shot, the next bird sits in the
+      sling, crack lines on hurt wood/glass/stone, +250 / +500 / +1000 / +1500 pop-ups, and breakable fort STONE in
+      Birds mode (bird impacts, especially the Boulder, and explosions; what it holds up falls). Helmeted zombies are
+      the existing Knights; the pause menu's Fort row already shows each fort's stars.
+      Left for the polish pass with you: more stone in the forts, score-based star thresholds vs the current
+      "spare birds" rule (a design call).
 - [~] Bed Brawl: DONE — kill feed (kills, FINAL KILLs, void falls, beds, upgrades), team upgrades bought with mid-island
       diamonds (Forge ×2 = faster generator, Sharp = +25% team damage; bots buy them too), sudden death at 5:00 breaks
       every bed, armor now goes to 3 from gold, cleaner shop labels. STILL TO DO: fireball & bridge-egg style items,

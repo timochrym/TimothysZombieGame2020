@@ -6,6 +6,17 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Siege Birds: breakable stone
+
+**Shipped:** in Birds mode the fort's stone blocks (never the one the slingshot stands on) have 240 HP: a bird that
+hits stone fast enough chips it (the Boulder ~3× harder), explosions take 160, cracks appear as it weakens, and at 0
+it shatters (+500), waking the sleeping blocks around it so whatever it held up comes down.
+
+**Measured:** fort 4 — a Boulder chip, then two blasts → both stone pillars gone, score 3750; the idle-bounce
+regression in Birds mode on all 5 forts is still 0 bounces / 0 idle deaths.
+
+---
+
 ## Stomp Squad course themes (+ engine `drawBack` hook)
 
 **Shipped:** a new `drawBack()` mode hook (drawn behind the level pieces, over the scenery). Stomp Squad uses it so the
