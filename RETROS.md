@@ -6,6 +6,28 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Word Lab (new game, B4 — type-a-thing sandbox)
+
+**Shipped:** `game_words.js`, built on the normal platformer engine (hero, physics, monsters, gadgets). Five rooms —
+High Shelf, The Gap, Guarded, Vault, Sky Star — each with a star you can't reach as-is. Enter or T opens a real text
+box at the bottom; what you type appears at the mouse (or next to you if the mouse is inside a wall). It knows about
+90 nouns, mapped onto engine pieces: crates / boulders / TNT / bouncy balls, walls, platforms, bridges, clouds,
+staircases, ramps, trampolines, fans, cars, ten monster kinds, crash dummies, power-ups (medkit, shield, gun, boots,
+sword, ice, lightning, magnet), explosions and a jetpack. Adjectives stack: size (big / huge / giant / tiny…),
+heavy / light, bouncy, explosive, 13 colours, angry monsters (double health). Unknown words get "I don't know X yet"
+with suggestions; "star", "key", "portal"… get "Nice try!". Words used vs par → 1-3 stars per room, saved. No game
+over: losing all health just puts you back at the room start. Pause menu: room select + word list.
+
+**Measured:** "big stairs" → 10 steps, the hero walked up and took the star with 1 word (3 stars), next room loaded;
+12 more words (bridge, heavy red crate, tiny bouncy ball, angry knight, trampoline, car, tnt, fan, medkit, jetpack,
+cloud, dummy) all spawned; no errors.
+
+**Went wrong:** escaped quotes in two strings came out double-escaped (a syntax error) → fixed before the first run.
+
+**Left / known:** more nouns and verbs, more rooms (TODO.md).
+
+---
+
 ## Table Games (new game, B4 — 2-player minigame pack)
 
 **Shipped:** `game_table.js` (ownScreen) with two original tabletop games, picked in the pause menu (Game / Opponent /

@@ -77,7 +77,11 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - [x] B4 — Snake arena (slither-style) → **Worm Arena**: round arena, mouse / A-D steering, boost burns length and drops
       food, head-into-body kills and bursts into pellets, 11 CPU worms that hunt food and cut smaller worms off,
       leaderboard, minimap, best length, local P2 (shared zooming camera), pads. Next: LAN, skins, team mode.
-- [ ] B4 — Word sandbox (scribblenauts-style): type a noun, it appears with sensible behaviour.
+- [~] B4 — Word sandbox → **Word Lab**: 5 rooms with a star to reach; Enter/T opens a text box; ~90 nouns (crates,
+      boulders, TNT, balls, walls, platforms, bridges, clouds, stairs, ramps, trampolines, fans, cars, 10 monster kinds,
+      dummies, power-ups, jetpack, explosions) + adjectives (big/huge/tiny, heavy/light, bouncy, explosive, 13 colours,
+      angry); unknown and "cheat" words get a reply; 3 stars for meeting the word par. STILL TO DO: many more nouns
+      (water, rope, balloon that lifts, animals that follow you), more rooms, verbs ("fly", "shrink").
 - [x] B4 — Endless jetpack runner → **Jet Dash**: hold to fly, speeds up over distance, zappers (static, gates,
       spinning), missiles that lock on behind a blinking ! warning, laser beams that charge then fire, coin ribbons,
       shield bubble, best distance + banked coins, local P2 on the same run, pads. Next: a coin shop (outfits,
