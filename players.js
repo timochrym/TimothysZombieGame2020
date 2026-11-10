@@ -45,6 +45,16 @@ var PlayersUI = {
 
     // "P1 (keyboard) + CPU vs 2 CPUs" style one-liner of the match as it is right now
     summary: function() {
+        // full-screen games: describe the seats (their heroes are hidden placeholders)
+        if (GameModes.flag("ownScreen", false) && GameModes.has("seats")) {
+            var parts = [];
+            GameModes.call("seats").forEach(function(st) {
+                if (st.count) { if (st.value) parts.push(st.value + " CPU" + (st.value > 1 ? "s" : "")); }
+                else if (st.value === "human") parts.push("🎮 " + st.label.split(" ")[0]);
+                else if (st.value === "cpu") parts.push("🤖 CPU");
+            });
+            return parts.join(" + ");
+        }
         var cs = characters.filter(function(c) { return c.isPlayer; });
         if (!cs.length) return "";
         var teams = {};
@@ -109,7 +119,10 @@ var PlayersUI = {
         var teamCols = L.ffa ? ["#ff4d52", "#94a3b8"] : ["#ff5a5f", "#3da5ff"];
         var title = GameModes.current ? GameModes.current.title : "";
         var h = "<div class='card'><h2>👥 Players — " + title + "</h2><div class='muted'>Right now: <b>" + (this.summary() || "—") + "</b></div>";
-        h += "<h3>Who's playing</h3><div class='grid'>";
+        var hasSeats = GameModes.has("seats") && (L.kind === "coop" || L.kind === "single");
+        if (hasSeats) L = { kind: L.kind, current: "", list: [] };      // the seat rows below replace the solo / co-op cards
+        if (L.list.length) h += "<h3>Who's playing</h3>";
+        h += "<div class='grid'>";
         L.list.forEach(function(o, i) {
             var teams = o[2];
             var body = teams.map(function(t, ti) { return "<div class='team'>" + t.map(function(s) { return self.chip(s, teamCols[ti] || "#64748b"); }).join("") + "</div>"; })
@@ -117,8 +130,24 @@ var PlayersUI = {
             h += "<button class='lu" + (o[0] === L.current ? " on" : "") + "' data-i='" + i + "'><b>" + (o[0] === L.current ? "✔ " : "") + o[1] + "</b>" + body + "</button>";
         });
         h += "</div>";
-        if (L.kind === "single") h += "<p class='muted'>This game is single-player on one screen. For more players use LAN below.</p>";
-        h += "<p class='muted'>Picking a line-up restarts the current match.</p>";
+        // per-seat toggles (games that declare seats(): Human / CPU / Off, or a CPU count)
+        var seats = GameModes.has("seats") ? GameModes.call("seats") : null;
+        if (seats && seats.length) {
+            h += "<h3>Seats</h3>";
+            seats.forEach(function(st, si) {
+                h += "<div class='row'><span class='chip' style='min-width:150px'>" + st.label + "</span>";
+                if (st.count) {
+                    h += "<button class='b' data-seat='" + si + "' data-v='" + (st.value - 1) + "'" + (st.value <= st.min ? " disabled" : "") + ">−</button><b style='min-width:28px;text-align:center'>" + st.value + "</b><button class='b' data-seat='" + si + "' data-v='" + (st.value + 1) + "'" + (st.value >= st.max ? " disabled" : "") + ">+</button>";
+                } else {
+                    var names = { human: "🎮 Human", cpu: "🤖 CPU", off: "— Off" };
+                    st.options.forEach(function(o) { h += "<button class='b" + (st.value === o ? " on" : "") + "' data-seat='" + si + "' data-v='" + o + "'>" + names[o] + "</button>"; });
+                }
+                if (st.note) h += "<span class='muted'>" + st.note + "</span>";
+                h += "</div>";
+            });
+        }
+        if (L.kind === "single" && !(seats && seats.length)) h += "<p class='muted'>This game is single-player on one screen. For more players use LAN below.</p>";
+        if (L.list.length) h += "<p class='muted'>Picking a line-up restarts the current match.</p>";
         var sk = this.cpuSkill();
         if (sk) {
             h += "<h3>CPU skill</h3><div class='row'>" + ["", "Easy", "Normal", "Hard"].map(function(n, v) { return v ? "<button class='b" + (sk.get === v ? " on" : "") + "' data-skill='" + v + "'>" + n + "</button>" : ""; }).join("") + "</div>";
@@ -132,7 +161,7 @@ var PlayersUI = {
         var lan = (typeof Net !== "undefined" && Net.role === "host") ? Net.peerCount() : 0;
         h += "<div class='row'><span class='chip'>📡 LAN</span> " + (lan ? lan + " player(s) connected on other devices — they take CPU slots when there are any." : "Play on other devices on the same Wi-Fi.") + " <button class='b' id='pl-lan'>Open LAN…</button></div>";
         // live roster
-        var cs = characters.filter(function(c) { return c.isPlayer; });
+        var cs = GameModes.flag("ownScreen", false) ? [] : characters.filter(function(c) { return c.isPlayer; });
         if (cs.length) {
             h += "<h3>In the match now</h3>";
             cs.forEach(function(c) {
@@ -144,6 +173,14 @@ var PlayersUI = {
         h += "<div class='row' style='margin-top:12px'><button class='b' id='pl-close'>Close (Esc)</button></div></div>";
         this.el.innerHTML = h;
         this.el.querySelectorAll(".lu").forEach(function(b) { b.onclick = function() { var o = L.list[Number(b.dataset.i)]; self.apply(L.kind, o[0]); }; });
+        this.el.querySelectorAll("[data-seat]").forEach(function(b) {
+            b.onclick = function() {
+                var st = seats[Number(b.dataset.seat)], v = st.count ? Number(b.dataset.v) : b.dataset.v;
+                st.set(v);
+                if (typeof showBanner === "function") showBanner("PLAYERS UPDATED", st.label + ": " + (st.count ? v : v.toUpperCase()), "#7dd3fc");
+                self.render();
+            };
+        });
         this.el.querySelectorAll("[data-skill]").forEach(function(b) { b.onclick = function() { sk.set(Number(b.dataset.skill)); self.render(); }; });
         var c = document.getElementById("pl-close"); if (c) c.onclick = function() { self.close(); };
         var l = document.getElementById("pl-lan"); if (l) l.onclick = function() { self.close(); NetUI.open(); };

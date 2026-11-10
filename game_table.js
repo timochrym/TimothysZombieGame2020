@@ -351,6 +351,10 @@ GameModes.register({
     flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: false },
     overTitle: "TABLE GAMES",
 
+    seats: function() {
+        return [{ label: "RED", options: ["human"], value: "human", set: function() {} },
+            { label: "BLUE", options: ["human", "cpu"], value: tableCfg.vs === "p2" ? "human" : "cpu", note: "human = pass-and-play (or a LAN player takes BLUE)", set: function(v) { tableCfg.vs = v === "human" ? "p2" : "cpu"; multiplayer = v === "human"; saveTable(); Flick.reset(); Four.reset(0); } }];
+    },
     setupLevel: function() { multiplayer = tableCfg.vs === "p2"; Flick.reset(); Four.reset(0); this.lastMouse = [mouseX, mouseY]; },
 
     screenFrame: function() {

@@ -421,6 +421,11 @@ GameModes.register({
     flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: true },
     overTitle: "TANK ARENA",
 
+    seats: function() {
+        return [{ label: "P1", options: ["human"], value: "human", set: function() {} },
+            { label: "P2 (arrows / pad 2)", options: ["human", "off"], value: multiplayer ? "human" : "off", set: function(v) { multiplayer = v === "human"; Tanks.reset(); } },
+            { label: "CPU opponents", count: true, value: TNK.CPUS, min: 0, max: 14, set: function(v) { TNK.CPUS = Math.max(0, Math.min(14, v)); Tanks.reset(); } }];
+    },
     setupLevel: function() { Tanks.reset(); },
 
     screenFrame: function() {

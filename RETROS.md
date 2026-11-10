@@ -6,6 +6,19 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Players panel: per-seat Human / CPU / Off toggles
+
+**Shipped:** a `seats()` mode hook; the 👥 Players panel renders it as one row per seat with 🎮 Human / 🤖 CPU / — Off
+buttons (or a −/+ CPU count) and a note on keys. Party Board and Rent Rush: P1 human, seat 2 human (Enter) / CPU / off,
+seats 3-4 CPU / off ("a gamepad 3 makes it human"); Table Games: BLUE human (pass-and-play) / CPU; Worm / Blob / Tank
+Arena: P2 human / off + CPU opponents count; Jet Dash: P2 runner on / off. The "Right now:" summary for these games is
+built from the seats (e.g. "🎮 P1 + 🎮 Seat + 🤖 CPU") instead of listing the hidden placeholder hero.
+
+**Measured:** clicking seat 2 → Human and seat 4 → Off in Party Board gave humans 2 / players 3 (P1, P2, CPU 3);
+Worm Arena CPU count 11 → 10 and P2 on → 12 worms incl. P2; Table Games BLUE human ↔ CPU switches `vs`; no errors.
+
+---
+
 ## Controls remapping (keyboard P1 / P2 + gamepad buttons)
 
 **Shipped:** `controls.js` — Settings → "Controls: remap keys & buttons" opens a panel with every P1 and P2 action

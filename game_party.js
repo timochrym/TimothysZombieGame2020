@@ -262,6 +262,19 @@ GameModes.register({
     firstLevel: "party_board",
     flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: false },
     overTitle: "PARTY BOARD",
+    seats: function() {
+        var C = partyCfg, out = [{ label: "P1", options: ["human"], value: "human", set: function() {} }];
+        for (let i = 1; i < 4; i++) (function(i) {
+            var v = i >= C.players ? "off" : (i === 1 ? (C.humans > 1 ? "human" : "cpu") : "cpu");
+            out.push({ label: "Seat " + (i + 1), options: i === 1 ? ["human", "cpu", "off"] : ["cpu", "off"], value: v, note: i >= 2 ? "a gamepad " + (i + 1) + " makes it human" : (i === 1 ? "Enter / ↑" : ""),
+                set: function(nv) {
+                    if (nv === "off") { C.players = Math.max(2, i); if (i === 1) C.humans = 1; }
+                    else { C.players = Math.max(C.players, i + 1); if (i === 1) C.humans = nv === "human" ? 2 : 1; }
+                    saveParty(); Party.reset();
+                } });
+        })(i);
+        return out;
+    },
     setupLevel: function() { Party.reset(); },
     screenFrame: function() { Party.update(); Party.draw(); },
     screenDraw: function() { Party.t++; Party.draw(); },

@@ -336,6 +336,11 @@ GameModes.register({
     flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: true },
     overTitle: "BLOB ARENA",
 
+    seats: function() {
+        return [{ label: "P1", options: ["human"], value: "human", set: function() {} },
+            { label: "P2 (arrows / pad 2)", options: ["human", "off"], value: multiplayer ? "human" : "off", set: function(v) { multiplayer = v === "human"; Cells.reset(); } },
+            { label: "CPU opponents", count: true, value: CEL.CPUS, min: 0, max: 24, set: function(v) { CEL.CPUS = Math.max(0, Math.min(24, v)); Cells.reset(); } }];
+    },
     setupLevel: function() { Cells.reset(); },
 
     screenFrame: function() {

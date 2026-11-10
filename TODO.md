@@ -126,9 +126,11 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - Bed Brawl: bots don't use the pathfinder's bridge/tower edges; one map; slow restock at the start.
 - 2.5D view: faces are flat-shaded, not textured.
 - Crash Lab / Wobble Wheels: wheelchair is a weak climber; rider pose on the bike is crude.
-- Siege Birds: abilities assigned by shot slot; stone is unbreakable.
+- Siege Birds: abilities assigned by shot slot (stone is breakable now).
 - Zombie Ball: confirm the "soccer physics like the actual character" interpretation (ball = zombie ragdoll).
-- Players panel: no free per-slot Human/CPU/Off toggles yet; pads can't be reassigned.
+- Players panel: per-seat Human / CPU / Off toggles and CPU counts now exist for Party Board, Rent Rush, Table Games,
+  the three arenas and Jet Dash (`seats()` hook). Brawl / Zombie Ball / Bed Brawl keep their line-up cards. Pads still
+  can't be reassigned to a different player number.
 - Head stomps make Survival easier — difficulty not re-measured. Square-look Settings row only checked in code.
 
 ## Final pass you asked for

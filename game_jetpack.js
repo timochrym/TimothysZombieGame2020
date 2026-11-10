@@ -275,6 +275,7 @@ GameModes.register({
     flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: true },
     overTitle: "JET DASH",
 
+    seats: function() { return [{ label: "P1", options: ["human"], value: "human", set: function() {} }, { label: "P2 runner (↑ / Enter)", options: ["human", "off"], value: multiplayer ? "human" : "off", set: function(v) { multiplayer = v === "human"; Jet.reset(); } }]; },
     setupLevel: function() { Jet.reset(); Jet.wasHeld = true; },
 
     screenFrame: function() {

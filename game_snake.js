@@ -323,6 +323,11 @@ GameModes.register({
     flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: true },
     overTitle: "WORM ARENA",
 
+    seats: function() {
+        return [{ label: "P1", options: ["human"], value: "human", set: function() {} },
+            { label: "P2 (arrows / pad 2)", options: ["human", "off"], value: multiplayer ? "human" : "off", set: function(v) { multiplayer = v === "human"; Snake.reset(); } },
+            { label: "CPU opponents", count: true, value: SNK.CPUS, min: 0, max: 20, set: function(v) { SNK.CPUS = Math.max(0, Math.min(20, v)); Snake.reset(); } }];
+    },
     setupLevel: function() { Snake.reset(); Snake.lastMouse = [mouseX, mouseY]; },
 
     screenFrame: function() {
