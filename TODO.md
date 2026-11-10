@@ -4,9 +4,9 @@ Kept up to date on every push. Finished items move to `RETROS.md` (with measurem
 Last updated: after Vehicles (backlog B2), during Terra (B3) and controller support.
 
 ## In progress right now
-- [ ] **Terra (B3 world generation)** — `game_terra.js` generates a deep world (biomes, trees, dirt/stone, caves,
-      coal/iron/gold, bedrock), streams collision chunks near the camera and draws ~2,300 tiles at 60 FPS.
-      **Not working yet:** mining (hold F / left mouse) and placing (right mouse / G) — the headless test dug 0 tiles.
+- [x] **Terra (B3 world generation)** — `game_terra.js`: deep generated world (forest/desert/hill biomes, trees,
+      dirt over stone, caves, coal/iron/gold, bedrock), chunk-streamed collision, mining and placing with a 9-slot
+      hotbar, underground darkness with a light around the hero, 60 FPS. (Genre-feel extras are in the pass below.)
 - [ ] **Controller support (your request)** — gamepads already drive P1/P2 movement/aim/shoot/jet/dash/grab/reload.
       Still needed: build mode / piece / material buttons, punch, vehicle enter/exit, menus (Arcade hub, pause,
       Players & LAN panels, Level Studio basics), pads 3-4 for Brawl/Soccer/Bed Wars slots, and showing which pad

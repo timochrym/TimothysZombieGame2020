@@ -183,10 +183,22 @@ GameModes.register({
     onSecondary: function(ch) { this.placeAt(ch); return true; },
     onClick: function(wx, wy, button) { if (button === 2) { this.placeAt(redGuy, wx, wy); return true; } return false; },
 
-    target: function(ch, wx, wy) {
+    // the tile a hero is working on: the one under the mouse, or (keys / gamepad) the first solid tile along the aim;
+    // `place` asks for the empty tile just before it instead
+    target: function(ch, wx, wy, place) {
         if (wx === undefined) {
             if (ch.playerIndex === 0 && typeof useMouseAim !== "undefined" && useMouseAim) { var m = Components.getMouseWorldPos(); wx = m[0]; wy = m[1]; }
-            else { var rad = Math.radians(ch.degree || 90); wx = ch.x + Math.sin(rad) * 70; wy = ch.y + Math.cos(rad) * 70; }
+            else {
+                var rad = Math.radians(ch.degree || 90), sx = Math.sin(rad), sy = Math.cos(rad), last = null;
+                for (let d = 20; d <= 220; d += 10) {
+                    var px = ch.x + sx * d, py = ch.y + sy * d, cc = terraCol(px), rr = terraRow(py);
+                    var id = terraGet(cc, rr);
+                    if (id && TILES[id][2] !== undefined && id !== 0) { if (place && last) { wx = terraCX(last[0]); wy = terraCY(last[1]); } else { wx = px; wy = py; } break; }
+                    var inside = Math.abs(px - ch.x) < ch.s1 / 2 + 2 && Math.abs(py - ch.y) < ch.s2 / 2 + 2;
+                    if (!inside) last = [cc, rr];
+                }
+                if (wx === undefined) { if (place && last) { wx = terraCX(last[0]); wy = terraCY(last[1]); } else { wx = ch.x + sx * 70; wy = ch.y + sy * 70; } }
+            }
         }
         var c = terraCol(wx), r = terraRow(wy);
         var reach = Math.hypot(terraCX(c) - ch.x, terraCY(r) - ch.y) < 260;
@@ -195,7 +207,7 @@ GameModes.register({
 
     placeAt: function(ch, wx, wy) {
         if (!ch || ch.dead) return;
-        var t = this.target(ch, wx, wy), name = TERRA_PLACEABLE[TERRA.sel];
+        var t = this.target(ch, wx, wy, true), name = TERRA_PLACEABLE[TERRA.sel];
         if (!t.ok || terraGet(t.c, t.r) !== 0 || !(TERRA.inv[name] > 0)) return;
         var bx = terraCX(t.c), by = terraCY(t.r);
         for (let i = 0; i < characters.length; i++) { var h = characters[i]; if (Math.abs(h.x - bx) < (h.s1 + TERRA.T) / 2 - 2 && Math.abs(h.y - by) < (h.s2 + TERRA.T) / 2 - 2) return; }

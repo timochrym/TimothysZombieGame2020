@@ -157,7 +157,7 @@ kind of mechanics. Mark items `[DONE]` as they ship.
 - Driveable cars (enter/exit, wheel physics, ramps, crashes).
 - Train / minecart on placeable rails (Level Studio piece), riders and cargo.
 
-### B3. World generation
+### B3. World generation [MOSTLY DONE] (TERRA, game_terra.js — frontier itself not lowered yet)
 - Frontier generates lower (more underground) terrain.
 - Terraria-like generation: layered dirt/stone, caves, ores, surface biomes, trees.
 - Block-game capabilities: dig and place tiles in the generated world (builds on `build.js`).

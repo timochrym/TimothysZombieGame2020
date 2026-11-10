@@ -6,6 +6,24 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Terra — backlog B3 (world generation, block-game)
+
+**Shipped:** `game_terra.js`: seeded 640×170-tile world (forest / desert / hill biomes, trees, dirt over stone,
+two-layer noise caves that widen with depth, coal / iron / gold by depth, bedrock); only chunks near the camera
+become collision boxes (row runs merged), so ~700 boxes instead of 108,800 tiles; mining by hardness (mouse or the
+first solid tile along the aim), placing from a 9-slot hotbar, darkness underground with a light around the hero.
+Engine: `deepWorld` flag (no "rescue" below the old floor), invisible collision-only statics.
+
+**Measured:** 60 FPS at the surface and 60 m down; digging gave +5 dirt in 6 s; placing works. No errors.
+
+**Went wrong:** keyboard aiming targeted a fixed point 70 px away — the empty tile at the hero's feet — so nothing
+could be mined; it now walks the aim line to the first solid tile.
+
+**Left / known:** no crafting / tools / torches / day-night / saving / LAN yet; the Survival frontier itself is not
+lower yet.
+
+---
+
 ## Vehicles — backlog B2
 
 **Shipped:** driveable cars (enter/exit with E, A/D drive, S brake, shoot from the window, run-over damage) and
