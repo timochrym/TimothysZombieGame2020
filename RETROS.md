@@ -6,6 +6,28 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Feedback fixes: Zombie Ball ball, Siege bouncing, Birds mode
+
+**Zombie Ball:** the ball is now a real zombie ragdoll (its spine follows the ball's reliable circle core; head and
+limbs use the normal ragdoll physics). Pause menu toggles back to the classic ball. *Interpretation:* the request
+was "soccer physics like the actual character"; the players already were real characters, so the ball was the
+odd one out. Say if you meant something else.
+
+**Siege "blocks bounce randomly":** reproduced on fort 5's TNT (45 bounces, crates bouncing up to 9 times, still
+moving after 8 s). Cause: a crate landing on a resting crate pushed its momentum down the whole stack into the
+ground, every crate bounced back up, and crate-on-crate landings kept 35% bounce. Fix: a crate resting on the
+ground can't be pushed into it, and crate-on-crate landings are almost dead. After: 0 bounces, settled in ~1 s.
+Forts at rest were already perfectly still (0 drift in 8 s on all 5).
+
+**Angry Birds option (original "Birds" ammo):** round birds — Rocky (plain), Trio (tap: split in three), Zip (tap:
+speed burst), Boulder (tap: slam down), Boomer (tap: explode) — and fort blocks with materials: wood cracks,
+glass shatters (+250 each). Toggle in the Siege pause menu. Verified: shots launch, abilities fire, a zombie was
+knocked out and a block shattered, no errors.
+
+**Left / known:** bird abilities are assigned by shot slot, not chosen per level; stone stays unbreakable.
+
+---
+
 ## Bigger physics, Crash Lab, Wobble Wheels — ROADMAP section 9
 
 **Shipped:**

@@ -295,7 +295,8 @@ class Object {
                         if (hitY && (hitY.movable || hitY instanceof Character)) {
                             CollisionDetector.transferMomentum(this, hitY, 0, dirY);
                         }
-                        this.yspeed = this.yspeed * this.bounciness;
+                        // crates landing on crates barely bounce (stacks settle instead of buzzing)
+                        this.yspeed = this.yspeed * this.bounciness * ((hitY && hitY.movable && stepY < 0) ? 0.2 : 1);
                         if (Math.abs(this.yspeed) < this.gravity * 2.5) {
                             this.yspeed = 0;
                         }

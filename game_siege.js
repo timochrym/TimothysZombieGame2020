@@ -19,6 +19,102 @@ var AMMO = {
     bomb:  { name: "Bomb", color: "#f97316", desc: "Click / Space again to detonate" }
 };
 
+// ---- BIRDS mode (pause menu): round birds with a tap ability, and fort blocks that crack and shatter ----
+var BIRDS = {
+    red:   { name: "Rocky", color: "#ef4444", r: 28, mass: 6, desc: "Just hits hard" },
+    split: { name: "Trio", color: "#38bdf8", r: 22, mass: 4, desc: "Tap: split into three" },
+    dash:  { name: "Zip", color: "#facc15", r: 24, mass: 5, desc: "Tap: speed burst" },
+    heavy: { name: "Boulder", color: "#334155", r: 36, mass: 14, desc: "Tap: slam straight down" },
+    bomb:  { name: "Boomer", color: "#1f2937", r: 30, mass: 7, desc: "Tap: explode" }
+};
+var SIEGE_MATS = { Crate: { hp: 70, name: "wood" }, Plank: { hp: 28, name: "glass" } };
+function siegeBirdFor(type, i) { return type === "heavy" ? "heavy" : (type === "bomb" ? "bomb" : ["red", "split", "dash"][i % 3]); }
+
+function siegeDrawBird(rd) {
+    var p = rd.pts[0], B = BIRDS[rd.birdType] || BIRDS.red, k = cameraScaleX;
+    var sx = wsx(p.x), sy = wsy(p.y), r = p.r * k;
+    var vx = p.x - p.px, vy = p.y - p.py, ang = Math.atan2(-vy, vx || 0.001);
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.fillStyle = B.color; ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill(); ctx.stroke();
+    // tail tuft opposite the flight direction
+    ctx.beginPath(); ctx.moveTo(-Math.cos(ang) * r, -Math.sin(ang) * r); ctx.lineTo(-Math.cos(ang - 0.4) * r * 1.5, -Math.sin(ang - 0.4) * r * 1.5); ctx.lineTo(-Math.cos(ang + 0.4) * r * 1.5, -Math.sin(ang + 0.4) * r * 1.5); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.beginPath(); ctx.ellipse(0, r * 0.35, r * 0.6, r * 0.4, 0, 0, 7); ctx.fill();
+    var fx = Math.cos(ang), fy = Math.sin(ang);
+    for (let e = -1; e <= 1; e += 2) {
+        var ex = fx * r * 0.35 + -fy * e * r * 0.32, ey = fy * r * 0.35 + fx * e * r * 0.32 - r * 0.18;
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(ex, ey, r * 0.24, 0, 7); ctx.fill();
+        ctx.fillStyle = "#0a0f16"; ctx.beginPath(); ctx.arc(ex + fx * r * 0.08, ey + fy * r * 0.08, r * 0.11, 0, 7); ctx.fill();
+    }
+    ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = Math.max(2, r * 0.12);
+    ctx.beginPath(); ctx.moveTo(-r * 0.5, -r * 0.62); ctx.lineTo(r * 0.5, -r * 0.42); ctx.stroke();         // angry brow
+    ctx.fillStyle = "#f59e0b"; ctx.beginPath(); ctx.moveTo(fx * r * 0.7 - fy * r * 0.18, fy * r * 0.7 + fx * r * 0.18); ctx.lineTo(fx * r * 1.25, fy * r * 1.25); ctx.lineTo(fx * r * 0.7 + fy * r * 0.18, fy * r * 0.7 - fx * r * 0.18); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (rd.birdType === "bomb") { ctx.fillStyle = "#f97316"; ctx.beginPath(); ctx.arc(0, -r * 1.05, r * 0.18, 0, 7); ctx.fill(); }
+    ctx.restore();
+}
+
+function siegeMakeBird(type, x, y, vx, vy) {
+    var B = BIRDS[type];
+    var rd = new Ragdoll({ kind: "bird", thick: B.mass }, 1);
+    rd.addPoint(x, y, B.r);
+    rd.setVelocity(vx, vy);
+    rd.birdType = type;
+    rd.drawFn = siegeDrawBird;
+    rd.life = rd.maxLife = 900;
+    rd.thrownBy = redGuy;
+    rd.projectileTimer = 400;
+    rd.gScale = SIEGE_GRAV; rd.drag = 0.999;
+    rd._lastSp = Math.hypot(vx, vy);
+    Ragdolls.list.push(rd);
+    return rd;
+}
+
+function siegeBirdAbility(rd) {
+    if (!rd || rd.abilityUsed) return;
+    rd.abilityUsed = true;
+    var p = rd.pts[0], vx = p.x - p.px, vy = p.y - p.py;
+    if (rd.birdType === "split") {
+        for (let s = -1; s <= 1; s += 2) {
+            var a = Math.atan2(vy, vx) + s * 0.22, sp = Math.hypot(vx, vy);
+            var b = siegeMakeBird("split", p.x, p.y + s * 20, Math.cos(a) * sp, Math.sin(a) * sp);
+            b.abilityUsed = true;
+        }
+        Components.spawnSparks(p.x, p.y, "#38bdf8", 10);
+    } else if (rd.birdType === "dash") {
+        p.px = p.x - vx * 2.1; p.py = p.y - vy * 2.1; rd.gScale = 0.2;
+        Components.spawnSparks(p.x, p.y, "#facc15", 10);
+    } else if (rd.birdType === "heavy") {
+        p.px = p.x - vx * 0.2; p.py = p.y + 34; rd.gScale = 1;
+    } else if (rd.birdType === "bomb") {
+        siegeDetonate();
+        return;
+    }
+    if (typeof SFX !== "undefined") SFX.play("whoosh", p.x, p.y);
+}
+
+// wood and glass crack from hard knocks (velocity changes) and shatter
+function siegeBlockDamage() {
+    for (let i = 0; i < movingObjects.length; i++) {
+        var o = movingObjects[i];
+        if (o.dead || o.sgHP === undefined) continue;
+        if (o._sgCd > 0) { o._sgCd--; o._pvx = o.xspeed; o._pvy = o.yspeed; continue; }
+        var dv = Math.hypot(o.xspeed - (o._pvx || 0), o.yspeed - (o._pvy || 0));
+        o._pvx = o.xspeed; o._pvy = o.yspeed;
+        if (dv > 5) {
+            o.sgHP -= (dv - 5) * 9;
+            if (o.sgHP <= 0) {
+                o.dead = true;
+                var col = o.sgMat === "glass" ? "#bae6fd" : "#c98c4a";
+                for (let k = 0; k < 8; k++) { if (particles.length >= 120) particles.shift(); particles.push({ x: o.x + (Math.random() - 0.5) * o.w, y: o.y + (Math.random() - 0.5) * o.h, w: 14, h: 14, xspeed: (Math.random() - 0.5) * 12, yspeed: 3 + Math.random() * 9, poly: Math.makeHitbox(14, 14), color: col, life: 40 }); }
+                if (typeof SFX !== "undefined") SFX.play(o.sgMat === "glass" ? "fizzle" : "kill", o.x, o.y, 0.6, o.sgMat === "glass" ? 1.6 : 0.9);
+                Siege.score += 250;
+                SiegeSleep.wakeAround(o.x, o.y, 220);
+            }
+        }
+    }
+}
+
 var Siege = {
     phase: "aim", shots: [], shotIdx: 0, rd: null, rdType: null, flightT: 0, settleT: 0,
     angle: 40, power: 0.75, dragging: false, wasMouse: false, wasFire: false,
@@ -159,6 +255,15 @@ function siegeFire() {
     var type = Siege.shots[Siege.shotIdx];
     if (!type || Siege.phase !== "aim") return;
     var v = siegeLaunchVel(), pp = [SIEGE_ANCHOR.x, SIEGE_ANCHOR.y + 10];   // released at the fork
+    if (siegeSave.birds) {
+        var bt = siegeBirdFor(type, Siege.shotIdx);
+        var brd = siegeMakeBird(bt, pp[0], pp[1], v[0], v[1]);
+        Siege.rd = brd; Siege.rdType = bt === "bomb" ? "bomb" : "bird";
+        Siege.phase = "flight"; Siege.flightT = 0; Siege.settleT = 0;
+        Siege.shotIdx++;
+        if (typeof SFX !== "undefined") SFX.play("sling");
+        return;
+    }
     // a throw-away character only used to dress the ragdoll
     var box = Math.makeHitbox(s1, s2);
     var tmp;
@@ -223,6 +328,12 @@ GameModes.register({
         }
         Siege.enemyTotal = sg.enemies.length;
         SiegeSleep.init();
+        for (let i = 0; i < movingObjects.length; i++) {
+            var o = movingObjects[i], m = siegeSave.birds ? SIEGE_MATS[o.name] : null;
+            if (!m) { o.sgHP = undefined; continue; }
+            o.sgHP = o.sgMax = m.hp; o.sgMat = m.name; o._sgCd = 90;
+            if (m.name === "glass") { o.color = "#93c5fd"; o.texture = "solid"; }
+        }
     },
 
     createPlayers: function() {
@@ -252,6 +363,7 @@ GameModes.register({
 
     update: function() {
         SiegeSleep.update();
+        if (siegeSave.birds) siegeBlockDamage();
         // remember enemy velocities for next frame's impact check
         for (let i = 0; i < zombies.length; i++) { zombies[i]._pvx = zombies[i].xspeed; zombies[i]._pvy = zombies[i].yspeed; }
         var alive = siegeEnemiesLeft();
@@ -287,6 +399,7 @@ GameModes.register({
         } else if (Siege.phase === "flight") {
             Siege.flightT++;
             if (Siege.rdType === "bomb" && (fresh || fireFresh) && Siege.flightT > 6) siegeDetonate();
+            else if (Siege.rdType === "bird" && (fresh || fireFresh) && Siege.flightT > 6) siegeBirdAbility(Siege.rd);
             var rd = Siege.rd;
             // bombs also go off on a hard landing
             if (rd && Siege.rdType === "bomb" && Siege.flightT > 20 && (rd.grounded || rd.projectileTimer <= 0) && !rd.detonated) {
@@ -447,11 +560,17 @@ GameModes.register({
         for (let i = 0; i < Siege.shots.length; i++) {
             var t = Siege.shots[i], used = i < Siege.shotIdx, cur = i === Siege.shotIdx && Siege.phase === "aim";
             ctx.globalAlpha = used ? 0.25 : 1;
-            PixelArt.draw(PixelArt.sprites.shot, tx + i * 30, ty - 14 + (cur ? -3 : 0), 2.5, { b: AMMO[t].color, f: "#f2c9a0", e: "#0a0f16", w: t === "bomb" ? "#ffd23f" : AMMO[t].color });
+            if (siegeSave.birds) {
+                var BB = BIRDS[siegeBirdFor(t, i)];
+                ctx.fillStyle = BB.color; ctx.strokeStyle = "#e2e8f0"; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(tx + i * 30 + 10, ty - 6 + (cur ? -3 : 0), 9, 0, 7); ctx.fill(); ctx.stroke();
+            } else PixelArt.draw(PixelArt.sprites.shot, tx + i * 30, ty - 14 + (cur ? -3 : 0), 2.5, { b: AMMO[t].color, f: "#f2c9a0", e: "#0a0f16", w: t === "bomb" ? "#ffd23f" : AMMO[t].color });
             ctx.globalAlpha = 1;
         }
         var nxt = Siege.shots[Siege.shotIdx];
-        if (Siege.phase === "aim" && nxt) uiText("NEXT: " + AMMO[nxt].name.toUpperCase() + " - " + AMMO[nxt].desc, 30 + Siege.shots.length * 30 + 10, ty, 11, AMMO[nxt].color, "left", "800");
+        if (Siege.phase === "aim" && nxt && !siegeSave.birds) uiText("NEXT: " + AMMO[nxt].name.toUpperCase() + " - " + AMMO[nxt].desc, 30 + Siege.shots.length * 30 + 10, ty, 11, AMMO[nxt].color, "left", "800");
+        if (Siege.phase === "aim" && nxt && siegeSave.birds) { var NB = BIRDS[siegeBirdFor(nxt, Siege.shotIdx)]; uiText("NEXT BIRD: " + NB.name.toUpperCase() + " - " + NB.desc, 30 + Siege.shots.length * 30 + 10, ty, 11, NB.color === "#1f2937" || NB.color === "#334155" ? "#cbd5e1" : NB.color, "left", "800"); }
+        if (Siege.phase === "flight" && Siege.rdType === "bird" && Siege.rd && !Siege.rd.abilityUsed && Siege.rd.birdType !== "red") uiText("CLICK / SPACE: " + BIRDS[Siege.rd.birdType].desc.replace("Tap: ", "").toUpperCase(), cssW / 2, 110, 22, "#fde047", "center", "900");
         if (Siege.phase === "flight" && Siege.rdType === "bomb" && Siege.rd) uiText("CLICK / SPACE TO DETONATE!", cssW / 2, 110, 24, "#f97316", "center", "900");
         if (Siege.phase === "aim") uiText("angle " + Math.round(Siege.angle) + "°   power " + Math.round(Siege.power * 100) + "%", cssW / 2, 100, 16, "#e2e8f0", "center", "800");
         uiText("Drag the mouse to pull & release to fire · or W/S aim, A/D power, Space fire · right-click/Tab swap shot · R retry · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
@@ -462,6 +581,7 @@ GameModes.register({
         if (pauseFromGameOver && Siege.won && n + 1 < SIEGE_LEVELS.length) items.unshift({ id: "sg_next", label: "Next fort ▶", hint: "Fort " + (n + 2) });
         items.push({ id: "sg_level", label: "Fort:  ◀  " + (n + 1) + " / " + SIEGE_LEVELS.length + "  " + "★".repeat(siegeStarsFor(SIEGE_LEVELS[n])) + "  ▶", hint: "", cycle: true });
         if (!pauseFromGameOver) items.push({ id: "sg_retry", label: "Retry fort  (R)", hint: "" });
+        items.push({ id: "sg_birds", label: "Ammo:  ◀  " + (siegeSave.birds ? "Birds (abilities, breakable blocks)" : "Ragdolls") + "  ▶", hint: "Restarts the fort", cycle: true });
     },
 
     onMenu: function(id, dir) {
@@ -469,6 +589,7 @@ GameModes.register({
         if (id === "sg_next") { closePause(); LevelManager.selectLevel(SIEGE_LEVELS[n + 1]); return true; }
         if (id === "sg_level") { n = (n + (dir || 1) + SIEGE_LEVELS.length) % SIEGE_LEVELS.length; closePause(); LevelManager.selectLevel(SIEGE_LEVELS[n]); return true; }
         if (id === "sg_retry") { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
+        if (id === "sg_birds") { siegeSave.birds = !siegeSave.birds; saveSiege(); closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
         return false;
     }
 });

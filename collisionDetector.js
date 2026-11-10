@@ -567,6 +567,9 @@ class CollisionDetector {
 
         var sourceSpeedAlongDir = source.xspeed * dx + source.yspeed * dy;
         if (sourceSpeedAlongDir <= 0.05) return false;
+        // Landing on something that is already resting on the ground: the ground takes the hit. Pushing it
+        // down would only make it bounce back up (that is what made Siege towers bounce for seconds).
+        if (dy < -0.5 && target.onGround) return false;
 
         var boost = 0.85;
         if (source.zombiePower == "TANK" || (typeof godMode !== "undefined" && godMode && !source.isZombie) || source.dashTimer > 0) {
