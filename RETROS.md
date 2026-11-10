@@ -6,6 +6,22 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Crate Lab — genre-feel pass (physics puzzle rooms)
+
+**Shipped:** wiring — every pressure plate and lever now draws a cable to whatever it powers (doors get a junction box,
+lifts and bridges get a cable that follows them); it's grey and still when off, green with current flowing along it
+when on, so "what does this plate do?" answers itself. Hints: H shows a one-line hint for the room; after 45 s
+in a room a "Stuck? Press H" nudge appears.
+
+**Measured:** room 1 crate-on-plate turns the cable green; rooms 3, 4, 7, 8 render their wiring, no errors.
+
+**Went wrong:** first cables ran along the floor line and vanished into the floor texture → they now rise above the
+floor before crossing over. The hint text overflowed its panel → wider panel.
+
+**Left / known:** more rooms and gadget types, room-select grid (TODO.md).
+
+---
+
 ## Parkour Rush — genre-feel pass (speedrun courses)
 
 **Shipped:** speedrun splits — each checkpoint P1 reaches shows the split time and the difference to the best run's

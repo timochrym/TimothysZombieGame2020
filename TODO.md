@@ -51,7 +51,10 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - [~] Parkour Rush: DONE — speedrun splits (time at each checkpoint vs your best run's split, green −/red +, saved
       with the best), speed lines when you're really moving, new engine hook onCheckpoint. STILL TO DO: slide-under
       gaps and vault/ledge-grab moves, a level select showing medals, a per-checkpoint quick restart key.
-- [ ] Crate Lab, Portal Lab, Brawl: same pass —
+- [~] Crate Lab: DONE — visible wiring from every plate / lever to the door, lift or bridge it powers (grey when off,
+      green with flowing current when on); a hint per room on H, offered after 45 s. STILL TO DO: more rooms (lasers &
+      mirrors, conveyor belts, buttons with timers), a room-select grid with best times, an undo-free "reset crate" key.
+- [ ] Portal Lab, Brawl: same pass —
       list each genre's core feel features and close the gaps.
 
 ## Your suggestions not built yet (backlog, all original games in the genre — no copied names/art)

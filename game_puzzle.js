@@ -116,6 +116,49 @@ puzzleRoom(7, "Final Exam", -2100, 2100, [-1900, 60],
     ]);
 PUZZLE_ROOMS.noBaseFloor.lab_7 = true;
 
+// one hint per room (H shows it; offered after 45 s)
+var PUZZLE_HINTS = [
+    "Carry the crate onto the plate and leave it there — the door stays open while it's weighed down.",
+    "Put one crate next to the ledge, throw the second on top of it, then hop up crate by crate.",
+    "Pull the lever, then wait for the platform to come to YOUR side before stepping on.",
+    "One crate on each plate. Throw the far crate rather than walking it over.",
+    "Stand in the fan and hold jump to rise; drift left onto the shelf for the key.",
+    "Grab a TNT barrel, get close to the cracked wall and throw it. Keep your distance from the blast!",
+    "Leave the crate on the plate — the lift only runs while it's pressed. Then ride it up.",
+    "Crate on the plate first, then the lever, ride across, and use the fan for the blue key."
+];
+
+// wiring: a line from every plate / lever to what it powers, lit while it's on
+function puzzleDrawWires() {
+    var L = Gadgets.list, k = cameraScaleX, t = puzzleState.time;
+    ctx.save();
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    for (let i = 0; i < L.length; i++) {
+        var a = L[i];
+        if (!a.links || !a.links.length || (a.type !== "plate" && a.type !== "switch")) continue;
+        for (let j = 0; j < L.length; j++) {
+            var b = L[j];
+            if (!b.id || a.links.indexOf(b.id) === -1) continue;
+            var bx = b.obj ? b.obj.x : b.x, by = b.obj ? b.obj.y - (b.obj.h || 0) / 2 : b.y;
+            if (b.type === "door" || b.type === "lockdoor") by = b.y - (b.h || 0) / 2 + 20;
+            if (b.type === "door" || b.type === "lockdoor") by = Math.max(a.y, by) + 140;   // a junction box on the door
+            var ay = a.y + 6, x0 = wsx(a.x), y0 = wsy(ay), x1 = wsx(bx), y1 = wsy(by), yr = wsy(Math.max(ay, by) + 140);
+            if (b.type === "door" || b.type === "lockdoor") yr = y1;
+            ctx.lineWidth = Math.max(2, 5 * k);
+            ctx.strokeStyle = "rgba(10,15,22,0.7)"; ctx.setLineDash([]);
+            ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, yr); ctx.lineTo(x1, yr); ctx.lineTo(x1, y1); ctx.stroke();
+            ctx.lineWidth = Math.max(1.5, 3 * k);
+            ctx.strokeStyle = a.active ? "#4ade80" : "rgba(148,163,184,0.55)";
+            ctx.setLineDash([10 * k + 2, 8 * k + 2]); ctx.lineDashOffset = a.active ? -t * 1.5 : 0;   // current flows when on
+            ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, yr); ctx.lineTo(x1, yr); ctx.lineTo(x1, y1); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = a.active ? "#4ade80" : "#64748b";
+            ctx.beginPath(); ctx.arc(x1, y1, Math.max(3, 6 * k), 0, 7); ctx.fill();
+        }
+    }
+    ctx.restore();
+}
+
 GameModes.register({
     id: "puzzle",
     title: "CRATE LAB",
@@ -138,6 +181,7 @@ GameModes.register({
         puzzleState.room = PUZZLE_ROOMS.indexOf(LevelManager.currentLevelKey);
         puzzleState.time = 0;
         puzzleState.done = false;
+        puzzleState.hint = false;
     },
 
     createPlayers: function() {
@@ -181,6 +225,7 @@ GameModes.register({
 
     onKey: function(code) {
         if (code === "KeyR") { LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
+        if (code === "KeyH") { puzzleState.hint = !puzzleState.hint; return true; }
         return false;
     },
 
@@ -190,13 +235,20 @@ GameModes.register({
 
     onRestart: function() { puzzleState.room = 0; LevelManager.selectLevel(PUZZLE_ROOMS[0]); },
 
+    drawWorld: function() { puzzleDrawWires(); },
+
     drawHUD: function() {
         var lvl = LevelManager.getCurrentLevel();
+        var hint = PUZZLE_HINTS[puzzleState.room];
+        if (hint && puzzleState.hint) {
+            uiPanel(cssW / 2 - 400, cssH - 110, 800, 54, "#fde047", 0.92);
+            uiText("💡 " + hint, cssW / 2, cssH - 78, 13, "#fef9c3", "center", "800");
+        } else if (hint && !puzzleState.done && puzzleState.time > 45 * 60) uiText("Stuck? Press H for a hint", cssW / 2, cssH - 44, 14, "#fde047", "center", "900");
         uiPanel(14, 14, 380, 92, "#d9a05b");
         uiText("CRATE LAB", 30, 46, 24, "#f4c27a", "left", "900");
         uiText("ROOM " + (puzzleState.room + 1) + "/" + PUZZLE_ROOMS.length + "  ·  " + (lvl.title || ""), 30, 70, 14, "#e2e8f0", "left", "800");
         uiText("⏱ " + (puzzleState.time / 60).toFixed(1) + "s   ★ " + Gadgets.starsGot + "/" + Gadgets.starsTotal + "   ☠ " + Gadgets.deaths + (Gadgets.keys["#facc15"] || Gadgets.keys["#38bdf8"] ? "   🔑" : ""), 30, 94, 13, "#94a3b8", "left", "700");
-        uiText("G / right-click grab · click throw · E lever · R restart room · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
+        uiText("G / right-click grab · click throw · E lever · H hint · R restart room · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
     },
 
     menuItems: function(items) {
