@@ -51,15 +51,43 @@ var Net = {
     peerCount: function() { var n = 0; for (var k in this.peers) n++; return n; },
 
     // ------------------------------------------------------------------ connection
+    // Make sure this page really comes from the game's server.js (a plain web server can't relay players)
     connect: function(role, name) {
         if (this.ws) this.disconnect();
         this.name = (name || "Player").slice(0, 16);
         try { localStorage.setItem("timsLanName", this.name); } catch (e) {}
+        var self = this;
+        this.status = "Checking for the LAN server…";
+        this.statusKind = "info";
+        this.serverMissing = false;
+        NetUI.render();
+        fetch("/lan-info", { cache: "no-store" }).then(function(r) {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+        }).then(function(info) {
+            if (!info || info.port === undefined) throw new Error("not the game server");
+            if (role === "host" && info.hasHost) {
+                self.status = "Someone on this network is already hosting. Press Join to play in their game.";
+                self.statusKind = "error";
+                NetUI.render();
+                return;
+            }
+            self.openSocket(role);
+        }).catch(function() {
+            self.serverMissing = true;
+            self.status = "This page isn't coming from the game's LAN server, so there's nothing to connect to.";
+            self.statusKind = "error";
+            NetUI.render();
+        });
+    },
+
+    openSocket: function(role) {
         var url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/lan";
         var ws;
-        try { ws = new WebSocket(url); } catch (e) { this.status = "Could not open a connection: " + e.message; NetUI.render(); return; }
+        try { ws = new WebSocket(url); } catch (e) { this.status = "Could not open a connection: " + e.message; this.statusKind = "error"; NetUI.render(); return; }
         this.ws = ws;
         this.status = "Connecting…";
+        this.statusKind = "info";
         var self = this;
         ws.onopen = function() { ws.send(JSON.stringify({ t: "hello", role: role, name: self.name })); };
         ws.onmessage = function(ev) { self.onMessage(ev.data); };
@@ -67,7 +95,8 @@ var Net = {
             if (self.ws !== ws) return;
             var was = self.role;
             self.cleanup();
-            self.status = was ? "Disconnected from the LAN game." : "Could not reach the LAN server. Is `node server.js` running?";
+            self.status = was ? "Disconnected from the LAN game." : "Could not connect to the LAN server. Is `node server.js` still running?";
+            self.statusKind = "error";
             NetUI.render();
         };
         NetUI.render();
@@ -110,7 +139,9 @@ var Net = {
             case "welcome":
                 this.role = m.role; this.pid = m.pid;
                 if (m.addresses) this.addresses = m.addresses;
+                this.statusKind = "ok";
                 if (m.role === "host") {
+                    if (typeof paused !== "undefined" && paused && typeof closePause === "function") closePause();
                     this.status = "Hosting. Players can join now.";
                     this.capture();
                     this.fullNext = true;
@@ -118,10 +149,11 @@ var Net = {
                     this.status = m.hasHost ? "Joined! Waiting for the host's game…" : "Connected. Waiting for someone to host…";
                     this.inGame = false;
                     document.body.classList.add("lan-client");
+                    setTimeout(function() { NetUI.close(); }, 600);
                     if (typeof SummonManager !== "undefined" && SummonManager.isOpen) SummonManager.togglePanel();
                 }
                 break;
-            case "error": this.status = m.msg; break;
+            case "error": this.status = m.msg; this.statusKind = "error"; break;
             case "lobby": this.lobbyPlayers = m.players || []; break;
             case "join": if (this.role === "host") this.hostAddPeer(m.pid, m.name); break;
             case "leave": if (this.role === "host") this.hostRemovePeer(m.pid); break;
@@ -735,7 +767,8 @@ var NetUI = {
             "#lan-panel code{background:#1e293b;padding:3px 7px;border-radius:6px;color:#7dd3fc;font-size:15px;user-select:all}" +
             "#lan-panel .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0}" +
             "#lan-panel .pl{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;background:#1e293b;margin:5px 0}" +
-            "#lan-panel .dot{width:14px;height:14px;border-radius:4px;flex:none}#lan-panel .st{color:#fbbf24;font-weight:600}" +
+            "#lan-panel .dot{width:14px;height:14px;border-radius:4px;flex:none}#lan-panel .st{color:#fbbf24;font-weight:600}#lan-panel .err{color:#fca5a5;font-weight:700;background:rgba(127,29,29,.35);padding:8px 10px;border-radius:8px}" +
+            "#lan-panel button:disabled{opacity:.45;cursor:default}" +
             "body.lan-client .top-bar-btn:not(#lan-btn),body.lan-client #level-select-dropdown,body.lan-client #mario-maker-dock{display:none!important}";
         document.head.appendChild(css);
         var el = document.createElement("div");
@@ -760,9 +793,16 @@ var NetUI = {
         } else if (!Net.role) {
             var nm = "";
             try { nm = localStorage.getItem("timsLanName") || ""; } catch (e) {}
+            var busy = !!Net.ws || Net.statusKind === "info" && /Checking/.test(Net.status);
             h += "<p>Play together on one Wi-Fi network. The <b>host</b> runs the game and picks what to play; every player who <b>joins</b> gets their own hero and camera on their own screen. Up to 16 players.</p>" +
-                 "<div class='row'>Your name: <input id='lan-name' maxlength='16' value='" + esc(nm || "Player") + "'></div>" +
-                 "<div class='row'><button id='lan-host'>🏠 Host a game</button><button id='lan-join'>🎮 Join the game</button><button class='sec' id='lan-close'>Close</button></div>";
+                 "<div class='row'>Your name: <input id='lan-name' maxlength='16' value='" + esc(Net.name || nm || "Player") + "'></div>" +
+                 "<div class='row'><button id='lan-host'" + (busy ? " disabled" : "") + ">🏠 Host a game</button><button id='lan-join'" + (busy ? " disabled" : "") + ">🎮 Join the game</button><button class='sec' id='lan-close'>Close</button></div>";
+            if (Net.status) h += "<p class='" + (Net.statusKind === "error" ? "err" : "st") + "'>" + esc(Net.status) + "</p>";
+            if (Net.serverMissing) {
+                h += "<p>This page is being served from <code>" + esc(location.host) + "</code> by a regular web server (for example <code>python -m http.server</code> or an editor preview). Multiplayer needs the game's own server:</p>" +
+                     "<p><b>1.</b> Stop the current server. <b>2.</b> Open a terminal in the game folder and run:</p><div class='row'><code>node server.js</code></div>" +
+                     "<p><b>3.</b> Open <code>http://localhost:8080</code> (other devices use the <code>http://192.168…:8080</code> link it prints). Want to keep port " + esc(location.port || "80") + "? Run <code>node server.js " + esc(location.port || "80") + "</code> instead.</p>";
+            }
         } else if (Net.role === "host") {
             var link = Net.addresses.length ? ("http://" + Net.addresses[0] + ":" + location.port) : location.origin;
             h += "<p class='st'>" + esc(Net.status) + "</p><p>Tell other players to open this link and press <b>Join</b>:</p><div class='row'><code>" + esc(link) + "</code></div>";
@@ -786,7 +826,7 @@ var NetUI = {
         var $ = function(id) { return document.getElementById(id); };
         var name = function() { return ($("lan-name") && $("lan-name").value.trim()) || "Player"; };
         if ($("lan-host")) $("lan-host").onclick = function() { Net.connect("host", name()); };
-        if ($("lan-join")) $("lan-join").onclick = function() { Net.connect("client", name()); NetUI.close(); };
+        if ($("lan-join")) $("lan-join").onclick = function() { Net.connect("client", name()); };
         if ($("lan-close")) $("lan-close").onclick = function() { NetUI.close(); };
         if ($("lan-leave")) $("lan-leave").onclick = function() { Net.disconnect(); };
     }
