@@ -118,7 +118,7 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
   1-0 (palette clicks are host-only); ~0.3-0.5 MB/s per client in the arenas.
 - Pathfinding: "60 FPS with 60+ enemies" met for the JS budget, not in headless software rendering; frontier pathing ~1 ms.
 - LAN: bandwidth is per client through the relay (~340 KB/s with 60 enemies); mode HUD state only synced for Stomp
-  Squad and Bed Brawl; minecarts/rails and Terra tiles not visible on LAN clients; Wobble Wheels has no LAN riders.
+  Squad and Bed Brawl; minecarts/rails and Terra tiles not visible on LAN clients. (Wobble Wheels LAN riders: done.)
 - Stomp Squad: courses tuned by eye; bubble co-op and courses 2-3 only smoke-tested. (Fireballs now bounce along the
   ground; enemy health bars are hidden via the new `noEnemyBars` flag.)
 - Level Studio: no multi-level campaigns; mover end points are numbers (not draggable); no thumbnails.

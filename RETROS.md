@@ -6,6 +6,18 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Wobble Wheels over LAN
+
+**Shipped:** LAN players get a rider of their own in Wobble Wheels (an `addNetPlayer` hook: hidden seat hero + rider
+steered by their keys, W/S drive, A/D lean, Space special), they keep riding after restarts and their rider goes away
+when they leave. Fixed a clash found while testing: the gamepad 3-4 rider code found riders by slot number, and LAN
+players also start at slot 2 — so it deleted the LAN rider as an "unplugged pad". Pad riders are tagged now.
+
+**Measured:** client held W → its rider drove from x -589 to 1847 on the host; after a restart it was back at the
+start; leaving removed it; the pad-3 join/unplug test still passes.
+
+---
+
 ## Stomp Squad: bouncing fireballs, no enemy health bars
 
 **Shipped:** fire-flower shots in Stomp Squad are now fireballs — they leave at a fixed speed, arc down under gravity

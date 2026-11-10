@@ -328,9 +328,14 @@ GameModes.register({
         var lvl = LevelManager.getCurrentLevel();
         for (let i = 0; i < Wheels.riders.length; i++) Ragdolls.remove(Wheels.riders[i]);
         Wheels.riders = [];
-        var hs = characters.filter(function(c) { return c.isPlayer; });
+        var hs = characters.filter(function(c) { return c.isPlayer && !c.isRemote; });
         var startX = Wheels.cpReached >= 0 ? Wheels.cps[Wheels.cpReached] : lvl.spawnP1[0];
         for (let i = 0; i < hs.length; i++) Wheels.riders.push(wheelsSpawn(i, startX - i * 200, 150, hs[i]));
+        // LAN players keep riding after a restart
+        if (typeof Net !== "undefined" && Net.role === "host") characters.forEach(function(c) {
+            if (!c.isRemote || !Net.peers[c.netPid]) return;
+            var rd = wheelsSpawn(c.playerIndex, startX - c.playerIndex * 120, 150, c); rd.netPeer = Net.peers[c.netPid]; rd.seat = c; Wheels.riders.push(rd);
+        });
         var tr = lvl.traps || {};
         Wheels.logs = (tr.logs || []).map(function(l) { return wheelsMakeLog(l[0], l[1]); });
     },
@@ -345,15 +350,31 @@ GameModes.register({
         return false;
     },
 
+    // LAN: a joining player gets a hidden seat hero plus a rider of their own (driven by their keys)
+    addNetPlayer: function(slot, p) {
+        var lvl = LevelManager.getCurrentLevel(), sx = Wheels.cpReached >= 0 ? Wheels.cps[Wheels.cpReached] : lvl.spawnP1[0];
+        var seat = ModeKit.makeHero(slot, sx - 120 * slot, 150, { label: p.name, color: p.color });
+        seat.dead = true; seat.noCollide = true;
+        var rd = wheelsSpawn(slot, sx - 120 * slot, 150, seat);
+        rd.netPeer = p; rd.seat = seat;
+        Wheels.riders.push(rd);
+        return seat;
+    },
     preUpdate: function() {
         Wheels.t++;
+        // LAN riders whose player left go away; seats follow their riders (camera / LAN "you" marker)
+        for (let i = Wheels.riders.length - 1; i >= 0; i--) {
+            var lr = Wheels.riders[i];
+            if (lr.netPeer && typeof Net !== "undefined" && !Net.peers[lr.netPeer.pid]) { Ragdolls.remove(lr); Wheels.riders.splice(i, 1); continue; }
+            if (lr.seat) { lr.seat.x = lr.pts[lr.vbase].x; lr.seat.y = lr.pts[lr.vbase].y + 60; }
+        }
         // gamepads 3-4 get riders of their own (there are no CPUs here to take over)
         if (typeof Pads !== "undefined") for (let i = 2; i < 4; i++) {
-            var on = Pads.state[i] && Pads.state[i].active, rider = Wheels.riders.find(function(r) { return r.wheelsSlot === i; });
+            var on = Pads.state[i] && Pads.state[i].active, rider = Wheels.riders.find(function(r) { return r.padRider === i; });
             if (on && !rider) {
                 var lvl = LevelManager.getCurrentLevel(), sx = Wheels.cpReached >= 0 ? Wheels.cps[Wheels.cpReached] : lvl.spawnP1[0];
                 var seat = ModeKit.makeHero(i, sx - i * 200, 150, { label: "P" + (i + 1) }); seat.dead = true; seat.noCollide = true;
-                Wheels.riders.push(wheelsSpawn(i, sx - i * 200, 150, seat));
+                var pr = wheelsSpawn(i, sx - i * 200, 150, seat); pr.padRider = i; Wheels.riders.push(pr);
                 showBanner("P" + (i + 1) + " JOINS!", "gamepad " + (i + 1) + ": stick lean, A drive, B / X special", "#7ff0ff");
             } else if (!on && rider) { Ragdolls.remove(rider); Wheels.riders.splice(Wheels.riders.indexOf(rider), 1); }
         }
@@ -368,7 +389,7 @@ GameModes.register({
         for (let i = 0; i < Wheels.riders.length; i++) {
             var rd = Wheels.riders[i], vx = rd.pts[rd.vbase].x, vy = rd.pts[rd.vbase].y;
             // keep the (invisible) hero with its rider so LAN / camera helpers have a position
-            var h = characters[i]; if (h) { h.x = vx; h.y = vy + 60; }
+            if (!rd.seat) { var h = characters.find(function(c) { return c.isPlayer && !c.isRemote && c.playerIndex === rd.wheelsSlot; }); if (h) { h.x = vx; h.y = vy + 60; } }
             if (rd.crashed && --rd.crashT === 0) { LevelManager.selectLevel(LevelManager.currentLevelKey); return; }
             if (vy < -900 && !rd.crashed) wheelsCrash(rd);
             for (let c = 0; c < Wheels.cps.length; c++) if (c > Wheels.cpReached && vx > Wheels.cps[c] && !rd.crashed) { Wheels.cpReached = c; Components.addFloatingText("CHECKPOINT", vx, vy + 160, "#4ade80", 20); }
