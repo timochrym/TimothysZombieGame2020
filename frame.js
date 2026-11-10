@@ -1194,6 +1194,7 @@ function pauseItems() {
             { id: "sdetail", label: "Character detail when zoomed in:  " + (settings.charDetail !== false ? "ON" : "OFF"), hint: "Shading, highlights and shine on big characters" },
             { id: "s3d", label: "3D view (2.5D):  " + (settings.view3d ? "ON" : "OFF"), hint: "Looks only: blocks get depth, gameplay stays 2D" },
             { id: "ssquare", label: "Character look:  " + (settings.squareChars ? "Classic squares" : "Detailed"), hint: "Classic squares = the original 2020 blocky look" },
+            { id: "scontrols", label: "Controls: remap keys & buttons  ▸", hint: "P1 / P2 keys and gamepad buttons" },
             { id: "help", label: "Controls help:  " + (devOpts.showHelp ? "ON" : "OFF"), hint: "Shows the key cheat-sheet" },
             { id: "back", label: "◀  Back", hint: "Esc" }
         ];
@@ -1236,6 +1237,7 @@ function pauseItems() {
 }
 
 function pauseActivate(id, dir) {
+    if (id === "scontrols") { if (typeof ControlsUI !== "undefined") ControlsUI.open(); return; }
     if (typeof SFX !== "undefined") SFX.play("select");
     if (id === "settings") { pauseSub = "settings"; pauseIndex = 0; return; }
     if (id === "back") { pauseSub = null; pauseIndex = 0; return; }
@@ -1379,6 +1381,7 @@ function drawHitboxes() {
 var tickAccumulator = 0;
 var lowFpsSeconds = 0;
 function tick() {
+    if (typeof ControlsUI !== "undefined") ControlsUI.poll();
     if (typeof Pads !== "undefined") Pads.poll();
     if (typeof Net !== "undefined" && Net.role === "client") { Net.clientTick(); return; }
     if (typeof Studio !== "undefined" && Studio.isOpen) { Studio.tick(); return; }

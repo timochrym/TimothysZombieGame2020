@@ -12,7 +12,8 @@ Last updated: after Vehicles (backlog B2), during Terra (B3) and controller supp
       RT fire), Crash Lab (RT uses the tool at the aim point, Select cycles tools), Terra (Select cycles blocks).
 - [x] Controller: Level Studio gamepad editing (cursor, A place/select/drag, B delete, X rotate, LB/RB pieces, LT/RT
       zoom, Y play-test, Start save, Back close); Wobble Wheels pads 3-4 get their own riders.
-- [ ] Controller: button remapping screen (keyboard + pad) — next.
+- [x] Controller: remapping screen (Settings → Controls): all 20 P1/P2 keys and 7 gamepad action buttons, clash
+      highlight, reset to defaults, saved. (A remapped key's old default still works too — harmless, noted.)
 - [x] **Textures for the new blocks** — 21 new pixel textures (textures.js) used by building pieces, Terra tiles,
       platformer pipes / used blocks, Bed Brawl beds, Siege glass, Crash Lab spikes; all listed in Level Studio.
 - [ ] More textures still to do: vehicles (car body, cart), rails, Bed Brawl pedestals/generators, Wobble Wheels

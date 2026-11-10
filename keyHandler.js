@@ -34,8 +34,8 @@ function queueGrab(idx) {
 function keyDownHandler(e) {
     if (isTypingTarget(e)) return;
     if (typeof SFX !== "undefined") SFX.unlock();
-    var k = e.key;
-    var c = e.code;
+    var c = (typeof KeyMap !== "undefined") ? KeyMap.tr(e.code) : e.code;      // remapped keys (Settings -> Controls)
+    var k = c !== e.code ? KeyMap.keyFor(c, e.key) : e.key;
 
     // LAN client: the host owns menus; Esc opens the small LAN menu
     if (typeof Net !== "undefined" && Net.role === "client" && Net.clientKey(e)) return;
@@ -106,8 +106,8 @@ function keyDownHandler(e) {
 }
 
 function keyUpHandler(e) {
-    var k = e.key;
-    var c = e.code;
+    var c = (typeof KeyMap !== "undefined") ? KeyMap.tr(e.code) : e.code;      // remapped keys (Settings -> Controls)
+    var k = c !== e.code ? KeyMap.keyFor(c, e.key) : e.key;
     if (k == "ArrowRight") ULDRrightPressed = false;
     if (k == "ArrowLeft") ULDRleftPressed = false;
     if (k == "ArrowUp") ULDRupPressed = false;
@@ -250,13 +250,14 @@ var Pads = {
                 st.left = ax < -0.35 || B(14);
                 st.right = ax > 0.35 || B(15);
                 st.down = ay > 0.6 || B(13);
-                st.up = B(0) || B(12);
+                var L = function(n) { return B(typeof KeyMap !== "undefined" ? KeyMap.padPhys(n) : n); };   // remappable action buttons
+                st.up = L(0) || B(12);
                 st.aim = Math.hypot(rx, ry) > 0.3 ? [rx, ry] : null;
-                st.shoot = B(7) || Math.hypot(rx, ry) > 0.8;
-                st.jet = B(5);
-                st.run = B(1) || B(2);
-                st.punchHeld = B(6);
-                st.interact = B(3);
+                st.shoot = L(7) || Math.hypot(rx, ry) > 0.8;
+                st.jet = L(5);
+                st.run = L(1) || L(2);
+                st.punchHeld = L(6);
+                st.interact = L(3);
                 var now = {};
                 for (let b = 0; b < 17; b++) now[b] = B(b);
                 now.su = ay < -0.6; now.sd = ay > 0.6; now.sl = ax < -0.6; now.sr = ax > 0.6;

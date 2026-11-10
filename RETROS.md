@@ -6,6 +6,19 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Controls remapping (keyboard P1 / P2 + gamepad buttons)
+
+**Shipped:** `controls.js` — Settings → "Controls: remap keys & buttons" opens a panel with every P1 and P2 action
+(move ×4, shoot, jetpack, dash, use, grab, reload) and the 7 gamepad action buttons (jump, shoot, jetpack, dash ×2,
+punch, use). Click a binding, press the new key / button; clashes are outlined red; Reset to defaults; saved. It's a
+translation layer in front of the normal key handler (a pressed key becomes the default key of the action it's bound
+to), so every game picks it up without changes; pads go through a logical → physical button table.
+
+**Measured:** rebinding P1 jump to I through the panel → pressing I set the jump flag and the hero rose 280; a pad
+with jump moved to X jumps on X and not on A; Esc closes the panel; gamepad regression test unchanged.
+
+---
+
 ## Controllers: Level Studio gamepad editing, Wobble Wheels pads 3-4
 
 **Shipped:** Level Studio works with a gamepad — a yellow world cursor on the left stick / D-pad (the camera follows it
