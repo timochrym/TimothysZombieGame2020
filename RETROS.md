@@ -6,6 +6,27 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Stomp Squad — genre-feel pass (platformer)
+
+**Shipped:** hold RUN (Shift for P1, Right-Shift for P2, pad X/B) to build up to ~1.7× walking speed (walk is a touch
+slower than before); skid dust when reversing at speed; ground-pound (S/↓ in the air: short hang, then a slam that
+shakes the screen, flattens foes within 120 px and breaks a brick under a big hero); new Shellback enemy — stomp it
+into a shell, stomp/walk into it to kick, it slides at 15 px/frame, bounces off walls, chain-kills everything in its
+path (score climbs per kill) and despawns once off-screen; flagpole slide down + walk-off. New engine hook `runMult`.
+
+**Measured:** walk 8.8 vs run 14.9 px/frame; one kicked shell took out hopper + 2 walkers + spiky (score 100 → 1600);
+ground-pound lands dead still; both regression runs (blocks, stomp, pit, goal → course 2) unchanged.
+
+**Went wrong:** (1) the kicked shell crawled at 6 px/frame because enemies share the soft speed cap → it now lifts its own
+cap while sliding. (2) The bounce off a fresh shell landed on it again and kicked it straight back at you → 45-frame
+grace. (3) Course 1's shell sat between two pipes = an unavoidable ricochet death trap → moved to an open stretch with
+foes ahead. (4) After the pound the hero bounced off the ground → speed zeroed on landing. (5) the walk-off kept walking
+through the right wall after the hero hid → stops once hidden.
+
+**Left / known:** crouch, wall-slide, pop-out animations, themes, shell sprite (TODO.md).
+
+---
+
 ## Zombie Ball "Flail" style — genre-feel pass (physics soccer)
 
 **Shipped:** `sport_flail.js` — an alternate style for Zombie Ball (pause menu → Style). Two original big-headed,

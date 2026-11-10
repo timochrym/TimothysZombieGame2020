@@ -157,7 +157,8 @@ class Character {
 
     // Calm top running speed (px/frame); knockback, dashes and wall-jumps can briefly exceed it
     runCapNow() {
-        if (!this.isPlayer) return this.maxspeed * 0.4;
+        if (!this.isPlayer) return this.maxspeed * 0.4 * (this.capMult || 1);
+        if (GameModes.has("runMult")) { var rm = GameModes.call("runMult", this); if (rm && rm !== 1) return this.maxspeed * 0.48 * rm; }
         var fm = (typeof Feel !== "undefined") ? Feel.speedMult() : 1;
         if (fm !== 1 && !this.creativeFlying) return this.maxspeed * (this.hasPower("SPEED") ? 0.62 : 0.48) * fm;
         if (this.creativeFlying) return this.maxspeed * 0.75;   // flying is quick

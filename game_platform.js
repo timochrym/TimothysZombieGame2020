@@ -26,8 +26,15 @@ var PLAT_ENEMY = {
     hopper: { power: "SLIME", name: "Blob", spd: 7 },
     flyer:  { power: "BAT", name: "Flapper", spd: 7 },
     spiky:  { power: "KNIGHT", name: "Spikehelm", spd: 5 },
-    tank:   { power: "TANK", name: "Brute", spd: 4.5 }
+    tank:   { power: "TANK", name: "Brute", spd: 4.5 },
+    shell:  { power: "SPITTER", name: "Shellback", spd: 5.5 }      // stomp -> shell, kick the shell, it slides and bowls others over
 };
+// is this hero holding RUN? (P1 left Shift, P2 right Shift, pad B / X)
+function platRunHeld(ch) {
+    var pad = (typeof Pads !== "undefined") ? Pads.state[ch.playerIndex] : null;
+    if (pad && pad.active && pad.run) return true;
+    return ch.playerIndex === 0 ? !!ShiftPressed : (ch.playerIndex === 1 ? !!RShiftPressed : false);
+}
 var PLAT_CHAIN = [100, 200, 400, 800, 1000, 2000, 4000, 8000];
 
 // ---------------------------------------------------------------- level kit (ground top = y 0, blocks are 80px)
@@ -73,13 +80,13 @@ function platCourse(n, title, theme, spawn, left, right, layout, gadgets, enemie
     gad(PK.q(720, 600, "coins5"));
     add(PK.pipe(1200, 160));
     add(PK.pipe(1560, 240));
-    E.push({ t: "walker", x: 1000 }, { t: "walker", x: 1380 }, { t: "walker", x: 1440 });
+    E.push({ t: "walker", x: 1000 }, { t: "walker", x: 1440 });
     // first gap, coin arc over it
     gad(PK.arc(1900, 120, 5));
     add(PK.ground(2160, 3700));
     gad([PK.br(2480, 280), PK.br(2560, 280, "coins5"), PK.br(2640, 280), PK.br(2720, 280)]);
     gad([PK.br(2560, 600), PK.q(2640, 600, "life"), PK.br(2720, 600)]);
-    E.push({ t: "hopper", x: 2900 }, { t: "walker", x: 3100 }, { t: "flyer", x: 3300, y: 320 });
+    E.push({ t: "shell", x: 2760 }, { t: "hopper", x: 2900 }, { t: "walker", x: 3100 }, { t: "walker", x: 3220 }, { t: "flyer", x: 3300, y: 320 });
     gad({ type: "checkpoint", x: 2400, y: 0 });
     gad(PK.q(3400, 280, "star"));
     E.push({ t: "spiky", x: 3550 });
@@ -114,7 +121,7 @@ function platCourse(n, title, theme, spawn, left, right, layout, gadgets, enemie
     add(PK.ground(2400, 4200));
     gad({ type: "checkpoint", x: 2600, y: 0 });
     add(PK.pipe(3000, 240));
-    E.push({ t: "hopper", x: 2800 }, { t: "hopper", x: 3300 }, { t: "walker", x: 3600 }, { t: "walker", x: 3700 });
+    E.push({ t: "hopper", x: 2800 }, { t: "hopper", x: 3300 }, { t: "shell", x: 3600 }, { t: "walker", x: 3700 }, { t: "walker", x: 3800 });
     gad([PK.q(3400, 280, "power"), PK.q(3480, 280), PK.q(3560, 280, "coins5")]);
     gad(PK.coins(3300, 700, 6));
     add(PK.plat(3260, 3700, 640));
@@ -301,6 +308,7 @@ GameModes.register({
     setupLevel: function(lvl) {
         Gadgets.load(lvl.gadgets);
         Plat.items = [];
+        Plat.slide = null;
         Plat.time = lvl.time || 300;
         Plat.tick = 0;
         Plat.phase = "play";
@@ -347,6 +355,27 @@ GameModes.register({
             if (!z.platAwake) return true;
         }
         var k = z.platKind;
+        if (z.platShell) {
+            if (z.shellKickT > 0) z.shellKickT--;
+            if (z.shellRestT > 0) z.shellRestT--;
+            if (z.shellV) {
+                if (CollisionDetector.collision(z, [Math.sign(z.shellV) * 10, 0], staticObjects) && !z.collidedRamp) { z.shellV = -z.shellV; if (typeof SFX !== "undefined") SFX.play("bonk", z.x, z.y, 0.5); }
+                var near = false;
+                for (let i = 0; i < characters.length; i++) if (characters[i].isPlayer && Math.abs(characters[i].x - z.x) < 1400) near = true;
+                if (!near) { z.dead = true; return true; }                       // a shell that slides off-screen is gone
+                z.xspeed = z.shellV; z.capMult = Math.abs(z.shellV) / (z.maxspeed * 0.4) + 0.05;   // past the normal enemy speed cap
+                if (z.shellV > 0) z.rightPressed = true; else z.leftPressed = true;
+                if (z.maxspeed < Math.abs(z.shellV)) z.maxspeed = Math.abs(z.shellV);
+                for (let i = 0; i < zombies.length; i++) {
+                    var o = zombies[i];
+                    if (o !== z && !o.dead && Math.abs(o.x - z.x) < (o.s1 + z.s1) / 2 && Math.abs(o.y - z.y) < (o.s2 + z.s2) / 2) {
+                        z.shellChain = (z.shellChain || 0) + 1;
+                        platKillFoe(o, null, PLAT_CHAIN[Math.min(PLAT_CHAIN.length - 1, z.shellChain - 1)]);
+                    }
+                }
+            } else { z.xspeed *= 0.8; z.capMult = 1; }
+            return true;
+        }
         if (k === "flyer") {
             z.flies = true;
             z.platT = (z.platT || 0) + 1;
@@ -376,6 +405,15 @@ GameModes.register({
         if (!foe.platKind) return false;
         if (hero.platStar > 0) { platKillFoe(foe, hero, 200); return true; }
         if (foe.platKind === "spiky") { platHurt(hero); hero.yspeed = 7; return true; }
+        if (foe.platKind === "shell") {
+            hero.yspeed = hero.upPressed ? 12 : 8; hero.onGround = false; hero.jump = false;
+            if (!foe.platShell) { foe.platShell = true; foe.shellV = 0; foe.scaleX = 1.3; foe.scaleY = 0.55; foe.playerLabel = "SHELL"; foe.shellRestT = 45; platAddScore(100, foe.x, foe.y + 70); }
+            else if (foe.shellRestT > 0) { }                                        // the bounce off a fresh shell doesn't kick it
+            else if (foe.shellV) { foe.shellV = 0; foe.shellRestT = 45; }                                    // stomping a sliding shell stops it
+            else { foe.shellV = (hero.x < foe.x ? 1 : -1) * 15; foe.shellKickT = 14; }
+            if (typeof SFX !== "undefined") SFX.play("kick", foe.x, foe.y);
+            return true;
+        }
         hero.yspeed = hero.upPressed ? 13 : 8.5;
         hero.jump = false; hero.onGround = false; hero.coyoteTimer = 0;
         hero.scaleX = 0.86; hero.scaleY = 1.16;
@@ -395,6 +433,12 @@ GameModes.register({
     onContact: function(hero, foe) {
         if (hero.platBubble) return true;
         if (hero.platStar > 0 && foe.platKind) { platKillFoe(foe, hero, 200); return true; }
+        if (foe.platShell) {
+            // a resting shell gets kicked; a freshly kicked shell can't hurt you; a sliding one does
+            if (!foe.shellV && foe.shellRestT > 0) return true;
+            if (!foe.shellV) { foe.shellV = (hero.x < foe.x ? 1 : -1) * 15; foe.shellKickT = 14; if (typeof SFX !== "undefined") SFX.play("kick", foe.x, foe.y); return true; }
+            if (foe.shellKickT > 0) return true;
+        }
         return false;
     },
 
@@ -415,6 +459,13 @@ GameModes.register({
     onHazard: function(ch, g) { platHurt(ch); ch.yspeed = 12; ch.onGround = false; return true; },
 
     canShoot: function(ch) { return ch.platSize === 2 && !ch.platBubble; },
+
+    // walking is a bit slower than before, holding RUN builds up to a much faster top speed
+    runMult: function(ch) {
+        var want = platRunHeld(ch) ? 1.55 : 0.92;
+        ch.platRunK = (ch.platRunK || 0.92) + (want - (ch.platRunK || 0.92)) * (want > (ch.platRunK || 0.92) ? 0.04 : 0.12);
+        return ch.platRunK;
+    },
     canBreak: function(ch) { return ch.platSize > 0; },
 
     onBlockHit: function(ch, g) {
@@ -430,6 +481,7 @@ GameModes.register({
     onBrickBreak: function(ch, g) { platAddScore(50); },
 
     onGoal: function(ch, g, frac) {
+        Plat.slide = { ch: ch, x: g.x, bottom: g.y };
         var steps = [100, 400, 800, 2000, 5000];
         if (frac > 0.95) platAddLife(ch.x, ch.y + 120);
         else platAddScore(steps[Math.min(4, Math.floor(frac * 5))], ch.x, ch.y + 120, "#fde047");
@@ -476,6 +528,39 @@ GameModes.register({
         }
         var heroes = Plat.heroes();
         var free = heroes.filter(function(c) { return !c.platBubble; });
+        for (let i = 0; i < free.length; i++) {
+            var hc = free[i];
+            // skid: reversing at speed kicks up dust
+            if (hc.onGround && Math.abs(hc.xspeed) > 6 && ((hc.xspeed > 0 && hc.leftPressed) || (hc.xspeed < 0 && hc.rightPressed)) && Plat.tick % 3 === 0) {
+                Components.spawnSparks(hc.x - Math.sign(hc.xspeed) * 20, hc.y - hc.s2 / 2 + 4, "#d6d3d1", 2);
+                if (Plat.tick % 12 === 0 && typeof SFX !== "undefined") SFX.play("ui", hc.x, hc.y, 0.3, 0.6);
+            }
+            // ground-pound: press down in the air -> brief hang, then slam
+            var downFresh = hc.downPressed && !hc.platDownPrev;
+            hc.platDownPrev = hc.downPressed;
+            if (!hc.onGround && downFresh && !hc.platPound && Plat.phase === "play") { hc.platPound = 14; hc.scaleX = 1.2; hc.scaleY = 0.8; }
+            if (hc.platPound > 0) {
+                if (hc.platPound > 1) { hc.platPound--; hc.xspeed = 0; hc.yspeed = 0; if (hc.platPound === 1) hc.yspeed = -24; }
+                else if (hc.onGround) {
+                    hc.platPound = 0; hc.yspeed = 0; hc.scaleX = 1.35; hc.scaleY = 0.7;
+                    screenShake = Math.max(screenShake, 6);
+                    Components.spawnSparks(hc.x, hc.y - hc.s2 / 2, "#e7e5e4", 10);
+                    if (typeof SFX !== "undefined") SFX.play("explode", hc.x, hc.y, 0.3, 1.5);
+                    for (let z = 0; z < zombies.length; z++) { var zz = zombies[z]; if (!zz.dead && zz.platKind && zz.platKind !== "spiky" && Math.abs(zz.x - hc.x) < 120 && Math.abs(zz.y - hc.y) < 90) platKillFoe(zz, hc, 200); }
+                    for (let g = 0; g < Gadgets.list.length; g++) {
+                        var gb = Gadgets.list[g];
+                        if ((gb.type === "brick" || gb.type === "qblock") && !gb.broken && Math.abs(gb.x - hc.x) < gb.w / 2 + 20 && Math.abs((gb.baseY + gb.h / 2) - (hc.y - hc.s2 / 2)) < 24) { if (hc.platSize > 0 && gb.type === "brick" && !gb.item) { gb.bump = 0; Gadgets.hitBlock(gb, hc); } }
+                    }
+                } else hc.yspeed = Math.min(hc.yspeed, -24);
+            }
+        }
+        // flagpole: slide down, then walk off to the right
+        if (Plat.slide && !Plat.slide.ch.dead) {
+            var sl = Plat.slide, sc = sl.ch;
+            sc.x = sl.x - 22; sc.xspeed = 0;
+            if (sc.y - sc.s2 / 2 > sl.bottom + 4) { sc.y -= 8; sc.yspeed = 0; }
+            else { sc.x = sl.x - 22 + (sl.walk = (sl.walk || 0) + 4); sc.lastFacing = 1; if (sl.walk > 260) sc.dead = true; }
+        }
         for (let i = 0; i < heroes.length; i++) {
             var c = heroes[i];
             if (c.platSize === undefined) platSetSize(c, 0);
@@ -608,7 +693,7 @@ GameModes.register({
             var c = hs[i], lab = c.platBubble ? "in a bubble" : ["small", "BIG", "FIRE"][c.platSize || 0] + (c.platStar > 0 ? " ★" : "");
             uiText((c.playerLabel || "P") + ": " + lab, 30 + (i % 2) * 200, 90 + Math.floor(i / 2) * 16, 12, c.color || "#fff", "left", "800");
         }
-        uiText("A/D run · W jump (hold = higher) · stomp enemies · hit ? blocks · FIRE: click / F to shoot · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
+        uiText("A/D move · hold Shift to RUN · W jump (hold = higher) · S in the air = ground-pound · stomp & kick shells · FIRE: click / F · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
         for (let i = 0; i < hs.length; i++) if (!hs[i].dead) drawEdgeIndicator(hs[i].x, hs[i].y, hs[i].color, hs[i].playerLabel);
     },
 

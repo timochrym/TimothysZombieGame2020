@@ -157,6 +157,7 @@ var SpacePressed = false;
 var EnterPressed = false;
 var EPressed = false;
 var ShiftPressed = false;
+var RShiftPressed = false;
 
 // Mouse Aim & Click-to-Shoot
 var mouseX = w / 2;

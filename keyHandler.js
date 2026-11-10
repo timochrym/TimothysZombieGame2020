@@ -71,6 +71,7 @@ function keyDownHandler(e) {
     if (c == "Enter" || c == "NumpadEnter") { PlayerInput[1].kbShoot = true; e.preventDefault(); }
     if (c == "Period" || c == "Numpad0") { PlayerInput[1].kbJet = true; e.preventDefault(); }
     if (c == "Slash" || c == "Numpad1") { PlayerInput[1].kbInteract = true; e.preventDefault(); }
+    if (c == "ShiftRight") RShiftPressed = true;
     if (c == "ShiftRight" && !e.repeat) { queueDash(1); }
     if ((c == "Comma" || c == "Numpad2") && !e.repeat) queueGrab(1);
     if ((c == "Quote" || c == "Numpad3") && !e.repeat) { PlayerInput[1].reloadQueued = true; e.preventDefault(); }
@@ -120,6 +121,7 @@ function keyUpHandler(e) {
     if (c == "KeyF") { PlayerInput[0].kbShoot = false; EnterPressed = false; }
     if (c == "KeyE" || c == "KeyQ") { PlayerInput[0].kbInteract = false; EPressed = false; }
     if (c == "ShiftLeft") ShiftPressed = false;
+    if (c == "ShiftRight") RShiftPressed = false;
 
     if (c == "Enter" || c == "NumpadEnter") PlayerInput[1].kbShoot = false;
     if (c == "Period" || c == "Numpad0") PlayerInput[1].kbJet = false;
@@ -252,6 +254,7 @@ var Pads = {
                 st.aim = Math.hypot(rx, ry) > 0.3 ? [rx, ry] : null;
                 st.shoot = B(7) || Math.hypot(rx, ry) > 0.8;
                 st.jet = B(5);
+                st.run = B(1) || B(2);
                 st.punchHeld = B(6);
                 st.interact = B(3);
                 var now = {};

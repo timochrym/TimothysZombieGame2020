@@ -21,9 +21,11 @@ Last updated: after Vehicles (backlog B2), during Terra (B3) and controller supp
 
 ## Genre-feel pass (your request: "make each game closer to the game it's trying to be")
 Play and feel like the genre's best, with ORIGINAL look (no copied characters, art style, music or levels):
-- [ ] Stomp Squad (platformer): run button with momentum, skid turns, crouch, ground-pound, wall-slide, enemies that
-      turn into kickable shells, power-up pop-out animations, flagpole slide + walk-off, overworld/underground themes,
-      cleaner chunky original sprites for heroes, enemies and blocks.
+- [~] Stomp Squad (platformer): DONE — run button with momentum (Shift / Right-Shift / pad X·B), skid dust,
+      ground-pound (S in the air: hang, slam, kills nearby foes, big heroes break bricks underneath), Shellback
+      enemies that turn into kickable shells (chain kills, wall bounce, vanish off-screen), flagpole slide + walk-off.
+      STILL TO DO: crouch, wall-slide, power-up pop-out animations, overworld/underground themes,
+      cleaner chunky original sprites for heroes, enemies and blocks, a proper shell sprite (now a squashed foe).
 - [ ] ⏸ PAUSED — Terra (sandbox): tools (pickaxe/axe tiers), crafting bench + recipes, torches & real light map, day/night with
       night enemies, inventory screen, world save/load, ore veins and biomes underground.
 - [x] Zombie Ball "Flail" style (pause menu → Style): one-button physics soccer — two big-headed, stiff-legged
