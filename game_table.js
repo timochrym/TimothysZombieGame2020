@@ -9,7 +9,7 @@
 var tableCfg = { game: "flick", vs: "cpu", level: 2 };
 try { var _tb = JSON.parse(localStorage.getItem("timsTableGames") || "null"); if (_tb) for (var _k in _tb) tableCfg[_k] = _tb[_k]; } catch (e) {}
 function saveTable() { try { localStorage.setItem("timsTableGames", JSON.stringify(tableCfg)); } catch (e) {} }
-var TABLE_GAMES = [["flick", "Flick Soccer"], ["four", "Four in a Row"]];
+var TABLE_GAMES = [["flick", "Flick Soccer"], ["four", "Four in a Row"], ["hockey", "Air Hockey"]];
 var TABLE_COLORS = ["#ef4444", "#3b82f6"];
 
 // ---------------------------------------------------------------- FLICK SOCCER
@@ -321,13 +321,110 @@ var Four = {
     }
 };
 
+// ---------------------------------------------------------------- AIR HOCKEY (real time)
+var Hockey = {
+    RW: 1000, RH: 560, GOAL: 190, MR: 34, PR: 22, win: 7,
+    m: [], puck: null, score: [0, 0], phase: "play", serveT: 0, msg: "", msgT: 0,
+    reset: function() { this.score = [0, 0]; this.phase = "play"; this.serve(0); },
+    serve: function(toward) {
+        this.m = [{ x: -380, y: 0, px: -380, py: 0 }, { x: 380, y: 0, px: 380, py: 0 }];
+        this.puck = { x: toward === 0 ? -120 : 120, y: 0, vx: 0, vy: 0 };
+        this.serveT = 50;
+    },
+    scale: function() { return Math.min((cssW - 80) / (this.RW + 80), (cssH - 170) / (this.RH + 60)); },
+    toScreen: function(x, y) { var s = this.scale(); return [cssW / 2 + x * s, cssH / 2 + 30 + y * s]; },
+    toWorld: function(sx, sy) { var s = this.scale(); return [(sx - cssW / 2) / s, (sy - cssH / 2 - 30) / s]; },
+    // where each mallet wants to go this frame
+    target: function(side) {
+        var M = this.m[side], W = this.RW / 2, H = this.RH / 2, pk = this.puck;
+        var lan = side === 1 && Table.lanPid();
+        if (side === 0 && !lan) {
+            if (Hockey.mouseMoved) { var w = this.toWorld(mouseX, mouseY); return w; }
+            var kx = (WASDrightPressed ? 1 : 0) - (WASDleftPressed ? 1 : 0), ky = (WASDdownPressed ? 1 : 0) - (WASDupPressed ? 1 : 0);
+            return [M.x + kx * 14, M.y + ky * 14];
+        }
+        if (lan) { var nb = Net.peerButtons(Table.lanPid()); return [M.x + ((nb.right ? 1 : 0) - (nb.left ? 1 : 0)) * 14, M.y + ((nb.down ? 1 : 0) - (nb.up ? 1 : 0)) * 14]; }
+        if (tableCfg.vs === "p2") return [M.x + ((ULDRrightPressed ? 1 : 0) - (ULDRleftPressed ? 1 : 0)) * 14, M.y + ((ULDRdownPressed ? 1 : 0) - (ULDRupPressed ? 1 : 0)) * 14];
+        // CPU: guard the goal mouth, strike when the puck is on its half and coming / slow
+        var lvl = tableCfg.level, home = [W - 90, Math.max(-this.GOAL / 2, Math.min(this.GOAL / 2, pk.y * 0.7))];
+        if (pk.x > 0 && (pk.vx > -2 || pk.x > W * 0.5)) return [pk.x + 26, pk.y + (pk.y > 0 ? -8 : 8) + (Math.random() - 0.5) * (4 - lvl) * 20];
+        return home;
+    },
+    update: function() {
+        if (this.msgT > 0) this.msgT--;
+        if (this.phase === "over") return;
+        var W = this.RW / 2, H = this.RH / 2, self = this, maxSp = [0, 9, 13, 17][tableCfg.level];
+        for (let side = 0; side < 2; side++) {
+            var M = this.m[side], t = this.target(side);
+            var lim = side === 0 ? [-W + this.MR, -this.MR] : [this.MR, W - this.MR];
+            var tx = Math.max(lim[0], Math.min(lim[1], t[0])), ty = Math.max(-H + this.MR, Math.min(H - this.MR, t[1]));
+            var dx = tx - M.x, dy = ty - M.y, d = Math.hypot(dx, dy), cap = (side === 1 && tableCfg.vs === "cpu" && !Table.lanPid()) ? maxSp : 40;
+            if (d > cap) { dx *= cap / d; dy *= cap / d; }
+            M.px = M.x; M.py = M.y; M.x += dx; M.y += dy;
+        }
+        if (this.serveT > 0) { this.serveT--; return; }
+        var P = this.puck;
+        for (let sub = 0; sub < 3; sub++) {
+            P.x += P.vx / 3; P.y += P.vy / 3;
+            if (P.y < -H + this.PR) { P.y = -H + this.PR; P.vy = Math.abs(P.vy) * 0.95; }
+            if (P.y > H - this.PR) { P.y = H - this.PR; P.vy = -Math.abs(P.vy) * 0.95; }
+            var inMouth = Math.abs(P.y) < this.GOAL / 2;
+            if (!inMouth) { if (P.x < -W + this.PR) { P.x = -W + this.PR; P.vx = Math.abs(P.vx) * 0.95; } if (P.x > W - this.PR) { P.x = W - this.PR; P.vx = -Math.abs(P.vx) * 0.95; } }
+            this.m.forEach(function(M) {
+                var dx = P.x - M.x, dy = P.y - M.y, d = Math.hypot(dx, dy), md = self.MR + self.PR;
+                if (d < md && d > 0) {
+                    var nx = dx / d, ny = dy / d; P.x = M.x + nx * md; P.y = M.y + ny * md;
+                    var mvx = M.x - M.px, mvy = M.y - M.py, rel = (P.vx - mvx) * nx + (P.vy - mvy) * ny;
+                    if (rel < 0) { P.vx -= 1.9 * rel * nx; P.vy -= 1.9 * rel * ny; if (typeof SFX !== "undefined" && -rel > 4) SFX.play("hit", 0, 0, Math.min(1, -rel / 25)); }
+                }
+            });
+        }
+        var sp = Math.hypot(P.vx, P.vy); if (sp > 30) { P.vx *= 30 / sp; P.vy *= 30 / sp; }
+        P.vx *= 0.996; P.vy *= 0.996;
+        if (P.x < -W - this.PR || P.x > W + this.PR) {
+            var scorer = P.x > 0 ? 0 : 1;
+            this.score[scorer]++; this.msg = (scorer === 0 ? "RED" : "BLUE") + " SCORES!"; this.msgT = 90;
+            if (typeof SFX !== "undefined") SFX.play("goal");
+            if (this.score[scorer] >= this.win) { this.phase = "over"; this.winner = scorer; showBanner((scorer === 0 ? "RED" : "BLUE") + " WINS!", this.score[0] + " - " + this.score[1], TABLE_COLORS[scorer]); }
+            else this.serve(1 - scorer);
+        }
+    },
+    draw: function() {
+        var s = this.scale(), W = this.RW / 2, H = this.RH / 2, G = this.GOAL / 2;
+        ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, cssW, cssH);
+        var a = this.toScreen(-W, -H), b = this.toScreen(W, H);
+        ctx.fillStyle = "#475569"; ctx.fillRect(a[0] - 16, a[1] - 16, b[0] - a[0] + 32, b[1] - a[1] + 32);
+        ctx.fillStyle = "#e0f2fe"; ctx.fillRect(a[0], a[1], b[0] - a[0], b[1] - a[1]);
+        ctx.fillStyle = "rgba(148,163,184,0.35)"; for (let x = a[0] + 14; x < b[0]; x += 28) for (let y = a[1] + 14; y < b[1]; y += 28) ctx.fillRect(x, y, 2, 2);   // air holes
+        var c = this.toScreen(0, 0);
+        ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(c[0], a[1]); ctx.lineTo(c[0], b[1]); ctx.stroke();
+        ctx.strokeStyle = "#3b82f6"; ctx.beginPath(); ctx.arc(c[0], c[1], 70 * s, 0, 7); ctx.stroke();
+        [-1, 1].forEach(function(sd, i) { var p = Hockey.toScreen(sd * W, -G), q = Hockey.toScreen(sd * W, G); ctx.strokeStyle = "#0f172a"; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); ctx.strokeStyle = TABLE_COLORS[i]; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p[0], c[1], G * s, sd < 0 ? -Math.PI / 2 : Math.PI / 2, sd < 0 ? Math.PI / 2 : Math.PI * 1.5); ctx.stroke(); });
+        var pk = this.toScreen(this.puck.x, this.puck.y);
+        ctx.fillStyle = "#0f172a"; ctx.beginPath(); ctx.arc(pk[0], pk[1], this.PR * s, 0, 7); ctx.fill(); ctx.strokeStyle = "#475569"; ctx.lineWidth = 2; ctx.stroke();
+        this.m.forEach(function(M, i) {
+            var q = Hockey.toScreen(M.x, M.y);
+            ctx.fillStyle = TABLE_COLORS[i]; ctx.beginPath(); ctx.arc(q[0], q[1], Hockey.MR * s, 0, 7); ctx.fill();
+            ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.beginPath(); ctx.arc(q[0], q[1], Hockey.MR * s * 0.5, 0, 7); ctx.fill();
+            ctx.strokeStyle = "#0f172a"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(q[0], q[1], Hockey.MR * s, 0, 7); ctx.stroke();
+        });
+        uiPanel(cssW / 2 - 150, 64, 300, 50, "#475569");
+        uiText(String(this.score[0]), cssW / 2 - 80, 100, 32, TABLE_COLORS[0], "center", "900");
+        uiText(String(this.score[1]), cssW / 2 + 80, 100, 32, TABLE_COLORS[1], "center", "900");
+        uiText(this.phase === "over" ? (this.winner === 0 ? "RED" : "BLUE") + " WINS — Space" : "first to " + this.win, cssW / 2, 96, 13, "#e2e8f0", "center", "900");
+        if (this.msgT > 0) uiText(this.msg, cssW / 2, cssH / 2, 56, "#0f172a", "center", "900");
+        uiText("RED: mouse (or WASD) · BLUE: " + (tableCfg.vs === "p2" ? "arrows" : (Table.lanPid() ? "LAN player" : "CPU")) + " · first to " + this.win + " · Esc: opponent / game", cssW / 2, cssH - 14, 12, "rgba(220,230,240,0.7)", "center", "700");
+    }
+};
+
 // LAN: the first LAN player takes BLUE (the CPU / P2 side)
 var Table = {
     lanPid: function() { if (typeof Net === "undefined" || Net.role !== "host") return null; for (var k in Net.peers) return Net.peers[k].pid; return null; },
     netState: function() {
         return { g: tableCfg.game, vs: tableCfg.vs, lan: !!Table.lanPid(), lanName: Table.lanPid() ? Net.peers[Table.lanPid()].name : "",
             f: { d: Flick.discs.map(function(q) { return [Math.round(q.x), Math.round(q.y), q.t]; }), b: [Math.round(Flick.ball.x), Math.round(Flick.ball.y)], turn: Flick.turn, phase: Flick.phase, score: Flick.score, sel: Flick.sel, aimA: Flick.aimA, aimP: Flick.aimP, msg: Flick.msg, msgT: Flick.msgT, win: Flick.winner },
-            q: { g: Four.g, turn: Four.turn, over: Four.over, win: Four.win, line: Four.line, col: Four.col } };
+            q: { g: Four.g, turn: Four.turn, over: Four.over, win: Four.win, line: Four.line, col: Four.col },
+            h: { m: Hockey.m.map(function(M) { return [Math.round(M.x), Math.round(M.y)]; }), p: [Math.round(Hockey.puck.x), Math.round(Hockey.puck.y)], s: Hockey.score, ph: Hockey.phase, w: Hockey.winner, msg: Hockey.msg, mt: Hockey.msgT } };
     },
     apply: function(m) {
         tableCfg.game = m.g; tableCfg.vs = m.vs; Table.remote = m.lan; Table.remoteName = m.lanName;
@@ -335,6 +432,7 @@ var Table = {
         if (!Flick.discs.length) Flick.kickoff(0);
         F.d.forEach(function(a, i) { if (Flick.discs[i]) { Flick.discs[i].x = a[0]; Flick.discs[i].y = a[1]; Flick.discs[i].t = a[2]; } });
         Flick.ball.x = F.b[0]; Flick.ball.y = F.b[1]; Flick.turn = F.turn; Flick.phase = F.phase; Flick.score = F.score; Flick.sel = F.sel; Flick.aimA = F.aimA; Flick.aimP = F.aimP; Flick.msg = F.msg; Flick.msgT = F.msgT; Flick.winner = F.win;
+        if (m.h) { if (!Hockey.puck) Hockey.reset(); m.h.m.forEach(function(a, i) { Hockey.m[i].x = a[0]; Hockey.m[i].y = a[1]; }); Hockey.puck.x = m.h.p[0]; Hockey.puck.y = m.h.p[1]; Hockey.score = m.h.s; Hockey.phase = m.h.ph; Hockey.winner = m.h.w; Hockey.msg = m.h.msg; Hockey.msgT = m.h.mt; }
         var Q = m.q; Four.g = Q.g; Four.turn = Q.turn; Four.over = Q.over; Four.win = Q.win; Four.line = Q.line; Four.col = Q.col; Four.drop = null;
     }
 };
@@ -345,7 +443,7 @@ ModeKit.addLevel("table_games", { name: "🎲 Table Games", mode: "table", waves
 GameModes.register({
     id: "table",
     title: "TABLE GAMES",
-    tagline: "2-player minigames: tabletop flick soccer and four in a row. Vs CPU or pass-and-play.",
+    tagline: "2-player minigames: tabletop flick soccer, four in a row and air hockey. Vs CPU, pass-and-play or LAN.",
     color: "#22c55e",
     firstLevel: "table_games",
     flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: false },
@@ -353,14 +451,16 @@ GameModes.register({
 
     seats: function() {
         return [{ label: "RED", options: ["human"], value: "human", set: function() {} },
-            { label: "BLUE", options: ["human", "cpu"], value: tableCfg.vs === "p2" ? "human" : "cpu", note: "human = pass-and-play (or a LAN player takes BLUE)", set: function(v) { tableCfg.vs = v === "human" ? "p2" : "cpu"; multiplayer = v === "human"; saveTable(); Flick.reset(); Four.reset(0); } }];
+            { label: "BLUE", options: ["human", "cpu"], value: tableCfg.vs === "p2" ? "human" : "cpu", note: "human = pass-and-play (or a LAN player takes BLUE)", set: function(v) { tableCfg.vs = v === "human" ? "p2" : "cpu"; multiplayer = v === "human"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); } }];
     },
-    setupLevel: function() { multiplayer = tableCfg.vs === "p2"; Flick.reset(); Four.reset(0); this.lastMouse = [mouseX, mouseY]; },
+    setupLevel: function() { multiplayer = tableCfg.vs === "p2"; Flick.reset(); Four.reset(0); Hockey.reset(); this.lastMouse = [mouseX, mouseY]; },
 
     screenFrame: function() {
         Four.mouseMoved = Math.hypot(mouseX - this.lastMouse[0], mouseY - this.lastMouse[1]) > 2;
         this.lastMouse = [mouseX, mouseY];
+        Hockey.mouseMoved = Four.mouseMoved || (Hockey.mouseMoved && !(WASDleftPressed || WASDrightPressed || WASDupPressed || WASDdownPressed));
         if (tableCfg.game === "four") { Four.update(); Four.draw(); }
+        else if (tableCfg.game === "hockey") { Hockey.update(); Hockey.draw(); if (Hockey.phase === "over" && SpacePressed) Hockey.reset(); }
         else { Flick.update(); Flick.draw(); }
         if (tableCfg.game === "flick" && Flick.phase === "over" && (SpacePressed || (mouseDown && !Flick.mouseLock))) { Flick.reset(); Flick.mouseLock = true; }
         uiPanel(14, 10, 280, 48, "#22c55e");
@@ -370,7 +470,7 @@ GameModes.register({
 
     screenDraw: function() {
         // LAN client view: blue is me; reuse the normal drawing (client-side "human" = it's my turn)
-        if (tableCfg.game === "four") Four.draw(); else Flick.draw();
+        if (tableCfg.game === "four") Four.draw(); else if (tableCfg.game === "hockey") Hockey.draw(); else Flick.draw();
         uiPanel(14, 10, 300, 48, "#22c55e");
         uiText("TABLE GAMES  ·  you are BLUE", 28, 36, 16, "#86efac", "left", "900");
         uiText("Four in a Row: ←/→ + Space   ·   Flick: ←/→ aim, ↑/↓ power, E next disc, Space shoot", 28, 52, 10, "#cbd5e1", "left", "700");
@@ -402,11 +502,11 @@ GameModes.register({
     },
     onMenu: function(id, dir) {
         if (id === "tb_game") { var gi = TABLE_GAMES.findIndex(function(g) { return g[0] === tableCfg.game; }); tableCfg.game = TABLE_GAMES[(gi + (dir || 1) + TABLE_GAMES.length) % TABLE_GAMES.length][0]; saveTable(); return true; }
-        if (id === "tb_vs") { tableCfg.vs = tableCfg.vs === "cpu" ? "p2" : "cpu"; multiplayer = tableCfg.vs === "p2"; saveTable(); Flick.reset(); Four.reset(0); return true; }
+        if (id === "tb_vs") { tableCfg.vs = tableCfg.vs === "cpu" ? "p2" : "cpu"; multiplayer = tableCfg.vs === "p2"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); return true; }
         if (id === "tb_lvl") { tableCfg.level = ((tableCfg.level - 1 + (dir || 1) + 3) % 3) + 1; saveTable(); return true; }
-        if (id === "tb_new") { closePause(); Flick.reset(); Four.reset(0); return true; }
+        if (id === "tb_new") { closePause(); Flick.reset(); Four.reset(0); Hockey.reset(); return true; }
         return false;
     },
-    onRestart: function() { Flick.reset(); Four.reset(0); },
-    overSub: function() { return "Flick soccer & four in a row"; }
+    onRestart: function() { Flick.reset(); Four.reset(0); Hockey.reset(); },
+    overSub: function() { return "Flick soccer · four in a row · air hockey"; }
 });

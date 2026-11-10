@@ -118,7 +118,8 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       down; brush size, pause, fast-forward, save/load. Next: more elements (acid, ice, gunpowder, seeds), gamepad cursor.
 - [~] B4 — 2-player minigame pack → **Table Games**: Flick Soccer (5 discs a side, drag-back flicks, posts, goals, first
       to 3, CPU that picks the best disc/angle, keyboard/pad aiming) and Four in a Row (minimax CPU, 3 skills), vs CPU or
-      pass-and-play. STILL TO DO: more minigames (air hockey, pool-style cue game, darts, word grid, tanks artillery),
+      pass-and-play; Air Hockey (real time: mouse / WASD vs CPU, arrows or a LAN player; first to 7). STILL TO DO: more
+      minigames (pool-style cue game, darts, word grid, tanks artillery),
       online/LAN turns.
 
 ## Known issues / polish found while building (from RETROS.md)

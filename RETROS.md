@@ -6,6 +6,17 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Table Games: Air Hockey
+
+**Shipped:** a third table game — Air Hockey: an air-hole rink with goal mouths, RED on the mouse (or WASD), BLUE as a
+CPU (guards the mouth, strikes when the puck is on its side; speed by skill), on the arrows, or a LAN player; puck
+physics with mallet momentum, a speed cap and table friction; first to 7, serve to the side that conceded. Syncs over
+LAN like the other table games.
+
+**Measured:** an 18 s scripted rally vs the normal CPU: 2-1, 60 FPS, no errors.
+
+---
+
 ## Rent Rush: auctions, mortgages, trading
 
 **Shipped:** skipping a street starts an AUCTION (from half price; CPUs bid up to a valuation that rises if the
