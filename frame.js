@@ -964,6 +964,8 @@ function drawHUD() {
 function frame() {
     ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
+    // modes with their own full screen (grid sims, board games) skip the platformer world entirely
+    if (GameModes.flag("ownScreen", false) && GameModes.has("screenFrame")) { GameModes.call("screenFrame"); drawBanners(); return; }
 
     // Draw Multi-Layer Repeating Parallax Background Mosaic & Non-Colliding Background Trees
     if (typeof BackgroundMosaic !== "undefined") {

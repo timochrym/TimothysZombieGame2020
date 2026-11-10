@@ -74,7 +74,9 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - [ ] B4 — Endless jetpack runner (jetpack-joyride-style): hold to fly, dodge lasers/missiles, coins.
 - [ ] B4 — Board party (mario-party-style): dice board + quick minigames between turns, stars/coins.
 - [ ] B4 — Property board game (monopoly-style, original): buy, trade, build, rent.
-- [ ] B4 — Powder toy (falling sand): sand, water, fire, oil, plants, lava, walls.
+- [x] B4 — Powder toy (falling sand) → **Sand Lab**: sand, water, wall, fire, oil, plant, lava, stone, steam, wood +
+      eraser; lava+water → stone & steam, fire spreads through oil/plants/wood, plants grow into water, steam rains back
+      down; brush size, pause, fast-forward, save/load. Next: more elements (acid, ice, gunpowder, seeds), gamepad cursor.
 - [ ] B4 — 2-player minigame pack (GamePigeon-style), led by tabletop flick soccer (the Plato Android one).
 
 ## Known issues / polish found while building (from RETROS.md)

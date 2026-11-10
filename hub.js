@@ -15,6 +15,7 @@ var HUB_ICONS = {
     dummy: { s: ["...yy.....", "...yy.....", "..yyyy....", ".y.yy.y...", "...yy...b.", "...yy..bbb", "..y..y.bbb", ".y....y.b.", ".y....y...", ".........."], p: { y: "#facc15", b: "#f97316" } },
     wheels: { s: ["..........", "....hh....", "....hh....", "...bbbb...", "..b.bb.b..", "..oooooo..", ".kkk..kkk.", "k...kk...k", "k...kk...k", ".kkk..kkk."], p: { h: "#fde68a", b: "#3b82f6", o: "#f97316", k: "#111827" } },
     terra: { s: ["..........", "...gg.....", "..gggg....", "...ww.....", "gggwwggggg", "dddddddddd", "ddsdddssdd", "sssyssssss", "ss..ssyss.", "ssssssssss"], p: { g: "#4f8a33", w: "#8b5a2b", d: "#7c4a26", s: "#6b7280", y: "#d4a017" } },
+    powder: { s: ["..........", "....ss....", "...ssss...", "..s.ss.s..", "....ss....", "...ssss...", "..ssssss..", ".wwssssww.", "wwwwssswww", "wwwwwwwwww"], p: { s: "#d6ba70", w: "#3884e6" } },
     race: { s: ["pkwkwkwk..", "pwkwkwkw..", "pkwkwkwk..", "pwkwkwkw..", "p.........", "p.........", "p.........", "p.........", "p.........", "pp........"], p: { p: "#e5e7eb", k: "#111827", w: "#f8fafc" } }
 };
 
@@ -75,6 +76,7 @@ var Hub = {
 
     click: function(mx, my) {
         if (typeof SFX !== "undefined") SFX.unlock();
+        if (my < 132 || my > cssH - 46) return;            // cards scrolled out of view can't be clicked
         for (let i = 0; i < this.rects.length; i++) {
             var r = this.rects[i];
             if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) { this.choose(i); return; }
@@ -115,12 +117,20 @@ var Hub = {
 
         var games = this.games();
         var cols = this.cols();
-        var cw = Math.min(290, (W - 80 - (cols - 1) * 22) / cols), ch = 200;
+        var cw = Math.min(290, (W - 80 - (cols - 1) * 22) / cols), ch = games.length > 12 ? 168 : 200;
         var rows = Math.ceil(games.length / cols);
         var totalW = cols * cw + (cols - 1) * 22;
         var x0 = W / 2 - totalW / 2;
-        var y0 = Math.max(150, Math.min(170, H / 2 - (rows * (ch + 22)) / 2 + 40));
-        if (y0 + rows * (ch + 22) > H - 60) { ch = Math.max(150, (H - 60 - y0) / rows - 22); }
+        // the grid scrolls once there are more games than fit: keep the selected row in view
+        var viewTop = 140, viewBot = H - 46, viewH = viewBot - viewTop, rowH = ch + 22, contentH = rows * rowH;
+        var selRow = Math.floor(this.idx / cols), want = this.scroll || 0;
+        if (selRow * rowH - want < 0) want = selRow * rowH;
+        if ((selRow + 1) * rowH - want > viewH) want = (selRow + 1) * rowH - viewH;
+        want = Math.max(0, Math.min(Math.max(0, contentH - viewH + 10), want));
+        this.scroll = (this.scroll || 0) + (want - (this.scroll || 0)) * 0.25;
+        var y0 = contentH <= viewH ? Math.max(viewTop + 10, H / 2 - contentH / 2 + 40) : viewTop + 16 - this.scroll;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(0, viewTop - 8, W, viewH + 8); ctx.clip();
         this.rects = [];
         for (let i = 0; i < games.length; i++) {
             var m = games[i];
@@ -158,9 +168,26 @@ var Hub = {
             if (sel) uiText("▶ PRESS ENTER", cx + cw / 2, cy - 8 + bob, 12, m.color || "#22d3ee", "center", "900");
             ctx.restore();
         }
+        ctx.restore();
+        if (contentH > viewH) {
+            if (this.scroll > 4) uiText("▲ more", W / 2, viewTop + 4, 12, "#a5b4fc", "center", "900");
+            if (this.scroll < contentH - viewH - 4) uiText("▼ more games", W / 2, viewBot - 4, 13, "#a5b4fc", "center", "900");
+        }
         // scanlines
         ctx.fillStyle = "rgba(0,0,0,0.12)";
         for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
         uiText("← → ↑ ↓ choose  ·  Enter / click / (A) play  ·  " + (this.boot ? "Esc quick-start" : "Esc back"), W / 2, H - 22, 13, "#a5b4fc", "center", "700");
     }
 };
+
+// mouse wheel scrolls the arcade grid a row at a time
+(function() {
+    var cv = typeof canvas !== "undefined" ? canvas : document.querySelector("canvas");
+    if (!cv) return;
+    cv.addEventListener("wheel", function(e) {
+        if (!Hub.isOpen) return;
+        var n = Hub.games().length, c = Hub.cols();
+        Hub.idx = Math.max(0, Math.min(n - 1, Hub.idx + (e.deltaY > 0 ? c : -c)));
+        e.preventDefault();
+    }, { passive: false });
+})();

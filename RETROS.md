@@ -6,6 +6,27 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Sand Lab (new game, B4) + arcade scrolling
+
+**Shipped:** `game_powder.js` — an original falling-sand toy on a 320×180 grid: sand, water, wall, fire, oil, plant,
+lava, stone, steam, wood and an eraser. Sand and stone pile and sink through liquids, oil floats on water, lava is
+sluggish and turns water into stone + steam, fire climbs and spreads through oil / plants / wood (water puts it out),
+plants drink water and grow, steam rises and rains back down. Left mouse paints (powders sprinkle, solids fill), right
+erases, wheel or [ ] sets the brush, 1-0 / palette picks the material, Space pauses, F fast-forwards, S / L save and
+load the box. New engine flag **`ownScreen`** + hook `screenFrame()` so a game can own the whole screen without the
+platformer world underneath (ENGINE.md). The arcade grid now **scrolls** (keyboard follows the selection, mouse wheel,
+"▼ more games" hints) — with 14 games the fourth row was already cut off before this.
+
+**Measured:** 0.28 ms per simulation step (60 FPS with room to spare); lava into the pond: water 2180 → 1109,
+759 stone, steam raining back; save → clear → load restores all 5445 cells; switching Sand Lab → Survival is clean.
+
+**Went wrong:** the eraser's palette label showed "1" (key numbering wrapped) → "E". The save encoding started out
+convoluted → plain one-char-per-cell string.
+
+**Left / known:** more elements, gamepad cursor (TODO.md).
+
+---
+
 ## Brawl — genre-feel pass (platform fighter)
 
 **Shipped:** KO blast — losing a stock fires a big beam in the fighter's colour from the screen edge they flew out of
