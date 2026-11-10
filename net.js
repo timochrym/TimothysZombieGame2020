@@ -765,7 +765,7 @@ var NetUI = {
         this.render();
     },
     close: function() { if (this.el) this.el.style.display = "none"; },
-    isOpen: function() { return this.el && this.el.style.display !== "none"; },
+    isOpen: function() { return !!this.el && this.el.style.display === "flex"; },
 
     build: function() {
         var css = document.createElement("style");

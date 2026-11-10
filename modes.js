@@ -24,6 +24,7 @@
 //   cpuThink(ch)                                  AI for CPU-controlled heroes (ch.isCPU)
 //   onSecondary(ch)                               right-click / alt-fire -> return true to consume
 //   onKey(code, e)                                keyboard hook -> return true to consume
+//   onPad(padIndex, button, ch)                   gamepad button pressed (standard mapping numbers) -> return true to consume
 //   onClick(wx, wy, button)                       mouse click in world coordinates -> return true to consume
 //   onDamage(ch, amount, kx, ky, attacker)        a character is damaged -> return true to consume
 //   onStomp(hero, foe)                            hero landed on an enemy's head -> return true to replace the

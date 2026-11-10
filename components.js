@@ -99,6 +99,10 @@ class Components {
                 } else {
                     object.shootPressed = inp.shoot;
                 }
+            } else if (object.padOnly) {
+                object.upPressed = object.downPressed = object.leftPressed = object.rightPressed = false;
+                object.shootPressed = inp.shoot;
+                object.abilityPressed = inp.interact;
             } else {
                 object.upPressed = ULDRupPressed;
                 object.downPressed = ULDRdownPressed;

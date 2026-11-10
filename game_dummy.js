@@ -85,7 +85,16 @@ GameModes.register({
     setupLevel: function() { Dummy.rd = null; Dummy.balls = []; Dummy.spikes = []; Dummy.drag = null; Dummy.tick = 0; },
     onReset: function() { dummySpawn(-400, 300); },
 
-    onDamage: function() { return true; },                    // the testers never get hurt
+    onDamage: function() { return true; },
+    onPad: function(i, b) {
+        if (b === 7 && Dummy.tool !== 0 && redGuy) {
+            // gamepad: use the tool at the point the right stick aims at
+            var rad = Math.radians(redGuy.degree || 90);
+            if (DUMMY_TOOLS[Dummy.tool].id === "hand") return true;
+            mouseDown = false;
+            return this.onClick(redGuy.x + Math.sin(rad) * 380, redGuy.y + Math.cos(rad) * 380, 0);
+        }
+        if (b === 8) { Dummy.tool = (Dummy.tool + 1) % DUMMY_TOOLS.length; return true; } if (b === 3) { dummySpawn(redGuy ? redGuy.x + 200 : 0, 500); return true; } return false; },                    // the testers never get hurt
     canShoot: function() { return Dummy.tool === 0; },
 
     cameraTargets: function() {

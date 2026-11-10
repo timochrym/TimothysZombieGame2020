@@ -373,7 +373,15 @@ GameModes.register({
         // ---- input ----
         var md = mouseDown, fresh = md && !Siege.wasMouse;
         Siege.wasMouse = md;
-        var fireKey = SpacePressed || EnterPressed;
+        var spad = (typeof Pads !== "undefined") ? Pads.state[0] : null;
+        var fireKey = SpacePressed || EnterPressed || !!(spad && spad.active && spad.shoot);
+        if (spad && spad.active && Siege.phase === "aim") {
+            // gamepad: stick / D-pad up-down aims, left-right sets power, RT fires
+            if (spad.up) Siege.angle = Math.min(80, Siege.angle + 0.8);
+            if (spad.down) Siege.angle = Math.max(-10, Siege.angle - 0.8);
+            if (spad.right) Siege.power = Math.min(1, Siege.power + 0.012);
+            if (spad.left) Siege.power = Math.max(0.15, Siege.power - 0.012);
+        }
         var fireFresh = fireKey && !Siege.wasFire;
         Siege.wasFire = fireKey;
 

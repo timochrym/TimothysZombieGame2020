@@ -171,6 +171,7 @@ GameModes.register({
     },
 
     canShoot: function() { return false; },
+    onPad: function(i, b) { if (b === 8 && i === 0) { TERRA.sel = (TERRA.sel + 1) % TERRA_PLACEABLE.length; return true; } return false; },
 
     onKey: function(code) {
         var m = /^Digit([1-9])$/.exec(code);

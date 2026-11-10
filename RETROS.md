@@ -6,6 +6,23 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Controller support
+
+**Shipped:** 4 gamepads (pads 3-4 borrow CPU slots and hand them back on disconnect), build-mode controls, punch on LT,
+vehicles/shops on Y, menu navigation, B closes the Players / LAN panels, per-game buttons through a new `onPad` mode
+hook (Terra hotbar, Crash Lab tools at the aim point, Siege aim + fire). `tests/gamepad.js` drives fake pads.
+
+**Measured (fake pads, headless):** Arcade navigation + A launches Brawl; pad 3 takes over the CPU and moves 478 px;
+Select → build mode, RB next piece, RT places (−10 wood), Select leaves; LT punch 16 dmg; Start pauses, B resumes.
+
+**Went wrong (caught by the test):** the LAN panel's "is it open" check read an empty inline style as "open" from page
+load — combined with the new "B closes panels" code it would have swallowed all gamepad input in every menu. Both
+panels now check for `display: flex`.
+
+**Left / known:** no gamepad editing in Level Studio; no remapping; Wobble Wheels only reads pads 1-2.
+
+---
+
 ## Terra — backlog B3 (world generation, block-game)
 
 **Shipped:** `game_terra.js`: seeded 640×170-tile world (forest / desert / hill biomes, trees, dirt over stone,

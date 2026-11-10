@@ -192,27 +192,55 @@ function mouseUpHandler(e) {
 window.addEventListener("contextmenu", function(e) { e.preventDefault(); });
 
 // ============================================================================
-// GAMEPADS (standard mapping) - pad 1 drives Player 1, pad 2 drives Player 2. Keyboard keeps working.
-//   Left stick / D-pad move   A jump   RT (or push the right stick) shoot   right stick aims
-//   RB / LT jetpack   B dash   Y shockwave / hold to revive   LB grab & throw   X reload   Start pause
+// GAMEPADS (standard mapping) - pads 1-2 drive Players 1-2; pads 3-4 take over CPU slots (Brawl, Soccer, Bed Brawl…).
+//   Left stick / D-pad move   A jump   RT (or push the right stick) shoot   right stick aims   RB jetpack
+//   B dash   Y shockwave / interact (vehicles, shops) / hold to revive   LB grab & throw   X reload   LT punch
+//   Back/Select: build mode (then LB/RB piece, X material, RT place, LT take back)   Start pause
+//   Menus: D-pad / stick move, A choose, B back. Games can claim buttons with the mode hook onPad(padIndex, button, ch).
 // ============================================================================
 var Pads = {
-    state: [{ active: false }, { active: false }],
-    prev: [{}, {}],
+    state: [{ active: false }, { active: false }, { active: false }, { active: false }],
+    prev: [{}, {}, {}, {}],
     announced: {},
+    // which character a pad drives (pads 3-4 borrow a CPU slot while connected)
+    charFor: function(i) {
+        for (let k = 0; k < characters.length; k++) { var c = characters[k]; if (c.padIdx === i || (c.isPlayer && !c.isCPU && !c.isRemote && c.playerIndex === i && c.padIdx === undefined)) return c; }
+        return null;
+    },
+    claimCpu: function(i) {
+        for (let k = 0; k < characters.length; k++) {
+            var c = characters[k];
+            if (!c.isCPU || c.dead || c.isRemote || c.padIdx !== undefined) continue;
+            c.isCPU = false; c.padIdx = i; c.padWasCPU = c.playerLabel; c.playerIndex = i; c.padOnly = true;
+            c.playerLabel = "P" + (i + 1) + " 🎮";
+            Components.addFloatingText("P" + (i + 1) + " (gamepad) takes over " + c.padWasCPU, c.x, c.y + 120, "#7ff0ff", 16);
+            return c;
+        }
+        return null;
+    },
+    releaseCpu: function(i) {
+        for (let k = 0; k < characters.length; k++) {
+            var c = characters[k];
+            if (c.padIdx !== i || !c.padWasCPU) continue;
+            c.isCPU = true; c.playerLabel = c.padWasCPU; c.padWasCPU = null; c.padIdx = undefined; c.padOnly = false;
+            c.cpuIn = c.cpuIn || { shoot: false, jet: false, interact: false, reloadQueued: false };
+        }
+    },
 
     poll: function() {
         var gps = (navigator.getGamepads && navigator.getGamepads()) || [];
         var list = [];
         for (let i = 0; i < gps.length; i++) if (gps[i] && gps[i].connected) list.push(gps[i]);
-        for (let i = 0; i < 2; i++) {
+        for (let i = 0; i < 4; i++) {
             var g = list[i];
+            // pads 3-4: borrow a CPU slot while connected
+            if (i >= 2) { if (g && !this.charFor(i)) this.claimCpu(i); if (!g) this.releaseCpu(i); }
             var st = { active: false };
             var prev = this.prev[i];
             if (g) {
                 if (!this.announced[g.index]) {
                     this.announced[g.index] = true;
-                    if (typeof showBanner === "function") showBanner("🎮 CONTROLLER " + (i + 1) + " CONNECTED", "It now controls Player " + (i + 1) + (i === 1 ? " (turn on co-op / PvP in the pause menu)" : ""), "#7ff0ff");
+                    if (typeof showBanner === "function") showBanner("🎮 CONTROLLER " + (i + 1) + " CONNECTED", i < 2 ? ("It now controls Player " + (i + 1) + (i === 1 ? " (turn on co-op / PvP in 👥 Players)" : "")) : "It takes over a CPU player when the game has one", "#7ff0ff");
                 }
                 var B = function(n) { var b = g.buttons[n]; return !!(b && (b.pressed || b.value > 0.5)); };
                 var ax = g.axes[0] || 0, ay = g.axes[1] || 0, rx = g.axes[2] || 0, ry = g.axes[3] || 0;
@@ -223,7 +251,8 @@ var Pads = {
                 st.up = B(0) || B(12);
                 st.aim = Math.hypot(rx, ry) > 0.3 ? [rx, ry] : null;
                 st.shoot = B(7) || Math.hypot(rx, ry) > 0.8;
-                st.jet = B(5) || B(6);
+                st.jet = B(5);
+                st.punchHeld = B(6);
                 st.interact = B(3);
                 var now = {};
                 for (let b = 0; b < 17; b++) now[b] = B(b);
@@ -231,7 +260,11 @@ var Pads = {
                 var edge = function(key) { return now[key] && !prev[key]; };
                 if (now[0] || now[7] || now[9]) { if (typeof SFX !== "undefined") SFX.unlock(); }
 
-                if (typeof Hub !== "undefined" && Hub.isOpen) {
+                var pch = this.charFor(i);
+                var panelOpen = (typeof PlayersUI !== "undefined" && PlayersUI.isOpen()) || (typeof NetUI !== "undefined" && NetUI.isOpen && NetUI.isOpen());
+                if (panelOpen) {
+                    if (edge(1) || edge(9)) { if (PlayersUI.isOpen()) PlayersUI.close(); else NetUI.close(); }
+                } else if (typeof Hub !== "undefined" && Hub.isOpen) {
                     var hk = function(code) { Hub.key({ code: code, preventDefault: function() {} }); };
                     if (edge(12) || edge("su")) hk("ArrowUp");
                     if (edge(13) || edge("sd")) hk("ArrowDown");
@@ -247,10 +280,24 @@ var Pads = {
                     if (edge(0)) fake("Enter");
                     if (edge(1) || edge(9)) { if (pauseSub) { pauseSub = null; pauseIndex = 0; } else if (!pauseFromGameOver) closePause(); }
                 } else {
+                    var claimed = function(b) { return edge(b) && GameModes.has("onPad") && GameModes.call("onPad", i, b, pch); };
                     if (edge(9)) togglePause();
-                    if (edge(1)) queueDash(i);
-                    if (edge(4)) queueGrab(i);
-                    if (edge(2)) PlayerInput[i].reloadQueued = true;
+                    else if (pch && pch.buildMode && typeof Build !== "undefined") {
+                        // build mode: LB/RB piece, X material, LT take back, Select leaves (RT places via shoot)
+                        if (edge(4)) Build.pick(pch, (pch.buildPiece || 0) - 1);
+                        if (edge(5)) Build.pick(pch, (pch.buildPiece || 0) + 1);
+                        if (edge(2)) Build.cycleMat(pch);
+                        if (edge(6)) Build.removeAt(pch);
+                        if (edge(8)) Build.toggle(pch);
+                        if (edge(1)) queueDash(i);
+                    } else {
+                        for (let b = 0; b < 17; b++) claimed(b);
+                        if (edge(1) && !(GameModes.has("onPad") && false)) queueDash(i);
+                        if (edge(4)) { if (pch && pch.padOnly) pch.tryGrabOrThrow(pch.x + Math.sin(Math.radians(pch.degree)) * 160, pch.y + Math.cos(Math.radians(pch.degree)) * 160); else queueGrab(i); }
+                        if (edge(2)) PlayerInput[i].reloadQueued = true;
+                        if (edge(6) && typeof Feel !== "undefined") Feel.punch(pch || (i === 0 ? redGuy : blueGuy));
+                        if (edge(8) && typeof Build !== "undefined" && pch) Build.toggle(pch);
+                    }
                 }
                 this.prev[i] = now;
             } else {

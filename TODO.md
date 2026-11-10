@@ -7,10 +7,14 @@ Last updated: after Vehicles (backlog B2), during Terra (B3) and controller supp
 - [x] **Terra (B3 world generation)** — `game_terra.js`: deep generated world (forest/desert/hill biomes, trees,
       dirt over stone, caves, coal/iron/gold, bedrock), chunk-streamed collision, mining and placing with a 9-slot
       hotbar, underground darkness with a light around the hero, 60 FPS. (Genre-feel extras are in the pass below.)
-- [ ] **Controller support (your request)** — gamepads already drive P1/P2 movement/aim/shoot/jet/dash/grab/reload.
-      Still needed: build mode / piece / material buttons, punch, vehicle enter/exit, menus (Arcade hub, pause,
-      Players & LAN panels, Level Studio basics), pads 3-4 for Brawl/Soccer/Bed Wars slots, and showing which pad
-      drives which player in the Players panel.
+- [x] **Controller support** — 4 pads (3-4 take CPU slots), build mode on Select (LB/RB piece, X material, RT place,
+      LT take back), LT punch, Y vehicles/shops, menus (Arcade, pause, Players/LAN close with B), Siege (stick aim +
+      RT fire), Crash Lab (RT uses the tool at the aim point, Select cycles tools), Terra (Select cycles blocks).
+- [ ] Controller: Level Studio has no gamepad editing (mouse/keyboard only); Wobble Wheels P3/P4; button remapping.
+- [ ] **Textures for all the new blocks and stuff** (your request): built pieces (wood/stone/metal), Terra tiles,
+      Stomp Squad blocks/pipes, Bed Brawl islands/beds/pedestals, Crash Lab props, vehicles, rails, carts, bird forts.
+- [ ] **More detailed characters when scaled up** (your request): extra detail layers (outlines, shading, eyes,
+      hands, clothing folds) that switch on when the camera zooms in / characters are big.
 
 ## Genre-feel pass (your request: "make each game closer to the game it's trying to be")
 Play and feel like the genre's best, with ORIGINAL look (no copied characters, art style, music or levels):
@@ -76,4 +80,5 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - "all the game pigeon games espcially the soccer tabletop one from the andriod clone (plato)"
 - "Add controller support and push to main"
 - "make sure in the angry birds like clones, after throwing more than 2 dudes, the blocks don't stop randomly and incorrectly bouncing and accidentally killing everything"
+- "Add lots of textures for all the new blocks and stuff" · "make the characters a bit more detailed when they are scaled up"
 - "Make each game closer to the game it's trying to be both visually, functionally, and in game play. Mario should look more like mario, terraria like terraria, soccer physics like soccer physics"
