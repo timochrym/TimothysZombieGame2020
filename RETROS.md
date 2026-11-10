@@ -6,6 +6,22 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Brawl — genre-feel pass (platform fighter)
+
+**Shipped:** KO blast — losing a stock fires a big beam in the fighter's colour from the screen edge they flew out of
+toward the stage; the big percent number jolts when that fighter gets hit; the GAME! screen now has a results table
+(winner first with a crown; KOs credited to whoever landed the last hit in the 5 s before the fall; falls; damage
+dealt); an eliminated fighter's panel shows only OUT (the old percent used to show through it).
+
+**Measured:** forced KOs: P1 credited with 2 KOs, falls/damage tallied, beam drawn from the right edge; no errors.
+
+**Went wrong:** the beam first started at the real exit point — which is always off-screen — so nothing showed →
+clamped to the screen edge.
+
+**Left / known:** shield/dodge, ledge grab, per-character moves, more stages (TODO.md).
+
+---
+
 ## Portal Lab — genre-feel pass (portal test chambers)
 
 **Shipped:** an aim reticle for mouse aiming — a faint line to where the portal beam would land, and at that spot a

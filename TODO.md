@@ -57,8 +57,10 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - [~] Portal Lab: DONE — aim reticle shows where the beam lands and whether a portal will stick (blue/orange ghost
       outline on white panels, red ✕ elsewhere); X closes your portals. STILL TO DO: more chambers (laser relays,
       light bridges, turrets that ragdoll), pad-aim reticle, chamber-select grid.
-- [ ] Brawl: same pass —
-      list each genre's core feel features and close the gaps.
+- [~] Brawl: DONE — KO blast (a beam of the fighter's colour fires in from the edge they flew out of), the damage
+      percent jolts when hit, results table on GAME! (KOs credited to the last hitter within 5 s, falls, damage dealt),
+      eliminated panels no longer show the percent under "OUT". STILL TO DO: shield/dodge button, ledge grab,
+      character-specific moves, more stages, items like a bat or a bomb to throw.
 
 ## Your suggestions not built yet (backlog, all original games in the genre — no copied names/art)
 - [ ] B3 — "Lower generated level": make the Survival frontier generate lower / more underground terrain (Terra is a

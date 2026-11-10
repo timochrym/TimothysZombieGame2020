@@ -8,7 +8,7 @@
 // ============================================================================
 var FIGHTER_COLORS = ["#ff5a5f", "#3da5ff", "#4ade80", "#fbbf24"];
 
-var brawl = { active: false, phase: "off", timer: 0, stage: null, winner: null, itemTimer: 0 };
+var brawl = { active: false, phase: "off", timer: 0, stage: null, winner: null, itemTimer: 0, ko: [], tick: 0 };
 
 var brawlCfg = {
     opponents: "1cpu",   // p2 | 1cpu | 2cpu | 3cpu | p2+1cpu | p2+2cpu
@@ -93,6 +93,7 @@ function createBrawlFighters() {
         else ch.playerLabel = "P" + (i + 1);
         ch.stocks = brawlCfg.stocks;
         ch.damagePct = 0;
+        ch.brKOs = 0; ch.brFalls = 0; ch.brDealt = 0; ch.brLastBy = null; ch.brLastT = -9999;
         ch.eliminated = false;
         ch.maxAirJumps = 2;
         ch.airJumps = 2;
@@ -122,6 +123,10 @@ function brawlLoseStock(ch) {
     var ex = Math.max(st.minX, Math.min(st.maxX, ch.x));
     var ey = Math.max(st.minY, Math.min(st.maxY, ch.y));
     ch.stocks--;
+    ch.brFalls = (ch.brFalls || 0) + 1;
+    if (ch.brLastBy && ch.brLastBy !== ch && brawl.tick - ch.brLastT < 300) ch.brLastBy.brKOs = (ch.brLastBy.brKOs || 0) + 1;   // last hit within 5 s gets the KO
+    // KO blast: a beam of the fighter's colour shooting from the exit point back toward the stage
+    brawl.ko.push({ x: ex, y: ey, cx: st.centerX, cy: (st.minY + st.maxY) / 2, col: FIGHTER_COLORS[ch.playerIndex], t: 0 });
     screenShake = Math.max(screenShake, 9);
     if (ch.liveRagdoll && typeof Ragdolls !== "undefined") { Ragdolls.remove(ch.liveRagdoll); ch.liveRagdoll = null; }
     if (typeof SFX !== "undefined") SFX.play("ko", ex, ey);
@@ -165,6 +170,8 @@ function brawlRespawn(ch) {
 function updateBrawl() {
     if (!brawl.active) return;
     var st = brawl.stage;
+    brawl.tick++;
+    for (let i = brawl.ko.length - 1; i >= 0; i--) if (++brawl.ko[i].t > 45) brawl.ko.splice(i, 1);
     if (brawl.phase === "countdown") {
         brawl.timer--;
         if (brawl.timer % 60 === 0 && brawl.timer > 0 && typeof SFX !== "undefined") SFX.play("beep");
@@ -225,6 +232,7 @@ function brawlApplyHit(victim, amount, kx, ky, attacker) {
 
     var pct = Math.max(1, dmg * 0.35);
     victim.damagePct += pct;
+    if (attacker && attacker !== victim && attacker.isPlayer) { victim.brLastBy = attacker; victim.brLastT = brawl.tick; attacker.brDealt = (attacker.brDealt || 0) + pct; }
     victim.hitFlashTimer = 6;
 
     // launch direction: away from the attacker (bullets use their own travel direction)
@@ -379,9 +387,28 @@ var Brawl = {
 // ---------------------------------------------------------------------------
 // HUD
 // ---------------------------------------------------------------------------
+function drawBrawlKO() {
+    for (let i = 0; i < brawl.ko.length; i++) {
+        var K = brawl.ko[i], a = 1 - K.t / 45;
+        // KOs happen past the screen edge: start the beam at the edge you flew out of
+        var x0 = Math.max(0, Math.min(cssW, wsx(K.x))), y0 = Math.max(0, Math.min(cssH, wsy(K.y))), dx = wsx(K.cx) - x0, dy = wsy(K.cy) - y0, L = Math.hypot(dx, dy) || 1;
+        var ux = dx / L, uy = dy / L, len = Math.min(L, 900) * (0.4 + Math.min(1, K.t / 8) * 0.6), wdt = 90 * a + 10;
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        var g = ctx.createLinearGradient(x0, y0, x0 + ux * len, y0 + uy * len);
+        g.addColorStop(0, K.col); g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.globalAlpha = a * 0.85; ctx.fillStyle = g;
+        ctx.beginPath(); ctx.moveTo(x0 - uy * wdt, y0 + ux * wdt); ctx.lineTo(x0 + ux * len, y0 + uy * len); ctx.lineTo(x0 + uy * wdt, y0 - ux * wdt); ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = a; ctx.fillStyle = "#ffffff";
+        ctx.beginPath(); ctx.moveTo(x0 - uy * wdt * 0.3, y0 + ux * wdt * 0.3); ctx.lineTo(x0 + ux * len * 0.6, y0 + uy * len * 0.6); ctx.lineTo(x0 + uy * wdt * 0.3, y0 - ux * wdt * 0.3); ctx.closePath(); ctx.fill();
+        ctx.restore();
+    }
+}
+
 function drawBrawlHUD() {
     ctx.textBaseline = "alphabetic";
     var st = brawl.stage;
+    drawBrawlKO();
     // title strip
     uiPanel(14, 14, 360, 56, "#ffd23f");
     uiText("BRAWL", 32, 50, 28, "#ffd23f", "left", "900");
@@ -400,7 +427,8 @@ function drawBrawlHUD() {
         if (c.eliminated) ctx.globalAlpha = 0.35;
         drawSkinPreview(c.skinId(), x + 38, y0 + 42, 50, col, c.isCPU ? "C" : "P" + (c.playerIndex + 1));
         var pct = Math.round(c.damagePct || 0);
-        uiText(pct + "%", x + 188, y0 + 62, 44, brawlPercentColor(c.damagePct || 0), "right", "900");
+        var shk = c.hitFlashTimer > 0 ? 4 : 0;          // the number jolts when you get hit
+        if (!c.eliminated) uiText(pct + "%", x + 188 + (Math.random() - 0.5) * shk * 2, y0 + 62 + (Math.random() - 0.5) * shk * 2, 44 + shk, brawlPercentColor(c.damagePct || 0), "right", "900");
         uiText(c.playerLabel + (c.isCPU ? "  ·  " + BRAWL_CPU_NAMES[brawlCfg.cpuLevel] : ""), x + 14, y0 + 90, 13, col, "left", "800");
         // stocks
         for (let s = 0; s < brawlCfg.stocks; s++) {
@@ -454,6 +482,21 @@ function drawBrawlHUD() {
         ctx.fillRect(0, 0, w, h);
         uiText("GAME!", w / 2, h / 2 - 20, 96, "#ffd23f", "center", "900");
         uiText(brawl.winner ? brawl.winner.playerLabel + " wins" : "Draw", w / 2, h / 2 + 30, 30, brawl.winner ? FIGHTER_COLORS[brawl.winner.playerIndex] : "#fff", "center", "900");
+        // results: KOs / falls / damage dealt
+        var rows = characters.slice().sort(function(a, b) { return (b === brawl.winner) - (a === brawl.winner) || (b.brKOs || 0) - (a.brKOs || 0); });
+        var tw = 420, tx = w / 2 - tw / 2, ty = h / 2 + 52;
+        uiPanel(tx, ty, tw, 34 + rows.length * 24, "#ffd23f", 0.9);
+        uiText("FIGHTER", tx + 18, ty + 22, 12, "#94a3b8", "left", "900");
+        uiText("KOs", tx + 220, ty + 22, 12, "#94a3b8", "center", "900");
+        uiText("FALLS", tx + 290, ty + 22, 12, "#94a3b8", "center", "900");
+        uiText("DAMAGE", tx + 370, ty + 22, 12, "#94a3b8", "center", "900");
+        for (let i = 0; i < rows.length; i++) {
+            var rc = rows[i], ry = ty + 46 + i * 24, rcol = FIGHTER_COLORS[rc.playerIndex];
+            uiText((rc === brawl.winner ? "👑 " : "") + rc.playerLabel, tx + 18, ry, 15, rcol, "left", "900");
+            uiText(String(rc.brKOs || 0), tx + 220, ry, 15, "#fff", "center", "900");
+            uiText(String(rc.brFalls || 0), tx + 290, ry, 15, "#fff", "center", "900");
+            uiText(Math.round(rc.brDealt || 0) + "%", tx + 370, ry, 15, "#fff", "center", "900");
+        }
     }
     uiText("Esc: pause menu (rematch, stage, opponents)", w / 2, h - 142, 11, "rgba(200,220,235,0.55)", "center", "600");
     drawCrosshair();
