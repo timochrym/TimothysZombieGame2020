@@ -88,8 +88,8 @@ class Ragdoll {
         this.wake();
     }
 
-    centerX() { return this.kind === "blob" ? this.pts[0].x : (this.pts[1].x + this.pts[2].x) / 2; }
-    centerY() { return this.kind === "blob" ? this.pts[0].y : (this.pts[1].y + this.pts[2].y) / 2; }
+    centerX() { return this.kind === "blob" ? this.pts[0].x : (this.pts.length < 3 ? this.pts[this.pts.length - 1].x : (this.pts[1].x + this.pts[2].x) / 2); }
+    centerY() { return this.kind === "blob" ? this.pts[0].y : (this.pts.length < 3 ? this.pts[this.pts.length - 1].y : (this.pts[1].y + this.pts[2].y) / 2); }
 
     velX() { var s = 0; for (let i = 0; i < this.pts.length; i++) s += this.pts[i].x - this.pts[i].px; return s / this.pts.length; }
     velY() { var s = 0; for (let i = 0; i < this.pts.length; i++) s += this.pts[i].y - this.pts[i].py; return s / this.pts.length; }
@@ -119,7 +119,7 @@ Ragdoll.nextId = 0;
 
 var Ragdolls = {
     list: [],
-    maxCount: 30,
+    maxCount: 60,          // corpses kept at once (drops to 30 automatically if the frame rate sinks)
 
     clear: function() { this.list = []; },
 
@@ -223,6 +223,7 @@ var Ragdolls = {
 
     trim: function() {
         var corpses = this.list.filter(function(r) { return r.life >= 0; });
+        if (this.maxCount <= 60 && typeof measuredFPS !== "undefined") this.maxCount = measuredFPS < 40 ? 30 : 60;
         while (corpses.length > this.maxCount) {
             var old = corpses.shift();
             this.remove(old);
@@ -315,10 +316,13 @@ var Ragdolls = {
         var pts = rd.pts, sticks = rd.sticks;
         for (let s = 0; s < sticks.length; s++) {
             var st = sticks[s];
+            if (st.broken) continue;
             var a = pts[st.a], b = pts[st.b];
             var dx = b.x - a.x, dy = b.y - a.y;
             var d = Math.hypot(dx, dy) || 0.0001;
             if (st.minOnly && d >= st.len) continue;
+            // breakable joints (vehicles: the rider tears off on a big hit)
+            if (st.breakAt && Math.abs(d - st.len) > st.breakAt) { st.broken = true; if (rd.onBreak) rd.onBreak(st); continue; }
             var diff = (d - st.len) / d * 0.5 * st.stiff;
             a.x += dx * diff; a.y += dy * diff;
             b.x -= dx * diff; b.y -= dy * diff;
@@ -328,7 +332,8 @@ var Ragdolls = {
     nearbySolids: function(rd) {
         var b = rd.bounds(70);
         var out = [];
-        var lists = [staticObjects, movingObjects];
+        // statics come from the spatial hash instead of scanning the whole level for every body
+        var lists = [typeof StaticGrid !== "undefined" ? StaticGrid.query(b.l, b.b, b.r, b.t, false, this._sbuf || (this._sbuf = [])).slice() : staticObjects, movingObjects];
         for (let li = 0; li < lists.length; li++) {
             var L = lists[li];
             for (let i = 0; i < L.length; i++) {
@@ -478,15 +483,16 @@ var Ragdolls = {
         }
 
         // 3) Bodies pile up instead of overlapping (cheap: head / neck / pelvis only)
-        for (let i = 0; i < list.length; i++) {
-            var A = list[i];
-            if (A.kind !== "humanoid") continue;
-            var ba = A.bounds(0);
-            for (let j = i + 1; j < list.length; j++) {
-                var Bd = list[j];
-                if (Bd.kind !== "humanoid") continue;
-                var bb = Bd.bounds(0);
-                if (ba.r < bb.l || ba.l > bb.r || ba.t < bb.b || ba.b > bb.t) continue;
+        var hs = [];
+        for (let i = 0; i < list.length; i++) if (list[i].kind === "humanoid") hs.push({ rd: list[i], b: list[i].bounds(0) });
+        hs.sort(function(p, q) { return p.b.l - q.b.l; });
+        for (let i = 0; i < hs.length; i++) {
+            var A = hs[i].rd, ba = hs[i].b;
+            for (let j = i + 1; j < hs.length; j++) {
+                var Bd = hs[j].rd, bb = hs[j].b;
+                if (bb.l > ba.r) break;
+                if (A.asleep && Bd.asleep) continue;
+                if (ba.t < bb.b || ba.b > bb.t) continue;
                 var keys = [0, 1, 2];
                 for (let u = 0; u < 3; u++) for (let v = 0; v < 3; v++) {
                     var p1 = A.pts[keys[u]], p2 = Bd.pts[keys[v]];
@@ -523,7 +529,7 @@ var Ragdolls = {
         if (!l.rdHit) l.rdHit = {};
         for (let i = 0; i < this.list.length; i++) {
             var rd = this.list[i];
-            if (rd.life < 0 || l.rdHit[rd.id]) continue;
+            if ((rd.life < 0 && !rd.isDummy) || l.rdHit[rd.id]) continue;
             var b = rd.bounds(8);
             if (l.x < b.l || l.x > b.r || l.y < b.b || l.y > b.t) continue;
             for (let j = 0; j < rd.pts.length; j++) {
@@ -564,7 +570,8 @@ var Ragdolls = {
         if (sr < -20 || sl > cssW + 20 || sb < -20 || st > cssH + 20) return;
         ctx.save();
         ctx.globalAlpha = rd.alpha();
-        if (rd.kind === "blob") this.drawBlob(rd);
+        if (rd.drawFn) rd.drawFn(rd);
+        else if (rd.kind === "blob") this.drawBlob(rd);
         else if (typeof settings !== "undefined" && settings.squareChars) this.drawSquare(rd);
         else this.drawHumanoid(rd);
         ctx.restore();

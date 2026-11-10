@@ -112,6 +112,7 @@ function createPlayers() {
 
 function rebuildAllObjects() {
     if (typeof StaticGrid !== "undefined") StaticGrid.build();
+    if (typeof DynGrid !== "undefined") DynGrid.build();
     allObjects = [];
     for (let i = 0; i < staticObjects.length; i++) {
         if (!staticObjects[i].dead) allObjects.push(staticObjects[i]);

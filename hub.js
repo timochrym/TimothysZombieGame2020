@@ -12,6 +12,7 @@ var HUB_ICONS = {
     creative: { s: ["....ww....", "...wwww...", "....ww....", "c...ww...c", "cccwwwwccc", "c..wwww..c", "....ww....", "...wwww...", "gggggggggg", "dddddddddd"], p: { w: "#e0f2fe", c: "#7dd3fc", g: "#4ade80", d: "#92400e" } },
     platform: { s: ["oooooooooo", "o.yyyyyy.o", "o.yy..yy.o", "o.....yy.o", "o....yy..o", "o...yy...o", "o...yy...o", "o........o", "o...yy...o", "oooooooooo"], p: { o: "#b45309", ".": "#f59e0b", y: "#fef3c7" } },
     bedwars: { s: ["..........", "..........", "ww........", "wwrrrrrrrr", "wwrrrrrrrr", "rrrrrrrrrr", "b........b", "b........b", "..........", ".........."], p: { w: "#f8fafc", r: "#ef4444", b: "#7f1d1d" } },
+    dummy: { s: ["...yy.....", "...yy.....", "..yyyy....", ".y.yy.y...", "...yy...b.", "...yy..bbb", "..y..y.bbb", ".y....y.b.", ".y....y...", ".........."], p: { y: "#facc15", b: "#f97316" } },
     race: { s: ["pkwkwkwk..", "pwkwkwkw..", "pkwkwkwk..", "pwkwkwkw..", "p.........", "p.........", "p.........", "p.........", "p.........", "pp........"], p: { p: "#e5e7eb", k: "#111827", w: "#f8fafc" } }
 };
 

@@ -46,11 +46,55 @@ var StaticGrid = {
             }
         }
         if (withDynamic) {
-            for (let i = 0; i < movingObjects.length; i++) if (!movingObjects[i].dead) out.push(movingObjects[i]);
-            for (let i = 0; i < characters.length; i++) out.push(characters[i]);
-            for (let i = 0; i < zombies.length; i++) if (!zombies[i].dead) out.push(zombies[i]);
+            if (DynGrid.built) DynGrid.query(l, b, r, t, out, st);
+            else {
+                for (let i = 0; i < movingObjects.length; i++) if (!movingObjects[i].dead) out.push(movingObjects[i]);
+                for (let i = 0; i < characters.length; i++) out.push(characters[i]);
+                for (let i = 0; i < zombies.length; i++) if (!zombies[i].dead) out.push(zombies[i]);
+            }
         }
         return out;
+    }
+};
+
+// Same idea for things that move (crates, heroes, enemies): rebuilt once per tick in rebuildAllObjects(), each object
+// filed with a margin so it is still found after moving during the tick. Turns crate-vs-everything into a local check.
+var DynGrid = {
+    cell: 256, PAD: 96,
+    map: new Map(),
+    built: false,
+    key: function(cx, cy) { return (cx + 50000) * 100000 + (cy + 50000); },
+    build: function() {
+        this.map.clear();
+        var cs = this.cell, P = this.PAD;
+        var add = function(o) {
+            if (!o || o.dead) return;
+            var hw = (o.w || o.s1 || 40) / 2 + P, hh = (o.h || o.s2 || 40) / 2 + P;
+            var x0 = Math.floor((o.x - hw) / cs), x1 = Math.floor((o.x + hw) / cs), y0 = Math.floor((o.y - hh) / cs), y1 = Math.floor((o.y + hh) / cs);
+            for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
+                var k = DynGrid.key(cx, cy), arr = DynGrid.map.get(k);
+                if (!arr) { arr = []; DynGrid.map.set(k, arr); }
+                arr.push(o);
+            }
+        };
+        for (let i = 0; i < movingObjects.length; i++) add(movingObjects[i]);
+        for (let i = 0; i < characters.length; i++) add(characters[i]);
+        for (let i = 0; i < zombies.length; i++) add(zombies[i]);
+        this.built = true;
+    },
+    query: function(l, b, r, t, out, stamp) {
+        var cs = this.cell;
+        var x0 = Math.floor(l / cs), x1 = Math.floor(r / cs), y0 = Math.floor(b / cs), y1 = Math.floor(t / cs);
+        for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
+            var arr = this.map.get(this.key(cx, cy));
+            if (!arr) continue;
+            for (let i = 0; i < arr.length; i++) {
+                var o = arr[i];
+                if (o.dead || o._gs === stamp) continue;
+                o._gs = stamp;
+                out.push(o);
+            }
+        }
     }
 };
 
@@ -608,14 +652,19 @@ class CollisionDetector {
     static enforceNonPenetration(staticList, dynamicList) {
         var iterations = 3;
 
+        var leftOf = function(o) { return o.x - (o.w || o.s1 || 40) / 2; };
         for (let iter = 0; iter < iterations; iter++) {
-            // 1. Resolve Dynamic vs Dynamic (Characters + Crates) without pushing either into Static walls/ramps
-            for (let i = 0; i < dynamicList.length; i++) {
-                var a = dynamicList[i];
+            // 1. Resolve Dynamic vs Dynamic (Characters + Crates) without pushing either into Static walls/ramps.
+            //    Sort-and-sweep on x: once the next object starts right of this one's right edge, nothing later can touch.
+            var sorted = dynamicList.slice().sort(function(p, q) { return leftOf(p) - leftOf(q); });
+            for (let i = 0; i < sorted.length; i++) {
+                var a = sorted[i];
                 if (a.dead || a.noCollide) continue;
+                var aRight = a.x + (a.w || a.s1 || 40) / 2 + 1;
 
-                for (let j = i + 1; j < dynamicList.length; j++) {
-                    var b = dynamicList[j];
+                for (let j = i + 1; j < sorted.length; j++) {
+                    var b = sorted[j];
+                    if (leftOf(b) > aRight) break;
                     if (b.dead || b.noCollide) continue;
 
                     var hit = this.satTest(a, [0, 0], b);

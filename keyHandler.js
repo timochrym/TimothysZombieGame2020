@@ -158,6 +158,11 @@ function mouseDownHandler(e) {
     if (typeof Hub !== "undefined" && Hub.isOpen) { if (e.button === 0) Hub.click(mouseX, mouseY); return; }
     if (paused) { if (e.button === 0) pauseClick(mouseX, mouseY); return; }
     useMouseAim = true;
+    if (GameModes.has("onClick")) {
+        if (e.button === 0) mouseDown = true;
+        var cwp = Components.getMouseWorldPos();
+        if (GameModes.call("onClick", cwp[0], cwp[1], e.button)) return;
+    }
 
     if (typeof SummonManager !== "undefined" && SummonManager.handleCanvasMouseDown(e)) return;
 
