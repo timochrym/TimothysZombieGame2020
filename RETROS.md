@@ -6,6 +6,24 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Zombie Ball "Flail" style — genre-feel pass (physics soccer)
+
+**Shipped:** `sport_flail.js` — an alternate style for Zombie Ball (pause menu → Style). Two original big-headed,
+stiff-legged ragdoll players per team on ONE button: tap to jump and whip both legs toward the enemy goal, hold to
+keep tipping forward; they pull themselves upright and shuffle behind the ball; the ball (zombie or classic) is
+kicked by their feet/head with real velocity. PvP (W vs ↑), vs CPU (presses timed by skill), co-op. Heroes stay as
+hidden seats so LAN/Players still work.
+
+**Measured:** 32 s of button mashing vs CPU: 1–2, ball crossing the whole pitch, players tumbling and recovering.
+
+**Went wrong:** the first version let the ball get stuck behind everyone for 12+ s (kicks only push toward the enemy
+goal) → players shuffle behind the ball and a dead ball is dropped back in after 6 s. Players were also too small to
+read → 1.5×.
+
+**Left / known:** no keeper, no modifiers, no goal replays.
+
+---
+
 ## Textures + character detail
 
 **Shipped:** `textures.js` — 21 procedurally drawn 32-px textures (planks, cut stone, metal plate, glass, pipe, used

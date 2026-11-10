@@ -3,7 +3,7 @@
 //   Kick (F / Enter / click / RT), dash-tackle opponents (Shift / B), shockwave the ball (E / Y),
 //   jump for headers. 1v1 to 3v3 with CPU teammates/opponents, or P1 vs P2.
 // ============================================================================
-var sportCfg = { format: "1v1", level: 2, minutes: 2, goals: 5, ball: "zombie" };
+var sportCfg = { format: "1v1", level: 2, minutes: 2, goals: 5, ball: "zombie", style: "classic" };
 try { var _sc = JSON.parse(localStorage.getItem("timsZombieBallCfg") || "null"); if (_sc) { for (var _k in _sc) sportCfg[_k] = _sc[_k]; } } catch (e) {}
 var SPORT_FORMATS = [
     ["1v1", "P1 vs CPU"], ["pvp", "P1 vs P2"], ["2v2", "P1 + CPU vs 2 CPU"], ["coop", "P1 + P2 vs 2 CPU"], ["3v3", "P1 + 2 CPU vs 3 CPU"]
@@ -179,6 +179,7 @@ var Sport = {
         }
         this.phase = "kickoff";
         this.timer = fresh ? 180 : 130;
+        if (typeof Flail !== "undefined") Flail.kickoff();
     },
 
     goal: function(team) {
@@ -198,7 +199,7 @@ var Sport = {
         // the losing side gets blown over by the goal blast (ragdolls!)
         for (let i = 0; i < characters.length; i++) {
             var c = characters[i];
-            if (c.fighterTeam !== team && Math.abs(c.x - gx) < 900) { c.ragdollImmune = 0; c.startRagdoll(Math.sign(c.x - gx) * 9, 8, 60); }
+            if (!c.dead && c.fighterTeam !== team && Math.abs(c.x - gx) < 900) { c.ragdollImmune = 0; c.startRagdoll(Math.sign(c.x - gx) * 9, 8, 60); }
         }
         var who = Ball.lastTouch && Ball.lastTouch.fighterTeam !== team ? " (OWN GOAL!)" : "";
         if (typeof showBanner === "function") showBanner("GOOOAL!" + who, TEAM_NAMES[team] + " scores  ·  " + this.score[0] + " - " + this.score[1], TEAM_COLORS[team]);
@@ -258,6 +259,8 @@ GameModes.register({
         };
         red.forEach(function(p) { make(p, 0); });
         blue.forEach(function(p) { make(p, 1); });
+        // Flail style: the teams are one-button ragdoll players instead (heroes stay as hidden seats)
+        if (typeof Flail !== "undefined" && Flail.on()) characters.forEach(function(c) { c.dead = true; c.noCollide = true; });
         multiplayer = (f === "pvp" || f === "coop");
     },
 
@@ -305,6 +308,7 @@ GameModes.register({
         }
         Ball.ensureBody(false);
         Ball.syncBody();
+        if (typeof Flail !== "undefined") Flail.update();
 
         // Kicks: shoot button near the ball
         if (S.phase === "play") {
@@ -364,6 +368,7 @@ GameModes.register({
     cameraTargets: function() {
         var pts = [{ x: Ball.x, y: Ball.y }, { x: Ball.x, y: Ball.y }];
         for (let i = 0; i < characters.length; i++) if (!characters[i].dead) pts.push(characters[i]);
+        if (typeof Flail !== "undefined" && Flail.on()) Flail.men.forEach(function(m) { pts.push({ x: m.pts[1].x, y: m.pts[1].y }); });
         return pts;
     },
 
@@ -467,7 +472,8 @@ GameModes.register({
         }
         // controls strip
         uiPanel(14, cssH - 64, 560, 50, "rgba(120,170,200,0.4)", 0.8);
-        uiText("P1: A/D move · W jump · F / click KICK · Shift DASH-TACKLE · E shockwave", 28, cssH - 34, 12, "#dbe7f0", "left", "700");
+        if (typeof Flail !== "undefined" && Flail.on()) uiText("ONE BUTTON — P1: W / F / click / pad A" + (sportCfg.format === "pvp" ? "   ·   P2: ↑ / Enter" : "") + "   (tap = jump & kick, hold = tip forward)", 28, cssH - 34, 12, "#dbe7f0", "left", "800");
+        else uiText("P1: A/D move · W jump · F / click KICK · Shift DASH-TACKLE · E shockwave", 28, cssH - 34, 12, "#dbe7f0", "left", "700");
         if (multiplayer) uiText("P2: arrows · Enter KICK · R-Shift DASH · / shockwave", 28, cssH - 18, 11, "#94a3b8", "left", "700");
         uiText("Esc: menu (format, CPU skill, match length)", cssW - 20, cssH - 22, 12, "rgba(200,220,235,0.6)", "right", "700");
         for (let i = 0; i < characters.length; i++) {
@@ -482,6 +488,7 @@ GameModes.register({
         items.push({ id: "zb_lvl", label: "CPU skill:  ◀  " + ["", "Easy", "Normal", "Hard"][sportCfg.level] + "  ▶", hint: "", cycle: true });
         items.push({ id: "zb_min", label: "Match length:  ◀  " + sportCfg.minutes + " min  ▶", hint: "Applies on Rematch", cycle: true });
         items.push({ id: "zb_goals", label: "Goals to win:  ◀  " + sportCfg.goals + "  ▶", hint: "", cycle: true });
+        items.push({ id: "zb_style", label: "Style:  ◀  " + (sportCfg.style === "flail" ? "Flail (one-button physics soccer)" : "Classic (run, kick, tackle)") + "  ▶", hint: "Restarts the match", cycle: true });
         items.push({ id: "zb_ball", label: "Ball:  ◀  " + (sportCfg.ball === "zombie" ? "Zombie ragdoll" : "Classic ball") + "  ▶", hint: "", cycle: true });
         if (!pauseFromGameOver) items.push({ id: "again", label: "Rematch", hint: "Start a new match" });
     },
@@ -497,6 +504,7 @@ GameModes.register({
         if (id === "zb_lvl") { sportCfg.level = ((sportCfg.level - 1 + dir + 3) % 3) + 1; save(); return true; }
         if (id === "zb_min") { sportCfg.minutes = Math.max(1, Math.min(10, sportCfg.minutes + dir)); save(); return true; }
         if (id === "zb_goals") { sportCfg.goals = Math.max(1, Math.min(15, sportCfg.goals + dir)); save(); return true; }
+        if (id === "zb_style") { sportCfg.style = sportCfg.style === "flail" ? "classic" : "flail"; save(); closePause(); if (typeof Flail !== "undefined" && sportCfg.style !== "flail") Flail.clearMen(); LevelManager.selectLevel("zb_stadium"); return true; }
         if (id === "zb_ball") { sportCfg.ball = sportCfg.ball === "zombie" ? "classic" : "zombie"; save(); Ball.ensureBody(true); return true; }
         return false;
     }

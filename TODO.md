@@ -24,17 +24,18 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - [ ] Stomp Squad (platformer): run button with momentum, skid turns, crouch, ground-pound, wall-slide, enemies that
       turn into kickable shells, power-up pop-out animations, flagpole slide + walk-off, overworld/underground themes,
       cleaner chunky original sprites for heroes, enemies and blocks.
-- [ ] Terra (sandbox): tools (pickaxe/axe tiers), crafting bench + recipes, torches & real light map, day/night with
+- [ ] ⏸ PAUSED — Terra (sandbox): tools (pickaxe/axe tiers), crafting bench + recipes, torches & real light map, day/night with
       night enemies, inventory screen, world save/load, ore veins and biomes underground.
-- [ ] Zombie Ball (physics soccer): one-button stiff-legged ragdoll players that swing and flail, bouncy big-head
-      characters, unpredictable physics goals — the "soccer physics" feel — alongside the current mode.
+- [x] Zombie Ball "Flail" style (pause menu → Style): one-button physics soccer — two big-headed, stiff-legged
+      ragdoll players per team, tap = jump & kick, hold = tip forward, they stand back up; CPUs time presses.
+- [ ] Flail polish: goalkeepers, wind / big-head / ice modifiers, slow-mo replays of goals, 2-button variants.
 - [ ] Bed Brawl, Siege (Birds), Wobble Wheels, Crash Lab, Parkour Rush, Crate Lab, Portal Lab, Brawl: same pass —
       list each genre's core feel features and close the gaps.
 
 ## Your suggestions not built yet (backlog, all original games in the genre — no copied names/art)
 - [ ] B3 — "Lower generated level": make the Survival frontier generate lower / more underground terrain (Terra is a
       separate deep world; the frontier itself is unchanged so far).
-- [ ] B3 — Terraria-like generation + block-game capabilities → Terra (above). Next: save/load worlds, crafting
+- [ ] ⏸ PAUSED by you — B3 — Terraria-like generation + block-game capabilities → Terra (above). Next: save/load worlds, crafting
       (planks from wood, torches), lighting from torches, enemies at night / in caves, LAN sync of the tile grid.
 - [ ] B4 — Cell arena (agar-style): eat pellets & smaller cells, split, eject mass.
 - [ ] B4 — Tank arena (diep-style): shoot shapes for XP, level up, upgrades, tank classes.
