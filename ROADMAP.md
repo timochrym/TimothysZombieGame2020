@@ -144,7 +144,7 @@ Characters stay billboards. Gameplay stays 2D. Be honest that true 3D would need
 All new games are ORIGINAL games in the named genre (own name, art, rules text); the reference is only for the
 kind of mechanics. Mark items `[DONE]` as they ship.
 
-### B1. Feel & polish (engine-wide, cheap, every game benefits)
+### B1. Feel & polish (engine-wide, cheap, every game benefits) [DONE] (feel.js)
 - Bouncing bullets: optional ricochet off walls (per-weapon / per-mode flag, max bounces).
 - Grab and throw players (heroes, CPU fighters, ragdolls) with the existing grab key; thrown players ragdoll.
 - Punchy melee: a zoomed-in, ragdoll-driven punch/kick attack with hit-stop and knockback.

@@ -396,8 +396,9 @@ var Ragdolls = {
                         // once per frame (first solver pass) and per contact point: a whole body sums to a
                         // believable shove instead of every point x every pass stacking up
                         if (!iter && -(ivx * nx + ivy * ny) > 0.4) {
-                            o.xspeed = Math.max(-16, Math.min(16, o.xspeed + ivx * 0.075 * mass));
-                            o.yspeed = Math.max(-16, Math.min(16, o.yspeed + ivy * 0.05 * mass));
+                            var ow = o.weight || 1;
+                            o.xspeed = Math.max(-16, Math.min(16, o.xspeed + ivx * 0.075 * mass / ow));
+                            o.yspeed = Math.max(-16, Math.min(16, o.yspeed + ivy * 0.05 * mass / ow));
                         }
                     }
                 }

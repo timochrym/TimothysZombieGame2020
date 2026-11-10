@@ -300,6 +300,7 @@ var Net = {
         }
         if (!p) return;
         if ((i.da || 0) > p.seen.da) { p.seen.da = i.da; if (!ch.dead && !ch.isZombie) ch.triggerNinjaDash(); }
+        if ((i.pu || 0) > (p.seen.pu || 0)) { p.seen.pu = i.pu; if (typeof Feel !== "undefined") Feel.punch(ch); }
         if (typeof Build !== "undefined") {
             if ((i.bt || 0) > (p.seen.bt || 0)) { p.seen.bt = i.bt; Build.toggle(ch); }
             ch.buildPiece = i.bp || 0; ch.buildMat = i.bm || 0;
@@ -592,6 +593,7 @@ var Net = {
             jt: (inp.kbJet || inp.jet || (padOn && pad.jet)) ? 1 : 0,
             it: (inp.kbInteract || inp.interact || (padOn && pad.interact)) ? 1 : 0,
             da: this.localDash, gr: this.localGrab, rl: this.localReload,
+            pu: this.localPunch || 0,
             bt: this.localBuildToggle || 0, bp: typeof Build !== "undefined" ? Build.localPiece : 0, bm: typeof Build !== "undefined" ? Build.localMat : 0
         };
         if (inp.reloadQueued) { inp.reloadQueued = false; this.localReload++; m.rl = this.localReload; }

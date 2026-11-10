@@ -158,6 +158,8 @@ class Character {
     // Calm top running speed (px/frame); knockback, dashes and wall-jumps can briefly exceed it
     runCapNow() {
         if (!this.isPlayer) return this.maxspeed * 0.4;
+        var fm = (typeof Feel !== "undefined") ? Feel.speedMult() : 1;
+        if (fm !== 1 && !this.creativeFlying) return this.maxspeed * (this.hasPower("SPEED") ? 0.62 : 0.48) * fm;
         if (this.creativeFlying) return this.maxspeed * 0.75;   // flying is quick
         return this.maxspeed * (this.hasPower("SPEED") ? 0.62 : 0.48);
     }
@@ -288,6 +290,7 @@ class Character {
     }
 
     tryGrabOrThrow(cursorWorldX, cursorWorldY) {
+        if (this.heldChar && typeof Feel !== "undefined") { Feel.throwCharacter(this, cursorWorldX, cursorWorldY); return true; }
         if (this.heldRagdoll) {
             this.throwHeldRagdoll(cursorWorldX, cursorWorldY);
             return true;
@@ -351,6 +354,8 @@ class Character {
                 return true;
             }
         }
+        // nothing else in reach: grab a player or an enemy
+        if (typeof Feel !== "undefined" && Feel.tryGrabCharacter(this)) return true;
         return false;
     }
 
@@ -399,8 +404,9 @@ class Character {
         var throwSpeed = godMode ? 32 : 25;
         block.x = this.x + dx * (this.s1 * 0.65 + block.w * 0.55);
         block.y = this.y + dy * (this.s2 * 0.65 + block.h * 0.55);
-        block.xspeed = dx * throwSpeed + this.xspeed * 0.35;
-        block.yspeed = dy * throwSpeed + 3;
+        var bw = Math.sqrt(block.weight || 1);
+        block.xspeed = (dx * throwSpeed + this.xspeed * 0.35) / bw;
+        block.yspeed = (dy * throwSpeed + 3) / bw;
 
         CollisionDetector.enforceNonPenetration(staticObjects, [block]);
         Components.spawnSparks(block.x, block.y, "#00f5d4", 8);
@@ -1042,7 +1048,7 @@ class Character {
             // Tactile Arcade Horizontal Movement (snappy turn-around skid + apex air-control boost)
             var isAtJumpApex = !this.onGround && Math.abs(this.yspeed) < 3.4;
             var capNow = this.runCapNow();
-            var accel = this.speed * (isAtJumpApex ? 1.0 : 0.9) * (this.onSlide ? 0.55 : 1);
+            var accel = this.speed * (isAtJumpApex ? 1.0 : 0.9) * (this.onSlide ? 0.55 : 1) * (this.isPlayer && typeof Feel !== "undefined" ? Feel.speedMult() : 1);
             var turnSnap = this.onGround ? (this.speed * 1.3 + this.slower * 0.9) : (this.speed * 1.0 + this.slower * 0.4);
 
             if (this.rightPressed && !this.leftPressed) {
@@ -1423,6 +1429,7 @@ class Character {
         if (other.team === this.team) return;
         if (this.frozenTimer > 0) return;
         if (this.isPlayer && other.isPlayer && GameModes.flag("noHeroContact", false)) return;
+        if (this.grabbedBy === other || other.grabbedBy === this) return;          // held in someone's hands
         // Enemy touches hero => hero is hurt (heroes only get a half-strength hit while undead)
         var victim = this.isPlayer ? this : other;
         var bully = this.isPlayer ? other : this;

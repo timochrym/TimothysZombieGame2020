@@ -165,6 +165,16 @@ Platform gadgets (used by Stomp Squad, available to any game and the editor): `q
 - **Saving**: each game keeps its own `localStorage` key (`timsCrateLab`, `timsPortalLab`,
   `timsZombieBallCfg`, `timsParkourRush`, `timsRagdollSiege`).
 
+## Feel (`feel.js`)
+
+Z (P1) / M (P2) punch: short-range hit with ragdoll knockback, hit-stop and a camera zoom kick (`Feel.zoomMult()`
+feeds `updateCamera`). G / right-click with nothing else in reach grabs a player or enemy (`ch.heldChar`,
+`o.grabbedBy`); grab again to throw them as a ragdoll; they wriggle free after 6 s. Settings: hero speed
+(Normal / Fast / Turbo via `Feel.speedMult()`), effects Calm (default: damage numbers on the same spot add up,
+half the sparks, 10 texts max, softer shake) or Full, bouncing bullets (0-3 ricochets off solid pieces).
+Every object has `weight` (default 1, editable on crates in Level Studio): pushes, throws, explosions and ragdoll
+impacts are divided by it.
+
 ## Building (`build.js`)
 
 Flag `building: true` turns it on (Survival, Creative, Bed Wars); `buildFree: true` makes it free (Creative).

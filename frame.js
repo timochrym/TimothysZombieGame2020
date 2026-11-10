@@ -582,7 +582,7 @@ function updateCamera() {
     focusY /= wTotal;
 
     // Dynamic zoom: zoom out to keep both heroes in frame
-    var desired = baseZoom * userZoom;
+    var desired = baseZoom * userZoom * (typeof Feel !== "undefined" ? Feel.zoomMult() : 1);
     if (heroes.length > 1) {
         var minHX = Infinity, maxHX = -Infinity, minHY = Infinity, maxHY = -Infinity;
         for (let hi = 0; hi < heroes.length; hi++) {
@@ -603,8 +603,9 @@ function updateCamera() {
     var shakeX = 0;
     var shakeY = 0;
     if (screenShake > 0) {
-        shakeX = (Math.random() - 0.5) * screenShake * 2 * settings.shake;
-        shakeY = (Math.random() - 0.5) * screenShake * 2 * settings.shake;
+        var calmK = (typeof Feel !== "undefined" && Feel.calm()) ? 0.6 : 1;
+        shakeX = (Math.random() - 0.5) * screenShake * 2 * settings.shake * calmK;
+        shakeY = (Math.random() - 0.5) * screenShake * 2 * settings.shake * calmK;
         screenShake *= 0.85;
         if (screenShake < 0.4) screenShake = 0;
     }
@@ -1047,6 +1048,7 @@ function frame() {
     if (typeof Gadgets !== "undefined") Gadgets.update();
     GameModes.call("update");
     if (typeof Build !== "undefined") Build.update();
+    if (typeof Feel !== "undefined") Feel.update();
 
     // Draw Static Map Objects (2.5D view: every side face first, then the fronts)
     if (typeof Depth !== "undefined" && Depth.on()) Depth.drawSides(staticObjects.concat(movingObjects));
@@ -1093,6 +1095,7 @@ function frame() {
     Components.drawEffects();
     GameModes.call("drawFront");
     if (typeof Build !== "undefined") Build.drawFront();
+    if (typeof Feel !== "undefined") Feel.drawFront();
     Components.updateFloatingTexts();
 
     if (devOpts.showHitboxes) drawHitboxes();
@@ -1175,6 +1178,9 @@ function pauseItems() {
             { id: "shit", label: "Hit-stop on big hits:  " + (settings.hitStop ? "ON" : "OFF"), hint: "Freezes a few frames on heavy impacts" },
             { id: "shidpi", label: "Sharp hi-DPI graphics:  " + (settings.hiDPI ? (renderScaleAutoReduced ? "ON (auto-reduced for speed)" : "ON") : "OFF"), hint: "Turn off if the game runs slowly" },
             { id: "sglow", label: "Glow effects:  " + (settings.glow ? (glowAutoDisabled ? "ON (auto-reduced for speed)" : "ON") : "OFF"), hint: "Turn off for more FPS on slower computers" },
+            { id: "sspeed", label: "Hero speed:  ◀  " + ({ normal: "Normal", fast: "Fast", turbo: "Turbo" })[settings.heroSpeed] + "  ▶", hint: "How fast heroes run" },
+            { id: "sfx", label: "Effects:  " + (settings.fx === "full" ? "Full (every number & spark)" : "Calm (merged numbers, fewer sparks)"), hint: "Calm keeps busy waves readable" },
+            { id: "sric", label: "Bouncing bullets:  ◀  " + (settings.ricochet ? settings.ricochet + " bounce" + (settings.ricochet > 1 ? "s" : "") : "OFF") + "  ▶", hint: "Shots ricochet off walls" },
             { id: "s3d", label: "3D view (2.5D):  " + (settings.view3d ? "ON" : "OFF"), hint: "Looks only: blocks get depth, gameplay stays 2D" },
             { id: "ssquare", label: "Character look:  " + (settings.squareChars ? "Classic squares" : "Detailed"), hint: "Classic squares = the original 2020 blocky look" },
             { id: "help", label: "Controls help:  " + (devOpts.showHelp ? "ON" : "OFF"), hint: "Shows the key cheat-sheet" },
@@ -1225,6 +1231,9 @@ function pauseActivate(id, dir) {
     if (id === "svol") { SFX.setVolume(Math.round((settings.volume + (dir || 1) * 0.1) * 10) / 10); if (settings.volume > 1) SFX.setVolume(1); return; }
     if (id === "sshake") { settings.shake = Math.max(0, Math.min(1, Math.round((settings.shake + (dir || 1) * 0.25) * 4) / 4)); saveSettings(); return; }
     if (id === "sglow") { settings.glow = !settings.glow; glowAutoDisabled = false; saveSettings(); return; }
+    if (id === "sspeed") { var sl = ["normal", "fast", "turbo"]; settings.heroSpeed = sl[(sl.indexOf(settings.heroSpeed) + (dir || 1) + 3) % 3]; saveSettings(); return; }
+    if (id === "sfx") { settings.fx = settings.fx === "full" ? "calm" : "full"; saveSettings(); return; }
+    if (id === "sric") { settings.ricochet = (settings.ricochet + (dir || 1) + 4) % 4; saveSettings(); return; }
     if (id === "s3d") { settings.view3d = !settings.view3d; saveSettings(); return; }
     if (id === "ssquare") { settings.squareChars = !settings.squareChars; saveSettings(); return; }
     if (id === "shit") { settings.hitStop = !settings.hitStop; saveSettings(); return; }

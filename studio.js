@@ -933,7 +933,7 @@ var Studio = {
         var h = "<h3>" + esc(title) + "</h3>" + summary;
         var keys = window.Object.keys(e).filter(function(k) { return k !== "cat" && k !== "_sid" && k !== "type"; });
         // useful optional fields
-        var extra = e.cat === "layout" ? ["name", "color", "texture", "kind", "portalable"] : e.cat === "gadget" ? (({ door: ["id", "need"], plate: ["links"], switch: ["links"], mover: ["id", "needsPower"], sign: ["text"], qblock: ["item"], brick: ["item"] })[e.type] || []) : [];
+        var extra = e.cat === "layout" ? ["name", "color", "texture", "kind", "portalable"].concat(e.type === "crate" ? ["weight"] : []) : e.cat === "gadget" ? (({ door: ["id", "need"], plate: ["links"], switch: ["links"], mover: ["id", "needsPower"], sign: ["text"], qblock: ["item"], brick: ["item"] })[e.type] || []) : [];
         extra.forEach(function(k) { if (keys.indexOf(k) === -1) keys.push(k); });
         keys.forEach(function(k) {
             var v = e[k], id = "sti-" + k, inp;

@@ -87,6 +87,10 @@ function keyDownHandler(e) {
         if (c == "BracketLeft" && blueGuy) Build.pick(blueGuy, (blueGuy.buildPiece || 0) + 1);
         if (c == "KeyT") { if (lanC) Build.localMat = (Build.localMat + 1) % BUILD_MATS.length; else { Build.cycleMat(redGuy); if (blueGuy && blueGuy.buildMode && !(redGuy && redGuy.buildMode)) Build.cycleMat(blueGuy); } }
     }
+    if (typeof Feel !== "undefined" && !e.repeat) {
+        if (c == "KeyZ") { if (typeof Net !== "undefined" && Net.role === "client") Net.localPunch = (Net.localPunch || 0) + 1; else Feel.punch(redGuy); }
+        if (c == "KeyM") Feel.punch(blueGuy);
+    }
     if (c == "KeyB") { if (typeof Studio !== "undefined") Studio.toggle(); else if (typeof SummonManager !== "undefined") SummonManager.togglePanel(); }
     if (c == "KeyP") { if (typeof Pathfinder !== "undefined") Pathfinder.showDebug = !Pathfinder.showDebug; }
     if (c == "KeyH") { devOpts.showHelp = !devOpts.showHelp; helpTimer = devOpts.showHelp ? 60 * 14 : 0; }

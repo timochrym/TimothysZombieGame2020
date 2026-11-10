@@ -624,7 +624,19 @@ class Components {
                         }
                         if (hit.buildHP !== undefined && typeof Build !== "undefined") Build.damage(hit, l.damage, l.owner);
                         Components.spawnSparks(l.x, l.y, l.color, 3);
-                        removeLazer = true;
+                        // bouncing bullets: reflect off the face we came through instead of disappearing
+                        if (l.bounces === undefined) l.bounces = (typeof Feel !== "undefined") ? Feel.ricochets() : 0;
+                        if (l.bounces > 0 && !hit.movable && !hit.explosive) {
+                            l.bounces--;
+                            var px0 = l.x - l.xspeed, py0 = l.y - l.yspeed;
+                            var hw0 = (hit.w || 40) / 2, hh0 = (hit.h || 40) / 2;
+                            if (hit.isRamp) { var sxv = l.xspeed; l.xspeed = l.yspeed * (hit.rampDir === "left" ? -1 : 1); l.yspeed = sxv * (hit.rampDir === "left" ? -1 : 1); }
+                            else if (px0 < hit.x - hw0 || px0 > hit.x + hw0) l.xspeed = -l.xspeed;
+                            else l.yspeed = -l.yspeed;
+                            l.x = px0; l.y = py0;
+                            l.life = Math.max(l.life, 30);
+                            if (typeof SFX !== "undefined") SFX.play("ui", l.x, l.y, 0.25, 1.8);
+                        } else removeLazer = true;
                     }
                 }
             }
@@ -816,7 +828,18 @@ class Components {
     }
 
     static addFloatingText(text, x, y, color = "#ffffff", size = 18) {
-        if (floatingTexts.length >= 18) floatingTexts.shift();
+        var calm = typeof Feel !== "undefined" && Feel.calm();
+        // calm: damage numbers landing on the same spot add up into one number instead of a pile
+        if (calm && /^-?\d+$/.test(String(text))) {
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                var f = floatingTexts[i];
+                if (f.num !== undefined && f.life > 25 && Math.abs(f.x - x) < 80 && Math.abs(f.y - y) < 90) {
+                    f.num += Number(text); f.text = String(f.num); f.life = Math.max(f.life, 50); f.size = Math.min(26, f.size + 1);
+                    return;
+                }
+            }
+        }
+        if (floatingTexts.length >= (calm ? 10 : 18)) floatingTexts.shift();
         floatingTexts.push({
             text: text,
             x: x + (Math.random() - 0.5) * 20,
@@ -825,7 +848,8 @@ class Components {
             color: color,
             size: size,
             life: 62,
-            maxLife: 62
+            maxLife: 62,
+            num: /^-?\d+$/.test(String(text)) ? Number(text) : undefined
         });
     }
 
@@ -857,6 +881,7 @@ class Components {
     }
 
     static spawnSparks(x, y, color, count) {
+        if (typeof Feel !== "undefined" && Feel.calm()) count = Math.ceil(count * 0.5);
         for (let i = 0; i < count; i++) {
             if (particles.length >= 60) particles.shift();
             var sz = 6 + Math.random() * 6;
@@ -916,8 +941,9 @@ class Components {
                         obj.takeDamage(damage * (1 - dist / radius * 0.5), nx * force, ny * force + 6, source);
                     }
                 } else if (obj.movable) {
-                    obj.xspeed += nx * force;
-                    obj.yspeed += ny * force + 6;
+                    var ow = obj.weight || 1;
+                    obj.xspeed += nx * force / ow;
+                    obj.yspeed += (ny * force + 6) / ow;
                     if (obj.explosive) {
                         obj.takeDamage(damage * 0.8);
                     }

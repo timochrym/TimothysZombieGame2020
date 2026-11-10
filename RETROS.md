@@ -6,6 +6,23 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Feel & polish — backlog B1
+
+**Shipped (`feel.js` + small engine hooks):** punch (Z / M) with ragdoll knockback, hit-stop and a zoom kick; grab &
+throw players and enemies; Settings for hero speed (Normal / Fast / Turbo), effects (Calm by default: merged damage
+numbers, half sparks, fewer texts, softer shake), and bouncing bullets (0-3 ricochets); a `weight` on every object
+(Level Studio can set it on crates). LAN clients can punch.
+
+**Measured:** punch 16 dmg + ragdoll + zoom; grab holds the enemy 89 px in front, throw ragdolls it; ricocheting
+bolts bounce; Turbo +16% distance in the first second; six "-12" hits show as one "-72"; a weight-4 crate moved 84 px
+from a blast that threw a normal crate 468 px. No errors.
+
+**Went wrong:** the first punch launched a zombie ~880 px — toned down.
+
+**Left / known:** gamepads have no punch button yet; the punch has no wind-up animation beyond the fist.
+
+---
+
 ## Players panel — "better multiplayer and CPU toggles, make it way clearer"
 
 **Shipped:** `players.js`. One **👥 Players** panel (top-bar button, which now reads e.g. "👥 1 player + 3 CPU", and a

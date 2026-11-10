@@ -588,8 +588,9 @@ class CollisionDetector {
             visited.push(curr);
 
             // Apply momentum along collision direction + shear transfer
-            curr.xspeed += dx * imp + (Math.abs(dy) > 0.5 ? source.xspeed * 0.35 : 0);
-            curr.yspeed += dy * imp + (Math.abs(dx) > 0.5 ? Math.max(0, source.yspeed * 0.25) : 0);
+            var wgt = curr.weight || 1;
+            curr.xspeed += (dx * imp + (Math.abs(dy) > 0.5 ? source.xspeed * 0.35 : 0)) / wgt;
+            curr.yspeed += (dy * imp + (Math.abs(dx) > 0.5 ? Math.max(0, source.yspeed * 0.25) : 0)) / wgt;
 
             var maxLim = (curr.maxspeed || 20) * 1.45;
             if (curr.xspeed > maxLim) curr.xspeed = maxLim;
