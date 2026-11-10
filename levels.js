@@ -573,6 +573,7 @@ class WorldGenerator {
     // Shifts the entire world around the player in multiples of 1600px (divisible by 40px grid & 32px textures)
     // so coordinates always stay near 0 and performance stays 100% locked at 60 FPS forever!
     static shiftWorldOrigin(shiftX) {
+        if (typeof Pathfinder !== "undefined" && Pathfinder.shiftWorld) Pathfinder.shiftWorld(shiftX);
         if (shiftX === 0) return;
         worldOriginOffsetX += shiftX;
         cameraTargetX -= shiftX;

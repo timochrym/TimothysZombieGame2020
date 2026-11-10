@@ -1189,6 +1189,7 @@ class Components {
             zombie.batTimer = (zombie.batTimer || 0) + 1;
             if (zombie.batState == "hover") {
                 var hx = target.x + Math.sin(zombie.aiTick * 0.02 + zombie.id) * 160, hyy = target.y + 190 + Math.sin(zombie.aiTick * 0.05 + zombie.id) * 30;
+                if (typeof Pathfinder !== "undefined" && Pathfinder.flySteer) { var fw = Pathfinder.flySteer(zombie, hx, hyy); hx = fw.x; hyy = fw.y; }
                 if (hx > zombie.x + 14) zombie.rightPressed = true; else if (hx < zombie.x - 14) zombie.leftPressed = true;
                 if (hyy > zombie.y + 12) zombie.upPressed = true; else if (hyy < zombie.y - 12) zombie.downPressed = true;
                 if (zombie.batTimer > 90 && Math.abs(dxT) < 190 && dyT < -80 && !zombie.specialCd) {

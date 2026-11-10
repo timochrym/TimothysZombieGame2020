@@ -17,7 +17,23 @@ var Portals = {
     colors: [["#38bdf8", "#fb923c"], ["#a78bfa", "#f43f5e"]],
     tick: 0,
 
-    clear: function() { this.pairs = {}; this.beams = []; this.fixed = null; },
+    clear: function() { this.pairs = {}; this.beams = []; this.fixed = null; this.syncNavLinks(); },
+
+    // tell the pathfinder about every complete portal pair (walk into one mouth, come out of the other)
+    syncNavLinks: function() {
+        if (typeof Pathfinder === "undefined" || !Pathfinder.addLink) return;
+        Pathfinder.clearLinks("portal");
+        for (var ow in this.pairs) {
+            var pr = this.pairFor(Number(ow));
+            if (!pr[0] || !pr[1]) continue;
+            for (let k = 0; k < 2; k++) {
+                var P = pr[k], Q = pr[1 - k];
+                // floor portals are entered from above, wall portals from the side they face
+                Pathfinder.addLink(P.x + P.nx * 30, P.y + (P.ny > 0.5 ? 0 : -40), Q.x + Q.nx * 60, Q.y + (Q.ny > 0.5 ? 10 : -40), "teleport", { tag: "portal" });
+            }
+        }
+        Pathfinder.refreshLinks();
+    },
 
     pairFor: function(owner) {
         if (!this.pairs[owner]) this.pairs[owner] = [null, null];
@@ -84,6 +100,7 @@ var Portals = {
         }
         var pair = this.pairFor(ch.playerIndex);
         pair[which] = { x: hit.x, y: hit.y, nx: hit.nx, ny: hit.ny, len: PORTAL_LEN, color: col, born: this.tick };
+        this.syncNavLinks();
         if (typeof SFX !== "undefined") SFX.play("portal", hit.x, hit.y, 1, which ? 0.8 : 1.15);
         Components.spawnSparks(hit.x, hit.y, col, 8);
     },
@@ -97,6 +114,7 @@ var Portals = {
     teleportAll: function() {
         var ents = [];
         for (let i = 0; i < characters.length; i++) if (!characters[i].dead && !characters[i].liveRagdoll) ents.push(characters[i]);
+        for (let i = 0; i < zombies.length; i++) if (!zombies[i].dead && !zombies[i].liveRagdoll) ents.push(zombies[i]);
         for (let i = 0; i < movingObjects.length; i++) if (!movingObjects[i].dead && !movingObjects[i].heldBy) ents.push(movingObjects[i]);
         for (let i = 0; i < ents.length; i++) {
             var e = ents[i];

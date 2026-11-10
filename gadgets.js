@@ -191,7 +191,9 @@ var Gadgets = {
                     var nh = Math.max(4, g.h * (1 - g.progress));
                     g.obj.resize(g.w, nh);
                     g.obj.y = g.topY - nh / 2;
+                    var wasOpen = !!g.obj.noCollide;
                     g.obj.noCollide = g.progress > 0.97;
+                    if (wasOpen !== g.obj.noCollide && typeof Pathfinder !== "undefined" && Pathfinder.invalidateRect) Pathfinder.invalidateRect(g.x, g.y, g.w, g.h);
                     moved = true;
                 }
             } else if (g.type === "mover") {
@@ -312,6 +314,7 @@ var Gadgets = {
                 }
                 Components.addFloatingText("CRUMBLE!", g.x, g.y + g.h / 2 + 40, "#fbbf24", 20);
                 if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                if (typeof Pathfinder !== "undefined" && Pathfinder.invalidateRect) Pathfinder.invalidateRect(g.x, g.y, g.w, g.h);
             }
         }
     },

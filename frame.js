@@ -1012,6 +1012,7 @@ function frame() {
     // Verlet ragdolls step first so knocked-down characters follow their bodies this frame
     if (typeof Ragdolls !== "undefined") Ragdolls.update();
     if (typeof Gadgets !== "undefined") Gadgets.preUpdate();
+    if (typeof Pathfinder !== "undefined" && Pathfinder.beginFrame) Pathfinder.beginFrame();
     GameModes.call("preUpdate");
 
     for (let i = 0; i < characters.length; i++) {
