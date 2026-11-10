@@ -30,7 +30,9 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       night enemies, inventory screen, world save/load, ore veins and biomes underground.
 - [x] Zombie Ball "Flail" style (pause menu → Style): one-button physics soccer — two big-headed, stiff-legged
       ragdoll players per team, tap = jump & kick, hold = tip forward, they stand back up; CPUs time presses.
-- [ ] Flail polish: goalkeepers, wind / big-head / ice modifiers, slow-mo replays of goals, 2-button variants.
+- [x] Flail polish: goalkeepers (on by default; they hold the goal line and spring straight up), modifiers in the
+      pause menu (Wind with gusts that change after goals, Big heads, Ice pitch, Random each match), slow-mo on goals.
+      Not done (low value for now): a 2-button variant, full instant replays.
 - [~] Siege Birds: DONE — opening fly-by over the fort (click skips), dotted trail of the last shot, the next bird sits
       in the sling, crack lines on hurt wood/glass, +250 / +1000 / +1500 score pop-ups (blocks / zombies / spare
       birds). STILL TO DO: stone blocks that can break, helmeted "boss" zombies, a fort-select screen with stars,

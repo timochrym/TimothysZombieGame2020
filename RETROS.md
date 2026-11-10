@@ -6,6 +6,22 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Zombie Ball Flail polish — keepers, modifiers, goal slow-mo
+
+**Shipped:** a third player per side in Flail style — a goalkeeper that slides along its goal line toward the ball's
+side and springs straight up on your button instead of charging upfield (pause menu → Goalkeepers on/off). Modifiers
+(pause menu → Modifier): Wind (a gust pushes the ball, and players a little; it changes after every goal; HUD shows
+the direction and strength), Big heads (heads 1.75× — great for headers), Ice pitch (feet keep sliding), Random each
+match. Every goal plays in slow motion for a moment.
+
+**Measured:** keepers stay at x ≈ ±1880 (goal line ±2100) through 12 s of mashing in all four modes; big-head radius
+39 → 68; goal → 70 slow-mo frames; no errors.
+
+**Went wrong:** first keepers jumped with the normal forward kick and walked back slowly → ended up at midfield
+(x -800); wind at full strength knocked everyone flat → bodies feel a quarter of it now.
+
+---
+
 ## LAN clarity for the full-screen games
 
 **Shipped:** the nine full-screen games skipped the host's snapshot step, so a LAN client stayed frozen on the

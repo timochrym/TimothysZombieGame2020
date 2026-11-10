@@ -6,8 +6,16 @@
 //   They try to stand back up on their own. The physics decides the rest.
 //   Pause menu -> "Style: Flail (one button)" to switch. Uses the normal ball, goals, clock and score.
 // ============================================================================
+var FLAIL_MODS = [["none", "None"], ["wind", "Wind"], ["bighead", "Big heads"], ["ice", "Ice pitch"], ["random", "Random each match"]];
 var Flail = {
-    men: [], idleT: 0,
+    men: [], idleT: 0, wind: 0, mod: "none",
+    // modifiers: sportCfg.flailMod (none / wind / bighead / ice / random), sportCfg.keepers (goalkeepers on/off)
+    pickMod: function() {
+        var m = sportCfg.flailMod || "none";
+        if (m === "random") m = ["none", "wind", "bighead", "ice"][(Math.random() * 4) | 0];
+        this.mod = m;
+        this.wind = m === "wind" ? (Math.random() < 0.5 ? -1 : 1) * (0.06 + Math.random() * 0.08) : 0;
+    },
     on: function() { return typeof sportCfg !== "undefined" && sportCfg.style === "flail"; },
 
     // who presses for each team: { kind: "p1" | "p2" | "cpu" }
@@ -21,8 +29,9 @@ var Flail = {
     spawnTeams: function() {
         this.clearMen();
         var C = this.controllers();
-        for (let t = 0; t < 2; t++) for (let k = 0; k < 2; k++) {
-            var x = (t === 0 ? -1 : 1) * (k === 0 ? 450 : 1150);
+        var n = sportCfg.keepers === false ? 2 : 3;
+        for (let t = 0; t < 2; t++) for (let k = 0; k < n; k++) {
+            var x = (t === 0 ? -1 : 1) * [450, 1150, 1880][k];
             this.men.push(this.makeMan(x, 0, t, k, C[t]));
         }
     },
@@ -35,7 +44,8 @@ var Flail = {
     makeMan: function(x, ground, team, k, ctrl) {
         var rd = new Ragdoll({ kind: "flail", thick: 3 }, 1);
         var S = 1.5;                               // big, readable players
-        rd.addPoint(x, ground + 170 * S, 26 * S);      // 0 head (big)
+        var headR = this.mod === "bighead" ? 26 * S * 1.75 : 26 * S;
+        rd.addPoint(x, ground + 170 * S, headR);       // 0 head (big - or huge with the Big heads modifier)
         rd.addPoint(x, ground + 82 * S, 9 * S);        // 1 hip
         rd.addPoint(x - 16 * S, ground + 12 * S, 11 * S);  // 2 left foot
         rd.addPoint(x + 16 * S, ground + 12 * S, 11 * S);  // 3 right foot
@@ -44,7 +54,7 @@ var Flail = {
         rd.addStick(2, 3, 0.35, true);         // feet don't cross
         rd.addStick(0, 2, 0.08, true); rd.addStick(0, 3, 0.08, true);
         rd.life = -1;
-        rd.flailTeam = team; rd.flailCtrl = ctrl; rd.flailK = k;
+        rd.flailTeam = team; rd.flailCtrl = ctrl; rd.flailK = k; rd.keeper = k === 2;
         rd.home = x;
         rd.drawFn = Flail.drawMan;
         Ragdolls.list.push(rd);
@@ -89,8 +99,11 @@ var Flail = {
             // shuffle toward a spot just behind the ball (front man) or a bit further back (back man)
             if (grounded && play) {
                 var want = Ball.x - dir * (90 + m.flailK * 260);
+                // the keeper stays on its goal line, sliding across to cover the ball's side
+                if (m.keeper) want = -dir * (Sport.goalX - 140) + Math.max(-60, Math.min(60, (Ball.x + dir * Sport.goalX) * 0.05));
                 var dx = want - hip.x;
-                if (Math.abs(dx) > 30) { var step = Math.sign(dx) * Math.min(1.1, Math.abs(dx) * 0.01); for (let j = 0; j < 4; j++) P[j].px -= step * 0.35; }
+                var hurry = m.keeper ? 3.2 : 1;           // keepers get back to the line quickly
+                if (Math.abs(dx) > 30) { var step = Math.sign(dx) * Math.min(1.1 * hurry, Math.abs(dx) * 0.01 * hurry); for (let j = 0; j < 4; j++) P[j].px -= step * 0.35; }
             }
             // try to stand up: pull the head over the hip (weaker in the air)
             var k = grounded ? 0.045 : 0.012;
@@ -99,15 +112,23 @@ var Flail = {
             if (press[t]) {
                 if (grounded && !this.fresh[t]) {
                     // jump + kick: feet whip toward the enemy goal, head rocks back -> the whole body rotates
-                    for (let j = 0; j < 4; j++) P[j].py -= 12.5;
-                    P[2].px -= dir * 13; P[3].px -= dir * 15;
-                    P[0].px += dir * 6;
+                    if (m.keeper) {
+                        // keepers spring straight up to block (arms-up dive), they don't charge upfield
+                        for (let j = 0; j < 4; j++) P[j].py -= 14;
+                    } else {
+                        for (let j = 0; j < 4; j++) P[j].py -= 12.5;
+                        P[2].px -= dir * 13; P[3].px -= dir * 15;
+                        P[0].px += dir * 6;
+                    }
                     if (typeof SFX !== "undefined" && i % 2 === 0) SFX.play("jump", hip.x, hip.y, 0.5, 1.2);
-                } else if (!grounded) {
+                } else if (!grounded && !m.keeper) {
                     // keep tipping forward while held
                     P[2].px -= dir * 0.6; P[3].px -= dir * 0.6; P[0].px += dir * 0.35;
                 }
             }
+            // modifiers: wind pushes everyone (and the ball, below); ice keeps feet sliding
+            if (this.wind) for (let j = 0; j < 4; j++) P[j].px -= this.wind * (j === 0 ? 0.5 : 0.25);   // a breeze on bodies (the ball feels it most)
+            if (this.mod === "ice" && grounded) for (let j = 1; j < 4; j++) P[j].px -= (P[j].x - P[j].px) * 0.06;
             m.wake();
             // ball contact: feet and head hit it with their real velocity
             for (let j = 0; j < 4; j++) {
@@ -125,14 +146,26 @@ var Flail = {
             }
         }
         this.fresh = [press[0], press[1]];
+        if (this.wind && play) Ball.vx += this.wind * 1.4;
         // a ball that sits dead for 6 s gets dropped back in at the centre
         if (play && Math.hypot(Ball.vx, Ball.vy) < 0.6) { if (++this.idleT > 360) { this.idleT = 0; Ball.x = 0; Ball.y = 700; Ball.vx = (Math.random() - 0.5) * 6; Ball.vy = 0; Components.addFloatingText("BALL DROP!", 0, 820, "#fde047", 22); } }
         else this.idleT = 0;
     },
 
-    kickoff: function() {
+    kickoff: function(fresh) {
         if (!this.on()) return;
+        if (fresh || !this.modPicked) { this.pickMod(); this.modPicked = true; }
+        if (this.mod === "wind" && Sport.score[0] + Sport.score[1] > 0) this.wind = (Math.random() < 0.5 ? -1 : 1) * (0.06 + Math.random() * 0.08);   // gusts change after goals
         this.spawnTeams();
+    },
+    // drawn by the sport HUD: which modifier is on (and the wind arrow)
+    hud: function() {
+        if (!this.on()) return;
+        var label = { none: "", wind: "WIND", bighead: "BIG HEADS", ice: "ICE PITCH" }[this.mod] || "";
+        if (!label) return;
+        uiPanel(cssW / 2 - 110, 150, 220, 34, "#67e8f9", 0.85);
+        var arrow = this.mod === "wind" ? (this.wind > 0 ? "  ➜ " : "  ⬅ ") + Math.round(Math.abs(this.wind) * 100) : "";
+        uiText("🌀 " + label + arrow, cssW / 2, 173, 15, "#cffafe", "center", "900");
     },
 
     drawMan: function(rd) {

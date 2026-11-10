@@ -179,7 +179,7 @@ var Sport = {
         }
         this.phase = "kickoff";
         this.timer = fresh ? 180 : 130;
-        if (typeof Flail !== "undefined") Flail.kickoff();
+        if (typeof Flail !== "undefined") Flail.kickoff(fresh);
     },
 
     goal: function(team) {
@@ -188,6 +188,7 @@ var Sport = {
         this.timer = 170;
         this.goalTeam = team;
         if (typeof SFX !== "undefined") SFX.play("goal");
+        if (typeof Flail !== "undefined" && Flail.on() && typeof Juice !== "undefined" && Juice.slowMo) Juice.slowMo(70, 0.3);   // savour the flop
         Juice.slowMo(70, 0.35);
         screenShake = 10;
         var gx = team === 0 ? this.goalX + 150 : -this.goalX - 150;
@@ -472,6 +473,7 @@ GameModes.register({
         }
         // controls strip
         uiPanel(14, cssH - 64, 560, 50, "rgba(120,170,200,0.4)", 0.8);
+        if (typeof Flail !== "undefined") Flail.hud();
         if (typeof Flail !== "undefined" && Flail.on()) uiText("ONE BUTTON — P1: W / F / click / pad A" + (sportCfg.format === "pvp" ? "   ·   P2: ↑ / Enter" : "") + "   (tap = jump & kick, hold = tip forward)", 28, cssH - 34, 12, "#dbe7f0", "left", "800");
         else uiText("P1: A/D move · W jump · F / click KICK · Shift DASH-TACKLE · E shockwave", 28, cssH - 34, 12, "#dbe7f0", "left", "700");
         if (multiplayer) uiText("P2: arrows · Enter KICK · R-Shift DASH · / shockwave", 28, cssH - 18, 11, "#94a3b8", "left", "700");
@@ -489,6 +491,11 @@ GameModes.register({
         items.push({ id: "zb_min", label: "Match length:  ◀  " + sportCfg.minutes + " min  ▶", hint: "Applies on Rematch", cycle: true });
         items.push({ id: "zb_goals", label: "Goals to win:  ◀  " + sportCfg.goals + "  ▶", hint: "", cycle: true });
         items.push({ id: "zb_style", label: "Style:  ◀  " + (sportCfg.style === "flail" ? "Flail (one-button physics soccer)" : "Classic (run, kick, tackle)") + "  ▶", hint: "Restarts the match", cycle: true });
+        if (sportCfg.style === "flail") {
+            var fm = FLAIL_MODS.find(function(f) { return f[0] === (sportCfg.flailMod || "none"); }) || FLAIL_MODS[0];
+            items.push({ id: "zb_fmod", label: "Modifier:  ◀  " + fm[1] + "  ▶", hint: "Restarts the match", cycle: true });
+            items.push({ id: "zb_keep", label: "Goalkeepers:  ◀  " + (sportCfg.keepers === false ? "Off" : "On") + "  ▶", hint: "Restarts the match", cycle: true });
+        }
         items.push({ id: "zb_ball", label: "Ball:  ◀  " + (sportCfg.ball === "zombie" ? "Zombie ragdoll" : "Classic ball") + "  ▶", hint: "", cycle: true });
         if (!pauseFromGameOver) items.push({ id: "again", label: "Rematch", hint: "Start a new match" });
     },
@@ -505,6 +512,8 @@ GameModes.register({
         if (id === "zb_min") { sportCfg.minutes = Math.max(1, Math.min(10, sportCfg.minutes + dir)); save(); return true; }
         if (id === "zb_goals") { sportCfg.goals = Math.max(1, Math.min(15, sportCfg.goals + dir)); save(); return true; }
         if (id === "zb_style") { sportCfg.style = sportCfg.style === "flail" ? "classic" : "flail"; save(); closePause(); if (typeof Flail !== "undefined" && sportCfg.style !== "flail") Flail.clearMen(); LevelManager.selectLevel("zb_stadium"); return true; }
+        if (id === "zb_fmod") { var fi = FLAIL_MODS.findIndex(function(f) { return f[0] === (sportCfg.flailMod || "none"); }); sportCfg.flailMod = FLAIL_MODS[(fi + dir + FLAIL_MODS.length) % FLAIL_MODS.length][0]; save(); closePause(); Flail.modPicked = false; Flail.clearMen(); LevelManager.selectLevel("zb_stadium"); return true; }
+        if (id === "zb_keep") { sportCfg.keepers = sportCfg.keepers === false; save(); closePause(); Flail.clearMen(); LevelManager.selectLevel("zb_stadium"); return true; }
         if (id === "zb_ball") { sportCfg.ball = sportCfg.ball === "zombie" ? "classic" : "zombie"; save(); Ball.ensureBody(true); return true; }
         return false;
     }
