@@ -16,6 +16,7 @@ var HUB_ICONS = {
     wheels: { s: ["..........", "....hh....", "....hh....", "...bbbb...", "..b.bb.b..", "..oooooo..", ".kkk..kkk.", "k...kk...k", "k...kk...k", ".kkk..kkk."], p: { h: "#fde68a", b: "#3b82f6", o: "#f97316", k: "#111827" } },
     terra: { s: ["..........", "...gg.....", "..gggg....", "...ww.....", "gggwwggggg", "dddddddddd", "ddsdddssdd", "sssyssssss", "ss..ssyss.", "ssssssssss"], p: { g: "#4f8a33", w: "#8b5a2b", d: "#7c4a26", s: "#6b7280", y: "#d4a017" } },
     powder: { s: ["..........", "....ss....", "...ssss...", "..s.ss.s..", "....ss....", "...ssss...", "..ssssss..", ".wwssssww.", "wwwwssswww", "wwwwwwwwww"], p: { s: "#d6ba70", w: "#3884e6" } },
+    snake: { s: ["..........", ".pppp.....", "p....p....", "p.ee.p....", ".pppp.p...", "......p...", ".....p....", "....p...o.", "...p...ooo", "..pppp..o."], p: { p: "#f472b6", e: "#ffffff", o: "#fbbf24" } },
     race: { s: ["pkwkwkwk..", "pwkwkwkw..", "pkwkwkwk..", "pwkwkwkw..", "p.........", "p.........", "p.........", "p.........", "p.........", "pp........"], p: { p: "#e5e7eb", k: "#111827", w: "#f8fafc" } }
 };
 

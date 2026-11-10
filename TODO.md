@@ -69,7 +69,9 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       (planks from wood, torches), lighting from torches, enemies at night / in caves, LAN sync of the tile grid.
 - [ ] B4 — Cell arena (agar-style): eat pellets & smaller cells, split, eject mass.
 - [ ] B4 — Tank arena (diep-style): shoot shapes for XP, level up, upgrades, tank classes.
-- [ ] B4 — Snake arena (slither-style): growing snake, boost, cut others off.
+- [x] B4 — Snake arena (slither-style) → **Worm Arena**: round arena, mouse / A-D steering, boost burns length and drops
+      food, head-into-body kills and bursts into pellets, 11 CPU worms that hunt food and cut smaller worms off,
+      leaderboard, minimap, best length, local P2 (shared zooming camera), pads. Next: LAN, skins, team mode.
 - [ ] B4 — Word sandbox (scribblenauts-style): type a noun, it appears with sensible behaviour.
 - [ ] B4 — Endless jetpack runner (jetpack-joyride-style): hold to fly, dodge lasers/missiles, coins.
 - [ ] B4 — Board party (mario-party-style): dice board + quick minigames between turns, stars/coins.

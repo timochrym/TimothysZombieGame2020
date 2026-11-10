@@ -6,6 +6,26 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Worm Arena (new game, B4 — slither-style)
+
+**Shipped:** `game_snake.js` on the new `ownScreen` path: a round arena with 1400 glowing pellets and 11 CPU worms.
+Mouse steers (A/D switch to keyboard turning), click / Space / W boosts at double speed but burns length and leaves food
+behind; a head that touches another worm's body bursts into pellets; the wall kills too. CPU worms probe seven rays
+for bodies / the wall, chase the best nearby food and, when bigger, try to cut in front of smaller worms. Leaderboard
+(you're always listed), minimap, best length saved, 2 s spawn protection, local P2 on the arrows with a camera that
+zooms to fit both, gamepad sticks.
+
+**Measured:** 0.45 ms per simulation step with 13 worms; CPUs grow 28 → 60 in 12 s; eating, death message, respawn and
+best-length save verified headless.
+
+**Went wrong:** (1) my `onKey` swallowed Space, so the global Space flag never got set and Space-boost did nothing →
+removed. (2) P1 could die two seconds after spawning in a crowd → spawn protection. (3) 700 pellets in this arena were
+too sparse to grow by hand → 1400 and worth a bit more.
+
+**Left / known:** LAN, skins, team mode (TODO.md).
+
+---
+
 ## Sand Lab (new game, B4) + arcade scrolling
 
 **Shipped:** `game_powder.js` — an original falling-sand toy on a 320×180 grid: sand, water, wall, fire, oil, plant,
