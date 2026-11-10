@@ -6,6 +6,23 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## LAN for the real-time full-screen games (arenas, Jet Dash, Sand Lab)
+
+**Shipped:** a `netInput()` hook — a full-screen game can send its own controls from a LAN client (steering angle,
+aim point, buttons) — plus `Net.peerList()` / `Net.peerX(pid)`. Worm Arena, Blob Arena and Tank Arena give every LAN
+player their own worm / blob / tank (steered with their mouse, boost / split / fire with their buttons, respawn on
+their button, removed when they leave); clients get the host's state (pellets only near LAN players to keep it
+small) and a camera that follows their own piece. Jet Dash adds LAN players as extra runners on the same run. Sand
+Lab streams the grid run-length encoded every other snapshot and lets LAN players paint with their own material and
+brush. No full-screen game is local-only any more.
+
+**Measured:** host + client over the relay — Worm: client mouse turned the worm right (angle 0) then down (1.57),
+click boosted (length 26 → 14), leaving removed it; Blob: the blob followed the client's mouse; Tank: D drove it
+right, click fired; Jet Dash: holding flew the runner up; Sand Lab: client painted 378 lava cells, identical on both
+screens. Snapshots 9-15 KB at 30 Hz in the arenas; all-games smoke test 0 errors.
+
+---
+
 ## LAN for the turn-based games (Rent Rush, Party Board, Table Games)
 
 **Shipped:** a draw-only LAN path for full-screen games: a mode can now offer `screenDraw()` plus `netState()` /

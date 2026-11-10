@@ -109,9 +109,10 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       online/LAN turns.
 
 ## Known issues / polish found while building (from RETROS.md)
-- LAN: Rent Rush, Party Board and Table Games now work over LAN (LAN players take CPU seats / the blue side and play
-  with their own keys). Still local-only (clients see a "local-only for now" screen, the host's arcade marks them):
-  Sand Lab, Worm / Blob / Tank Arena, Jet Dash — real-time games that need a proper streamed state.
+- LAN: all nine new games work over LAN now (turn-based ones seat LAN players in CPU seats; Worm / Blob / Tank Arena
+  give each LAN player their own worm / blob / tank; Jet Dash adds them as runners; Sand Lab lets them paint into the
+  host's box). Known limits: Tank Arena LAN tanks get auto stats / class; Sand Lab LAN painters pick materials with
+  1-0 (palette clicks are host-only); ~0.3-0.5 MB/s per client in the arenas.
 - Pathfinding: "60 FPS with 60+ enemies" met for the JS budget, not in headless software rendering; frontier pathing ~1 ms.
 - LAN: bandwidth is per client through the relay (~340 KB/s with 60 enemies); mode HUD state only synced for Stomp
   Squad and Bed Brawl; minecarts/rails and Terra tiles not visible on LAN clients; Wobble Wheels has no LAN riders.

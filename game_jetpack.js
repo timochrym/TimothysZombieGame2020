@@ -18,10 +18,24 @@ var Jet = {
         this.x = 0; this.speed = 7; this.t = 0; this.phase = "ready"; this.obs = []; this.coins = []; this.fx = []; this.nextAt = 1100; this.coinsRun = 0; this.endT = 0;
         this.runners = [this.makeRunner(0, "#ff5a5f")];
         if (multiplayer) this.runners.push(this.makeRunner(1, "#3da5ff"));
+        this.lanSync();
+    },
+    // LAN players join the run as extra runners (host); they drop out when they leave
+    lanSync: function() {
+        if (typeof Net === "undefined" || Net.role !== "host") return;
+        var self = this;
+        Net.peerList().forEach(function(p) {
+            if (self.runners.some(function(r) { return r.pid === p.pid; })) return;
+            var r = self.makeRunner(self.runners.length, p.color || "#fde047"); r.lan = true; r.pid = p.pid; r.name = p.name;
+            if (self.phase !== "ready") { r.alive = false; r.why = "joined mid-run"; }
+            self.runners.push(r);
+        });
+        this.runners = this.runners.filter(function(r) { return !r.lan || Net.peers[r.pid]; });
     },
     makeRunner: function(i, col) { return { i: i, col: col, x: 260 - i * 70, y: this.H - JD.FLOOR - 40, vy: 0, alive: true, shield: false, flame: 0, dist: 0, dieX: 0, spin: 0 }; },
 
     held: function(r) {
+        if (r.lan) return !!Net.peerX(r.pid).h;
         var pad = (typeof Pads !== "undefined") ? Pads.state[r.i] : null;
         if (r.i === 0) return SpacePressed || WASDupPressed || mouseDown || !!(pad && pad.active && (pad.up || pad.shoot)) || (!multiplayer && (ULDRupPressed || !!PlayerInput[1].kbShoot));
         return ULDRupPressed || !!PlayerInput[1].kbShoot || !!(pad && pad.active && (pad.up || pad.shoot));
@@ -231,7 +245,7 @@ var Jet = {
         ctx.fillStyle = "#0a0f16"; ctx.fillRect(4, -26, 4, 6); ctx.fillRect(10, -26, 4, 6);
         if (r.shield) { ctx.strokeStyle = "rgba(103,232,249,0.85)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(2, -4, 46, 0, 7); ctx.stroke(); ctx.fillStyle = "rgba(103,232,249,0.12)"; ctx.fill(); }
         ctx.restore();
-        if (r.alive) uiText("P" + (r.i + 1), r.x, r.y - 50, 12, "#fff", "center", "900");      // (inside the scaled corridor view)
+        if (r.alive) uiText(r.name || "P" + (r.i + 1), r.x, r.y - 50, 12, (typeof Net !== "undefined" && Net.role === "client" && r.pid === Net.pid) ? "#fde047" : "#fff", "center", "900");      // (inside the scaled corridor view)
     },
 
     hud: function() {
@@ -270,9 +284,24 @@ GameModes.register({
             if (again && !Jet.wasHeld) Jet.reset();
             Jet.wasHeld = again;
         } else Jet.wasHeld = Jet.phase === "ready" ? false : true;
+        Jet.lanSync();
         Jet.step();
         Jet.render();
         Jet.hud();
+    },
+    screenDraw: function() { Jet.render(); Jet.hud(); },
+    netInput: function() { return { h: (SpacePressed || WASDupPressed || mouseDown) ? 1 : 0 }; },
+    netState: function() {
+        var J = Jet, W = J.W;
+        return { x: Math.round(J.x), sp: J.speed, t: J.t, ph: J.phase, cr: J.coinsRun, et: J.endT,
+            r: J.runners.map(function(r) { return { i: r.i, c: r.col, x: r.x, y: Math.round(r.y), a: r.alive ? 1 : 0, s: r.shield ? 1 : 0, f: r.flame, n: r.name || "", p: r.pid || null, w: r.why || "", sp: r.spin, iv: r.inv || 0 }; }),
+            o: J.obs.filter(function(o) { return o.x < J.x + W + 1400; }).map(function(o) { return { k: o.k, x: Math.round(o.x), y: Math.round(o.y), len: o.len, ang: o.ang, warnT: o.warnT, t: o.t, charge: o.charge, fire: o.fire }; }),
+            c: J.coins.filter(function(c) { return c.x < J.x + W + 200; }).map(function(c) { return [Math.round(c.x), Math.round(c.y), c.shield ? 1 : 0]; }) };
+    },
+    applyNetState: function(m) {
+        Jet.x = m.x; Jet.speed = m.sp; Jet.t = m.t; Jet.phase = m.ph; Jet.coinsRun = m.cr; Jet.endT = m.et;
+        Jet.runners = m.r.map(function(o) { return { i: o.i, col: o.c, x: o.x, y: o.y, alive: !!o.a, shield: !!o.s, flame: o.f, name: o.n, pid: o.p, why: o.w, spin: o.sp, inv: o.iv, vy: 0 }; });
+        Jet.obs = m.o; Jet.coins = m.c.map(function(a) { return { x: a[0], y: a[1], shield: !!a[2] }; }); Jet.fx = [];
     },
 
     onClick: function() { return true; },

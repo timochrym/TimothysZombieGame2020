@@ -16,6 +16,22 @@ var Cells = {
     players: [], blobs: [], pellets: [], viruses: [], t: 0, cam: { x: 0, y: 0, z: 1 },
 
     rad: function(m) { return Math.sqrt(m) * 5; },
+    // players at THIS screen (P1/P2 on the host, my own blob on a LAN client)
+    locals: function() {
+        if (typeof Net !== "undefined" && Net.role === "client") return this.players.filter(function(p) { return p.pid === Net.pid; });
+        return this.players.filter(function(p) { return p.human === 0 || p.human === 1; });
+    },
+    lanSync: function() {
+        if (typeof Net === "undefined" || Net.role !== "host") return;
+        var self = this;
+        Net.peerList().forEach(function(p) { if (!self.players.some(function(q) { return q.pid === p.pid; })) { var q = self.addPlayer({ human: "lan", name: p.name, color: p.color || "#fde047" }); q.pid = p.pid; } });
+        this.players.forEach(function(q) {
+            if (q.human !== "lan") return;
+            if (!Net.peers[q.pid]) { q.gone = true; self.blobs = self.blobs.filter(function(bb) { return bb.pl !== q; }); return; }
+            if (!q.alive && ++q.deadT > 60 && Net.peerX(q.pid).s) { self.spawn(q); q.splitPrev = true; }
+        });
+        this.players = this.players.filter(function(q) { return !q.gone; });
+    },
     speed: function(m) { return 9 * Math.pow(m, -0.24); },
     mass: function(pl) { var s = 0; for (let i = 0; i < this.blobs.length; i++) if (this.blobs[i].pl === pl) s += this.blobs[i].m; return s; },
     mine: function(pl) { return this.blobs.filter(function(b) { return b.pl === pl; }); },
@@ -70,6 +86,10 @@ var Cells = {
             pl.aimX = cx + dx * 400; pl.aimY = cy + dy * 400;
             split = !!PlayerInput[1].kbShoot || !!(p2 && p2.active && p2.shoot);
             eject = !!PlayerInput[1].kbInteract || !!(p2 && p2.active && p2.interact);
+        } else if (pl.human === "lan") {
+            var x = Net.peerX(pl.pid);
+            if (x.ax !== undefined) { pl.aimX = x.ax; pl.aimY = x.ay; }
+            split = !!x.s; eject = !!x.e;
         } else {
             var cmd = this.cpu(pl, me, cx, cy, M);
             split = cmd.split; eject = false;
@@ -211,7 +231,7 @@ var Cells = {
 
     die: function(pl, by) {
         pl.alive = false; pl.deadT = 0; pl.by = by;
-        if (pl.human !== undefined) {
+        if (pl.human === 0 || pl.human === 1) {
             var pk = Math.round(pl.peak);
             if (pk > cellsSave.best) { cellsSave.best = pk; try { localStorage.setItem("timsBlobArena", JSON.stringify(cellsSave)); } catch (e) {} }
             if (typeof SFX !== "undefined") SFX.play("ko");
@@ -221,7 +241,7 @@ var Cells = {
     toScreen: function(x, y) { var c = this.cam; return [(x - c.x) * c.z + cssW / 2, (y - c.y) * c.z + cssH / 2]; },
 
     render: function() {
-        var hum = this.players.filter(function(p) { return p.human !== undefined && p.alive; });
+        var hum = this.locals().filter(function(p) { return p.alive; });
         var tx = this.cam.x, ty = this.cam.y, M = 20, span = 0;
         if (hum.length) {
             tx = 0; ty = 0; M = 0;
@@ -278,7 +298,7 @@ var Cells = {
     },
 
     hud: function() {
-        var hum = this.players.filter(function(p) { return p.human !== undefined; });
+        var hum = this.locals();
         uiPanel(14, 10, 320, 60, "#a78bfa");
         uiText("BLOB ARENA", 30, 38, 22, "#c4b5fd", "left", "900");
         uiText(hum.map(function(p) { return p.name + " " + (p.alive ? Math.round(Cells.mass(p)) : "✖"); }).join("   ") + "   best " + cellsSave.best, 30, 58, 12, "#cbd5e1", "left", "800");
@@ -298,7 +318,7 @@ var Cells = {
             var y = cssH / 2 - 60 + i * 120;
             uiPanel(cssW / 2 - 210, y, 420, 100, h.color, 0.92);
             uiText(h.name + (h.by ? " was eaten by " + h.by.name : " is out"), cssW / 2, y + 36, 22, "#fff", "center", "900");
-            uiText("peak mass " + Math.round(h.peak) + "  ·  " + (h.deadT > 60 ? (h.human === 0 ? "click / Space" : "Enter") + " to play again" : "…"), cssW / 2, y + 70, 15, "#cbd5e1", "center", "800");
+            uiText("peak mass " + Math.round(h.peak) + "  ·  " + (h.deadT > 60 ? (h.human === 1 ? "Enter" : "click / Space") + " to play again" : "…"), cssW / 2, y + 70, 15, "#cbd5e1", "center", "800");
         }
         ctx.fillStyle = "rgba(15,23,42,0.8)"; ctx.fillRect(0, cssH - 30, cssW, 30);
         uiText("Mouse moves · Space split · W eject · eat anything 25% smaller · green spikes pop big blobs · Esc menu" + (multiplayer ? " · P2: arrows, Enter split, / eject" : ""), cssW / 2, cssH - 11, 12, "rgba(220,230,240,0.85)", "center", "700");
@@ -327,9 +347,32 @@ GameModes.register({
             var again = pl.human === 0 ? (mouseDown || SpacePressed || !!(pad && pad.active && pad.shoot)) : (!!PlayerInput[1].kbShoot || !!(pad && pad.active && pad.shoot));
             if (pl.deadT > 60 && again) { Cells.spawn(pl); pl.splitPrev = true; }
         }
+        Cells.lanSync();
         Cells.step();
         Cells.render();
         Cells.hud();
+    },
+    screenDraw: function() { Cells.t++; Cells.render(); Cells.hud(); },
+    netInput: function() {
+        var c = Cells.cam;
+        return { ax: Math.round((mouseX - cssW / 2) / c.z + c.x), ay: Math.round((mouseY - cssH / 2) / c.z + c.y), s: SpacePressed ? 1 : 0, e: WASDupPressed ? 1 : 0 };
+    },
+    netState: function() {
+        var lan = Cells.players.filter(function(p) { return p.human === "lan" && p.alive; });
+        var near = Cells.pellets.filter(function(p) { return lan.some(function(q) { return Math.abs(p.x - q.cx) < 2600 && Math.abs(p.y - q.cy) < 1800; }); });
+        return {
+            pl: Cells.players.map(function(p) { return { n: p.name, c: p.color, h: p.human === undefined ? -1 : p.human, p: p.pid || null, a: p.alive ? 1 : 0, pk: Math.round(p.peak), dt: p.deadT, by: p.by ? p.by.name : "" }; }),
+            b: Cells.blobs.map(function(bb) { return [Cells.players.indexOf(bb.pl), Math.round(bb.x), Math.round(bb.y), Math.round(bb.m)]; }),
+            p: near.map(function(p) { return [Math.round(p.x), Math.round(p.y), p.m, CEL_COLORS.indexOf(p.col)]; }),
+            v: Cells.viruses.map(function(v) { return [Math.round(v.x), Math.round(v.y)]; })
+        };
+    },
+    applyNetState: function(m) {
+        Cells.players = m.pl.map(function(o) { return { name: o.n, color: o.c, human: o.h === -1 ? undefined : o.h, pid: o.p, alive: !!o.a, peak: o.pk, deadT: o.dt, by: o.by ? { name: o.by } : null, cx: 0, cy: 0 }; });
+        Cells.blobs = m.b.map(function(a) { return { pl: Cells.players[a[0]], x: a[1], y: a[2], m: a[3], vx: 0, vy: 0 }; }).filter(function(bb) { return bb.pl; });
+        Cells.players.forEach(function(p) { var M = 0, x = 0, y = 0; Cells.blobs.forEach(function(bb) { if (bb.pl === p) { M += bb.m; x += bb.x * bb.m; y += bb.y * bb.m; } }); if (M) { p.cx = x / M; p.cy = y / M; } });
+        Cells.pellets = m.p.map(function(a) { return { x: a[0], y: a[1], m: a[2], col: a[3] >= 0 ? CEL_COLORS[a[3]] : "#ffffff", vx: 0, vy: 0 }; });
+        Cells.viruses = m.v.map(function(a) { return { x: a[0], y: a[1], m: 100 }; });
     },
 
     onClick: function() { return true; },

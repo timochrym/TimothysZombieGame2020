@@ -187,7 +187,40 @@ GameModes.register({
 
     setupLevel: function() { if (!Powder.grid) Powder.init(); },
 
+    screenDraw: function() { Powder.t++; Powder.render(); this.hudBits(true); },
+    netInput: function() {
+        var gp = Powder.toGrid(mouseX, mouseY);
+        return { gx: gp[0], gy: gp[1], m: Powder.sel, b: Powder.brush, p: mouseDown ? 1 : 0, e: rightMouseDown ? 1 : 0 };
+    },
+    netState: function() {
+        Powder.netTick = (Powder.netTick || 0) + 1;
+        if (Powder.netTick % 2) return null;                       // the grid every other snapshot (~15 Hz) is plenty
+        var g = Powder.grid, out = [], v = g[0], n = 0;
+        for (let i = 0; i < g.length; i++) { if (g[i] === v && n < 60000) n++; else { out.push(v, n); v = g[i]; n = 1; } }
+        out.push(v, n);
+        return { r: out };
+    },
+    applyNetState: function(m) {
+        if (!m || !m.r) return;
+        if (!Powder.grid) Powder.init();
+        var g = Powder.grid, k = 0;
+        for (let i = 0; i < m.r.length; i += 2) { g.fill(m.r[i], k, k + m.r[i + 1]); k += m.r[i + 1]; }
+    },
+    hudBits: function(client) {
+        uiPanel(14, 10, 430, 50, "#d6ba70");
+        uiText("SAND LAB" + (client ? "  ·  LAN" : ""), 30, 42, 22, "#fde68a", "left", "900");
+        Powder.palette();
+        uiText("Left paint · right erase · wheel / [ ] brush " + Powder.brush + " · 1-0 material · E eraser" + (client ? " · you're painting in the host's box" : " · Space pause · F fast · C clear · S save · L load") + " · Esc menu", cssW / 2, cssH - 14, 12, "rgba(220,230,240,0.7)", "center", "700");
+    },
     screenFrame: function() {
+        // LAN painters (host side): each paints with their own material and brush
+        if (typeof Net !== "undefined" && Net.role === "host") Net.peerList().forEach(function(p) {
+            var x = (p.inp && p.inp.x) || {};
+            if (!x.p && !x.e) return;
+            var keep = Powder.brush; Powder.brush = Math.max(1, Math.min(20, x.b || 4));
+            Powder.paint(x.gx, x.gy, x.e ? P_EMPTY : Math.max(0, Math.min(PM.length - 1, x.m | 0)));
+            Powder.brush = keep;
+        });
         // paint while the mouse is held (left = material, right = erase)
         var gp = Powder.toGrid(mouseX, mouseY);
         if (Powder.palDown) Powder.palDown = mouseDown;

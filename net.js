@@ -178,6 +178,8 @@ var Net = {
         }
         return changed;
     },
+    peerList: function() { var a = []; for (var k in this.peers) a.push(this.peers[k]); return a; },
+    peerX: function(pid) { var p = this.peers[pid]; return (p && p.inp && p.inp.x) || {}; },
     // buttons of a LAN player for turn-based games: go = Space / F / ↑, no = ↓ / S, build/extra = E, plus left / right
     peerButtons: function(pid) {
         var p = this.peers[pid], i = (p && p.inp) || {};
@@ -617,6 +619,7 @@ var Net = {
             bt: this.localBuildToggle || 0, bp: typeof Build !== "undefined" ? Build.localPiece : 0, bm: typeof Build !== "undefined" ? Build.localMat : 0
         };
         if (inp.reloadQueued) { inp.reloadQueued = false; this.localReload++; m.rl = this.localReload; }
+        if (GameModes.has("netInput")) { try { m.x = GameModes.call("netInput"); } catch (e) {} }    // full-screen games send their own controls
         if (padOn && pad.aim) m.ag = Math.round((Math.degrees(Math.atan2(pad.aim[0], -pad.aim[1])) + 360) % 360);
         else if (useMouseAim && me) { var mp = Components.getMouseWorldPos(); m.ax = Math.round(mp[0]); m.ay = Math.round(mp[1]); }
         var str = JSON.stringify(m);

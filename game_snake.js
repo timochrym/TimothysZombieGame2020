@@ -62,7 +62,25 @@ var Snake = {
             if (pad2 && pad2.active && (pad2.left || pad2.right || pad2.aim)) { var bx = pad2.aim ? pad2.aim[0] : (pad2.right ? 1 : -1), by = pad2.aim ? pad2.aim[1] : 0; w.want = Math.atan2(by, bx); }
             else if (ULDRleftPressed || ULDRrightPressed) w.want = w.ang + (ULDRrightPressed ? 0.09 : -0.09);
             w.boost = ULDRupPressed || !!PlayerInput[1].kbShoot || !!(pad2 && pad2.active && pad2.shoot);
+        } else if (w.human === "lan") {
+            var x = Net.peerX(w.pid);
+            if (x.a !== undefined) w.want = x.a;
+            w.boost = !!x.b;
         } else this.cpu(w);
+    },
+    // LAN: every LAN player gets a worm of their own (host only); leavers' worms burst
+    lanSync: function() {
+        if (typeof Net === "undefined" || Net.role !== "host") return;
+        var self = this;
+        Net.peerList().forEach(function(p) {
+            if (!self.worms.some(function(w) { return w.pid === p.pid; })) { var w = self.spawn({ name: p.name, color: p.color || "#fde047", human: "lan" }); w.pid = p.pid; }
+        });
+        this.worms.forEach(function(w) {
+            if (w.human !== "lan") return;
+            if (!Net.peers[w.pid]) { if (w.alive) self.kill(w, null); w.gone = true; return; }
+            if (!w.alive && ++w.deadT > 60 && Net.peerX(w.pid).b) self.spawn({ old: w, name: w.name, color: w.color, human: "lan" });
+        });
+        this.worms = this.worms.filter(function(w) { return !w.gone; });
     },
 
     cpu: function(w) {
@@ -132,7 +150,7 @@ var Snake = {
         if (w.human !== undefined) {
             w.deathMsg = by ? "Eaten by " + by.name : "You hit the wall";
             w.finalLen = Math.round(w.len);
-            if (w.finalLen > snakeSave.best) { snakeSave.best = w.finalLen; try { localStorage.setItem("timsWormArena", JSON.stringify(snakeSave)); } catch (e) {} }
+            if ((w.human === 0 || w.human === 1) && w.finalLen > snakeSave.best) { snakeSave.best = w.finalLen; try { localStorage.setItem("timsWormArena", JSON.stringify(snakeSave)); } catch (e) {} }
             if (typeof SFX !== "undefined") SFX.play("ko");
         } else if (by && by.human !== undefined) {
             if (typeof SFX !== "undefined") SFX.play("kill");
@@ -193,7 +211,10 @@ var Snake = {
 
     toScreen: function(x, y) { var c = this.cam; return [(x - c.x) * c.z + cssW / 2, (y - c.y) * c.z + cssH / 2]; },
 
-    humans: function() { return this.worms.filter(function(w) { return w.human !== undefined; }); },
+    humans: function() {
+        if (typeof Net !== "undefined" && Net.role === "client") return this.worms.filter(function(w) { return w.pid === Net.pid; });
+        return this.worms.filter(function(w) { return w.human === 0 || w.human === 1; });
+    },
 
     render: function() {
         var hs = this.humans().filter(function(w) { return w.alive; });
@@ -285,7 +306,7 @@ var Snake = {
             var y = cssH / 2 - 60 + i * 120;
             uiPanel(cssW / 2 - 200, y, 400, 100, hw.color, 0.92);
             uiText(hw.name + ": " + (hw.deathMsg || "Out!"), cssW / 2, y + 36, 22, "#fff", "center", "900");
-            uiText("length " + hw.finalLen + "  ·  " + (hw.deadT > 60 ? (hw.human === 0 ? "click / Space" : "Enter / ↑") + " to play again" : "…"), cssW / 2, y + 70, 15, "#cbd5e1", "center", "800");
+            uiText("length " + hw.finalLen + "  ·  " + (hw.deadT > 60 ? (hw.human === 1 ? "Enter / ↑" : "click / Space") + " to play again" : "…"), cssW / 2, y + 70, 15, "#cbd5e1", "center", "800");
         }
         uiText((hs[0] && hs[0].keyMode ? "A/D turn" : "Mouse steers") + " · click / Space / W boost (costs length) · cut others off · Esc menu" + (multiplayer ? " · P2: ←/→ turn, ↑ boost" : ""), cssW / 2, cssH - 14, 12, "rgba(220,230,240,0.7)", "center", "700");
     }
@@ -317,9 +338,35 @@ GameModes.register({
             var again = w.human === 0 ? (mouseDown || SpacePressed || !!(pad && pad.active && pad.shoot)) : (ULDRupPressed || !!PlayerInput[1].kbShoot || !!(pad && pad.active && pad.shoot));
             if (w.deadT > 60 && again) { Snake.spawn({ old: w, name: w.name, color: w.color, human: w.human }); w.kills = 0; }
         }
+        Snake.lanSync();
         Snake.step();
         Snake.render();
         Snake.hud();
+    },
+    screenDraw: function() { Snake.t++; Snake.render(); Snake.hud(); },
+    netInput: function() {
+        var me = Snake.humans()[0];
+        var x = { b: (mouseDown || SpacePressed || WASDupPressed) ? 1 : 0 };
+        if (me && me.alive) { var hs = Snake.toScreen(me.segs[0].x, me.segs[0].y); x.a = Math.round(Math.atan2(mouseY - hs[1], mouseX - hs[0]) * 100) / 100; }
+        return x;
+    },
+    netState: function() {
+        var lan = Snake.worms.filter(function(w) { return w.human === "lan" && w.alive; }).map(function(w) { return w.segs[0]; });
+        var near = Snake.pellets.filter(function(p) { return lan.some(function(h) { return Math.abs(p.x - h.x) < 2000 && Math.abs(p.y - h.y) < 1400; }); });
+        return {
+            w: Snake.worms.map(function(w) {
+                var sg = []; for (let i = 0; i < w.segs.length; i += 2) sg.push(Math.round(w.segs[i].x), Math.round(w.segs[i].y));
+                return { n: w.name, c: w.color, h: w.human === undefined ? -1 : w.human, p: w.pid || null, a: w.alive ? 1 : 0, l: Math.round(w.len), g: Math.round(w.ang * 100) / 100, b: w.boosting ? 1 : 0, s: w.safeT || 0, sg: sg, dm: w.deathMsg || "", fl: w.finalLen || 0, dt: w.deadT || 0 };
+            }),
+            p: near.map(function(p) { return [Math.round(p.x), Math.round(p.y), p.v, SNK_COLORS.indexOf(p.col)]; })
+        };
+    },
+    applyNetState: function(m) {
+        Snake.worms = m.w.map(function(o) {
+            var segs = []; for (let i = 0; i < o.sg.length; i += 2) { segs.push({ x: o.sg[i], y: o.sg[i + 1] }); segs.push({ x: o.sg[i], y: o.sg[i + 1] }); }
+            return { name: o.n, color: o.c, human: o.h === -1 ? undefined : o.h, pid: o.p, alive: !!o.a, len: o.l, ang: o.g, boosting: !!o.b, safeT: o.s, segs: segs.length ? segs : [{ x: 0, y: 0 }], deathMsg: o.dm, finalLen: o.fl, deadT: o.dt };
+        });
+        Snake.pellets = m.p.map(function(a) { return { x: a[0], y: a[1], v: a[2], col: SNK_COLORS[a[3]] || "#ffffff", ph: (a[0] + a[1]) % 6 }; });
     },
 
     onClick: function() { return true; },

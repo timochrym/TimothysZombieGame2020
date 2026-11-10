@@ -30,6 +30,21 @@ try { var _tk = JSON.parse(localStorage.getItem("timsTankArena") || "null"); if 
 var Tanks = {
     tanks: [], shapes: [], bullets: [], pending: [], t: 0, cam: { x: 0, y: 0, z: 1 }, auto: false,
 
+    locals: function() {
+        if (typeof Net !== "undefined" && Net.role === "client") return this.tanks.filter(function(k) { return k.pid === Net.pid; });
+        return this.tanks.filter(function(k) { return k.human === 0 || k.human === 1; }).sort(function(a, b) { return a.human - b.human; });
+    },
+    lanSync: function() {
+        if (typeof Net === "undefined" || Net.role !== "host") return;
+        var self = this;
+        Net.peerList().forEach(function(p) { if (!self.tanks.some(function(k) { return k.pid === p.pid; })) { var k = self.addTank({ human: "lan", name: p.name, color: p.color || "#fde047" }); k.pid = p.pid; } });
+        this.tanks.forEach(function(k) {
+            if (k.human !== "lan") return;
+            if (!Net.peers[k.pid]) { k.gone = true; return; }
+            if (!k.alive && ++k.deadT > 60 && Net.peerX(k.pid).f) self.spawn(k);
+        });
+        this.tanks = this.tanks.filter(function(k) { return !k.gone; });
+    },
     xpFor: function(l) { return Math.round(3 * Math.pow(l, 1.55)) + 4; },
     maxHp: function(k) { return 50 + 20 * k.st[1] + 2 * k.lvl; },
     reload: function(k) { return 22 * Math.pow(0.9, k.st[6]) * (TNK_CLASSES[k.cls].rl || 1); },
@@ -77,7 +92,7 @@ var Tanks = {
             k.hp = Math.min(this.maxHp(k), k.hp + 10);
             if (k.human !== undefined && typeof SFX !== "undefined") SFX.play("select", k.x, k.y, 0.6, 1.3);
         }
-        if (k.human === undefined || k.human === 1) this.autoSpend(k);
+        if (k.human === undefined || k.human === 1 || k.human === "lan") this.autoSpend(k);
     },
     addStat: function(k, i) { if (k.pts > 0 && k.st[i] < 7) { k.st[i]++; k.pts--; if (i === 1) k.hp += 20; return true; } return false; },
     pickClass: function(k, id) { if (!k.choose) return; k.cls = id; k.choose = false; k.barrelT = []; if (k.human !== undefined) showBanner(TNK_CLASSES[id].name.toUpperCase() + "!", "new class", k.color); },
@@ -105,6 +120,9 @@ var Tanks = {
             var tg = this.nearestTarget(k, 700);
             if (tg) k.ang = Math.atan2(tg.y - k.y, tg.x - k.x);
             fire = !!PlayerInput[1].kbShoot || !!(p2 && p2.active && p2.shoot);
+        } else if (k.human === "lan") {
+            var x = Net.peerX(k.pid);
+            mx = x.mx || 0; my = x.my || 0; if (x.a !== undefined) k.ang = x.a; fire = !!x.f;
         } else {
             var c = this.cpu(k); mx = c[0]; my = c[1]; fire = c[2];
         }
@@ -174,6 +192,7 @@ var Tanks = {
             if (by && by.alive !== undefined) { by.kills++; this.gainXp(by, Math.round(Math.min(this.xpFor(k.lvl) * 2, 50 + k.score * 0.5))); }
             if (k.human !== undefined) {
                 k.final = k.score;
+                if (k.human === "lan") return;
                 if (k.score > tanksSave.best) { tanksSave.best = k.score; try { localStorage.setItem("timsTankArena", JSON.stringify(tanksSave)); } catch (e) {} }
                 if (typeof SFX !== "undefined") SFX.play("ko");
             } else if (by && by.human !== undefined) showBanner(by.name + " destroyed " + k.name + "!", "", by.color);
@@ -283,7 +302,7 @@ var Tanks = {
     },
 
     render: function() {
-        var hum = this.tanks.filter(function(k) { return k.human !== undefined && k.alive; });
+        var hum = this.locals().filter(function(k) { return k.alive; });
         var tx = this.cam.x, ty = this.cam.y, fov = 1, span = 0;
         if (hum.length) {
             tx = 0; ty = 0; hum.forEach(function(k) { tx += k.x; ty += k.y; fov = Math.max(fov, (TNK_CLASSES[k.cls].fov || 1) * (1 + k.lvl * 0.006)); });
@@ -326,7 +345,7 @@ var Tanks = {
     },
 
     hud: function() {
-        var me = this.tanks.find(function(k) { return k.human === 0; });
+        var me = this.locals()[0];
         uiPanel(14, 10, 330, 60, "#60a5fa");
         uiText("TANK ARENA", 30, 38, 22, "#93c5fd", "left", "900");
         uiText(this.tanks.filter(function(k) { return k.human !== undefined; }).map(function(k) { return k.name + " " + (k.alive ? "Lv " + k.lvl + " · " + k.score : "✖"); }).join("   ") + "   best " + tanksSave.best, 30, 58, 12, "#cbd5e1", "left", "800");
@@ -413,9 +432,30 @@ GameModes.register({
             var again = k.human === 0 ? (mouseDown || SpacePressed || !!(pad && pad.active && pad.shoot)) : (!!PlayerInput[1].kbShoot || !!(pad && pad.active && pad.shoot));
             if (k.deadT > 60 && again) Tanks.spawn(k);
         }
+        Tanks.lanSync();
         Tanks.step();
         Tanks.render();
         Tanks.hud();
+    },
+    screenDraw: function() { Tanks.t++; Tanks.render(); Tanks.hud(); },
+    netInput: function() {
+        var me = Tanks.locals()[0], x = { mx: (WASDrightPressed ? 1 : 0) - (WASDleftPressed ? 1 : 0), my: (WASDdownPressed ? 1 : 0) - (WASDupPressed ? 1 : 0), f: (mouseDown || SpacePressed) ? 1 : 0 };
+        if (me && me.alive) { var sc = Tanks.toScreen(me.x, me.y); x.a = Math.round(Math.atan2(mouseY - sc[1], mouseX - sc[0]) * 100) / 100; }
+        return x;
+    },
+    netState: function() {
+        var T = Tanks.tanks;
+        return {
+            k: T.map(function(k) { return { n: k.name, c: k.color, h: k.human === undefined ? -1 : k.human, p: k.pid || null, a: k.alive ? 1 : 0, x: Math.round(k.x), y: Math.round(k.y), g: Math.round(k.ang * 100) / 100, hp: Math.round(k.hp), l: k.lvl, cl: k.cls, st: k.st, sc: k.score, xp: k.xp, pt: k.pts, iv: k.inv, fl: k.flash, dt: k.deadT, by: k.by ? k.by.name : "", fn: k.final || 0 }; }),
+            s: Tanks.shapes.map(function(q) { return [q.type.charAt(0), Math.round(q.x), Math.round(q.y), Math.round(q.ang * 100) / 100, Math.round(q.hp), q.hitT]; }),
+            b: Tanks.bullets.map(function(bb) { return [Math.round(bb.x), Math.round(bb.y), Math.round(bb.r), T.indexOf(bb.owner)]; })
+        };
+    },
+    applyNetState: function(m) {
+        Tanks.tanks = m.k.map(function(o) { return { name: o.n, color: o.c, human: o.h === -1 ? undefined : o.h, pid: o.p, alive: !!o.a, x: o.x, y: o.y, vx: 0, vy: 0, ang: o.g, hp: o.hp, lvl: o.l, cls: o.cl, st: o.st, score: o.sc, xp: o.xp, pts: o.pt, inv: o.iv, flash: o.fl, deadT: o.dt, by: o.by ? { name: o.by } : null, final: o.fn, choose: false }; });
+        var tm = { s: "square", t: "tri", p: "penta" };
+        Tanks.shapes = m.s.map(function(a) { var ty = tm[a[0]]; return { type: ty, x: a[1], y: a[2], ang: a[3], hp: a[4], max: TNK_SHAPES[ty].hp, hitT: a[5] }; });
+        Tanks.bullets = m.b.map(function(a) { return { x: a[0], y: a[1], r: a[2], owner: Tanks.tanks[a[3]] || { color: "#fff" } }; });
     },
 
     onKey: function(code) {

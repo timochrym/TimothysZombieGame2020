@@ -97,6 +97,7 @@ Every hook is optional. The engine calls `GameModes.call("hook", ...)` at these 
 | `canShoot(ch)` / `canBreak(ch)` | May this hero fire right now / smash bricks |
 | `enemyAI(z)` | Drive an enemy yourself (set its `left/right/upPressed`); return `true` to skip the built-in AI |
 | `onBlockHit(ch, g)` / `onCoin(ch, g)` / `onGoal(ch, g, frac)` / `onBrickBreak(ch, g)` | Platform gadget events |
+| `screenDraw()` / `netInput()` | Full-screen games on LAN: `screenDraw` draws the synced state on a client (no simulation); `netInput` returns extra client controls, read on the host with `Net.peerX(pid)`. Seat helpers: `Net.seatPeers(list)`, `Net.peerButtons(pid)`, `Net.peerList()` |
 | `drawBack()` | Draw a backdrop behind the level pieces but over the scenery (Stomp Squad's cave course) |
 | `onCheckpoint(ch, g)` | A hero touched a checkpoint gadget (every new touch; splits in Parkour Rush) |
 | `runMult(ch)` -> number | Multiplies a player's run speed cap each frame (Stomp Squad: hold RUN for ×1.55) |
