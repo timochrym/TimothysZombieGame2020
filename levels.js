@@ -971,6 +971,10 @@ class WorldGenerator {
 
         // Cycle cleanly through distinct, non-repetitive macro-biomes (Chunk 1 starts with GRAND_CASTLE so you can explore the 12-story Mega-Citadel immediately!)
         var biomes = ["GRAND_CASTLE", "BRIDGE_GORGE", "FRONTIER_TOWN", "MOUNTAIN_PASS", "DEEP_CAVERN"];
+        // Heading east the trail also dips underground: a mine descent, a long tunnel, then the climb back out.
+        // (Only eastward: chunk edge heights chain left -> right, and the deep cavern stays on the surface so its
+        //  lowest tier never reaches the bedrock / rescue line.)
+        if (chunkIdx > 0) biomes = ["GRAND_CASTLE", "BRIDGE_GORGE", "FRONTIER_TOWN", "MOUNTAIN_PASS", "MINE_DESCENT", "MINE_TUNNEL", "MINE_ASCENT", "DEEP_CAVERN"];
         var idx = (Math.abs(chunkIdx) - 1 + (chunkIdx < 0 ? 1 : 0)) % biomes.length;
         var pick = biomes[idx];
 
@@ -1275,6 +1279,57 @@ class WorldGenerator {
         //    Descend 2 full tiers underground (-240px and -480px) into a massive
         //    glowing cavern complex!
         // ====================================================================
+        // ====================================================================
+        // 6-8. ⛏ THE OLD MINE: down a stepped shaft, along a tunnel 560px under the
+        //      frontier, and back up to daylight. (Edge heights carry to the next chunk.)
+        // ====================================================================
+        else if (pick === "MINE_DESCENT") {
+            this.generatedChunks[chunkIdx] = { type: "MINE_DESCENT", title: "⛏ Old Mine Entrance" };
+            var mineY = startY - 280;
+            this.addInteriorWall(leftX + 480, mineY, 1760, 440, "cavern");
+            this.addGridBox(leftX, startY - 120, 480, 120, "#588157", { name: "Mine Yard", texture: "grass_dirt" });
+            // a stepped shaft: seven 40-high steps down
+            for (let k = 0; k < 7; k++) this.addGridBox(leftX + 480 + k * 160, startY - 400, 160, 360 - k * 40, "#6b4f3a", { name: "Mine Shaft Step", texture: "stone_raw" });
+            this.addGridBox(leftX + 1600, mineY - 120, 640, 120, "#4a5568", { name: "Mine Gallery Floor", texture: "stone_raw" });
+            // timber-framed roof over the shaft
+            this.addGridBox(leftX + 640, startY + 120, 1600, 40, "#8b5a2b", { name: "Mine Roof Timbers", texture: "log" });
+            this.addGridCrate(leftX + 1700, mineY, 80, "#c49a6c", { name: "Iron Ore", texture: "ore_iron", weight: 2 });
+            this.addGridCrate(leftX + 1860, mineY, 80, "#e84545", { explosive: true, name: "Mining Dynamite Crate" });
+            this.addChest(leftX + 2000, mineY);
+            this.spawnChunkEnemy("BAT", leftX + 1000, startY + 40);
+            this.spawnChunkEnemy("SLIME", leftX + 1900, mineY + 60);
+            this.setRightEdgeY(chunkIdx, this.ty(mineY));
+        }
+        else if (pick === "MINE_TUNNEL") {
+            this.generatedChunks[chunkIdx] = { type: "MINE_TUNNEL", title: "⛏ Deep Mine Tunnels" };
+            this.addInteriorWall(leftX, startY, this.designWidth, 200, "cavern");
+            this.addGridBox(leftX, startY - 200, this.designWidth, 200, "#4a5568", { name: "Tunnel Floor", texture: "stone_raw" });
+            this.addGridBox(leftX, startY + 200, this.designWidth, 160, "#374151", { name: "Tunnel Ceiling", texture: "stone_raw" });
+            // one-way timber platforms and support pillars to fight around
+            this.addGridBox(leftX + 360, startY + 100, 280, 20, "#8b5a2b", { name: "Mine Scaffold", texture: "wood_plank", kind: "platform" });
+            this.addGridBox(leftX + 1000, startY + 100, 280, 20, "#8b5a2b", { name: "Mine Scaffold", texture: "wood_plank", kind: "platform" });
+            this.addGridBox(leftX + 1640, startY + 100, 280, 20, "#8b5a2b", { name: "Mine Scaffold", texture: "wood_plank", kind: "platform" });
+            this.addGridCrate(leftX + 760, startY, 80, "#eab308", { name: "Gold Ore", texture: "ore_gold", weight: 2 });
+            this.addGridCrate(leftX + 1420, startY, 80, "#1f2937", { name: "Coal", texture: "ore_coal", weight: 2 });
+            this.addGridCrate(leftX + 1500, startY, 80, "#e84545", { explosive: true, name: "Mining Dynamite Crate" });
+            this.addChest(leftX + 1120, startY + 120);
+            this.spawnChunkEnemy("KNIGHT", leftX + 900, startY + 60);
+            this.spawnChunkEnemy("ARCHER", leftX + 1700, startY + 160);
+            this.spawnChunkEnemy("BAT", leftX + 1300, startY + 150);
+            this.setRightEdgeY(chunkIdx, startY);
+        }
+        else if (pick === "MINE_ASCENT") {
+            this.generatedChunks[chunkIdx] = { type: "MINE_ASCENT", title: "⛏ Mine Exit — Back to Daylight" };
+            this.addInteriorWall(leftX, startY, 640, 200, "cavern");
+            this.addGridBox(leftX, startY - 200, 640, 200, "#4a5568", { name: "Tunnel Floor", texture: "stone_raw" });
+            this.addGridBox(leftX, startY + 200, 640, 160, "#374151", { name: "Tunnel Ceiling", texture: "stone_raw" });
+            for (let k = 0; k < 7; k++) this.addGridBox(leftX + 640 + k * 160, startY - 200, 160, 200 + (k + 1) * 40, "#6b4f3a", { name: "Mine Exit Step", texture: "stone_raw" });
+            this.addGridBox(leftX + 1760, startY - 200, 480, 480, "#588157", { name: "Hillside", texture: "grass_dirt" });
+            this.addGridBumper(leftX + 400, startY, 160, 40, 28, "#ff2e63", { name: "Mine Lift Spring" });
+            this.addChest(leftX + 1960, startY + 280);
+            this.spawnChunkEnemy("SLIME", leftX + 300, startY + 60);
+            this.setRightEdgeY(chunkIdx, this.ty(startY + 280));
+        }
         else if (pick === "DEEP_CAVERN") {
             this.generatedChunks[chunkIdx] = { type: "DEEP_CAVERN", title: "💎 Deep Echo Caverns & Catacombs" };
             var tier1Y = startY - 240;

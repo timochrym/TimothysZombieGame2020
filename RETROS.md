@@ -6,6 +6,27 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Frontier goes underground (B3 "lower generated level") + all-games smoke test
+
+**Shipped:** three new frontier chunks in `levels.js`, in the eastward biome cycle between Thunderhead Peak and the
+Deep Echo Caverns: **Old Mine Entrance** (yard → seven-step shaft down under timber roof beams → gallery 560 px below
+the trail, iron ore, dynamite, a chest, bat + slime), **Deep Mine Tunnels** (a full chunk of floor + ceiling with
+one-way scaffolds, gold / coal ore crates, dynamite, a chest, knight / archer / bat) and **Mine Exit** (tunnel →
+spring → seven steps up to a grassy hillside back at trail height). Each chunk passes its right-edge height to the
+next, so the world really is lower for two chunks.
+
+**Measured:** chunk edge heights 40 → 40 → -520 → -520 → 40; walking east from the mine yard the hero reaches the
+tunnel floor (y -480), crosses it and climbs back out; no errors. Plus a smoke test of all 22 games (launch, input,
+pause, resume): 0 errors, 47-61 FPS headless.
+
+**Went wrong / decided:** (1) Deep Echo Caverns can't follow a descent — its lowest tier would end up under the
+rescue line and inside the bedrock — so the mine climbs back out first. (2) Heights only chain west→east, so the
+mine only appears heading east. (3) A hanging support beam looked like a floating log → removed.
+
+**Left / known:** a deeper multi-level underground (needs the rescue line / bedrock to follow the terrain).
+
+---
+
 ## Rent Rush (new game, B4 — property board game) — B4 complete
 
 **Shipped:** `game_property.js` (ownScreen): an original property game on a 7×7 ring of 24 spaces — five colour

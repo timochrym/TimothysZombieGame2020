@@ -63,8 +63,10 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       character-specific moves, more stages, items like a bat or a bomb to throw.
 
 ## Your suggestions not built yet (backlog, all original games in the genre — no copied names/art)
-- [ ] B3 — "Lower generated level": make the Survival frontier generate lower / more underground terrain (Terra is a
-      separate deep world; the frontier itself is unchanged so far).
+- [x] B3 — "Lower generated level": heading east, the Survival frontier now dips underground — an Old Mine entrance
+      (stepped shaft under timber roofing), a Deep Mine tunnel 560 px below the trail (scaffolds, ore crates, dynamite,
+      knights / archers / bats) and a climb back to daylight, before the Deep Echo Caverns. (West of the start is
+      unchanged: chunk heights chain west→east only.)
 - [ ] ⏸ PAUSED by you — B3 — Terraria-like generation + block-game capabilities → Terra (above). Next: save/load worlds, crafting
       (planks from wood, torches), lighting from torches, enemies at night / in caves, LAN sync of the tile grid.
 - [x] B4 — Cell arena (agar-style) → **Blob Arena**: eat pellets and blobs 25% smaller, bigger = slower, split to lunge
