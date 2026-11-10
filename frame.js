@@ -492,6 +492,7 @@ function resetGame() {
     helpTimer = devOpts.showHelp ? 60 * 12 : 0;
     createMap();
     createPlayers();
+    if (typeof Net !== "undefined") Net.afterPlayersCreated();
     if (!brawl.active && GameModes.flag("waves", true)) startLevel(1);
     else { levelTransitionTimer = 0; zombiesRemainingToSpawn = 0; }
     rebuildAllObjects();
@@ -562,7 +563,8 @@ function updateCamera() {
     var heroes = [];
     var modeTargets = GameModes.call("cameraTargets");
     if (modeTargets && modeTargets.length) heroes = modeTargets;
-    else for (let i = 0; i < characters.length; i++) if (!characters[i].dead) heroes.push(characters[i]);
+    else for (let i = 0; i < characters.length; i++) if (!characters[i].dead && !characters[i].isRemote) heroes.push(characters[i]);
+    if (heroes.length === 0) for (let i = 0; i < characters.length; i++) if (!characters[i].dead) heroes.push(characters[i]);
     if (heroes.length === 0) heroes.push(redGuy);
 
     var focusX = 0, focusY = 0, wTotal = 0;
@@ -1095,6 +1097,7 @@ function frame() {
     }
 
     drawHUD();
+    if (typeof Net !== "undefined" && Net.role === "host") Net.hostFrame();
 }
 
 document.addEventListener("keydown", keyDownHandler, false);
@@ -1338,7 +1341,8 @@ var tickAccumulator = 0;
 var lowFpsSeconds = 0;
 function tick() {
     if (typeof Pads !== "undefined") Pads.poll();
-    if (typeof Hub !== "undefined" && Hub.isOpen) { Hub.draw(); return; }
+    if (typeof Net !== "undefined" && Net.role === "client") { Net.clientTick(); return; }
+    if (typeof Hub !== "undefined" && Hub.isOpen) { Hub.draw(); if (typeof Net !== "undefined") Net.hostIdle(); return; }
     if (paused) { drawPauseMenu(); return; }
     if (hitStopFrames > 0) { hitStopFrames--; return; }   // impact freeze: hold the last image
     if (gameOver) {

@@ -76,7 +76,9 @@ class Components {
             object.leftPressed = object.rightPressed = object.upPressed = object.downPressed = false;
             return;
         }
-        if (object.isPlayer) {
+        if (object.isPlayer && object.isRemote) {
+            Net.applyRemoteInput(object);
+        } else if (object.isPlayer) {
             var inp = object.input;
             if (object.playerIndex === 0) {
                 object.upPressed = WASDupPressed;
@@ -143,7 +145,7 @@ class Components {
             }
         }
 
-        if (object.isPlayer) {
+        if (object.isPlayer && !(object.isRemote && object.netAim)) {
             Components.directionArrow(object);
             // Right stick aims directly (twin-stick)
             var padA = (typeof Pads !== "undefined") ? Pads.state[object.playerIndex] : null;

@@ -157,6 +157,24 @@ Activators power every gadget whose `id` is in their `links`.
 - **Saving**: each game keeps its own `localStorage` key (`timsCrateLab`, `timsPortalLab`,
   `timsZombieBallCfg`, `timsParkourRush`, `timsRagdollSiege`).
 
+## LAN multiplayer (`server.js` + `net.js`)
+
+- **Run it:** `node server.js` (no npm packages; `node server.js 3000` for another port). It serves the game and prints
+  `http://<your-ip>:8080`. Everyone on the same Wi-Fi opens that link, presses **📡 LAN**, one player **Hosts**, the rest **Join**.
+  Opened as a plain file, the LAN panel explains this instead.
+- **Model:** host-authoritative. The host runs the normal game; each joiner gets a hero (`ch.isRemote`, `ch.netPid`,
+  `playerIndex` 2+). `Components.moveTypeFinder` feeds remote heroes from `Net.applyRemoteInput` (keys, mouse-aim world point
+  or pad angle, dash/grab/reload counters). Clients run no simulation: `tick()` calls `Net.clientTick()`, which draws the host's
+  world from snapshots with its own camera on its own hero, and the HUD shows that hero.
+- **Snapshots** (every 2 ticks): every character, enemy, crate, level piece (every 20 ticks), bullet, pickup, ragdoll and gadget,
+  delta-encoded per field; HUD globals (`NET_GLOBALS`); `brawl`; and the sounds / floating texts / sparks / rings that happened.
+  A new joiner triggers a full snapshot.
+- **CPUs:** a joiner takes over a CPU slot if there is one (keeps team / stocks), and the CPU takes it back when they leave.
+- **Mode hooks:** `addNetPlayer(slot, peer)` -> return a hero to use instead of the default; `netState()` -> JSON of private
+  HUD state, applied on clients with `applyNetState(json)`.
+- **Limits:** up to 16 players per server; the host's camera follows the people at the host's screen; only the host changes
+  games, levels and settings.
+
 ## Difficulty and rewards
 
 Zombie Survival's balance lives in one table, `BALANCE` in `var.js`: enemy health, damage, speed and

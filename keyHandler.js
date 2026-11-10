@@ -10,11 +10,13 @@ function isTypingTarget(e) {
 }
 
 function queueDash(idx) {
+    if (typeof Net !== "undefined" && Net.role === "client") { if (idx === 0) Net.localDash++; return; }
     var ch = (idx === 0) ? redGuy : blueGuy;
     if (ch && !ch.dead && !ch.isZombie) ch.triggerNinjaDash();
 }
 
 function queueGrab(idx) {
+    if (typeof Net !== "undefined" && Net.role === "client") { if (idx === 0) Net.localGrab++; return; }
     var ch = (idx === 0) ? redGuy : blueGuy;
     if (!ch || ch.dead) return;
     if (GameModes.call("onSecondary", ch)) return;
@@ -33,6 +35,9 @@ function keyDownHandler(e) {
     var k = e.key;
     var c = e.code;
 
+    // LAN client: the host owns menus; Esc opens the small LAN menu
+    if (typeof Net !== "undefined" && Net.role === "client" && Net.clientKey(e)) return;
+    if (typeof Net !== "undefined" && Net.role === "client") { if (Hub.isOpen) Hub.close(); paused = false; }
     // Pause menu owns the keyboard while it is open (restart / co-op / levels live there)
     if (typeof Hub !== "undefined" && Hub.isOpen) { Hub.key(e); return; }
     if (c == "Escape") {
@@ -133,6 +138,12 @@ function mouseDownHandler(e) {
     mouseX = e.clientX - rect.left;
     mouseY = e.clientY - rect.top;
     if (typeof SFX !== "undefined") SFX.unlock();
+    if (typeof Net !== "undefined" && Net.role === "client") {
+        useMouseAim = true;
+        if (e.button === 0) mouseDown = true;
+        else if (e.button === 2) { rightMouseDown = true; Net.localGrab++; }
+        return;
+    }
     if (typeof Hub !== "undefined" && Hub.isOpen) { if (e.button === 0) Hub.click(mouseX, mouseY); return; }
     if (paused) { if (e.button === 0) pauseClick(mouseX, mouseY); return; }
     useMouseAim = true;

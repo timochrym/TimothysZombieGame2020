@@ -153,7 +153,7 @@ class Character {
 
     accent() { return this.accentColor || (typeof FIGHTER_COLORS !== "undefined" && FIGHTER_COLORS[this.playerIndex]) || "#ff5a5f"; }
 
-    get input() { return this.isCPU ? this.cpuIn : (PlayerInput[this.playerIndex] || PlayerInput[0]); }
+    get input() { return this.isCPU ? this.cpuIn : (this.netIn || PlayerInput[this.playerIndex] || PlayerInput[0]); }
 
     // Calm top running speed (px/frame); knockback, dashes and wall-jumps can briefly exceed it
     runCapNow() {
