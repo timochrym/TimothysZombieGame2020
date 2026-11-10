@@ -6,9 +6,9 @@
 //   Traps: spike strips, mines, swinging logs; helpers: bounce pads, ramps; crates to smash through.
 // ============================================================================
 var WHEELS_VEHICLES = {
-    bike:       { label: "Bike", pts: [[-48, -46, 30, "w"], [54, -46, 30, "w"], [-6, 0, 8, "seat"], [36, 22, 8, "bar"]], accel: 0.55, cap: 19 },
-    wheelchair: { label: "Wheelchair", pts: [[-8, -36, 36, "w"], [44, -62, 12, "w"], [0, 0, 8, "seat"], [-26, 44, 7, "bar"]], accel: 0.62, cap: 16 },
-    cart:       { label: "Cart", pts: [[-52, -42, 24, "w"], [52, -42, 24, "w"], [-8, 0, 8, "seat"], [46, 18, 8, "bar"], [-56, 14, 8, "tail"]], accel: 0.5, cap: 17 }
+    bike:       { label: "Bike", pts: [[-48, -46, 30, "w"], [54, -46, 30, "w"], [-6, 0, 8, "seat"], [36, 22, 8, "bar"]], accel: 0.55, cap: 19, special: "hop", hop: 9.5, cd: 45, sp: "Space: bunny-hop" },
+    wheelchair: { label: "Wheelchair", pts: [[-30, -36, 36, "w"], [48, -62, 12, "w"], [0, 0, 8, "seat"], [22, 14, 7, "bar"], [-8, 26, 6, "back"]], accel: 0.62, cap: 16, special: "rocket", sp: "Space: rocket boost (fuel)" },
+    cart:       { label: "Cart", pts: [[-52, -42, 24, "w"], [52, -42, 24, "w"], [-8, 0, 8, "seat"], [46, 18, 8, "bar"], [-56, 14, 8, "tail"]], accel: 0.5, cap: 17, special: "hop", hop: 13, cd: 90, sp: "Space: big jump" }
 };
 var WHEELS_COURSES = [];
 var wheelsSave = { vehicle: "bike", best: {} };
@@ -88,6 +88,7 @@ function wheelsSpawn(slot, x, y, hero) {
     var J = [];
     var joint = function(a, b, br) { rd.addStick(a, b, 0.9); var s = rd.sticks[rd.sticks.length - 1]; s.breakAt = br; s.joint = true; J.push(s); };
     joint(2, idx.seat, 22); joint(4, idx.bar, 18); joint(6, idx.bar, 18); joint(8, idx.seat, 26); joint(10, idx.seat, 26);
+    if (idx.back !== undefined) joint(1, idx.back, 20);          // backrest keeps a seated rider upright
     rd.life = -1;
     rd.isVehicle = true;
     rd.wheelsSlot = slot;
@@ -113,6 +114,7 @@ function wheelsCrash(rd) {
     Components.addFloatingText("CRASH!", h.x, h.y + 80, "#f87171", 26);
     if (typeof SFX !== "undefined") SFX.play("bonk", h.x, h.y, 1, 0.6);
     screenShake = Math.max(screenShake, 6);
+    if (typeof Juice !== "undefined" && Juice.slowMo) Juice.slowMo(45, 0.35);    // savour the wipe-out
     Wheels.crashes = (Wheels.crashes || 0) + 1;
 }
 
@@ -143,13 +145,14 @@ function wheelsDraw(rd) {
 
 function wheelsControls(rd) {
     var p2 = rd.wheelsSlot === 1;
-    if (typeof Net !== "undefined" && rd.netPeer) { var i = rd.netPeer.inp || {}; return { go: i.u ? 1 : (i.d ? -1 : 0), lean: i.r ? 1 : (i.l ? -1 : 0) }; }
+    if (typeof Net !== "undefined" && rd.netPeer) { var i = rd.netPeer.inp || {}; return { go: i.u ? 1 : (i.d ? -1 : 0), lean: i.r ? 1 : (i.l ? -1 : 0), sp: !!(i.jt || i.it) }; }
     var pad = (typeof Pads !== "undefined") ? Pads.state[rd.wheelsSlot] : null;
     var up = p2 ? ULDRupPressed : WASDupPressed, dn = p2 ? ULDRdownPressed : WASDdownPressed;
     var lf = p2 ? ULDRleftPressed : WASDleftPressed, rt = p2 ? ULDRrightPressed : WASDrightPressed;
     if (!multiplayer && !p2) { up = up || ULDRupPressed; dn = dn || ULDRdownPressed; lf = lf || ULDRleftPressed; rt = rt || ULDRrightPressed; }
-    if (pad && pad.active) { up = up || pad.shoot || pad.up; dn = dn || pad.down; lf = lf || pad.left; rt = rt || pad.right; }
-    return { go: up ? 1 : (dn ? -1 : 0), lean: rt ? 1 : (lf ? -1 : 0) };
+    var sp = p2 ? !!PlayerInput[1].kbShoot : (SpacePressed || EnterPressed || (!multiplayer && !!PlayerInput[1].kbShoot));   // P1 Space/F, P2 Enter
+    if (pad && pad.active) { up = up || pad.shoot || pad.up; dn = dn || pad.down; lf = lf || pad.left; rt = rt || pad.right; sp = sp || pad.run || pad.jet; }
+    return { go: up ? 1 : (dn ? -1 : 0), lean: rt ? 1 : (lf ? -1 : 0), sp: !!sp };
 }
 
 function wheelsDrive(rd) {
@@ -191,6 +194,43 @@ function wheelsDrive(rd) {
             q.px += ry * w; q.py -= rx * w;                     // add angular velocity w about the centre
         }
     }
+    // vehicle special: hop (bike / cart) or rocket (wheelchair)
+    var w1 = P[rd.vbase], w2 = P[rd.vbase + 1];
+    var fwx = w2.x - w1.x, fwy = w2.y - w1.y, fl = Math.hypot(fwx, fwy) || 1; fwx /= fl; fwy /= fl;
+    if (rd.spCd > 0) rd.spCd--;
+    if (def.special === "hop" && c.sp && !rd.spPrev && anyContact && !(rd.spCd > 0)) {
+        for (let i = 0; i < P.length; i++) P[i].py -= def.hop;
+        rd.spCd = def.cd;
+        if (typeof SFX !== "undefined") SFX.play("jump", cx, cy, 0.6, 0.9);
+    }
+    if (def.special === "rocket") {
+        if (rd.fuel === undefined) rd.fuel = 100;
+        if (c.sp && rd.fuel > 0) {
+            for (let i = 0; i < P.length; i++) { P[i].px -= fwx * 0.42; P[i].py -= fwy * 0.42; }
+            rd.fuel = Math.max(0, rd.fuel - 1.1);
+            if (Wheels.t % 2 === 0) Components.spawnSparks(w1.x - fwx * 50, w1.y - fwy * 50 + 30, Wheels.t % 4 ? "#f97316" : "#fde047", 2);
+        } else if (anyContact) rd.fuel = Math.min(100, rd.fuel + 0.2);
+    }
+    rd.spPrev = c.sp;
+    // flips: add up how far the frame turns while airborne, pay out on landing (each full turn = -0.5 s)
+    var ang = Math.atan2(fwy, fwx);
+    if (rd.lastAng !== undefined && !anyContact) {
+        var da = ang - rd.lastAng;
+        if (da > Math.PI) da -= Math.PI * 2; else if (da < -Math.PI) da += Math.PI * 2;
+        rd.spin = (rd.spin || 0) + da;
+    }
+    if (anyContact && rd.spin) {
+        var flips = Math.floor(Math.abs(rd.spin) / (Math.PI * 1.6));     // ~290°+ and still on your wheels counts
+        if (flips > 0 && Wheels.phase === "ride") {
+            var name = (rd.spin > 0 ? "BACKFLIP" : "FRONTFLIP") + (flips > 1 ? " ×" + flips : "") + "!  -" + (flips * 0.5).toFixed(1) + "s";
+            Wheels.time = Math.max(0, Wheels.time - flips * 30);
+            Wheels.flips = (Wheels.flips || 0) + flips;
+            Components.addFloatingText(name, cx, cy + 150, "#a5f3fc", 22);
+            if (typeof SFX !== "undefined") SFX.play("coin", cx, cy, 0.7, 1.2);
+        }
+        rd.spin = 0;
+    }
+    rd.lastAng = ang;
     rd.wake();
 }
 
@@ -363,9 +403,17 @@ GameModes.register({
         uiPanel(14, 14, 430, 84, "#f97316");
         uiText("WOBBLE WHEELS", 30, 42, 22, "#fdba74", "left", "900");
         uiText("Course " + (n + 1) + "/" + WHEELS_COURSES.length + ": " + (lvl.title || "") + "  ·  " + WHEELS_VEHICLES[wheelsSave.vehicle].label + " (V to switch)", 30, 66, 13, "#e2e8f0", "left", "800");
-        uiText("⏱ " + (Wheels.time / 60).toFixed(2) + "s   best " + (best ? (best / 60).toFixed(2) + "s" : "--") + "   crashes " + (Wheels.crashes || 0), 30, 86, 12, "#cbd5e1", "left", "700");
+        uiText("⏱ " + (Wheels.time / 60).toFixed(2) + "s   best " + (best ? (best / 60).toFixed(2) + "s" : "--") + "   crashes " + (Wheels.crashes || 0) + "   flips " + (Wheels.flips || 0), 30, 86, 12, "#cbd5e1", "left", "700");
+        for (let i = 0; i < Wheels.riders.length; i++) {
+            var wr = Wheels.riders[i];
+            if (wr.def.special !== "rocket") continue;
+            var fy0 = 108 + i * 22;
+            uiPanel(14, fy0, 200, 18, "#f97316", 0.8);
+            ctx.fillStyle = (wr.fuel || 0) > 25 ? "#f97316" : "#ef4444"; ctx.fillRect(70, fy0 + 5, 136 * (wr.fuel === undefined ? 1 : wr.fuel / 100), 8);
+            uiText("P" + (i + 1) + " fuel", 22, fy0 + 13, 10, "#fdba74", "left", "800");
+        }
         if (Wheels.phase === "ready") uiText("GET READY", cssW / 2, cssH / 2 - 60, 48, "#fdba74", "center", "900");
-        uiText("W/S drive & brake · A/D lean (flip in the air!) · R restart · V vehicle" + (multiplayer ? " · P2: arrows" : "") + " · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.75)", "center", "700");
+        uiText("W/S drive & brake · A/D lean (flips = -0.5 s) · " + WHEELS_VEHICLES[wheelsSave.vehicle].sp + " · R restart · V vehicle" + (multiplayer ? " · P2: arrows" : "") + " · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.75)", "center", "700");
     },
 
     menuItems: function(items) {

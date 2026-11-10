@@ -39,7 +39,12 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       diamonds (Forge ×2 = faster generator, Sharp = +25% team damage; bots buy them too), sudden death at 5:00 breaks
       every bed, armor now goes to 3 from gold, cleaner shop labels. STILL TO DO: fireball & bridge-egg style items,
       pickaxe tiers for breaking defenses, more maps / 4 teams, emerald-tier mid resource.
-- [ ] Wobble Wheels, Crash Lab, Parkour Rush, Crate Lab, Portal Lab, Brawl: same pass —
+- [~] Wobble Wheels: DONE — vehicle specials on Space/F (P2 Enter, pad B/X/RB): bike bunny-hop, cart big jump,
+      wheelchair rocket with a fuel bar; flips counted in the air (each ≈full turn landed = -0.5 s), slow-mo on crashes;
+      FIXED the wheelchair (it tipped onto its back at spawn and crawled — now upright with a backrest, 10× faster).
+      STILL TO DO: more courses + a course select with medals, eject button, ghost of your best run, more vehicles
+      (pogo, scooter, shopping trolley), destructible obstacles, hazards that react (falling platforms, fans).
+- [ ] Crash Lab, Parkour Rush, Crate Lab, Portal Lab, Brawl: same pass —
       list each genre's core feel features and close the gaps.
 
 ## Your suggestions not built yet (backlog, all original games in the genre — no copied names/art)

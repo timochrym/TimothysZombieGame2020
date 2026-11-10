@@ -6,6 +6,27 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Wobble Wheels — genre-feel pass (ragdoll vehicle trials)
+
+**Shipped:** every vehicle has a special on Space / F (P2 Enter, pad B/X/RB): the bike bunny-hops, the cart does a
+bigger, slower-recharging jump, the wheelchair fires a rocket with a fuel bar that refills while you roll; air
+rotation is counted and a landed flip (≈290°+ and still on your wheels) shows BACKFLIP / FRONTFLIP and takes 0.5 s off
+your time; crashes get a short slow-motion; the HUD shows flips and the current vehicle's special.
+
+**Went wrong (found while testing):** the wheelchair had been broken since it shipped — the rider sat right over the
+big wheel's axle, so it tipped onto its back at spawn and dragged its seat (98 px in 75 frames vs the bike's ~900).
+Moved the big wheel back, put the hand anchor on the armrest and strapped the rider to a new backrest point:
+960 px in 75 frames, rider upright. The old test only checked "it moved", not how far — the speed is now part of the
+check.
+
+**Measured:** hop +6.4 px/frame upward; rocket 1370 vs 960 px in 73 frames; a landed 6.6-rad spin = 1 flip, -30 frames;
+regression course runs unchanged (bike 4160 px in 5 s, cart 2400, no errors).
+
+**Left / known:** pure lean only reaches ~300° on the biggest drops, so flips mostly come off pads/ramps; course select,
+eject, ghost runs, more vehicles (TODO.md).
+
+---
+
 ## Bed Brawl — genre-feel pass (bed defence)
 
 **Shipped:** a kill feed in the top-right (who killed whom, FINAL KILL once a bed is gone, void falls, beds broken,
