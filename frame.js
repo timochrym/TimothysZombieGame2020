@@ -900,7 +900,10 @@ function drawHUD() {
         helpTimer--;
         var fade = Math.min(1, helpTimer / 60);
         var hw = multiplayer ? 640 : 560;
-        var hx = w / 2 - hw / 2, hy = h - 150;
+        var hy = h - 150;
+        // not enough room between the hero cards (bottom corners)? sit above them instead of on top of them
+        if (w - 2 * (14 + 340) < hw) { hw = Math.min(hw, w - 28); hy = h - 300; }
+        var hx = w / 2 - hw / 2;
         ctx.save();
         ctx.globalAlpha = fade;
         uiPanel(hx, hy, hw, 132, "rgba(120,170,200,0.4)", 0.8);
@@ -1301,7 +1304,7 @@ function pauseKey(e) {
 function pauseHover(mx, my) {
     for (let i = 0; i < pauseRects.length; i++) {
         var r = pauseRects[i];
-        if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) { pauseIndex = i; return; }
+        if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) { pauseIndex = r.idx !== undefined ? r.idx : i; return; }
     }
 }
 
@@ -1310,6 +1313,7 @@ function pauseClick(mx, my) {
     for (let i = 0; i < pauseRects.length; i++) {
         var r = pauseRects[i];
         if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+            i = r.idx !== undefined ? r.idx : i;
             pauseIndex = i;
             var dir = 0;
             if (PAUSE_CYCLE_IDS.indexOf(items[i].id) !== -1 || items[i].cycle) dir = (mx > r.x + r.w / 2) ? 1 : -1;
@@ -1320,6 +1324,7 @@ function pauseClick(mx, my) {
     return false;
 }
 
+var pauseScroll = 0, pauseHoverXY = null;
 function drawPauseMenu() {
     if (!pauseSnap) return;
     ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
@@ -1329,34 +1334,56 @@ function drawPauseMenu() {
 
     var items = pauseItems();
     if (pauseIndex >= items.length) pauseIndex = 0;
-    var pw = 560, rowH = Math.max(40, Math.min(58, Math.floor((h - 190) / items.length)));
-    var ph = 150 + items.length * rowH;
-    var px = w / 2 - pw / 2, py = Math.max(20, h / 2 - ph / 2);
+    // fits any window: below the top bar, rows shrink to a minimum and the list scrolls past that
+    var top = 58, compact = h < 640;
+    var pw = Math.min(560, w - 24), headH = compact ? 84 : 112, footH = 30;
+    var avail = h - top - 12 - headH - footH;
+    var rowH = Math.max(34, Math.min(56, Math.floor(avail / items.length)));
+    var visN = Math.max(3, Math.min(items.length, Math.floor(avail / rowH)));
+    if (pauseIndex < pauseScroll) pauseScroll = pauseIndex;
+    if (pauseIndex >= pauseScroll + visN) pauseScroll = pauseIndex - visN + 1;
+    pauseScroll = Math.max(0, Math.min(items.length - visN, pauseScroll));
+    var ph = headH + visN * rowH + footH;
+    var px = w / 2 - pw / 2, py = Math.max(top, Math.min(h / 2 - ph / 2, h - ph - 8));
     uiPanel(px, py, pw, ph, pauseFromGameOver ? "#ff4d5e" : "#22d3ee", 0.96);
-    uiText(pauseSub === "settings" ? "SETTINGS" : pauseConfirm ? "RESTART?" : (pauseFromGameOver ? (GameModes.current.overTitle || (brawl.active ? "GAME!" : "OVERRUN")) : "PAUSED"), w / 2, py + 62, 44, pauseFromGameOver ? "#ff4d5e" : "#ffd23f", "center", "900");
-    uiText(GameModes.has("overSub") ? GameModes.call("overSub", pauseFromGameOver) : brawl.active ? ("Brawl  ·  " + (brawl.stage ? brawl.stage.name.replace(/^[^A-Za-z]+/, "") : "")) : ("Wave " + level + "  ·  Score " + score + "  ·  " + (multiplayer ? "Co-op" : "Solo")), w / 2, py + 92, 15, "#a8c0d0", "center", "700");
+    var title = pauseSub === "settings" ? "SETTINGS" : pauseConfirm ? "RESTART?" : (pauseFromGameOver ? (GameModes.current.overTitle || (brawl.active ? "GAME!" : "OVERRUN")) : "PAUSED");
+    uiText(title, w / 2, py + (compact ? 42 : 56), compact ? 32 : 42, pauseFromGameOver ? "#ff4d5e" : "#ffd23f", "center", "900");
+    var sub = GameModes.has("overSub") ? GameModes.call("overSub", pauseFromGameOver) : brawl.active ? ("Brawl  ·  " + (brawl.stage ? brawl.stage.name.replace(/^[^A-Za-z]+/, "") : "")) : ("Wave " + level + "  ·  Score " + score + "  ·  " + (multiplayer ? "Co-op" : "Solo"));
+    uiText((GameModes.current && pauseSub !== "settings" ? GameModes.current.title + "  ·  " : "") + sub, w / 2, py + (compact ? 66 : 86), compact ? 12 : 14, "#a8c0d0", "center", "700");
+
+    // mouse hover picks the row under the pointer
+    if (pauseHoverXY && (pauseHoverXY[0] !== mouseX || pauseHoverXY[1] !== mouseY)) {
+        for (let k = 0; k < pauseRects.length; k++) { var hr = pauseRects[k]; if (mouseX >= hr.x && mouseX <= hr.x + hr.w && mouseY >= hr.y && mouseY <= hr.y + hr.h) pauseIndex = hr.idx; }
+    }
+    pauseHoverXY = [mouseX, mouseY];
 
     pauseRects = [];
-    for (let i = 0; i < items.length; i++) {
-        var ry = py + 116 + i * rowH;
+    var listY = py + headH;
+    for (let n = 0; n < visN; n++) {
+        var i = pauseScroll + n, it = items[i];
+        if (!it) break;
+        var ry = listY + n * rowH, rh = rowH - 6;
         var sel = (i === pauseIndex);
         ctx.save();
         ctx.fillStyle = sel ? "rgba(34, 211, 238, 0.22)" : "rgba(255,255,255,0.05)";
-        uiRoundRect(px + 24, ry, pw - 48, rowH - 8, 12);
+        uiRoundRect(px + 20, ry, pw - 40, rh, 10);
         ctx.fill();
         ctx.lineWidth = 2;
         ctx.strokeStyle = sel ? "#22d3ee" : "rgba(255,255,255,0.08)";
         ctx.stroke();
         ctx.restore();
-        uiText(items[i].label, w / 2, ry + 28, 19, sel ? "#ffffff" : "#c3d5e2", "center", "800");
-        if (sel && items[i].hint) uiText(items[i].hint, w / 2, ry + 43, 11, "#7ff0ff", "center", "600");
-        if (items[i].id === "skin0" || items[i].id === "skin1") {
-            var si = (items[i].id === "skin0") ? 0 : 1;
-            drawSkinPreview(heroSkins[si], px + 62, ry + (rowH - 8) / 2, 40, si === 0 ? "#ff5a5f" : "#3da5ff", "P" + (si + 1));
+        var fs = Math.max(14, Math.min(19, rh * 0.42)), hasHint = sel && it.hint && rh >= 40;
+        uiText(it.label, w / 2, ry + (hasHint ? rh * 0.5 : rh * 0.5 + fs * 0.35), fs, sel ? "#ffffff" : "#c3d5e2", "center", "800");
+        if (hasHint) uiText(it.hint, w / 2, ry + rh - 6, 11, "#7ff0ff", "center", "600");
+        if (it.id === "skin0" || it.id === "skin1") {
+            var si = (it.id === "skin0") ? 0 : 1;
+            drawSkinPreview(heroSkins[si], px + 54, ry + rh / 2, Math.min(40, rh - 4), si === 0 ? "#ff5a5f" : "#3da5ff", "P" + (si + 1));
         }
-        pauseRects.push({ x: px + 24, y: ry, w: pw - 48, h: rowH - 8 });
+        pauseRects.push({ x: px + 20, y: ry, w: pw - 40, h: rh, idx: i });
     }
-    uiText("↑ ↓ select    ← → change    Enter confirm    Esc resume", w / 2, py + ph - 14, 12, "#8ba2b4", "center", "600");
+    if (pauseScroll > 0) uiText("▲ more", px + pw - 30, listY - 6, 11, "#7ff0ff", "right", "800");
+    if (pauseScroll + visN < items.length) uiText("▼ more", px + pw - 30, listY + visN * rowH + 8, 11, "#7ff0ff", "right", "800");
+    uiText(w < 520 ? "↑↓ select · ←→ change · Enter · Esc" : "↑ ↓ select    ← → change (or click the left / right half)    Enter confirm    Esc resume", w / 2, py + ph - 10, 12, "#8ba2b4", "center", "600");
 }
 
 function drawHitboxes() {
@@ -1382,6 +1409,7 @@ var tickAccumulator = 0;
 var lowFpsSeconds = 0;
 function tick() {
     if (typeof ControlsUI !== "undefined") ControlsUI.poll();
+    if (typeof topBarRefresh === "function" && (++tick.n || (tick.n = 1)) % 15 === 0) { try { topBarRefresh(); } catch (e) {} }
     if (typeof Pads !== "undefined") Pads.poll();
     if (typeof Net !== "undefined" && Net.role === "client") { Net.clientTick(); return; }
     if (typeof Studio !== "undefined" && Studio.isOpen) { Studio.tick(); return; }
@@ -1440,3 +1468,16 @@ requestAnimationFrame(gameLoop);
 
 // Boot into the Arcade game-select screen
 if (typeof Hub !== "undefined") Hub.openHub(true);
+
+// mouse wheel moves through a long pause menu
+(function() {
+    var cv = typeof canvas !== "undefined" ? canvas : document.querySelector("canvas");
+    if (!cv) return;
+    cv.addEventListener("wheel", function(e) {
+        if (!paused) return;
+        var n = pauseItems().length;
+        pauseIndex = Math.max(0, Math.min(n - 1, pauseIndex + (e.deltaY > 0 ? 1 : -1)));
+        pauseHoverXY = [mouseX, mouseY];
+        e.preventDefault();
+    }, { passive: false });
+})();

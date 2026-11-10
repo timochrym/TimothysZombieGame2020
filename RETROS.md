@@ -6,6 +6,23 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## UI pass 1: compact top bar, adaptive pause menu
+
+**Shipped:** the six-button top-right strip (which covered HUD text and wrapped at narrow widths) is now four icon
+buttons — 👥 Players (shows humans + CPUs), 📡 LAN (shows "Hosting · N" while live), 🛠 Studio, ☰ Menu — that dim
+while you play and light up on hover, pause or when a menu is open; labels drop below 1100 px. ☰ opens one grouped
+menu (Play / People / Make & tune / Settings) with shortcut keys shown, closing on Esc or a click outside. The pause
+menu now starts below the bar, shrinks its rows to fit the window, scrolls (keys, wheel) when it still doesn't fit,
+and follows the mouse. The key-help sheet moves up instead of colliding with the side HUDs on narrow windows.
+
+**Measured:** screenshots at 1280×720, 820×600 and 800×450: nothing clipped, Settings (14 rows) scrolls at 450 px;
+Esc closes the menu without pausing; no console errors.
+
+**Went wrong:** the old cheats toggle rewrote its button's HTML and wiped the label, so it was rewritten to only flip
+classes.
+
+---
+
 ## Wobble Wheels: eject + best-run ghost
 
 **Shipped:** E (P2 /) ejects — the rider lets go and is flung up and forward (a deliberate bail-out that counts as a

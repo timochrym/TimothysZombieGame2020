@@ -323,13 +323,7 @@ var DevUI = {
             var zl = panel.querySelector('[data-val="zoom"]');
             if (zl) zl.textContent = userZoom.toFixed(2) + "x";
         }
-        // top bar mirrors
-        var coopBtn = document.getElementById("coop-btn");
-        if (coopBtn) {
-            coopBtn.classList.toggle("active", multiplayer || brawl.active);
-            var humans = characters.filter(function(c) { return c.isPlayer && !c.isCPU; }).length, cpus = characters.filter(function(c) { return c.isPlayer && c.isCPU; }).length;
-            coopBtn.innerHTML = "👥 " + humans + (humans === 1 ? " player" : " players") + (cpus ? " + " + cpus + " CPU" : "");
-        }
+        topBarRefresh();
         var godBtn = document.getElementById("god-mode-btn");
         if (godBtn) {
             godBtn.classList.toggle("active", godMode);
@@ -450,12 +444,28 @@ SummonManager.buildUI = function() {
     var style = document.createElement("style");
     style.textContent = `
         :root { --dp-bg: rgba(10,16,24,0.94); --dp-line: rgba(130,180,210,0.22); --dp-accent: #22d3ee; --dp-accent2: #ffd23f; --dp-text: #e6f1f7; --dp-dim: #8aa3b5; }
-        #top-right-bar { position: fixed; top: 14px; right: 16px; z-index: 1000; display: flex; gap: 8px; align-items: center; user-select: none; font-family: 'Segoe UI', Arial, sans-serif; }
-        #level-select-dropdown, .top-bar-btn { background: var(--dp-bg); color: var(--dp-text); border: 1px solid var(--dp-line); padding: 9px 14px; font-size: 13px; font-weight: 700; border-radius: 10px; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,0.4); transition: all .15s; font-family: inherit; }
-        #level-select-dropdown { max-width: 260px; color: #7ff0b0; }
-        .top-bar-btn:hover { border-color: var(--dp-accent); transform: translateY(-1px); }
-        .top-bar-btn.active { background: linear-gradient(135deg, #ffd23f, #ff9f1c); color: #1a1205; border-color: #fff3; box-shadow: 0 0 18px rgba(255,190,40,.55); }
-        #coop-btn.active { background: linear-gradient(135deg, #22d3ee, #3b82f6); color: #04121c; box-shadow: 0 0 18px rgba(34,211,238,.5); }
+        /* compact top bar: a few icon buttons + a ☰ menu with everything else; fades back while you play */
+        #top-right-bar { position: fixed; top: 10px; right: 12px; z-index: 1000; display: flex; gap: 6px; align-items: center; user-select: none; font-family: 'Segoe UI', Arial, sans-serif; opacity: .62; transition: opacity .2s; }
+        #top-right-bar:hover, #top-right-bar.menu-open, body.hub-open #top-right-bar, body.paused #top-right-bar { opacity: 1; }
+        body.studio-open #top-right-bar { display: none; }
+        .top-bar-btn { background: var(--dp-bg); color: var(--dp-text); border: 1px solid var(--dp-line); height: 36px; min-width: 38px; padding: 0 11px; font-size: 13px; font-weight: 700; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,0.35); transition: border-color .15s, background .15s; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .top-bar-btn:hover { border-color: var(--dp-accent); }
+        .top-bar-btn.active { background: linear-gradient(135deg, #ffd23f, #ff9f1c); color: #1a1205; border-color: #fff3; }
+        #coop-btn.active { background: linear-gradient(135deg, #22d3ee, #3b82f6); color: #04121c; }
+        #lan-btn.live { background: linear-gradient(135deg, #34d399, #059669); color: #03140d; }
+        @media (max-width: 1100px) { .top-bar-btn .lbl { display: none; } }
+        #top-menu { position: fixed; top: 52px; right: 12px; z-index: 1001; width: 300px; max-height: calc(100vh - 70px); overflow-y: auto; background: var(--dp-bg); border: 1px solid var(--dp-line); border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.6); padding: 8px; display: none; font-family: 'Segoe UI', Arial, sans-serif; color: var(--dp-text); }
+        #top-menu.open { display: block; }
+        #top-menu .tm-head { padding: 6px 8px 8px; border-bottom: 1px solid var(--dp-line); margin-bottom: 6px; }
+        #top-menu .tm-head b { display: block; font-size: 14px; color: #fde68a; } #top-menu .tm-head span { font-size: 12px; color: var(--dp-dim); }
+        #top-menu .tm-sec { font-size: 10px; font-weight: 800; letter-spacing: .1em; color: var(--dp-dim); text-transform: uppercase; margin: 8px 8px 3px; }
+        #top-menu button.tm { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; background: transparent; color: var(--dp-text); border: 0; border-radius: 9px; padding: 8px 10px; font: 600 13px inherit; cursor: pointer; }
+        #top-menu button.tm:hover { background: rgba(34,211,238,.12); }
+        #top-menu button.tm .ic { width: 22px; text-align: center; font-size: 16px; }
+        #top-menu button.tm .tx { flex: 1; } #top-menu button.tm .tx small { display: block; color: var(--dp-dim); font-weight: 500; font-size: 11px; }
+        #top-menu button.tm kbd { margin-left: auto; }
+        #top-menu button.tm.active { background: rgba(255,210,63,.16); }
+        #level-select-dropdown { width: calc(100% - 16px); margin: 2px 8px 6px; background: #0b1220; color: #7ff0b0; border: 1px solid var(--dp-line); border-radius: 9px; padding: 7px 8px; font: 600 13px inherit; }
 
         #mario-maker-dock { position: fixed; bottom: 166px; left: calc(50% - 215px); transform: translateX(-50%); z-index: 1000; background: var(--dp-bg); border: 1px solid var(--dp-line); border-radius: 16px; padding: 10px 14px; display: none; align-items: center; gap: 8px; box-shadow: 0 12px 34px rgba(0,0,0,.6); user-select: none; font-family: 'Segoe UI', Arial, sans-serif; max-width: calc(100vw - 460px); overflow-x: auto; }
         #mario-maker-dock.open { display: flex; }
@@ -541,32 +551,70 @@ SummonManager.buildUI = function() {
     topBar.addEventListener("mousedown", stop);
     topBar.addEventListener("click", stop);
 
-    var lvlSelect = document.createElement("select");
-    lvlSelect.id = "level-select-dropdown";
-    lvlSelect.addEventListener("change", function() {
-        LevelManager.selectLevel(this.value);
-        this.blur();
-    });
-    topBar.appendChild(lvlSelect);
-
-    var mk = function(id, html, title, fn, hidden) {
+    var mk = function(id, icon, label, title, fn) {
         var b = document.createElement("button");
         if (id) b.id = id;
         b.className = "top-bar-btn";
-        b.innerHTML = html;
+        b.innerHTML = icon + (label ? " <span class='lbl'>" + label + "</span>" : "");
         b.title = title;
-        if (hidden) b.style.display = "none";
         b.addEventListener("click", function(e) { e.stopPropagation(); fn(); this.blur(); });
         topBar.appendChild(b);
         return b;
     };
-    mk("coop-btn", "👥 Players", "Who's playing: humans, CPUs, teams, controls", function() { PlayersUI.open(); });
-    mk("", "🌲 Frontier", "Procedural frontier with the giant castle", function() { LevelManager.selectLevel("infinite_frontier"); });
-    mk("god-mode-btn", "⚡ God Mode [V]", "Invincible + unlimited everything", function() { SummonManager.toggleGodMode(); DevUI.sync(); }, true);
-    mk("lan-btn", "📡 LAN", "Local network multiplayer: host or join a game on the same Wi-Fi", function() { NetUI.open(); });
-    mk("", "🕹 Arcade", "Switch to another game made with this engine", function() { if (typeof paused !== "undefined" && paused) closePause(); Hub.openHub(false); });
-    mk("studio-btn", "🛠️ Level Studio [B]", "Level editor: build, test and share levels for every game", function() { Studio.open(); });
-    mk("summon-toggle-btn", "🧪 Cheats", "Cheats & tuning panel (god mode, sliders, spawning)", function() { SummonManager.togglePanel(); });
+    mk("coop-btn", "👥", "Players", "Who's playing: humans, CPUs, teams, controls", function() { closeTopMenu(); PlayersUI.open(); });
+    mk("lan-btn", "📡", "LAN", "Play with other devices on the same Wi-Fi: host or join", function() { closeTopMenu(); NetUI.open(); });
+    mk("studio-btn", "🛠", "Studio", "Level Studio [B]: build, test and share levels", function() { closeTopMenu(); Studio.open(); });
+    var menuBtn = mk("top-menu-btn", "☰", "Menu", "Everything else: switch game, levels, settings, controls, cheats", function() { toggleTopMenu(); });
+
+    // ---------- the ☰ menu ----------
+    var menu = document.createElement("div");
+    menu.id = "top-menu";
+    ["mousedown", "click", "wheel", "keydown"].forEach(function(ev) { menu.addEventListener(ev, function(e) { e.stopPropagation(); }); });
+    var row = function(id, icon, text, sub, key, fn) {
+        var b = document.createElement("button");
+        b.className = "tm"; if (id) b.id = id;
+        b.innerHTML = "<span class='ic'>" + icon + "</span><span class='tx'>" + text + (sub ? "<small>" + sub + "</small>" : "") + "</span>" + (key ? "<kbd>" + key + "</kbd>" : "");
+        b.addEventListener("click", function(e) { e.stopPropagation(); fn(b); });
+        menu.appendChild(b);
+        return b;
+    };
+    var sec = function(t) { var d = document.createElement("div"); d.className = "tm-sec"; d.textContent = t; menu.appendChild(d); };
+    var head = document.createElement("div"); head.className = "tm-head"; head.id = "tm-head"; menu.appendChild(head);
+    sec("Play");
+    row("", "🕹", "Arcade — switch game", "All the games made with this engine", "", function() { closeTopMenu(); if (typeof paused !== "undefined" && paused) closePause(); Hub.openHub(false); });
+    var lvlSelect = document.createElement("select");
+    lvlSelect.id = "level-select-dropdown";
+    lvlSelect.title = "Levels / courses of this game";
+    lvlSelect.addEventListener("change", function() { closeTopMenu(); LevelManager.selectLevel(this.value); this.blur(); });
+    menu.appendChild(lvlSelect);
+    row("", "🌲", "Infinite Frontier", "Survival on the endless generated trail", "", function() { closeTopMenu(); LevelManager.selectLevel("infinite_frontier"); });
+    row("", "⏸", "Pause menu", "Restart, game options, levels", "Esc", function() { closeTopMenu(); if (typeof openPause === "function" && !paused) openPause(false); });
+    sec("People");
+    row("", "👥", "Players & CPUs", "Humans, CPU seats, teams, gamepads", "", function() { closeTopMenu(); PlayersUI.open(); });
+    row("", "📡", "LAN multiplayer", "Host or join on the same Wi-Fi", "", function() { closeTopMenu(); NetUI.open(); });
+    sec("Make & tune");
+    row("", "🛠", "Level Studio", "Build, play-test and share levels", "B", function() { closeTopMenu(); Studio.open(); });
+    row("summon-toggle-btn", "🧪", "Cheats & tuning", "Dev panel: sliders, spawning, god mode", "", function() { closeTopMenu(); SummonManager.togglePanel(); });
+    var god = row("god-mode-btn", "⚡", "God mode", "Invincible + unlimited everything", "V", function() { SummonManager.toggleGodMode(); DevUI.sync(); });
+    god.style.display = "none";
+    sec("Settings");
+    row("", "⚙", "Settings", "Sound, shake, graphics, speed, 3D view", "", function() { closeTopMenu(); if (!paused) openPause(false); pauseActivate("settings"); });
+    row("", "🎮", "Controls", "Remap keys and gamepad buttons", "", function() { closeTopMenu(); if (typeof ControlsUI !== "undefined") ControlsUI.open(); });
+    row("tm-help", "❓", "Key help on screen", "Show / hide the control cheat-sheet", "H", function(b) { devOpts.showHelp = !devOpts.showHelp; b.classList.toggle("active", devOpts.showHelp); });
+    document.body.appendChild(menu);
+    window.toggleTopMenu = function() {
+        var open = !menu.classList.contains("open");
+        menu.classList.toggle("open", open); topBar.classList.toggle("menu-open", open);
+        if (open) {
+            if (typeof SummonManager !== "undefined") SummonManager.refreshLevelDropdown();
+            var g = GameModes.current, lvl = LevelManager.getCurrentLevel ? LevelManager.getCurrentLevel() : null;
+            head.innerHTML = "<b>" + (g ? g.title : "") + "</b><span>" + (lvl && lvl.name ? lvl.name.replace(/^[^A-Za-z0-9]+/, "") : "") + "</span>";
+            var h = document.getElementById("tm-help"); if (h) h.classList.toggle("active", !!devOpts.showHelp);
+        }
+    };
+    window.closeTopMenu = function() { menu.classList.remove("open"); topBar.classList.remove("menu-open"); };
+    document.addEventListener("mousedown", function(e) { if (menu.classList.contains("open") && !menu.contains(e.target) && e.target !== menuBtn) closeTopMenu(); }, true);
+    document.addEventListener("keydown", function(e) { if (e.code === "Escape" && menu.classList.contains("open")) { closeTopMenu(); e.stopImmediatePropagation(); e.preventDefault(); } }, true);
     document.body.appendChild(topBar);
 
     // ---------- Bottom palette dock ----------
@@ -854,9 +902,8 @@ SummonManager.togglePanel = function() {
     if (this.isOpen) {
         panel.classList.add("open");
         dock.classList.add("open");
-        godBtn.style.display = "inline-block";
+        godBtn.style.display = "flex";
         devBtn.classList.add("active");
-        devBtn.innerHTML = "🧪 Cheats: ON";
         this.refreshLevelDropdown();
         this.refreshObjectList();
         DevUI.sync();
@@ -865,7 +912,6 @@ SummonManager.togglePanel = function() {
         dock.classList.remove("open");
         if (!godMode) godBtn.style.display = "none";
         devBtn.classList.remove("active");
-        devBtn.innerHTML = "🧪 Cheats";
         this.showGrid = false;
         this.setToolMode("shoot");
     }
@@ -1070,3 +1116,28 @@ SummonManager.refreshObjectList = function() {
 setInterval(function() {
     if (typeof SummonManager !== "undefined" && SummonManager.isOpen) DevUI.sync();
 }, 400);
+
+// keeps the compact top bar honest a few times a second: player count, LAN status, paused / arcade state
+function topBarRefresh() {
+        var coopBtn = document.getElementById("coop-btn");
+        if (coopBtn) {
+            coopBtn.classList.toggle("active", multiplayer || brawl.active);
+            var humans = characters.filter(function(c) { return c.isPlayer && !c.isCPU; }).length, cpus = characters.filter(function(c) { return c.isPlayer && c.isCPU; }).length;
+            if (GameModes.flag("ownScreen", false) && GameModes.has("seats")) {          // full-screen games: count their seats
+                humans = 0; cpus = 0;
+                GameModes.call("seats").forEach(function(st) { if (st.count) cpus += st.value; else if (st.value === "human") humans++; else if (st.value === "cpu") cpus++; });
+            }
+            var ch = "👥 <b>" + humans + "</b>" + (cpus ? "<span style='opacity:.8'>+" + cpus + "🤖</span>" : "") + " <span class='lbl'>" + (humans === 1 ? "player" : "players") + "</span>";
+            if (coopBtn.innerHTML !== ch) coopBtn.innerHTML = ch;
+            coopBtn.title = humans + " human" + (humans === 1 ? "" : "s") + (cpus ? " + " + cpus + " CPU" : "") + " — click to change who's playing";
+        }
+        var lanBtn = document.getElementById("lan-btn");
+        if (lanBtn && typeof Net !== "undefined") {
+            var live = Net.role === "host" || Net.role === "client";
+            lanBtn.classList.toggle("live", live);
+            var lh = "📡 <span class='lbl'>" + (Net.role === "host" ? "Hosting · " + (Net.peerCount() + 1) : "LAN") + "</span>";
+            if (lanBtn.innerHTML !== lh) lanBtn.innerHTML = lh;
+        }
+    document.body.classList.toggle("paused", typeof paused !== "undefined" && !!paused);
+    document.body.classList.toggle("hub-open", typeof Hub !== "undefined" && !!Hub.isOpen);
+}
