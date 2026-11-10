@@ -35,7 +35,7 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       by time of day fading underground, torches, heroes' glow), day / night cycle (4 min) with monsters on the surface
       at night (gone at dawn), inventory screen (I), save / load (K / L) + autosave every minute + continue on launch,
       ore veins, a deep layer (deepstone + crystals), no game over (you wake at spawn). E shockwave to fight.
-      Still open: LAN sync of the tile grid (Terra is host-screen only on LAN), axes / swords, more biomes.
+      LAN: the tile grid streams to clients (re-sent when it changes); LAN players dig / place into a shared stash. Still open: axes / swords, more biomes.
 - [x] Zombie Ball "Flail" style (pause menu → Style): one-button physics soccer — two big-headed, stiff-legged
       ragdoll players per team, tap = jump & kick, hold = tip forward, they stand back up; CPUs time presses.
 - [x] Flail polish: goalkeepers (on by default; they hold the goal line and spring straight up), modifiers in the
@@ -80,7 +80,7 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       knights / archers / bats) and a climb back to daylight, before the Deep Echo Caverns. (West of the start is
       unchanged: chunk heights chain west→east only.)
 - [x] B3 — Terraria-like generation + block-game capabilities → Terra (above): save/load, crafting, torch lighting,
-      night enemies done. LAN tile sync still open.
+      night enemies, LAN tile sync done.
 - [x] B4 — Cell arena (agar-style) → **Blob Arena**: eat pellets and blobs 25% smaller, bigger = slower, split to lunge
       (pieces merge back after 9 s), eject mass, spiky viruses pop big blobs into pieces, 14 CPU blobs that flee /
       chase / lunge / dodge viruses, leaderboard, best mass, local P2 + pads. Next: LAN, teams, feeding viruses.
@@ -123,7 +123,7 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
   1-0 (palette clicks are host-only); ~0.3-0.5 MB/s per client in the arenas.
 - Pathfinding: "60 FPS with 60+ enemies" met for the JS budget, not in headless software rendering; frontier pathing ~1 ms.
 - LAN: bandwidth is per client through the relay (~340 KB/s with 60 enemies); mode HUD state only synced for Stomp
-  Squad and Bed Brawl; minecarts/rails and Terra tiles not visible on LAN clients. (Wobble Wheels LAN riders: done.)
+  Squad and Bed Brawl; minecarts/rails not visible on LAN clients (Terra tiles: done). (Wobble Wheels LAN riders: done.)
 - Stomp Squad: courses tuned by eye; bubble co-op and courses 2-3 only smoke-tested. (Fireballs now bounce along the
   ground; enemy health bars are hidden via the new `noEnemyBars` flag.)
 - Level Studio: no multi-level campaigns; mover end points are numbers (not draggable); no thumbnails.

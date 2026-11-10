@@ -169,6 +169,7 @@ function terraSet(c, r, t) {
     var Tr = TERRA;
     if (c < 0 || r < 0 || c >= Tr.W || r >= Tr.H) return;
     Tr.grid[r * Tr.W + c] = t;
+    Tr.ver = (Tr.ver || 0) + 1;                    // LAN: the grid changed, send it again
     var k = Math.floor(c / Tr.CH);
     if (Tr.chunks[k]) terraStream(k);
 }
@@ -319,8 +320,49 @@ GameModes.register({
         if (typeof SFX !== "undefined") SFX.play("select", bx, by, 0.4, 0.9);
     },
 
+    // LAN players dig with their shoot button (at their own aim) and place with their grab button; shared stash
+    lanDig: function() {
+        if (typeof Net === "undefined" || Net.role !== "host") return;
+        var self = this;
+        characters.forEach(function(ch) {
+            if (!ch.isRemote || ch.dead) return;
+            var p = Net.peers[ch.netPid], i = (p && p.inp) || {};
+            if (i.gr !== undefined && i.gr !== ch._terraGr) { if (ch._terraGr !== undefined) self.placeAt(ch, i.ax, i.ay); ch._terraGr = i.gr; }
+            if (!i.sh) { ch._mineT = 0; return; }
+            var t = self.target(ch, i.ax, i.ay), id = terraGet(t.c, t.r);
+            if (!t.ok || !id || id === TILE_ID.bedrock || TERRA.tool < (TERRA_NEED[TILES[id][0]] || 0)) { ch._mineT = 0; return; }
+            var key = t.c + "," + t.r;
+            if (ch._mineAt !== key) { ch._mineAt = key; ch._mineT = 0; }
+            if (++ch._mineT >= TILES[id][3] * TERRA_TOOLS[TERRA.tool][1]) {
+                var drop = TILES[id][4]; if (drop) TERRA.inv[drop] = (TERRA.inv[drop] || 0) + 1;
+                terraSet(t.c, t.r, 0); Components.spawnSparks(terraCX(t.c), terraCY(t.r), TILES[id][1], 4); ch._mineT = 0;
+            }
+        });
+    },
+    netState: function() {
+        var Tr = TERRA, m = { t: Tr.time, tool: Tr.tool, inv: Tr.inv, sel: Tr.sel };
+        Tr.netN = (Tr.netN || 0) + 1;
+        if (Tr.sentVer !== Tr.ver || Tr.netN % 90 === 0) {
+            Tr.sentVer = Tr.ver;
+            var g = Tr.grid, out = [], v = g[0], n = 0;
+            for (let i = 0; i < g.length; i++) { if (g[i] === v && n < 65000) n++; else { out.push(v, n); v = g[i]; n = 1; } }
+            out.push(v, n);
+            m.g = out; m.s = Tr.surface; m.seed = Tr.seed;
+        }
+        return m;
+    },
+    applyNetState: function(m) {
+        var Tr = TERRA;
+        Tr.time = m.t; Tr.tool = m.tool; Tr.inv = m.inv; Tr.tick++;
+        if (m.g) {
+            var g = Tr.grid && Tr.grid.length === Tr.W * Tr.H ? Tr.grid : new Uint8Array(Tr.W * Tr.H), k = 0;
+            for (let i = 0; i < m.g.length; i += 2) { g.fill(m.g[i], k, k + m.g[i + 1]); k += m.g[i + 1]; }
+            Tr.grid = g; Tr.surface = m.s; Tr.seed = m.seed;
+        }
+    },
     preUpdate: function() {
         TERRA.tick++;
+        this.lanDig();
         if (TERRA.tick % 20 === 0) terraStream();
         TERRA.time = (TERRA.time + 1 / TERRA.DAY) % 1;
         if (TERRA.tick % 3600 === 0) terraSave(true);                      // autosave every minute

@@ -6,6 +6,18 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Terra over LAN
+
+**Shipped:** Terra's tile grid now streams to LAN clients (run-length encoded; re-sent whenever a tile changes and every
+3 s for late joiners) together with the clock, tool and stash, so clients see the same world, light and day/night.
+LAN players dig with their own shoot button at their own aim and place blocks with their grab button; everything
+goes into one shared co-op stash.
+
+**Measured:** host + client: grid checksums identical after joining; the client held the mouse on the tile under its
+feet → the tile was mined on the host, dirt 20 → 21 in the stash, checksums still identical; no errors.
+
+---
+
 ## Terra resumed: tools, crafting, light, day/night, saving
 
 **Shipped:** you paused Terra "in favor of other tasks"; those are done, so it's back. Pickaxe tiers (hands → wooden →
