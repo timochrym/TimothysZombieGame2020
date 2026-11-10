@@ -115,7 +115,7 @@ It is a full editor:
   world from it after every edit (use Pathfinder.invalidateRect / full rebuild from section 3).
   Keep the old cheats/tuning panel reachable as a tab.
 
-### 6. Building during play (Minecraft/Fortnite-style)
+### 6. Building during play (Minecraft/Fortnite-style) [DONE] (build.js)
 A build toggle with a grid-snapped ghost preview at the cursor, piece picker (block, wall, floor,
 ramp/stairs), materials that cost resources, breaking blocks by hitting or shooting them, and fast
 Fortnite-style piece placement. Placing/breaking calls Pathfinder.invalidateRect.

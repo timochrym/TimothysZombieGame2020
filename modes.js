@@ -9,7 +9,7 @@
 //   id, title, tagline, color, firstLevel        identity + which level to load from the Arcade
 //   flags: {                                      engine features to switch on/off for this game
 //     waves, revive, jetpack, shooting, ability, ammo, playerControl, noBedrock, scenery, enemiesPassive,
-//     coopToggle, dash, wallJump, airJumps, bigPads, flight
+//     coopToggle, dash, wallJump, airJumps, bigPads, flight, building, buildFree
 //   }
 //   onActivate() / onDeactivate()                 entering / leaving this game
 //   setupLevel(lvl)                               after the level geometry loads (build gadgets, balls ...)
@@ -104,7 +104,7 @@ GameModes.register({
     tagline: "The original. Waves, co-op, revive, castles, the endless frontier.",
     color: "#55ff88",
     firstLevel: "classic_arena",
-    flags: { waves: true, revive: true, jetpack: true, shooting: true, ability: true, ammo: true, scenery: true }
+    flags: { waves: true, revive: true, jetpack: true, shooting: true, ability: true, ammo: true, scenery: true, building: true }
 });
 
 GameModes.register({

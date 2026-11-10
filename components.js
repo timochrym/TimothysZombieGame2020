@@ -384,6 +384,7 @@ class Components {
             object.abilityCooldown = (godMode || devOpts.infiniteAmmo) ? 10 : 150;
         }
 
+        if (object.isPlayer && object.buildMode) { object.buildWant = !!object.shootPressed; return; }
         if (object.isPlayer && !GameModes.flag("shooting", true)) return;
         if (object.isPlayer && GameModes.has("canShoot") && !GameModes.call("canShoot", object)) return;
         var canEnemyShoot = (object.isPlayer || object.zombiePower == "SPITTER" || object.zombiePower == "ARCHER" || object.zombiePower == "MAGE" || object.zombiePower == "BOSS_KING");
@@ -621,6 +622,7 @@ class Components {
                         if (hit.explosive) {
                             hit.takeDamage(l.damage);
                         }
+                        if (hit.buildHP !== undefined && typeof Build !== "undefined") Build.damage(hit, l.damage, l.owner);
                         Components.spawnSparks(l.x, l.y, l.color, 3);
                         removeLazer = true;
                     }
@@ -878,6 +880,7 @@ class Components {
         if (typeof Ragdolls !== "undefined") Ragdolls.explode(x, y, radius * 1.15, Math.min(17, 4 + Math.abs(damage) * 0.28));
         GameModes.call("onExplosion", x, y, radius, Math.min(17, 4 + Math.abs(damage) * 0.28));
         if (typeof Gadgets !== "undefined") Gadgets.onExplosion(x, y, radius);
+        if (typeof Build !== "undefined") Build.onExplosion(x, y, radius, damage, source);
         if (typeof SFX !== "undefined") SFX.play(Math.abs(damage) >= 20 ? "explode" : "kill", x, y, Math.min(1, radius / 300));
 
         for (let i = 0; i < count; i++) {

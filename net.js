@@ -300,6 +300,12 @@ var Net = {
         }
         if (!p) return;
         if ((i.da || 0) > p.seen.da) { p.seen.da = i.da; if (!ch.dead && !ch.isZombie) ch.triggerNinjaDash(); }
+        if (typeof Build !== "undefined") {
+            if ((i.bt || 0) > (p.seen.bt || 0)) { p.seen.bt = i.bt; Build.toggle(ch); }
+            ch.buildPiece = i.bp || 0; ch.buildMat = i.bm || 0;
+            ch.netAimX = i.ax; ch.netAimY = i.ay;
+            if (ch.buildMode && (i.gr || 0) > p.seen.gr) { p.seen.gr = i.gr; Build.removeAt(ch); }
+        }
         if ((i.rl || 0) > p.seen.rl) { p.seen.rl = i.rl; n.reloadQueued = true; }
         if ((i.gr || 0) > p.seen.gr) {
             p.seen.gr = i.gr;
@@ -585,7 +591,8 @@ var Net = {
             sh: (inp.kbShoot || inp.shoot || (mouseDown && !this.menuOpen) || (padOn && pad.shoot)) ? 1 : 0,
             jt: (inp.kbJet || inp.jet || (padOn && pad.jet)) ? 1 : 0,
             it: (inp.kbInteract || inp.interact || (padOn && pad.interact)) ? 1 : 0,
-            da: this.localDash, gr: this.localGrab, rl: this.localReload
+            da: this.localDash, gr: this.localGrab, rl: this.localReload,
+            bt: this.localBuildToggle || 0, bp: typeof Build !== "undefined" ? Build.localPiece : 0, bm: typeof Build !== "undefined" ? Build.localMat : 0
         };
         if (inp.reloadQueued) { inp.reloadQueued = false; this.localReload++; m.rl = this.localReload; }
         if (padOn && pad.aim) m.ag = Math.round((Math.degrees(Math.atan2(pad.aim[0], -pad.aim[1])) + 360) % 360);
@@ -651,8 +658,10 @@ var Net = {
         safe(function() { Components.updateParticles(); });
         safe(function() { Components.drawEffects(); });
         safe(function() { GameModes.call("drawFront"); });
+        safe(function() { if (typeof Build !== "undefined") { Build.drawWorld(); Build.drawFront(); } });
         safe(function() { Components.updateFloatingTexts(); });
         safe(function() { drawHUD(); });
+        safe(function() { if (typeof Build !== "undefined") Build.drawHUD(); });
         this.drawClientBadge(me);
         if (this.menuOpen) this.drawClientMenu();
     },

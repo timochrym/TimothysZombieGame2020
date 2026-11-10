@@ -17,6 +17,8 @@ function queueDash(idx) {
 
 function queueGrab(idx) {
     if (typeof Net !== "undefined" && Net.role === "client") { if (idx === 0) Net.localGrab++; return; }
+    var bch = (idx === 0) ? redGuy : blueGuy;
+    if (bch && bch.buildMode && typeof Build !== "undefined") { Build.removeAt(bch); return; }
     var ch = (idx === 0) ? redGuy : blueGuy;
     if (!ch || ch.dead) return;
     if (GameModes.call("onSecondary", ch)) return;
@@ -76,6 +78,15 @@ function keyDownHandler(e) {
     if (e.repeat) return;
 
     if (c == "KeyV") { if (typeof SummonManager !== "undefined") SummonManager.toggleGodMode(); }
+    // ----- Building (C / ; toggle, 1-4 / [ piece, T material) -----
+    if (typeof Build !== "undefined" && !e.repeat) {
+        var lanC = typeof Net !== "undefined" && Net.role === "client";
+        if (c == "KeyC") { if (lanC) Net.localBuildToggle = (Net.localBuildToggle || 0) + 1; else Build.toggle(redGuy); }
+        if (c == "Semicolon") Build.toggle(blueGuy);
+        if (/^Digit[1-4]$/.test(c)) { var bi = Number(c.charAt(5)) - 1; if (lanC) Build.localPiece = bi; else if (redGuy) Build.pick(redGuy, bi); }
+        if (c == "BracketLeft" && blueGuy) Build.pick(blueGuy, (blueGuy.buildPiece || 0) + 1);
+        if (c == "KeyT") { if (lanC) Build.localMat = (Build.localMat + 1) % BUILD_MATS.length; else { Build.cycleMat(redGuy); if (blueGuy && blueGuy.buildMode && !(redGuy && redGuy.buildMode)) Build.cycleMat(blueGuy); } }
+    }
     if (c == "KeyB") { if (typeof Studio !== "undefined") Studio.toggle(); else if (typeof SummonManager !== "undefined") SummonManager.togglePanel(); }
     if (c == "KeyP") { if (typeof Pathfinder !== "undefined") Pathfinder.showDebug = !Pathfinder.showDebug; }
     if (c == "KeyH") { devOpts.showHelp = !devOpts.showHelp; helpTimer = devOpts.showHelp ? 60 * 14 : 0; }
@@ -154,6 +165,7 @@ function mouseDownHandler(e) {
         mouseDown = true;
     } else if (e.button === 2) {
         rightMouseDown = true;
+        if (redGuy && redGuy.buildMode && typeof Build !== "undefined") { Build.removeAt(redGuy); return; }
         if (redGuy && !redGuy.dead && GameModes.call("onSecondary", redGuy)) return;
         if (redGuy && !redGuy.dead) {
             var mPos = Components.getMouseWorldPos();

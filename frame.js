@@ -1045,12 +1045,14 @@ function frame() {
     updateBrawl();
     if (typeof Gadgets !== "undefined") Gadgets.update();
     GameModes.call("update");
+    if (typeof Build !== "undefined") Build.update();
 
     // Draw Static Map Objects
     for (let i = 0; i < staticObjects.length; i++) {
         staticObjects[i].staticObject();
     }
 
+    if (typeof Build !== "undefined") Build.drawWorld();
     if (typeof Gadgets !== "undefined") Gadgets.draw();
     GameModes.call("drawWorld");
 
@@ -1088,6 +1090,7 @@ function frame() {
     Components.updateParticles();
     Components.drawEffects();
     GameModes.call("drawFront");
+    if (typeof Build !== "undefined") Build.drawFront();
     Components.updateFloatingTexts();
 
     if (devOpts.showHitboxes) drawHitboxes();
@@ -1100,6 +1103,7 @@ function frame() {
     }
 
     drawHUD();
+    if (typeof Build !== "undefined") Build.drawHUD();
     if (typeof Net !== "undefined" && Net.role === "host") Net.hostFrame();
 }
 

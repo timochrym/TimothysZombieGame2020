@@ -535,6 +535,7 @@ class Character {
             var humanityGain = (this.zombiePower == "BOSS_KING") ? 100 : ((this.zombiePower == "TANK" || this.zombiePower == "KNIGHT") ? 45 : (this.zombiePower == "MINI_SLIME" ? 8 : 24));
             var killer = this.lastHitBy;
             if (killer && killer.isPlayer) killer.kills++;
+            if (killer && killer.isPlayer && typeof Build !== "undefined" && GameModes.flag("building", false)) { Build.mats(killer).wood += 5; if (Math.random() < 0.25) Build.mats(killer).stone += 4; }
             for (let pi = 0; pi < characters.length; pi++) {
                 var pc = characters[pi];
                 if (pc.isPlayer && pc.isZombie) {

@@ -6,6 +6,22 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Building during play — ROADMAP section 6
+
+**Shipped:** `build.js`: build mode, block / wall / floor / ramp, wood / stone / metal, grid-snapped green/red ghost,
+hold-to-spam placement, take-back with half refund, piece HP worn down by bullets, explosions and enemies, costs and
+kill rewards in Survival, free in Creative, hotbar HUD, pathfinding patched on every change, LAN support.
+
+**Measured (scripted headless run):** place a block (60 → 50 wood), place a wall, refused at 5 wood, right-click
+take-back (+5 refund), shooting a piece destroys it, a walking enemy wore a wall from 60 to 48 HP. No errors.
+
+**Went wrong:** the hotbar sat on top of the controls help card; build mode now dismisses the card.
+
+**Left / known:** hold-to-spam only places where the ghost is valid, so sweeping too slowly over your own last piece
+places nothing (correct, but can feel unresponsive); gamepads have no build buttons yet.
+
+---
+
 ## Level Studio — ROADMAP section 5 (and the "dev improvement" request)
 
 **Shipped:** `studio.js` replaces the dev screen and the drag-out dock. Frozen world with a free camera (right/middle

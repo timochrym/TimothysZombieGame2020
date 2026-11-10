@@ -165,6 +165,16 @@ Platform gadgets (used by Stomp Squad, available to any game and the editor): `q
 - **Saving**: each game keeps its own `localStorage` key (`timsCrateLab`, `timsPortalLab`,
   `timsZombieBallCfg`, `timsParkourRush`, `timsRagdollSiege`).
 
+## Building (`build.js`)
+
+Flag `building: true` turns it on (Survival, Creative, Bed Wars); `buildFree: true` makes it free (Creative).
+C / ; toggle build mode, 1-4 / [ pick block, wall, floor, ramp; T cycles wood / stone / metal (60 / 150 / 280 HP);
+click / F / Enter places at the grid-snapped ghost (hold to spam), right-click / G / , takes a piece back for half.
+Placed pieces are ordinary statics with `buildHP`; bullets (`Build.damage`), explosions (`Build.onExplosion`) and
+enemies pushing on them wear them down. Every change calls `Pathfinder.invalidateRect`. Survival kills give wood
+(and sometimes stone). Hooks: `buildCost(ch, piece, mat)`, `canBuild(ch)`, `onBuild(ch, obj)`, `onBreakPiece(obj, by)`.
+Works for LAN players (toggle/piece/material and the aim point travel in the input packet).
+
 ## Level Studio (`studio.js`)
 
 B (or the 🛠 button / pause menu) opens the editor; the old developer panel lives on as **🧪 Cheats & tuning**.
