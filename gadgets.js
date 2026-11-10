@@ -330,7 +330,7 @@ var Gadgets = {
         }
         if (g.type === "brick") {
             var big = GameModes.has("canBreak") ? GameModes.call("canBreak", c) : true;
-            if (g.item && !g.used) { g.used = true; g.type = "qblock"; g.obj.texture = "solid"; g.obj.color = "#8b5a2b"; GameModes.call("onBlockHit", c, g); return; }
+            if (g.item && !g.used) { g.used = true; g.type = "qblock"; g.obj.texture = "used_block"; g.obj.color = "#8b5a2b"; GameModes.call("onBlockHit", c, g); return; }
             if (!big) { if (typeof SFX !== "undefined") SFX.play("ui", g.x, g.y); return; }
             g.broken = true;
             g.obj.dead = true;
@@ -346,7 +346,7 @@ var Gadgets = {
         if (g.used) { if (typeof SFX !== "undefined") SFX.play("ui", g.x, g.y); return; }
         if (g.item === "coins5" && --g.hitsLeft > 0) { GameModes.call("onBlockHit", c, g) || this.popCoin(g); return; }
         g.used = true;
-        g.obj.texture = "solid"; g.obj.color = "#8b5a2b";
+        g.obj.texture = "used_block"; g.obj.color = "#8b5a2b";
         if (!GameModes.call("onBlockHit", c, g)) this.popCoin(g);
     },
 

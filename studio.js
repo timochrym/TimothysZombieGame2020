@@ -15,7 +15,9 @@
 // ============================================================================
 var simFrozen = false;
 
-var STUDIO_TEXTURES = ["brick", "grass_dirt", "castle_stone", "dojo_wood", "lab_metal", "crate_plank", "neon_grid", "question_gold", "solid"];
+var STUDIO_TEXTURES = ["brick", "grass_dirt", "castle_stone", "dojo_wood", "lab_metal", "crate_plank", "neon_grid", "question_gold", "solid",
+    "wood_plank", "stone_block", "metal_plate", "glass", "pipe_green", "used_block", "wool_red", "wool_blue", "tex_dirt", "grass_top",
+    "stone_raw", "ore_coal", "ore_iron", "ore_gold", "log", "leaves", "sand", "bedrock", "hazard", "ice", "mossy_brick"];
 var STUDIO_ENEMIES = ["NORMAL", "SLIME", "BAT", "ARCHER", "KNIGHT", "MAGE", "LEAPER", "EXPLODER", "TANK", "SPITTER", "BOSS_KING"];
 var STUDIO_PLAT_ENEMIES = ["walker", "hopper", "flyer", "spiky", "tank"];
 var STUDIO_MODES = [["survival", "Zombie Survival (waves)"], ["creative", "Creative (fly & build)"], ["platform", "Stomp Squad (platformer)"],

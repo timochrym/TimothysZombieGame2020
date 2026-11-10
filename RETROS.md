@@ -6,6 +6,21 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Textures + character detail
+
+**Shipped:** `textures.js` — 21 procedurally drawn 32-px textures (planks, cut stone, metal plate, glass, pipe, used
+block, red/blue wool, dirt, grass top, raw stone, coal/iron/gold ore, log, leaves, sand, bedrock, hazard stripes, ice,
+mossy brick), installed into `TextureManager` (survive its re-inits) and used across the newer games; Terra draws its
+tiles with them. Characters: a `SKIN_DETAIL` level from on-screen size adds shading/highlights to skinned limbs and
+shine to round parts; the original sprite hero gets lighting + catch-lights; Settings → "Character detail when
+zoomed in".
+
+**Measured:** all 21 textures installed; Creative gallery + Terra at 60 FPS; zoomed screenshots show the detail. No errors.
+
+**Left / known:** vehicles, rails and some props still flat-coloured; ragdolls don't get the detail layer.
+
+---
+
 ## Controller support
 
 **Shipped:** 4 gamepads (pads 3-4 borrow CPU slots and hand them back on disconnect), build-mode controls, punch on LT,

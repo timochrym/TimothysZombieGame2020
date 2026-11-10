@@ -40,6 +40,9 @@ function cycleSkin(playerIdx, dir) {
 // Drawing helpers (all coordinates are in a design space where the character box is 80 x 80,
 // origin at the centre, +y downward; everything is scaled by S/80 and drawn onto `ctx`)
 // ---------------------------------------------------------------------------
+// 0..1: how much extra detail to draw (set per character from its on-screen size; big = more detail)
+var SKIN_DETAIL = 0;
+
 function skinSeg(x1, y1, x2, y2, lw, col, flash) {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -49,6 +52,17 @@ function skinSeg(x1, y1, x2, y2, lw, col, flash) {
     ctx.strokeStyle = flash ? "#ffffff" : col;
     ctx.lineWidth = lw;
     ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    if (SKIN_DETAIL > 0 && !flash && typeof col === "string" && col[0] === "#") {
+        // shading: a darker under-edge and a light top-edge highlight along the limb
+        var dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+        if (ny > 0) { nx = -nx; ny = -ny; }
+        ctx.globalAlpha = 0.55 * SKIN_DETAIL;
+        ctx.strokeStyle = Components.shade(col, -45); ctx.lineWidth = lw * 0.35;
+        ctx.beginPath(); ctx.moveTo(x1 - nx * lw * 0.3, y1 - ny * lw * 0.3); ctx.lineTo(x2 - nx * lw * 0.3, y2 - ny * lw * 0.3); ctx.stroke();
+        ctx.strokeStyle = Components.shade(col, 60); ctx.lineWidth = lw * 0.22;
+        ctx.beginPath(); ctx.moveTo(x1 + nx * lw * 0.25, y1 + ny * lw * 0.25); ctx.lineTo(x2 + nx * lw * 0.25, y2 + ny * lw * 0.25); ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
 }
 
 function skinPoly(pts, fill, flash) {
@@ -69,6 +83,19 @@ function skinCirc(x, y, r, fill, flash, outline) {
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fillStyle = flash ? "#ffffff" : fill;
     ctx.fill();
+    if (SKIN_DETAIL > 0 && !flash && r > 3 && typeof fill === "string" && fill[0] === "#") {
+        // round shading + a specular shine on heads, hands and joints
+        ctx.save();
+        ctx.clip();
+        ctx.globalAlpha = 0.35 * SKIN_DETAIL;
+        ctx.fillStyle = Components.shade(fill, -50);
+        ctx.beginPath(); ctx.arc(x + r * 0.35, y + r * 0.4, r, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 0.65 * SKIN_DETAIL;
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath(); ctx.ellipse(x - r * 0.38, y - r * 0.42, r * 0.28, r * 0.17, -0.6, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+    }
     if (outline !== false) {
         ctx.lineWidth = 3;
         ctx.strokeStyle = "#0a0f16";
@@ -86,6 +113,7 @@ function skinLimb(ax, ay, bx, by, bend, lw, col, flash) {
 
 // st: { facing:+1/-1, phase, moving(0..1), air, rising, aimX, aimY (unit, screen space), color, firing, flash, t }
 function drawHeroSkin(skin, cx, cy, S, st) {
+    SKIN_DETAIL = (typeof settings === "undefined" || settings.charDetail !== false) ? Math.max(0, Math.min(1, (S - 70) / 50)) : 0;
     ctx.save();
     ctx.translate(cx, cy);
     var k = S / 80;
@@ -282,6 +310,7 @@ function enemyHand(st, i, nx, ny) {
 }
 
 function drawEnemySkin(skin, cx, cy, S, st) {
+    SKIN_DETAIL = (typeof settings === "undefined" || settings.charDetail !== false) ? Math.max(0, Math.min(1, (S - 70) / 50)) : 0;
     ctx.save();
     ctx.translate(cx, cy);
     var k = S / 80;

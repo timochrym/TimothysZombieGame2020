@@ -11,10 +11,13 @@ Last updated: after Vehicles (backlog B2), during Terra (B3) and controller supp
       LT take back), LT punch, Y vehicles/shops, menus (Arcade, pause, Players/LAN close with B), Siege (stick aim +
       RT fire), Crash Lab (RT uses the tool at the aim point, Select cycles tools), Terra (Select cycles blocks).
 - [ ] Controller: Level Studio has no gamepad editing (mouse/keyboard only); Wobble Wheels P3/P4; button remapping.
-- [ ] **Textures for all the new blocks and stuff** (your request): built pieces (wood/stone/metal), Terra tiles,
-      Stomp Squad blocks/pipes, Bed Brawl islands/beds/pedestals, Crash Lab props, vehicles, rails, carts, bird forts.
-- [ ] **More detailed characters when scaled up** (your request): extra detail layers (outlines, shading, eyes,
-      hands, clothing folds) that switch on when the camera zooms in / characters are big.
+- [x] **Textures for the new blocks** — 21 new pixel textures (textures.js) used by building pieces, Terra tiles,
+      platformer pipes / used blocks, Bed Brawl beds, Siege glass, Crash Lab spikes; all listed in Level Studio.
+- [ ] More textures still to do: vehicles (car body, cart), rails, Bed Brawl pedestals/generators, Wobble Wheels
+      course pieces, Crash Lab lab props, enemies' weapons.
+- [x] **More detailed characters when big** — skinned heroes and enemies get limb shading + highlights and shine on
+      round parts; the original pixel hero gets soft lighting, a rim light and eye catch-lights (Settings toggle).
+- [ ] Character detail still to do: ragdoll bodies (they use their own drawing), hands/feet on the square look.
 
 ## Genre-feel pass (your request: "make each game closer to the game it's trying to be")
 Play and feel like the genre's best, with ORIGINAL look (no copied characters, art style, music or levels):

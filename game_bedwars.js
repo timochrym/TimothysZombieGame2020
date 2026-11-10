@@ -226,7 +226,7 @@ GameModes.register({
         BW.beds = []; BW.gens = []; BW.shops = [];
         for (let t = 0; t < 2; t++) {
             var side = BW_TEAMS[t].side;
-            var bed = Object.addBox(side * 2380, 25, 160, 50, BW_TEAMS[t].color, { name: BW_TEAMS[t].name + " Bed", texture: "solid", kind: "block" });
+            var bed = Object.addBox(side * 2380, 25, 160, 50, BW_TEAMS[t].color, { name: BW_TEAMS[t].name + " Bed", texture: t === 0 ? "wool_red" : "wool_blue", kind: "block" });
             bed.buildHP = bed.buildMaxHP = 160; bed.isBed = true; bed.bedTeam = t;
             BW.beds[t] = bed;
             BW.gens[t] = { x: side * 3050, y: 0, team: t, t: 0, kinds: ["iron", "gold"] };

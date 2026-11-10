@@ -1827,6 +1827,23 @@ class Character {
             // Hero: bright visor with eyes, belt stripe in player colour and gun barrel
             var accent = this.accent();
             this.drawSprite(characterImg, x, y, w, h, r, this.playerIndex === 1 ? "#2f8cff" : null);
+            // big on screen: soft lighting, rim light and eye catch-lights so the pixel face doesn't look flat
+            var det = (typeof settings === "undefined" || settings.charDetail !== false) ? Math.max(0, Math.min(1, (w - 90) / 60)) : 0;
+            if (det > 0 && !flash) {
+                ctx.save();
+                this.roundRectPath(x, y, w, h, r); ctx.clip();
+                var lg = ctx.createLinearGradient(x, y, x + w, y + h);
+                lg.addColorStop(0, "rgba(255,255,255," + (0.16 * det).toFixed(3) + ")");
+                lg.addColorStop(0.55, "rgba(255,255,255,0)");
+                lg.addColorStop(1, "rgba(0,0,0," + (0.28 * det).toFixed(3) + ")");
+                ctx.fillStyle = lg; ctx.fillRect(x, y, w, h);
+                ctx.globalAlpha = 0.9 * det; ctx.fillStyle = "#ffffff";
+                var ex = facing >= 0 ? [0.27, 0.66] : [0.29, 0.68];
+                for (let e = 0; e < 2; e++) ctx.fillRect(x + w * ex[e], y + h * 0.43, Math.max(2, w * 0.035), Math.max(2, h * 0.035));
+                ctx.globalAlpha = 0.5 * det; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = Math.max(1.5, w * 0.012);
+                ctx.beginPath(); ctx.moveTo(x + r, y + 2); ctx.lineTo(x + w - r, y + 2); ctx.moveTo(x + 2, y + r); ctx.lineTo(x + 2, y + h * 0.5); ctx.stroke();
+                ctx.restore();
+            }
             ctx.fillStyle = accent;
             ctx.fillRect(x + 2, y + h * 0.66, w - 4, h * 0.10);
             // headband tail

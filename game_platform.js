@@ -34,7 +34,7 @@ var PLAT_CHAIN = [100, 200, 400, 800, 1000, 2000, 4000, 8000];
 var PK = {
     theme: { ground: "#7f4f24", groundTex: "grass_dirt", block: "#9e3b24", blockTex: "brick", pipe: "#16a34a" },
     ground: function(x0, x1, top) { top = top || 0; return { type: "box", name: "Ground", x: (x0 + x1) / 2, y: (top - 1600) / 2, w: x1 - x0, h: top + 1600, color: PK.theme.ground, texture: PK.theme.groundTex, kind: "block" }; },
-    pipe: function(x, h) { return { type: "box", name: "Pipe", x: x, y: h / 2, w: 120, h: h, color: PK.theme.pipe, texture: "solid", kind: "block" }; },
+    pipe: function(x, h) { return { type: "box", name: "Pipe", x: x, y: h / 2, w: 120, h: h, color: PK.theme.pipe, texture: "pipe_green", kind: "block" }; },
     solid: function(x0, x1, top, h) { h = h || 80; return { type: "box", name: "Block", x: (x0 + x1) / 2, y: top - h / 2, w: x1 - x0, h: h, color: PK.theme.block, texture: PK.theme.blockTex, kind: "block" }; },
     plat: function(x0, x1, top) { return { type: "box", name: "Platform", x: (x0 + x1) / 2, y: top - 15, w: x1 - x0, h: 30, color: "#8b6b4a", texture: "dojo_wood", kind: "platform" }; },
     // staircase of solid columns starting at x0; dir 1 = climbs to the right, -1 = descends

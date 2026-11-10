@@ -3,7 +3,7 @@
 // ============================================================================
 
 // ---- Persisted player settings (Pause menu -> Settings) ----
-var settings = { volume: 0.6, shake: 1, hitStop: true, hiDPI: true, glow: true, squareChars: false, view3d: false, heroSpeed: "normal", fx: "calm", ricochet: 0 };
+var settings = { volume: 0.6, shake: 1, hitStop: true, hiDPI: true, glow: true, squareChars: false, view3d: false, heroSpeed: "normal", fx: "calm", ricochet: 0, charDetail: true };
 try {
     var savedSettings = JSON.parse(localStorage.getItem("timsZombieGameSettings") || "null");
     if (savedSettings) {
@@ -16,6 +16,7 @@ try {
         if (typeof savedSettings.view3d === "boolean") settings.view3d = savedSettings.view3d;
         if (["normal", "fast", "turbo"].indexOf(savedSettings.heroSpeed) !== -1) settings.heroSpeed = savedSettings.heroSpeed;
         if (savedSettings.fx === "full" || savedSettings.fx === "calm") settings.fx = savedSettings.fx;
+        if (typeof savedSettings.charDetail === "boolean") settings.charDetail = savedSettings.charDetail;
         if (typeof savedSettings.ricochet === "number") settings.ricochet = Math.max(0, Math.min(3, savedSettings.ricochet));
     }
 } catch (e) {}

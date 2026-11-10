@@ -25,6 +25,8 @@ var TILES = [
     ["planks", "#b07a3c", true, 22, "planks"],
     ["brick", "#9e3b24", true, 45, "brick"]
 ];
+// texture per tile id (textures.js)
+var TERRA_TEX = [null, "tex_dirt", "grass_top", "stone_raw", "ore_coal", "ore_iron", "ore_gold", "log", "leaves", "sand", "bedrock", "wood_plank", "brick"];
 var TERRA_PLACEABLE = ["dirt", "stone", "sand", "planks", "brick", "wood", "coal", "iron", "gold"];
 var TILE_ID = {}; TILES.forEach(function(t, i) { TILE_ID[t[0]] = i; });
 
@@ -258,11 +260,12 @@ GameModes.register({
                     continue;
                 }
                 var t = TILES[id];
-                ctx.fillStyle = t[1];
                 var sx = wsx(terraCX(cc) - T / 2);
-                ctx.fillRect(sx, sy, sz, sz);
-                // a little texture: lighter top edge, ore flecks, depth darkening
-                if (k > 0.25) {
+                var texName = TERRA_TEX[id], tex = texName && TextureManager.canvases ? TextureManager.canvases[texName] : null;
+                if (tex && k > 0.15) { ctx.imageSmoothingEnabled = false; ctx.drawImage(tex, sx, sy, sz, sz); }
+                else { ctx.fillStyle = t[1]; ctx.fillRect(sx, sy, sz, sz); }
+                // flat-colour fallback detail when zoomed far out
+                if (!tex && k > 0.25) {
                     if (id === TILE_ID.grass) { ctx.fillStyle = "#6fbf4a"; ctx.fillRect(sx, sy, sz, sz * 0.25); }
                     else if (id >= TILE_ID.coal && id <= TILE_ID.gold) { ctx.fillStyle = id === TILE_ID.coal ? "#111827" : (id === TILE_ID.iron ? "#e7c9a9" : "#fde047"); ctx.fillRect(sx + sz * 0.2, sy + sz * 0.25, sz * 0.22, sz * 0.22); ctx.fillRect(sx + sz * 0.58, sy + sz * 0.55, sz * 0.2, sz * 0.2); }
                     else if (id === TILE_ID.planks || id === TILE_ID.brick) { ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fillRect(sx, sy + sz * 0.48, sz, 1.5); }

@@ -17,9 +17,9 @@ var BUILD_PIECES = [
     { id: "ramp", label: "Ramp", icon: "◢", w: 160, h: 160, cost: 15 }
 ];
 var BUILD_MATS = [
-    { id: "wood", label: "Wood", hp: 60, tex: "crate_plank", color: "#a16207" },
-    { id: "stone", label: "Stone", hp: 150, tex: "castle_stone", color: "#64748b" },
-    { id: "metal", label: "Metal", hp: 280, tex: "lab_metal", color: "#94a3b8" }
+    { id: "wood", label: "Wood", hp: 60, tex: "wood_plank", color: "#a16207" },
+    { id: "stone", label: "Stone", hp: 150, tex: "stone_block", color: "#64748b" },
+    { id: "metal", label: "Metal", hp: 280, tex: "metal_plate", color: "#94a3b8" }
 ];
 
 var Build = {

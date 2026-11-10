@@ -332,7 +332,7 @@ GameModes.register({
             var o = movingObjects[i], m = siegeSave.birds ? SIEGE_MATS[o.name] : null;
             if (!m) { o.sgHP = undefined; continue; }
             o.sgHP = o.sgMax = m.hp; o.sgMat = m.name; o._sgCd = 90;
-            if (m.name === "glass") { o.color = "#93c5fd"; o.texture = "solid"; }
+            if (m.name === "glass") { o.color = "#93c5fd"; o.texture = "glass"; }
         }
     },
 

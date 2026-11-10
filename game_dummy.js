@@ -128,7 +128,7 @@ GameModes.register({
             if (typeof SFX !== "undefined") SFX.play("explode", cx, cy, 0.6, 1.4);
         }
         else if (t === "pad") { Object.addBumper(Math.round(wx / 40) * 40, Math.round(wy / 40) * 40, 200, 40, 32, "#ff2e63", { name: "Bounce Pad" }); rebuildAllObjects(); }
-        else if (t === "spike") { var s = Object.addBox(Math.round(wx / 40) * 40, Math.round(wy / 40) * 40, 160, 40, "#94a3b8", { name: "Spike Block", texture: "solid", kind: "block" }); s.isSpike = true; Dummy.spikes.push(s); rebuildAllObjects(); }
+        else if (t === "spike") { var s = Object.addBox(Math.round(wx / 40) * 40, Math.round(wy / 40) * 40, 160, 40, "#94a3b8", { name: "Spike Block", texture: "hazard", kind: "block" }); s.isSpike = true; Dummy.spikes.push(s); rebuildAllObjects(); }
         else if (t === "weight") { var w = Object.addCrate(wx, wy + 700, 120, "#1f2937", { name: "Heavy Weight", texture: "solid", bounciness: -0.05 }); w.yspeed = -6; rebuildAllObjects(); }
         else if (t === "ball") {
             var top = (levelBounds ? levelBounds.topY : 2000) - 40;
