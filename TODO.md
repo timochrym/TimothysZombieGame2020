@@ -87,7 +87,10 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - [x] B4 — Powder toy (falling sand) → **Sand Lab**: sand, water, wall, fire, oil, plant, lava, stone, steam, wood +
       eraser; lava+water → stone & steam, fire spreads through oil/plants/wood, plants grow into water, steam rains back
       down; brush size, pause, fast-forward, save/load. Next: more elements (acid, ice, gunpowder, seeds), gamepad cursor.
-- [ ] B4 — 2-player minigame pack (GamePigeon-style), led by tabletop flick soccer (the Plato Android one).
+- [~] B4 — 2-player minigame pack → **Table Games**: Flick Soccer (5 discs a side, drag-back flicks, posts, goals, first
+      to 3, CPU that picks the best disc/angle, keyboard/pad aiming) and Four in a Row (minimax CPU, 3 skills), vs CPU or
+      pass-and-play. STILL TO DO: more minigames (air hockey, pool-style cue game, darts, word grid, tanks artillery),
+      online/LAN turns.
 
 ## Known issues / polish found while building (from RETROS.md)
 - Pathfinding: "60 FPS with 60+ enemies" met for the JS budget, not in headless software rendering; frontier pathing ~1 ms.

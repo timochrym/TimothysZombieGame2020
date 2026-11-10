@@ -20,6 +20,7 @@ var HUB_ICONS = {
     cells: { s: ["..........", "...pppp...", "..pppppp..", ".pp.pp.pp.", ".pppppppp.", ".pppppppp.", "..pppppp..", "...pppp.gg", "........gg", "..........."], p: { p: "#a78bfa", g: "#4ade80" } },
     tanks: { s: ["..........", "..........", "....gggggg", "..bbbggggg", ".bbbbbb...", ".bbbbbb...", ".bbbbbb...", "..bbbb....", "..........", ".........."], p: { b: "#60a5fa", g: "#94a3b8" } },
     jetpack: { s: ["..........", "...ff.....", "..gfff....", "..gfff....", "..gfff....", "..g.ff....", "..o.......", ".ooo......", "..o.......", ".........."], p: { f: "#ff5a5f", g: "#64748b", o: "#fb923c" } },
+    table: { s: ["gggggggggg", "gw......wg", "gw..ww..wg", "g.r....b.g", "g...ow...g", "g.r....b.g", "gw..ww..wg", "gw......wg", "gggggggggg", ".........."], p: { g: "#22c55e", w: "#f8fafc", r: "#ef4444", b: "#3b82f6", o: "#0a0f16" } },
     race: { s: ["pkwkwkwk..", "pwkwkwkw..", "pkwkwkwk..", "pwkwkwkw..", "p.........", "p.........", "p.........", "p.........", "p.........", "pp........"], p: { p: "#e5e7eb", k: "#111827", w: "#f8fafc" } }
 };
 

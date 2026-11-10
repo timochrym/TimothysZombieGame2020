@@ -6,6 +6,27 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Table Games (new game, B4 — 2-player minigame pack)
+
+**Shipped:** `game_table.js` (ownScreen) with two original tabletop games, picked in the pause menu (Game / Opponent /
+CPU skill). **Flick Soccer**: a felt pitch on a wooden table, five discs a side; on your turn press a disc, drag back
+and let go to flick (dashed aim line + pull line); real circle physics (mass, restitution, friction, goal posts,
+open goal mouths); a goal resets the formation and the side that conceded kicks off; first to 3. Keyboard / pad
+alternative: Tab / L1 picks a disc, A/D turns the aim, W/S power, Space shoots. The CPU scores every disc: contact
+point behind the ball toward the goal, how straight the cut is, distance and blockers, plus skill noise.
+**Four in a Row**: drop counters (click or ←/→ + Space), winning line highlighted; CPU = alpha-beta minimax (depth
+1 / 4 / 6 by skill, a heuristic that counts open twos and threes and likes the centre). Pass-and-play for both.
+
+**Measured:** a human flick reached x 484 on the ball; the CPU answered with its own flick; a forced goal scored 1-0;
+the hard Four in a Row CPU blocks an open three; hard search ≈ 130 ms per move.
+
+**Went wrong:** pucks rolled for ~5 s per turn → more table friction. The hover counter hid behind the turn banner →
+board moved down.
+
+**Left / known:** more minigames (air hockey, cue game, darts, artillery), LAN turns (TODO.md).
+
+---
+
 ## Jet Dash (new game, B4 — jetpack runner)
 
 **Shipped:** `game_jetpack.js` (ownScreen): an original lab-corridor runner. You run right on your own (7 → 17 px/frame
