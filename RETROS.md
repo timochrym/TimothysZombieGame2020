@@ -6,6 +6,25 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Jet Dash (new game, B4 — jetpack runner)
+
+**Shipped:** `game_jetpack.js` (ownScreen): an original lab-corridor runner. You run right on your own (7 → 17 px/frame
+over distance); hold Space / W / click (pads: A / RT) to thrust, let go to fall. Hazards: electric zappers (single bars
+at four angles, some spinning, and two-bar gates), missiles that lock onto your height behind a blinking "!" and then
+streak across, and laser beams that show a dashed charge line and then fire across the corridor (sometimes in pairs).
+Coin ribbons and sprinkles, a rare shield bubble that saves you once. Death = a tumble and skid, then a results card
+(distance, cause, coins, banked total, best). P2 flies the same run on ↑ / Enter.
+
+**Measured:** an autopilot test survived 685 m and grabbed 19 coins; restart after death works; 60 FPS.
+
+**Went wrong:** (1) dying didn't end the run — the "everyone dead?" check ran before that frame's collisions → moved
+to the end of the step. (2) Missiles parked at `cssW` (screen pixels) in a world that is scaled → uses the scaled
+corridor width. (3) The P1/P2 labels were scaled twice.
+
+**Left / known:** coin shop, rideable vehicles, missions (TODO.md).
+
+---
+
 ## Tank Arena (new game, B4 — diep-style)
 
 **Shipped:** `game_tanks.js` (ownScreen): a 6000² arena with 240 drifting shapes (yellow squares, red triangles,

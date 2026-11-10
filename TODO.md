@@ -78,7 +78,10 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       food, head-into-body kills and bursts into pellets, 11 CPU worms that hunt food and cut smaller worms off,
       leaderboard, minimap, best length, local P2 (shared zooming camera), pads. Next: LAN, skins, team mode.
 - [ ] B4 — Word sandbox (scribblenauts-style): type a noun, it appears with sensible behaviour.
-- [ ] B4 — Endless jetpack runner (jetpack-joyride-style): hold to fly, dodge lasers/missiles, coins.
+- [x] B4 — Endless jetpack runner → **Jet Dash**: hold to fly, speeds up over distance, zappers (static, gates,
+      spinning), missiles that lock on behind a blinking ! warning, laser beams that charge then fire, coin ribbons,
+      shield bubble, best distance + banked coins, local P2 on the same run, pads. Next: a coin shop (outfits,
+      jetpack styles), vehicles to ride, daily missions.
 - [ ] B4 — Board party (mario-party-style): dice board + quick minigames between turns, stars/coins.
 - [ ] B4 — Property board game (monopoly-style, original): buy, trade, build, rent.
 - [x] B4 — Powder toy (falling sand) → **Sand Lab**: sand, water, wall, fire, oil, plant, lava, stone, steam, wood +
