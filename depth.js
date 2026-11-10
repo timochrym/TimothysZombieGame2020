@@ -26,7 +26,7 @@ var Depth = {
         var faces = [];
         for (let i = 0; i < list.length; i++) {
             var o = list[i];
-            if (!o || o.dead || o.noCollide) continue;
+            if (!o || o.dead || o.noCollide || o.invisible) continue;
             var P = this.screenPoly(o);
             if (!P) continue;
             // cull off-screen

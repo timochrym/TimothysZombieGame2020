@@ -241,7 +241,7 @@ function enforceContainment() {
         // Heroes: remember the last safe standing spot, and rescue them if they ever fall beneath the world
         if (c.isPlayer && !brawl.active) {
             if (c.onGround && c.y > -1250) { c.lastSafeX = c.x; c.lastSafeY = c.y; }
-            if (c.y < -1350 && c.lastSafeX !== undefined) {
+            if (c.y < -1350 && c.lastSafeX !== undefined && !GameModes.flag("deepWorld", false)) {
                 c.x = c.lastSafeX;
                 c.y = c.lastSafeY + 60;
                 c.xspeed = c.yspeed = 0;
@@ -249,7 +249,7 @@ function enforceContainment() {
                 Components.addFloatingText("RESCUED!", c.x, c.y + 90, "#7ff0ff", 20);
             }
         }
-        if (c.y < -1700 && !c.isPlayer) {
+        if (c.y < -1700 && !c.isPlayer && !GameModes.flag("deepWorld", false)) {
             // fell through the world: put the enemy back on the battlefield near a hero
             var anchor = redGuy;
             for (let h = 0; h < characters.length; h++) if (!characters[h].isZombie) anchor = characters[h];

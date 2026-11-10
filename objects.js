@@ -380,7 +380,7 @@ class Object {
     }
 
     staticObject() {
-        if (this.dead) return;
+        if (this.dead || this.invisible) return;
         if (this.isInfiniteBase && typeof cameraTargetX !== "undefined") {
             this.x = Math.round(cameraTargetX / 960) * 960 + (this.baseOffsetX || 0);
         }

@@ -297,7 +297,7 @@ var Ragdolls = {
                 else rd.sleepFrames = 0;
             }
             // fell out of the world
-            if (rd.centerY() < -3300) { this.remove(rd); continue; }
+            if (rd.centerY() < (GameModes.flag("deepWorld", false) ? -9000 : -3300)) { this.remove(rd); continue; }
         }
         this.interact();
     },
