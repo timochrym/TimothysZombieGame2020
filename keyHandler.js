@@ -76,7 +76,7 @@ function keyDownHandler(e) {
     if (e.repeat) return;
 
     if (c == "KeyV") { if (typeof SummonManager !== "undefined") SummonManager.toggleGodMode(); }
-    if (c == "KeyB") { if (typeof SummonManager !== "undefined") SummonManager.togglePanel(); }
+    if (c == "KeyB") { if (typeof Studio !== "undefined") Studio.toggle(); else if (typeof SummonManager !== "undefined") SummonManager.togglePanel(); }
     if (c == "KeyP") { if (typeof Pathfinder !== "undefined") Pathfinder.showDebug = !Pathfinder.showDebug; }
     if (c == "KeyH") { devOpts.showHelp = !devOpts.showHelp; helpTimer = devOpts.showHelp ? 60 * 14 : 0; }
     if (k == "Delete" || k == "Backspace") {

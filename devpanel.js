@@ -564,7 +564,8 @@ SummonManager.buildUI = function() {
     mk("god-mode-btn", "⚡ God Mode [V]", "Invincible + unlimited everything", function() { SummonManager.toggleGodMode(); DevUI.sync(); }, true);
     mk("lan-btn", "📡 LAN", "Local network multiplayer: host or join a game on the same Wi-Fi", function() { NetUI.open(); });
     mk("", "🕹 Arcade", "Switch to another game made with this engine", function() { if (typeof paused !== "undefined" && paused) closePause(); Hub.openHub(false); });
-    mk("summon-toggle-btn", "🛠️ Dev Mode [B]", "Open the developer tools", function() { SummonManager.togglePanel(); });
+    mk("studio-btn", "🛠️ Level Studio [B]", "Level editor: build, test and share levels for every game", function() { Studio.open(); });
+    mk("summon-toggle-btn", "🧪 Cheats", "Cheats & tuning panel (god mode, sliders, spawning)", function() { SummonManager.togglePanel(); });
     document.body.appendChild(topBar);
 
     // ---------- Bottom palette dock ----------
@@ -854,7 +855,7 @@ SummonManager.togglePanel = function() {
         dock.classList.add("open");
         godBtn.style.display = "inline-block";
         devBtn.classList.add("active");
-        devBtn.innerHTML = "🛠️ Dev Mode: ON [B]";
+        devBtn.innerHTML = "🧪 Cheats: ON";
         this.refreshLevelDropdown();
         this.refreshObjectList();
         DevUI.sync();
@@ -863,7 +864,7 @@ SummonManager.togglePanel = function() {
         dock.classList.remove("open");
         if (!godMode) godBtn.style.display = "none";
         devBtn.classList.remove("active");
-        devBtn.innerHTML = "🛠️ Dev Mode [B]";
+        devBtn.innerHTML = "🧪 Cheats";
         this.showGrid = false;
         this.setToolMode("shoot");
     }

@@ -6,6 +6,33 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Level Studio — ROADMAP section 5 (and the "dev improvement" request)
+
+**Shipped:** `studio.js` replaces the dev screen and the drag-out dock. Frozen world with a free camera (right/middle
+drag or WASD, wheel zoom at the cursor), palette by category (terrain, stairs/slopes/slides, pads & crates, all 17
+gadgets, 16 enemy types, every power-up, P1/P2 starts), select / shift-select / box-select / drag-move / resize
+handles / rotate / flip / duplicate / delete / copy-paste / 120-step undo-redo / arrow nudges / grid snap with sizes.
+The inspector edits every property (textures, kinds, door ids and links, sign text, enemy type, portalable…).
+Level settings: name, which game's rules apply, waves. Save / load / delete, JSON export and import, autosave,
+"Edit current level". Play-test runs the document under the chosen game; exits and goal poles bring you back with
+the document unchanged. The old cheats/tuning panel is still one click away.
+
+**Measured (scripted headless run):** place 3 pieces, drag-move (+520, +160), set width 800 in the inspector,
+undo → 480, redo → 800, Ctrl+D → +1, Delete → −1, add an enemy and an exit, save (shows in the level list),
+play-test (hero + enemy spawned, simulation running), touch the exit → back in the editor with an identical document,
+B → back to Overworld Arena. No errors.
+
+**Went wrong (caught by the test):**
+- Keyboard focus stayed in the inspector after editing a number, so Ctrl+Z / Ctrl+D / Delete edited the text box.
+  Fields now hand focus back, and clicking the world does too.
+- Zombie Survival never loaded level gadgets at all, so the exit vanished in play-test. Fixed in the engine:
+  any level's gadgets now load in any game.
+
+**Left / known:** no multi-level "campaign" building yet; mover end points are edited as numbers (dx2/dy2), not dragged;
+no thumbnails in the Load list.
+
+---
+
 ## Stomp Squad platformer — ROADMAP section 4
 
 **Shipped:** `game_platform.js` + new engine gadgets (? block, brick, coin, goal pole) and hooks (`canShoot`, `canBreak`,

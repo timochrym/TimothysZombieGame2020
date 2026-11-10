@@ -165,6 +165,17 @@ Platform gadgets (used by Stomp Squad, available to any game and the editor): `q
 - **Saving**: each game keeps its own `localStorage` key (`timsCrateLab`, `timsPortalLab`,
   `timsZombieBallCfg`, `timsParkourRush`, `timsRagdollSiege`).
 
+## Level Studio (`studio.js`)
+
+B (or the 🛠 button / pause menu) opens the editor; the old developer panel lives on as **🧪 Cheats & tuning**.
+The document `{ name, mode, waves, ents }` is the source of truth; each entity has `cat`: `layout` (Object.loadMap
+format), `gadget` (Gadgets format; movers store `dx2/dy2` relative to their start), `enemy` `{ power }`, `item`
+`{ power }`, `spawn` `{ player }`. `Studio.docToDef(doc)` turns it into a normal level definition (with `studioSpawns`
+for enemies/items, spawned by `Studio.afterReset()` at the end of `resetGame`). Saving also registers the level in
+`LevelManager.customLevels`, so it shows up in the level list. While editing, `simFrozen` is true and `tick()` calls
+`Studio.tick()` instead of `frame()`. During play-test, exits and goal poles return to the editor.
+`createMap()` now loads a level's `gadgets` for any game whose `setupLevel` didn't.
+
 ## LAN multiplayer (`server.js` + `net.js`)
 
 - **Run it:** `node server.js` (no npm packages; `node server.js 3000` for another port). It serves the game and prints

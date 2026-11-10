@@ -267,6 +267,7 @@ var Gadgets = {
                     }
                 } else if (g.type === "exit") {
                     if (!g.done && Math.abs(c.x - g.x) < 70 && bot >= g.y - 10 && bot < g.y + 150) {
+                        if (typeof Studio !== "undefined" && Studio.playtesting) { Studio.endPlaytest("🏁 Exit reached — back in the editor"); return; }
                         g.done = true;
                         if (typeof SFX !== "undefined") SFX.play("levelup", g.x, g.y);
                         GameModes.call("onExit", c, g);
@@ -284,6 +285,7 @@ var Gadgets = {
                     }
                 } else if (g.type === "goalpole") {
                     if (!g.done && Math.abs(c.x - g.x) < hw + 16 && bot > g.y - 20 && bot < g.y + g.h + 60) {
+                        if (typeof Studio !== "undefined" && Studio.playtesting) { Studio.endPlaytest("🎌 Goal reached — back in the editor"); return; }
                         g.done = true;
                         var frac = Math.max(0, Math.min(1, (bot - g.y) / g.h));
                         g.grabY = Math.max(0, bot - g.y);

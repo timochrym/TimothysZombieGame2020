@@ -95,7 +95,7 @@ Platformer rules:
   stomps.
 - 3 levels with a midpoint checkpoint and a goal. Flags: airJumps 0, dash false, wallJump true.
 
-### 5. Level Studio
+### 5. Level Studio [DONE] (studio.js — B or 🛠 Level Studio)
 Replaces the weak dev screen and the bottom drag-out dock (#mario-maker-dock / SummonManager).
 It is a full editor:
 - The simulation freezes while editing: add a simFrozen flag around the update half of frame(),

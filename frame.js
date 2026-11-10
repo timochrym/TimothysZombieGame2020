@@ -64,6 +64,8 @@ function createMap() {
         levelBounds = { minX: lw.x + lw.w / 2, maxX: rw.x - rw.w / 2, topY: lw.y + lw.h / 2 - 40, floorY: -1500 };
     }
     GameModes.call("setupLevel", currentLvl);
+    // games that don't load gadgets themselves still get the level's gadgets (Level Studio levels in Survival etc.)
+    if (currentLvl && currentLvl.gadgets && currentLvl.gadgets.length && typeof Gadgets !== "undefined" && Gadgets.list.length === 0) Gadgets.load(currentLvl.gadgets);
     if (currentLvl && currentLvl.isProcedural && typeof WorldGenerator !== "undefined") {
         WorldGenerator.reset();
         WorldGenerator.update(0);
@@ -504,6 +506,7 @@ function resetGame() {
         SummonManager.refreshObjectList();
     }
     GameModes.call("onReset");
+    if (typeof Studio !== "undefined") Studio.afterReset();
 }
 
 // Partner revive: hold your interact key next to a fallen (undead) teammate
@@ -1200,7 +1203,9 @@ function pauseItems() {
         if (!pauseFromGameOver) items.push({ id: "restart", label: "Restart run", hint: "Asks for confirmation" });
     }
     items.push({ id: "settings", label: "Settings  ▸", hint: "Sound, screen shake, hit-stop, graphics, help" });
-    items.push({ id: "dev", label: "Developer Mode panel", hint: "Same as pressing B" });
+    if (typeof Studio !== "undefined" && Studio.playtesting) items.unshift({ id: "studio_back", label: "◀ Back to Level Studio", hint: "Your level is unchanged ( ` )" });
+    items.push({ id: "dev", label: "🛠 Level Studio (editor)", hint: "Same as pressing B" });
+    items.push({ id: "cheats", label: "Cheats & tuning panel", hint: "God mode, sliders, spawning" });
     return items;
 }
 
@@ -1242,7 +1247,9 @@ function pauseActivate(id, dir) {
         else { var key = pauseLevelKeys[pauseLevelIdx]; closePause(); LevelManager.selectLevel(key); }
     }
     else if (id === "help") { devOpts.showHelp = !devOpts.showHelp; helpTimer = devOpts.showHelp ? 60 * 14 : 0; }
-    else if (id === "dev") { closePause(); if (!SummonManager.isOpen) SummonManager.togglePanel(); }
+    else if (id === "dev") { closePause(); Studio.open(); }
+    else if (id === "cheats") { closePause(); if (!SummonManager.isOpen) SummonManager.togglePanel(); }
+    else if (id === "studio_back") { closePause(); Studio.endPlaytest(); }
 }
 
 function pauseKey(e) {
@@ -1342,6 +1349,7 @@ var lowFpsSeconds = 0;
 function tick() {
     if (typeof Pads !== "undefined") Pads.poll();
     if (typeof Net !== "undefined" && Net.role === "client") { Net.clientTick(); return; }
+    if (typeof Studio !== "undefined" && Studio.isOpen) { Studio.tick(); return; }
     if (typeof Hub !== "undefined" && Hub.isOpen) { Hub.draw(); if (typeof Net !== "undefined") Net.hostIdle(); return; }
     if (paused) { drawPauseMenu(); return; }
     if (hitStopFrames > 0) { hitStopFrames--; return; }   // impact freeze: hold the last image
