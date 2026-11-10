@@ -15,6 +15,10 @@
 //   cracked    { x, y, w, h }                                 breakable wall: explosions destroy it
 //   star       { x, y }                                       collectible (mode reads Gadgets.starsGot)
 //   sign       { x, y(bottom), text }                         tutorial sign (text shows when a hero is near)
+//   qblock     { x, y, item: coin|power|coins5|star|life }    ? block: hit from below -> mode.onBlockHit(ch, g) (default: a coin)
+//   brick      { x, y, item? }                                breaks when mode.canBreak(ch) says so (default yes), else bumps
+//   coin       { x, y }                                       floating coin -> mode.onCoin(ch, g)
+//   goalpole   { x, y(bottom), h }                            grab it: mode.onGoal(ch, g, heightFraction 0..1), then onExit
 // ============================================================================
 
 // ---- Tiny pixel-art renderer (keeps the retro look consistent across games) ----
@@ -85,6 +89,15 @@ var Gadgets = {
             g.progress = 0;
             if (g.type === "mover") { g.ax = g.x; g.ay = g.y; g.t = 0; g.dir = 1; g.speed = g.speed || 3; }
         }
+        if (g.type === "qblock" || g.type === "brick") {
+            g.w = g.w || 80; g.h = g.h || 80;
+            g.obj = Object.addBox(g.x, g.y, g.w, g.h, g.type === "qblock" ? "#f59e0b" : "#b0462d",
+                { name: g.type === "qblock" ? "? Block" : "Brick", texture: g.type === "qblock" ? "question_gold" : "brick", kind: "block" });
+            g.obj.gadget = g;
+            g.baseY = g.y; g.bump = 0;
+            if (g.item === "coins5") g.hitsLeft = 5;
+        }
+        if (g.type === "goalpole") { g.h = g.h || 640; g.flagY = g.h - 40; }
         if (g.type === "star") this.starsTotal++;
         if (g.id) this.byId[g.id] = g;
         this.list.push(g);
@@ -260,6 +273,24 @@ var Gadgets = {
                     }
                 } else if (g.type === "switch") {
                     if (Math.abs(c.x - g.x) < 110 && Math.abs(bot - g.y) < 120 && pressedOnce(c, "sw" + i, !!c.abilityPressed)) this.toggle(g);
+                } else if ((g.type === "qblock" || g.type === "brick") && !g.broken) {
+                    // head-butt from below: was rising last tick, now stopped by the block's underside
+                    var head = c.y + hh, under = g.obj.y - g.h / 2;
+                    if (Math.abs(c.x - g.x) < g.w / 2 + hw * 0.45 && head > under - 10 && head < under + 14 && (c._vyPrev || 0) > 1 && c.yspeed <= 0.5) this.hitBlock(g, c);
+                } else if (g.type === "coin") {
+                    if (!g.taken && Math.abs(c.x - g.x) < hw + 22 && Math.abs(c.y - g.y) < hh + 26) {
+                        g.taken = true;
+                        if (!GameModes.call("onCoin", c, g)) { Components.addFloatingText("+1", g.x, g.y + 40, "#ffd23f", 16); if (typeof SFX !== "undefined") SFX.play("coin", g.x, g.y); }
+                    }
+                } else if (g.type === "goalpole") {
+                    if (!g.done && Math.abs(c.x - g.x) < hw + 16 && bot > g.y - 20 && bot < g.y + g.h + 60) {
+                        g.done = true;
+                        var frac = Math.max(0, Math.min(1, (bot - g.y) / g.h));
+                        g.grabY = Math.max(0, bot - g.y);
+                        if (typeof SFX !== "undefined") SFX.play("levelup", g.x, g.y);
+                        GameModes.call("onGoal", c, g, frac);
+                        GameModes.call("onExit", c, g);
+                    }
                 }
             }
             if (g.type === "switch") {
@@ -269,7 +300,50 @@ var Gadgets = {
                 }
             }
             if (g.type === "fan") this.applyFan(g);
+            if ((g.type === "qblock" || g.type === "brick") && g.obj && !g.broken) {
+                if (g.bump > 0) { g.bump--; g.obj.y = g.baseY + Math.sin((10 - g.bump) / 10 * Math.PI) * 14; }
+                else g.obj.y = g.baseY;
+            }
+            if (g.type === "goalpole" && g.done && g.flagY > (g.grabY || 0)) g.flagY = Math.max(g.grabY || 0, g.flagY - 9);
         }
+        for (let j = 0; j < characters.length; j++) characters[j]._vyPrev = characters[j].yspeed;
+    },
+
+    hitBlock: function(g, c) {
+        if (g.bump > 0) return;
+        g.bump = 10;
+        var top = g.baseY + g.h / 2;
+        // anything standing on the block gets knocked off
+        for (let z = 0; z < zombies.length; z++) {
+            var zz = zombies[z];
+            if (!zz.dead && Math.abs(zz.x - g.x) < g.w / 2 + zz.s1 / 2 && Math.abs((zz.y - zz.s2 / 2) - top) < 16) zz.takeDamage(-999, (zz.x > g.x ? 4 : -4), 10, c);
+        }
+        if (g.type === "brick") {
+            var big = GameModes.has("canBreak") ? GameModes.call("canBreak", c) : true;
+            if (g.item && !g.used) { g.used = true; g.type = "qblock"; g.obj.texture = "solid"; g.obj.color = "#8b5a2b"; GameModes.call("onBlockHit", c, g); return; }
+            if (!big) { if (typeof SFX !== "undefined") SFX.play("ui", g.x, g.y); return; }
+            g.broken = true;
+            g.obj.dead = true;
+            var idx = staticObjects.indexOf(g.obj);
+            if (idx !== -1) staticObjects.splice(idx, 1);
+            for (let k = 0; k < 8; k++) particles.push({ x: g.x + (Math.random() - 0.5) * g.w, y: g.y + (Math.random() - 0.5) * g.h, w: 22, h: 22, xspeed: (Math.random() - 0.5) * 14, yspeed: 8 + Math.random() * 10, poly: Math.makeHitbox(22, 22), color: "#b0462d", life: 50 });
+            if (typeof SFX !== "undefined") SFX.play("explode", g.x, g.y, 0.5, 1.6);
+            GameModes.call("onBrickBreak", c, g);
+            if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            if (typeof Pathfinder !== "undefined" && Pathfinder.invalidateRect) Pathfinder.invalidateRect(g.x, g.y, g.w, g.h);
+            return;
+        }
+        if (g.used) { if (typeof SFX !== "undefined") SFX.play("ui", g.x, g.y); return; }
+        if (g.item === "coins5" && --g.hitsLeft > 0) { GameModes.call("onBlockHit", c, g) || this.popCoin(g); return; }
+        g.used = true;
+        g.obj.texture = "solid"; g.obj.color = "#8b5a2b";
+        if (!GameModes.call("onBlockHit", c, g)) this.popCoin(g);
+    },
+
+    popCoin: function(g) {
+        Components.addFloatingText("+1 🪙", g.x, g.baseY + g.h / 2 + 60, "#ffd23f", 18);
+        Components.spawnSparks(g.x, g.baseY + g.h / 2 + 20, "#ffd23f", 6);
+        if (typeof SFX !== "undefined") SFX.play("coin", g.x, g.y);
     },
 
     toggle: function(g) {
@@ -393,6 +467,19 @@ var Gadgets = {
                 ctx.strokeStyle = "rgba(10,15,22,0.8)"; ctx.lineWidth = 3;
                 ctx.beginPath(); ctx.moveTo(sx - cw * 0.3, cty); ctx.lineTo(sx, cty + chh * 0.3); ctx.lineTo(sx - cw * 0.15, cty + chh * 0.55); ctx.lineTo(sx + cw * 0.2, cty + chh); ctx.stroke();
                 if (this.nearHero(g.x, g.y, 300)) uiText("💥 cracked - blow it up", sx, cty - 14, 12, "#fbbf24", "center", "800");
+            } else if (g.type === "coin" && !g.taken) {
+                var cw2 = Math.max(0.15, Math.abs(Math.cos(t * 0.06 + g.x * 0.01)));
+                ctx.fillStyle = "#f59e0b"; ctx.beginPath(); ctx.ellipse(sx, sy, 22 * k * cw2, 28 * k, 0, 0, 7); ctx.fill();
+                ctx.fillStyle = "#fde047"; ctx.beginPath(); ctx.ellipse(sx, sy, 14 * k * cw2, 20 * k, 0, 0, 7); ctx.fill();
+                ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(sx, sy, 22 * k * cw2, 28 * k, 0, 0, 7); ctx.stroke();
+            } else if (g.type === "goalpole") {
+                var ptop = wsy(g.y + g.h);
+                ctx.fillStyle = "#e2e8f0"; ctx.fillRect(sx - 5 * k, ptop, 10 * k, sy - ptop);
+                ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 2; ctx.strokeRect(sx - 5 * k, ptop, 10 * k, sy - ptop);
+                ctx.fillStyle = "#22c55e"; ctx.beginPath(); ctx.arc(sx, ptop, 14 * k, 0, 7); ctx.fill(); ctx.stroke();
+                var fy = wsy(g.y + g.flagY);
+                ctx.fillStyle = "#f43f5e"; ctx.beginPath(); ctx.moveTo(sx - 5 * k, fy); ctx.lineTo(sx - 85 * k, fy + 26 * k); ctx.lineTo(sx - 5 * k, fy + 52 * k); ctx.closePath(); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = "#475569"; ctx.fillRect(sx - 40 * k, sy - 40 * k, 80 * k, 40 * k); ctx.strokeRect(sx - 40 * k, sy - 40 * k, 80 * k, 40 * k);
             } else if (g.type === "sign") {
                 ctx.fillStyle = "#7c4a1e"; ctx.fillRect(sx - 4 * k, sy - 70 * k, 8 * k, 70 * k);
                 ctx.fillStyle = "#b07a3c"; ctx.fillRect(sx - 34 * k, sy - 96 * k, 68 * k, 40 * k);

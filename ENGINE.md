@@ -92,6 +92,10 @@ Every hook is optional. The engine calls `GameModes.call("hook", ...)` at these 
 | `onKey(code, e)` | Key pressed. Return `true` to consume it |
 | `onDamage(ch, amount, kx, ky, attacker)` | A character is hurt. Return `true` to cancel the damage |
 | `onStomp(hero, foe)` | A hero landed on an enemy's head (engine-wide head stomps: 35 x `rpgDamageMult` damage, bounce higher while jump is held, ~10 frames without contact damage). Return `true` to replace the default damage + bounce |
+| `onEnemyDamage(foe, amount, kx, ky, attacker)` | An enemy is hurt. Return `true` to handle it yourself (custom deaths, no Survival loot) |
+| `canShoot(ch)` / `canBreak(ch)` | May this hero fire right now / smash bricks |
+| `enemyAI(z)` | Drive an enemy yourself (set its `left/right/upPressed`); return `true` to skip the built-in AI |
+| `onBlockHit(ch, g)` / `onCoin(ch, g)` / `onGoal(ch, g, frac)` / `onBrickBreak(ch, g)` | Platform gadget events |
 | `onContact(hero, foe)` | A hero touches an enemy from the side/below. Return `true` to skip the default contact damage (e.g. star power) |
 | `onExplosion(x, y, radius, power)` | Any explosion |
 | `onExit(ch, gadget)` / `onHazard(ch, gadget)` | A hero reaches an exit gadget / touches spikes. Return `true` from `onHazard` to cancel the kill |
@@ -143,6 +147,10 @@ Activators power every gadget whose `id` is in their `links`.
 | `cracked` | `w, h` | Wall that crumbles in explosions |
 | `exit` | | Calls the mode's `onExit` |
 | `sign` | `text` | Tutorial speech bubble |
+
+Platform gadgets (used by Stomp Squad, available to any game and the editor): `qblock { x, y, item: coin|power|coins5|star|life }`
+(hit from below), `brick { x, y, item? }` (breaks when `canBreak`, otherwise bumps; knocks out enemies standing on it),
+`coin { x, y }`, `goalpole { x, y, h }` (grab height -> `onGoal`, then `onExit`).
 
 ## Other shared systems
 

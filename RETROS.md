@@ -6,6 +6,26 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Stomp Squad platformer — ROADMAP section 4
+
+**Shipped:** `game_platform.js` + new engine gadgets (? block, brick, coin, goal pole) and hooks (`canShoot`, `canBreak`,
+`enemyAI`, `onEnemyDamage`, block/coin/goal events). Small / big / fire sizes, star power, lives, 100 coins = 1UP,
+a 300-tick timer, stomp-chain scoring (100 … 8000 then 1UP), checkpoints, co-op bubbles, five original enemies
+(Shambler, Blob, Flapper, Spikehelm, Brute), and three courses (Meadow Dash, Cavern Crawl, Sky Bridges).
+All names and art are original. Works over LAN (HUD numbers and pickups sync via `netState`).
+
+**Measured (scripted headless run):** power block → seed → BIG → brick broken → walker stomped (+100) → hit shrinks
+to small → pit costs a life and restarts the course → goal pole clears it and course 2 loads. 61 FPS, no errors.
+
+**Went well:** the existing gadget and hook system took a whole new genre with only ~60 lines of engine changes.
+
+**Went wrong:** the first HUD ran under the level dropdown, and "COURSE 1-3" read like "World 1-3". Fixed.
+
+**Left / known:** courses are tuned by eye, not playtested by a person; fireballs fly straight (no bounce); the
+co-op bubble path and courses 2–3 were only smoke-tested; enemies still show health bars they don't need.
+
+---
+
 ## Pathfinding upgrade — ROADMAP section 3
 
 **Shipped:** whole-level nav graph (camera window only on the endless frontier), spatial hashes, jump edges limited

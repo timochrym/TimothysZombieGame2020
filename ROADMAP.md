@@ -75,7 +75,7 @@ do not rewrite from scratch. Fix these known defects:
 Stress test: 60+ enemies on the largest level must hold 60 FPS. Show before/after timings (ms per
 frame spent in Pathfinder), and screenshot the debug overlay on two levels.
 
-### 4. Platformer game
+### 4. Platformer game [DONE] (STOMP SQUAD, game_platform.js)
 In the style of New Super Mario Bros. Wii but fully original (no Nintendo names, characters or
 art). Example name: "STOMP SQUAD". Add engine gadgets in gadgets.js so the editor can place them:
 - ? block: hit from below, gives coin / power-up / 5 coins / star.

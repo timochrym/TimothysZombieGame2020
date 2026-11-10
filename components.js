@@ -385,6 +385,7 @@ class Components {
         }
 
         if (object.isPlayer && !GameModes.flag("shooting", true)) return;
+        if (object.isPlayer && GameModes.has("canShoot") && !GameModes.call("canShoot", object)) return;
         var canEnemyShoot = (object.isPlayer || object.zombiePower == "SPITTER" || object.zombiePower == "ARCHER" || object.zombiePower == "MAGE" || object.zombiePower == "BOSS_KING");
         if (object.isZombie && !canEnemyShoot && object.moveType == "ZOMBIE") {
             return;
@@ -1099,6 +1100,7 @@ class Components {
         zombie.rightPressed = false;
         zombie.shootPressed = false;
         if (zombie.frozenTimer > 0 || zombie.ragdollTimer > 0 || zombie.staggerTimer > 0) return;
+        if (GameModes.has("enemyAI") && GameModes.call("enemyAI", zombie)) return;
         if (GameModes.flag("enemiesPassive", false)) return;
 
         zombie.aiTick = (zombie.aiTick || 0) + 1;

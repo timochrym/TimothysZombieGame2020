@@ -10,6 +10,7 @@ var HUB_ICONS = {
     portal: { s: ["...bbbb...", "..b....b..", ".b......b.", ".b..oo..b.", ".b.o..o.b.", ".b.o..o.b.", ".b..oo..b.", ".b......b.", "..b....b..", "...bbbb..."], p: { b: "#38bdf8", o: "#fb923c" } },
     siege: { s: ["w.......w.", "w.......w.", ".w.....w..", ".w.....w..", "..wsssw...", "...www....", "....w.....", "....w.....", "....w.....", "...www...."], p: { w: "#9c6644", s: "#e5e7eb" } },
     creative: { s: ["....ww....", "...wwww...", "....ww....", "c...ww...c", "cccwwwwccc", "c..wwww..c", "....ww....", "...wwww...", "gggggggggg", "dddddddddd"], p: { w: "#e0f2fe", c: "#7dd3fc", g: "#4ade80", d: "#92400e" } },
+    platform: { s: ["oooooooooo", "o.yyyyyy.o", "o.yy..yy.o", "o.....yy.o", "o....yy..o", "o...yy...o", "o...yy...o", "o........o", "o...yy...o", "oooooooooo"], p: { o: "#b45309", ".": "#f59e0b", y: "#fef3c7" } },
     race: { s: ["pkwkwkwk..", "pwkwkwkw..", "pkwkwkwk..", "pwkwkwkw..", "p.........", "p.........", "p.........", "p.........", "p.........", "pp........"], p: { p: "#e5e7eb", k: "#111827", w: "#f8fafc" } }
 };
 

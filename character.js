@@ -438,6 +438,7 @@ class Character {
         }
         if (attacker && attacker.team === this.team && attacker !== this && !devOpts.friendlyFire) return;
         if (this.isPlayer && GameModes.has("onDamage") && GameModes.call("onDamage", this, amount, knockX, knockY, attacker)) return;
+        if (!this.isPlayer && GameModes.has("onEnemyDamage") && GameModes.call("onEnemyDamage", this, amount, knockX, knockY, attacker)) return;
 
         // Brawl mode: damage becomes a percent and knockback grows with it (no health, no death)
         if (typeof brawl !== "undefined" && brawl.active && this.isPlayer) {

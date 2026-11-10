@@ -27,6 +27,10 @@
 //   onDamage(ch, amount, kx, ky, attacker)        a character is damaged -> return true to consume
 //   onStomp(hero, foe)                            hero landed on an enemy's head -> return true to replace the
 //                                                 default stomp (35 dmg + bounce); hero still gets contact i-frames
+//   onEnemyDamage(foe, amount, kx, ky, attacker)  an enemy is damaged -> return true to consume (custom deaths / no loot)
+//   canShoot(ch) / canBreak(ch)                   may this hero fire / smash bricks right now
+//   enemyAI(z)                                    drive an enemy yourself (set z.left/right/upPressed) -> return true
+//   onBlockHit(ch, g) / onCoin(ch, g) / onGoal(ch, g, frac) / onBrickBreak(ch, g)   platform gadget events
 //   onContact(hero, foe)                          hero touches an enemy (not a stomp) -> return true to skip contact damage
 //   onExplosion(x, y, radius, power)              any explosion in the world
 //   onExit(ch, gadget) / onHazard(ch, gadget)     gadget events (level exit reached / spikes touched)
