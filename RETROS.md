@@ -6,6 +6,24 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Crash Lab — genre-feel pass (dummy dismount)
+
+**Shipped:** a second scenario, **Stair Drop** (pause menu → Scenario): the dummy stands on top of a 14-step stone
+staircase; you get ONE push (click where to push — further = harder, a dashed line shows it), the damage score runs
+until the dummy has been still for 1.5 s (or 20 s), then you get a score banner and a saved best; R resets. The
+camera follows only the dummy there. In both scenarios the dummy now shows a damage heat-map (head, torso and limbs
+drift from test-dummy yellow to bruised red) and the biggest hits get a short slow-mo.
+
+**Measured:** two pushes scored 560 and 717 (steeper 84-px steps; with 110-px steps it stopped a third of the way down
+at 351 / 452); sandbox regression unchanged (cannon/bomb/blaster/fling → 1710, no errors).
+
+**Went wrong:** first staircase was too shallow — the dummy landed flat on step 5 and stopped every time → narrower,
+steeper steps. Not fixed: the mode's base zoom keeps the dummy fairly small on screen.
+
+**Left / known:** more scenarios and vehicles, pose picker, replays (TODO.md).
+
+---
+
 ## Wobble Wheels — genre-feel pass (ragdoll vehicle trials)
 
 **Shipped:** every vehicle has a special on Space / F (P2 Enter, pad B/X/RB): the bike bunny-hops, the cart does a

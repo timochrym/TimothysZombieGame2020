@@ -16,8 +16,12 @@ var DUMMY_TOOLS = [
     { id: "weight", label: "Heavy weight", icon: "🏋", hint: "drop a weight from above" },
     { id: "ball", label: "Wrecking ball", icon: "⚫", hint: "swing a ball from the ceiling" }
 ];
-var dummySave = { best: 0 };
-try { var _ds = JSON.parse(localStorage.getItem("timsCrashLab") || "null"); if (_ds) dummySave.best = _ds.best || 0; } catch (e) {}
+var dummySave = { best: 0, stairs: 0 };
+try { var _ds = JSON.parse(localStorage.getItem("timsCrashLab") || "null"); if (_ds) { dummySave.best = _ds.best || 0; dummySave.stairs = _ds.stairs || 0; } } catch (e) {}
+function saveDummy() { try { localStorage.setItem("timsCrashLab", JSON.stringify(dummySave)); } catch (e) {} }
+var DUMMY_STAIRS_START = [-1700, 1520];
+// Stair Drop challenge: one push from the top, the score runs until the dummy comes to rest
+function dummyChallenge() { return LevelManager.currentLevelKey === "crash_stairs"; }
 
 var Dummy = {
     rd: null, tool: 0, total: 0, combo: 0, comboT: 0, bones: 0, parts: [0, 0, 0], tick: 0,
@@ -37,6 +41,19 @@ var Dummy = {
     L.push({ type: "crate", name: "TNT Barrel", x: 1700, y: 40, size: 70, explosive: true });
     ModeKit.addLevel("crash_lab", { name: "🧪 Crash Lab", mode: "dummy", wavesEnabled: false, spawnP1: [-300, 60], spawnP2: [-200, 60], layout: L, title: "Crash Lab" });
 })();
+(function() {
+    var L = ModeKit.room(-2400, 2400, 2600, { tex: "lab_metal", color: "#334155", floorTex: "lab_metal", floorColor: "#475569" });
+    L.push({ type: "box", name: "Top Landing", x: -1900, y: 700, w: 800, h: 1400, color: "#475569", texture: "stone_block", kind: "block" });
+    for (let i = 0; i < 14; i++) {
+        var top = 1400 - (i + 1) * 100, x0 = -1500 + i * 84;
+        if (top <= 0) break;
+        L.push({ type: "box", name: "Step", x: x0 + 42, y: top / 2, w: 84, h: top, color: "#64748b", texture: "stone_block", kind: "block" });
+    }
+    L.push({ type: "bumper", name: "Bounce Pad", x: 700, y: 20, w: 240, h: 40, bounce: 30 });
+    L.push({ type: "box", name: "Wall", x: 1500, y: 300, w: 100, h: 600, color: "#334155", texture: "metal_plate", kind: "wall" });
+    L.push({ type: "crate", name: "Crate", x: 300, y: 40, size: 80 }, { type: "crate", name: "Crate", x: 300, y: 121, size: 80 });
+    ModeKit.addLevel("crash_stairs", { name: "🧪 Crash Lab: Stair Drop", mode: "dummy", wavesEnabled: false, spawnP1: [-2100, 1480], spawnP2: [-2200, 1480], layout: L, title: "Stair Drop" });
+})();
 
 function dummySpawn(x, y) {
     if (Dummy.rd) Ragdolls.remove(Dummy.rd);
@@ -50,6 +67,18 @@ function dummySpawn(x, y) {
     Dummy.lastV = [];
     Dummy.total = 0; Dummy.combo = 0; Dummy.bones = 0; Dummy.parts = [0, 0, 0];
     Dummy.grace = 45;
+    Dummy.run = dummyChallenge() ? "aim" : null; Dummy.calmT = 0; Dummy.runT = 0;
+}
+
+// damage heat-map: each body group drifts from test-dummy yellow to bruised red as it takes damage
+function dummyTint(rd) {
+    var mix = function(a, b, t) {
+        var pa = [1, 3, 5].map(function(i) { return parseInt(a.substr(i, 2), 16); }), pb = [1, 3, 5].map(function(i) { return parseInt(b.substr(i, 2), 16); });
+        return "rgb(" + pa.map(function(v, i) { return Math.round(v + (pb[i] - v) * t); }).join(",") + ")";
+    };
+    rd.style.head = mix("#fde047", "#dc2626", Math.min(1, Dummy.parts[0] / 260));
+    rd.style.body = mix("#facc15", "#b91c1c", Math.min(1, Dummy.parts[1] / 360));
+    rd.style.limb = mix("#fbbf24", "#991b1b", Math.min(1, Dummy.parts[2] / 520));
 }
 
 // a point resting on / launched by a bounce pad is bouncing, not crashing
@@ -68,7 +97,8 @@ function dummyHurt(amount, x, y, part) {
     Dummy.combo += amount;
     Dummy.comboT = 90;
     Dummy.parts[part] += amount;
-    if (Dummy.total > dummySave.best) { dummySave.best = Math.round(Dummy.total); try { localStorage.setItem("timsCrashLab", JSON.stringify(dummySave)); } catch (e) {} }
+    if (!dummyChallenge() && Dummy.total > dummySave.best) { dummySave.best = Math.round(Dummy.total); saveDummy(); }
+    if (amount > 45 && typeof Juice !== "undefined" && Juice.slowMo && Dummy.tick - (Dummy.lastSlow || -999) > 120) { Dummy.lastSlow = Dummy.tick; Juice.slowMo(35, 0.35); }
     if (amount > 8) Components.addFloatingText("-" + Math.round(amount), x, y + 40, part === 0 ? "#f87171" : "#fde68a", Math.min(28, 14 + amount * 0.25));
 }
 
@@ -83,7 +113,7 @@ GameModes.register({
     overTitle: "CRASH LAB",
 
     setupLevel: function() { Dummy.rd = null; Dummy.balls = []; Dummy.spikes = []; Dummy.drag = null; Dummy.tick = 0; },
-    onReset: function() { dummySpawn(-400, 300); },
+    onReset: function() { if (dummyChallenge()) dummySpawn(DUMMY_STAIRS_START[0], DUMMY_STAIRS_START[1]); else dummySpawn(-400, 300); },
 
     onDamage: function() { return true; },
     onPad: function(i, b) {
@@ -94,11 +124,12 @@ GameModes.register({
             mouseDown = false;
             return this.onClick(redGuy.x + Math.sin(rad) * 380, redGuy.y + Math.cos(rad) * 380, 0);
         }
-        if (b === 8) { Dummy.tool = (Dummy.tool + 1) % DUMMY_TOOLS.length; return true; } if (b === 3) { dummySpawn(redGuy ? redGuy.x + 200 : 0, 500); return true; } return false; },                    // the testers never get hurt
+        if (b === 8) { Dummy.tool = (Dummy.tool + 1) % DUMMY_TOOLS.length; return true; } if (b === 3) { this.onKey("KeyR"); return true; } return false; },                    // the testers never get hurt
     canShoot: function() { return Dummy.tool === 0; },
 
     cameraTargets: function() {
         var t = [];
+        if (dummyChallenge() && Dummy.rd) return [{ x: Dummy.rd.centerX() - 250, y: Dummy.rd.centerY() - 150 }, { x: Dummy.rd.centerX() + 350, y: Dummy.rd.centerY() + 150 }];
         if (redGuy && !redGuy.dead) t.push(redGuy);
         if (Dummy.rd) t.push({ x: Dummy.rd.centerX(), y: Dummy.rd.centerY(), isZombie: false });
         return t;
@@ -107,13 +138,22 @@ GameModes.register({
     onKey: function(code) {
         var m = /^Digit([1-9])$/.exec(code);
         if (m) { Dummy.tool = Math.min(DUMMY_TOOLS.length - 1, Number(m[1]) - 1); return true; }
-        if (code === "KeyR") { dummySpawn(redGuy ? redGuy.x + 200 : 0, 500); return true; }
+        if (code === "KeyR") { if (dummyChallenge()) this.onReset(); else dummySpawn(redGuy ? redGuy.x + 200 : 0, 500); return true; }
         return false;
     },
 
     onClick: function(wx, wy, button) {
         if (button !== 0) return false;
         var t = DUMMY_TOOLS[Dummy.tool].id, rd = Dummy.rd;
+        if (dummyChallenge()) {
+            // one push per run: harder the further from the dummy you click
+            if (!rd || Dummy.run !== "aim") return true;
+            var pcx = rd.centerX(), pcy = rd.centerY(), pdx = wx - pcx, pdy = wy - pcy, pL = Math.hypot(pdx, pdy) || 1, pw = Math.min(30, 6 + pL / 18);
+            rd.addVelocity(pdx / pL * pw, pdy / pL * pw);
+            Dummy.run = "go"; Dummy.total = 0; Dummy.parts = [0, 0, 0]; Dummy.bones = 0; Dummy.grace = 3; Dummy.runT = 0;
+            if (typeof SFX !== "undefined") SFX.play("whoosh", pcx, pcy);
+            return true;
+        }
         if (t === "blaster") return false;
         if (t === "hand" && rd) {
             var best = -1, bd = 140;
@@ -178,7 +218,7 @@ GameModes.register({
         if (Dummy.grace > 0) Dummy.grace--;
         var padHit = false;
         for (let i = 0; i < rd.pts.length && !padHit; i++) padHit = dummyOnPad(rd.pts[i]);
-        var scoring = Dummy.grace === 0 && !Dummy.drag && !rd.heldBy && !padHit;
+        var scoring = Dummy.grace === 0 && !Dummy.drag && !rd.heldBy && !padHit && (!dummyChallenge() || Dummy.run === "go");
         // blaster bolts that hit the dummy
         for (let l = lazers.length - 1; l >= 0; l--) {
             var lz = lazers[l];
@@ -230,6 +270,19 @@ GameModes.register({
                 }
             }
         }
+        dummyTint(rd);
+        if (Dummy.run === "go") {
+            Dummy.runT++;
+            var sp = Math.abs(rd.velX()) + Math.abs(rd.velY());
+            Dummy.calmT = sp < 0.8 ? Dummy.calmT + 1 : 0;
+            if (Dummy.calmT > 90 || Dummy.runT > 60 * 20) {
+                Dummy.run = "done";
+                var sc = Math.round(Dummy.total), nb = sc > dummySave.stairs;
+                if (nb) { dummySave.stairs = sc; saveDummy(); }
+                showBanner("SCORE " + sc, nb ? "NEW BEST!  ·  R to go again" : "best " + dummySave.stairs + "  ·  R to go again", "#facc15");
+                if (typeof SFX !== "undefined") SFX.play(nb ? "clear" : "select");
+            }
+        }
         if (Dummy.comboT > 0 && --Dummy.comboT === 0) { if (Dummy.combo > 150) showBanner("COMBO " + Math.round(Dummy.combo), "", "#facc15"); Dummy.combo = 0; }
     },
 
@@ -257,7 +310,15 @@ GameModes.register({
         uiPanel(cssW / 2 - 190, dy, 380, 92, "#facc15");
         uiText("DAMAGE", cssW / 2, dy + 22, 13, "#fde68a", "center", "900");
         uiText(String(Math.round(Dummy.total)), cssW / 2, dy + 60, 40, "#ffffff", "center", "900");
-        uiText("best " + dummySave.best + (Dummy.combo > 0 ? "   combo " + Math.round(Dummy.combo) : "") + "   bones " + Dummy.bones, cssW / 2, dy + 84, 12, "#cbd5e1", "center", "800");
+        if (dummyChallenge()) {
+            uiText(Dummy.run === "aim" ? "STAIR DROP — click where to push the dummy (further = harder)" : (Dummy.run === "go" ? "falling…" : "run over — R to reset"), cssW / 2, dy + 116, 14, "#fde68a", "center", "900");
+            if (Dummy.run === "aim" && Dummy.rd) {
+                var mw = Components.getMouseWorldPos(), acx = Dummy.rd.centerX(), acy = Dummy.rd.centerY();
+                ctx.strokeStyle = "rgba(250,204,21,0.85)"; ctx.lineWidth = 3; ctx.setLineDash([8, 6]);
+                ctx.beginPath(); ctx.moveTo(wsx(acx), wsy(acy)); ctx.lineTo(wsx(mw[0]), wsy(mw[1])); ctx.stroke(); ctx.setLineDash([]);
+            }
+        }
+        uiText((dummyChallenge() ? "stairs best " + dummySave.stairs : "best " + dummySave.best) + (Dummy.combo > 0 ? "   combo " + Math.round(Dummy.combo) : "") + "   bones " + Dummy.bones, cssW / 2, dy + 84, 12, "#cbd5e1", "center", "800");
         // body chart
         var tot = Math.max(1, Dummy.parts[0] + Dummy.parts[1] + Dummy.parts[2]);
         var names = ["Head", "Torso", "Limbs"], cols = ["#f87171", "#fbbf24", "#a3e635"];
@@ -268,8 +329,8 @@ GameModes.register({
             ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.fillRect(80, 52 + i * 16, 140, 9);
             ctx.fillStyle = cols[i]; ctx.fillRect(80, 52 + i * 16, 140 * Dummy.parts[i] / tot, 9);
         }
-        // tool bar
-        var n = DUMMY_TOOLS.length, bw = 70, x0 = cssW / 2 - (n * (bw + 6)) / 2, y0 = cssH - 96;
+        // tool bar (the sandbox only)
+        var n = dummyChallenge() ? 0 : DUMMY_TOOLS.length, bw = 70, x0 = cssW / 2 - (n * (bw + 6)) / 2, y0 = cssH - 96;
         for (let i = 0; i < n; i++) {
             var t = DUMMY_TOOLS[i], bx = x0 + i * (bw + 6), on = i === Dummy.tool;
             ctx.fillStyle = on ? "rgba(250,204,21,0.3)" : "rgba(15,23,42,0.85)"; ctx.fillRect(bx, y0, bw, 58);
@@ -277,14 +338,16 @@ GameModes.register({
             uiText(t.icon, bx + bw / 2, y0 + 30, 22, "#fff", "center", "800");
             uiText((i + 1) + " " + t.label, bx + bw / 2, y0 + 50, 9, on ? "#fde047" : "#94a3b8", "center", "800");
         }
+        if (dummyChallenge()) { uiText("Click to push · R reset · Esc menu → Scenario", cssW / 2, cssH - 18, 12, "rgba(220,230,240,0.75)", "center", "700"); return; }
         uiText(DUMMY_TOOLS[Dummy.tool].label + ": " + DUMMY_TOOLS[Dummy.tool].hint + "  ·  1-9 tools · R new dummy · WASD move · Space jetpack · Esc menu", cssW / 2, cssH - 18, 12, "rgba(220,230,240,0.75)", "center", "700");
     },
 
-    menuItems: function(items) { items.push({ id: "dm_new", label: "New dummy (R)", hint: "" }, { id: "dm_clear", label: "Clear props", hint: "pads, spikes, TNT, weights, balls" }); },
+    menuItems: function(items) { items.push({ id: "dm_scn", label: "Scenario:  ◀  " + (dummyChallenge() ? "Stair Drop (one push, score)" : "Sandbox (all tools)") + "  ▶", hint: "", cycle: true }); items.push({ id: "dm_new", label: "New dummy (R)", hint: "" }, { id: "dm_clear", label: "Clear props", hint: "pads, spikes, TNT, weights, balls" }); },
     onMenu: function(id) {
-        if (id === "dm_new") { closePause(); dummySpawn(redGuy ? redGuy.x + 200 : 0, 500); return true; }
-        if (id === "dm_clear") { closePause(); LevelManager.selectLevel("crash_lab"); return true; }
+        if (id === "dm_scn") { closePause(); LevelManager.selectLevel(dummyChallenge() ? "crash_lab" : "crash_stairs"); return true; }
+        if (id === "dm_new") { closePause(); this.onKey("KeyR"); return true; }
+        if (id === "dm_clear") { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
         return false;
     },
-    onRestart: function() { LevelManager.selectLevel("crash_lab"); }
+    onRestart: function() { LevelManager.selectLevel(LevelManager.currentLevelKey); }
 });
