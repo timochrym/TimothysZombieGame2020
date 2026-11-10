@@ -18,6 +18,7 @@ var HUB_ICONS = {
     powder: { s: ["..........", "....ss....", "...ssss...", "..s.ss.s..", "....ss....", "...ssss...", "..ssssss..", ".wwssssww.", "wwwwssswww", "wwwwwwwwww"], p: { s: "#d6ba70", w: "#3884e6" } },
     snake: { s: ["..........", ".pppp.....", "p....p....", "p.ee.p....", ".pppp.p...", "......p...", ".....p....", "....p...o.", "...p...ooo", "..pppp..o."], p: { p: "#f472b6", e: "#ffffff", o: "#fbbf24" } },
     cells: { s: ["..........", "...pppp...", "..pppppp..", ".pp.pp.pp.", ".pppppppp.", ".pppppppp.", "..pppppp..", "...pppp.gg", "........gg", "..........."], p: { p: "#a78bfa", g: "#4ade80" } },
+    tanks: { s: ["..........", "..........", "....gggggg", "..bbbggggg", ".bbbbbb...", ".bbbbbb...", ".bbbbbb...", "..bbbb....", "..........", ".........."], p: { b: "#60a5fa", g: "#94a3b8" } },
     race: { s: ["pkwkwkwk..", "pwkwkwkw..", "pkwkwkwk..", "pwkwkwkw..", "p.........", "p.........", "p.........", "p.........", "p.........", "pp........"], p: { p: "#e5e7eb", k: "#111827", w: "#f8fafc" } }
 };
 

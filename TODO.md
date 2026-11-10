@@ -70,7 +70,10 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - [x] B4 — Cell arena (agar-style) → **Blob Arena**: eat pellets and blobs 25% smaller, bigger = slower, split to lunge
       (pieces merge back after 9 s), eject mass, spiky viruses pop big blobs into pieces, 14 CPU blobs that flee /
       chase / lunge / dodge viruses, leaderboard, best mass, local P2 + pads. Next: LAN, teams, feeding viruses.
-- [ ] B4 — Tank arena (diep-style): shoot shapes for XP, level up, upgrades, tank classes.
+- [x] B4 — Tank arena (diep-style) → **Tank Arena**: squares / triangles / pentagons (nest in the middle) for XP, 45
+      levels, 8 stats on 1-8, classes at 15 (Twin, Sniper, Machine Gun, Flank Guard) and 30 (Triple Shot, Assassin,
+      Destroyer, Tri-Angle), recoil, bullet pierce + bullet-vs-bullet, body ramming, 8 CPU tanks that farm / fight /
+      flee, auto-fire, local P2 with auto-aim + pads. Next: LAN, drone classes, team mode, more tier-2 classes.
 - [x] B4 — Snake arena (slither-style) → **Worm Arena**: round arena, mouse / A-D steering, boost burns length and drops
       food, head-into-body kills and bursts into pellets, 11 CPU worms that hunt food and cut smaller worms off,
       leaderboard, minimap, best length, local P2 (shared zooming camera), pads. Next: LAN, skins, team mode.

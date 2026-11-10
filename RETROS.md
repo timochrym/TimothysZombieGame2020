@@ -6,6 +6,28 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Tank Arena (new game, B4 — diep-style)
+
+**Shipped:** `game_tanks.js` (ownScreen): a 6000² arena with 240 drifting shapes (yellow squares, red triangles,
+purple pentagons that crowd the glowing middle), 8 CPU tanks and you. Shapes and tanks give XP; 45 levels; a stat
+point per level for 8 stats (regen, max health, body damage, bullet speed, pierce, damage, reload, move speed — keys
+1-8 or click); class picks at 15 (Twin, Sniper, Machine Gun, Flank Guard) and 30 (Triple Shot, Assassin, Destroyer,
+Tri-Angle) on U/I/O/P or click. Recoil, pierce, bullets cancel each other, ramming hurts both sides, regen after 4 s,
+spawn protection. CPUs farm the best XP-per-distance shape, keep a fighting distance and strafe, run (shooting back)
+below 40% health, spend points to a build and pick classes. E = auto-fire. P2 on the arrows + Enter with auto-aim
+(its points and class are chosen for it). Snipers / Assassins see further.
+
+**Measured:** 0.29 ms per step; level 15 → class card, U → Twin, stats spent with keys; no errors.
+
+**Went wrong:** (1) the first numbers made it a grind — about 2 s per square and ~10 000 XP to level 15 → more bullet
+damage, faster reload, a gentler XP curve (~1 000 XP to 15, ~6 300 to 30). (2) Stat names and the XP bar text were
+dark on dark → light text. (3) Delayed second barrels used `setTimeout`, which keeps running while paused → a
+frame-timed queue.
+
+**Left / known:** LAN, drone classes, teams (TODO.md).
+
+---
+
 ## Blob Arena (new game, B4 — agar-style)
 
 **Shipped:** `game_cells.js` (ownScreen): a 5200² arena with 2000 pellets, 14 viruses and 14 CPU blobs. You eat pellets
