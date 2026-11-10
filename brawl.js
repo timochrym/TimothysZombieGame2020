@@ -104,6 +104,7 @@ function createBrawlFighters() {
     blueGuy = characters.length > 1 ? characters[1] : null;
     multiplayer = characters.length > 1;
     brawl.phase = "countdown";
+    brawl.ledges = null;
     brawl.timer = 190;
     brawl.winner = null;
     brawl.itemTimer = 420;
@@ -167,6 +168,61 @@ function brawlRespawn(ch) {
     Components.addFloatingText(ch.playerLabel + " is back!", ch.x, ch.y + 90, FIGHTER_COLORS[ch.playerIndex], 18);
 }
 
+// ---------------------------------------------------------------------------
+// Ledge grab: falling past the corner of a solid stage block catches it. Up / jump climbs on, down lets go.
+// One grab per trip through the air; a short invulnerability while hanging.
+function brawlLedges() {
+    var out = [];
+    for (let i = 0; i < staticObjects.length; i++) {
+        var o = staticObjects[i];
+        if (o.kind !== "block" || o.w < 400 || o.isInfiniteBase) continue;
+        var top = o.y + o.h / 2;
+        out.push({ x: o.x - o.w / 2, y: top, side: -1 }, { x: o.x + o.w / 2, y: top, side: 1 });
+    }
+    return out;
+}
+function brawlLedge(ch) {
+    if (ch.liveRagdoll || ch.ragdollTimer > 0) { ch.ledge = null; return; }
+    if (ch.ledge) {
+        var L = ch.ledge;
+        var jumped = ch.yspeed > 1.5 && L.t > 8;               // the engine already turned UP into a jump this frame
+        // hang just outside the wall with the head at the lip (fully clear of the block, so it never counts as ground)
+        ch.x = L.x + L.side * (ch.s1 / 2 + 3); ch.y = L.y - ch.s2 / 2 + 18; ch.xspeed = 0; ch.yspeed = 0; ch.onGround = false;
+        ch.airJumps = ch.maxAirJumps;
+        L.t++;
+        var up = jumped || ch.upPressed || (ch.isCPU && L.t > 25), down = ch.downPressed || L.t > 200;
+        if (up && L.t > 8) {                                   // climb on
+            ch.x = L.x - L.side * (ch.s1 / 2 + 14); ch.y = L.y + ch.s2 / 2 + 4; ch.yspeed = 2; ch.xspeed = 0; ch.ledge = null; ch.invulnTimer = Math.max(ch.invulnTimer, 20);
+            if (typeof SFX !== "undefined") SFX.play("jump", ch.x, ch.y, 0.4, 1.3);
+        } else if (down && L.t > 8) { ch.ledge = null; ch.yspeed = -2; ch.x += L.side * 20; }
+        return;
+    }
+    if (ch.onGround) { ch.ledgeUsed = false; return; }
+    if (ch.ledgeUsed || ch.yspeed > 0) return;
+    var ls = brawl.ledges || (brawl.ledges = brawlLedges());
+    for (let i = 0; i < ls.length; i++) {
+        var e = ls[i], head = ch.y + ch.s2 / 2;
+        if (Math.abs(ch.x - (e.x + e.side * ch.s1 / 2)) < ch.s1 * 0.75 && head > e.y - 30 && head < e.y + 70 && (ch.x - e.x) * e.side > -10) {
+            ch.ledge = { x: e.x, y: e.y, side: e.side, t: 0 }; ch.ledgeUsed = true; ch.invulnTimer = Math.max(ch.invulnTimer, 40);
+            Components.addFloatingText("LEDGE!", ch.x, ch.y + 80, "#e2e8f0", 14);
+            if (typeof SFX !== "undefined") SFX.play("ui", ch.x, ch.y, 0.4, 1.2);
+            break;
+        }
+    }
+}
+// Shield: hold DOWN while standing on the solid main stage. It soaks hits (no knockback) and shrinks as it takes them;
+// it regrows when lowered; if it breaks you're dizzy for a second.
+function brawlShield(ch) {
+    if (ch.shieldHP === undefined) ch.shieldHP = 50;
+    if (ch.dizzyT > 0) { ch.dizzyT--; ch.xspeed = 0; ch.shielding = false; ch.leftPressed = ch.rightPressed = false; return; }
+    var standOnSolid = ch.onGround && !(ch.collidedWith && ch.collidedWith.kind === "platform");
+    var want = ch.downPressed && standOnSolid;
+    if (ch.isCPU) want = standOnSolid && lazers.some(function(l) { return l.owner !== ch && Math.abs(l.x - ch.x) < 220 && Math.abs(l.y - ch.y) < 120 && (l.x - ch.x) * l.xspeed < 0; }) && ch.shieldHP > 15;
+    ch.shielding = want && ch.shieldHP > 0;
+    if (ch.shielding) { ch.xspeed *= 0.5; ch.shieldHP = Math.max(0, ch.shieldHP - 0.08); }
+    else ch.shieldHP = Math.min(50, ch.shieldHP + 0.12);
+}
+
 function updateBrawl() {
     if (!brawl.active) return;
     var st = brawl.stage;
@@ -190,7 +246,8 @@ function updateBrawl() {
             continue;
         }
         ch.health = ch.maxHealth;
-        if (ch.x < st.minX || ch.x > st.maxX || ch.y < st.minY || ch.y > st.maxY) brawlLoseStock(ch);
+        if (ch.x < st.minX || ch.x > st.maxX || ch.y < st.minY || ch.y > st.maxY) { brawlLoseStock(ch); continue; }
+        if (brawl.phase === "fight") { brawlLedge(ch); brawlShield(ch); }
     }
 
     // Items drop onto the stage now and then
@@ -230,6 +287,13 @@ function brawlApplyHit(victim, amount, kx, ky, attacker) {
         if (dmg < 1) return;
     }
 
+    if (victim.shielding && victim.shieldHP > 0) {
+        victim.shieldHP -= dmg * 0.6;
+        Components.spawnSparks(victim.x, victim.y, "#93c5fd", 6);
+        if (typeof SFX !== "undefined") SFX.play("ui", victim.x, victim.y, 0.5, 1.6);
+        if (victim.shieldHP <= 0) { victim.shieldHP = 0; victim.shielding = false; victim.dizzyT = 70; Components.addFloatingText("SHIELD BREAK!", victim.x, victim.y + 90, "#fca5a5", 20); }
+        return;
+    }
     var pct = Math.max(1, dmg * 0.35);
     victim.damagePct += pct;
     if (attacker && attacker !== victim && attacker.isPlayer) { victim.brLastBy = attacker; victim.brLastT = brawl.tick; attacker.brDealt = (attacker.brDealt || 0) + pct; }
@@ -387,7 +451,20 @@ var Brawl = {
 // ---------------------------------------------------------------------------
 // HUD
 // ---------------------------------------------------------------------------
+function drawBrawlShields() {
+    for (let i = 0; i < characters.length; i++) {
+        var c = characters[i];
+        if (c.dead || c.eliminated) continue;
+        if (c.shielding) {
+            var r = (c.s1 * 0.75) * (0.55 + 0.45 * c.shieldHP / 50) * cameraScaleX;
+            ctx.save(); ctx.globalAlpha = 0.45; ctx.fillStyle = FIGHTER_COLORS[c.playerIndex] || "#93c5fd";
+            ctx.beginPath(); ctx.arc(wsx(c.x), wsy(c.y), r, 0, 7); ctx.fill(); ctx.globalAlpha = 0.9; ctx.strokeStyle = "#e0f2fe"; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
+        }
+        if (c.dizzyT > 0) uiText("★ ✦ ★", wsx(c.x), wsy(c.y + c.s2 / 2 + 20), 14, "#fde047", "center", "900");
+    }
+}
 function drawBrawlKO() {
+    drawBrawlShields();
     for (let i = 0; i < brawl.ko.length; i++) {
         var K = brawl.ko[i], a = 1 - K.t / 45;
         // KOs happen past the screen edge: start the beam at the edge you flew out of

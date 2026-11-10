@@ -6,6 +6,22 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Brawl: ledge grab and shield
+
+**Shipped:** falling past the lip of a solid stage block catches it (once per trip through the air, brief
+invulnerability); UP / jump climbs on, DOWN lets go, you drop after ~3 s. Holding DOWN while standing on the solid
+main stage raises a shield bubble: hits do no damage or knockback but shrink it; it regrows when lowered; if it breaks
+you're dizzy for about a second. CPUs raise their shield against incoming shots.
+
+**Measured:** P1 dropped beside the right edge → caught at the lip (x 1143, y 58), held steadily, W → climbed onto the
+stage (x 1046); shield up → a 20-damage hit left the percent unchanged and knockback 0; no errors.
+
+**Went wrong:** (1) the first hang spot overlapped the stage corner, so the engine called it "on ground", which
+cleared the hang and re-grabbed every other frame; (2) W on the ledge became a normal jump before my code saw it → it
+now hangs fully outside the wall and an engine jump while hanging counts as the climb.
+
+---
+
 ## Terra over LAN
 
 **Shipped:** Terra's tile grid now streams to LAN clients (run-length encoded; re-sent whenever a tile changes and every
