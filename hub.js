@@ -164,6 +164,7 @@ var Hub = {
                 PixelArt.draw(ic.s, cx + cw / 2 - 5 * px, cy + 18 + bob, px, ic.p);
             }
             uiText(m.title, cx + cw / 2, cy + ch - 62 + bob, 18, sel ? (m.color || "#fff") : "#e2e8f0", "center", "900");
+            if (m.flags && m.flags.ownScreen && typeof Net !== "undefined" && Net.role === "host") uiText("local only (no LAN yet)", cx + cw / 2, cy + 16 + bob, 11, "#fca5a5", "center", "800");
             // wrapped tagline
             ctx.font = "600 12px " + UI_FONT;
             var words = (m.tagline || "").split(" "), line = "", lines = [];

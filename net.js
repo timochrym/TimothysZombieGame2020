@@ -617,6 +617,11 @@ var Net = {
             this.drawWaiting(this.hostInHub ? "The host is picking a game…" : (this.status || "Waiting for the host…"));
             return;
         }
+        // the full-screen games (board games, arenas, Sand Lab…) don't stream over LAN yet: say so instead of an empty world
+        if (GameModes.current && GameModes.current.flags && GameModes.current.flags.ownScreen) {
+            this.drawWaiting("The host is playing " + (GameModes.current.title || "a game") + " — local-only for now (play it on the host's screen)");
+            return;
+        }
         // smooth toward the latest snapshot positions; bullets keep flying between snapshots
         var lists = [characters, zombies, movingObjects];
         for (let l = 0; l < lists.length; l++) for (let i = 0; i < lists[l].length; i++) {

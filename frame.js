@@ -965,7 +965,11 @@ function frame() {
     ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
     // modes with their own full screen (grid sims, board games) skip the platformer world entirely
-    if (GameModes.flag("ownScreen", false) && GameModes.has("screenFrame")) { GameModes.call("screenFrame"); drawBanners(); return; }
+    if (GameModes.flag("ownScreen", false) && GameModes.has("screenFrame")) {
+        GameModes.call("screenFrame"); drawBanners();
+        if (typeof Net !== "undefined" && Net.role === "host") Net.hostFrame();     // keeps LAN clients told which game is on
+        return;
+    }
 
     // Draw Multi-Layer Repeating Parallax Background Mosaic & Non-Colliding Background Trees
     if (typeof BackgroundMosaic !== "undefined") {

@@ -105,6 +105,9 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       online/LAN turns.
 
 ## Known issues / polish found while building (from RETROS.md)
+- LAN: the nine full-screen games (Sand Lab, Worm / Blob / Tank Arena, Jet Dash, Table Games, Party Board, Rent Rush;
+  Word Lab is a normal world game) don't stream to LAN clients yet — clients see "local-only for now" and the host's
+  arcade marks them. Next: turn-based ones (Table Games, Party Board, Rent Rush) are the easiest to put on LAN.
 - Pathfinding: "60 FPS with 60+ enemies" met for the JS budget, not in headless software rendering; frontier pathing ~1 ms.
 - LAN: bandwidth is per client through the relay (~340 KB/s with 60 enemies); mode HUD state only synced for Stomp
   Squad and Bed Brawl; minecarts/rails and Terra tiles not visible on LAN clients; Wobble Wheels has no LAN riders.

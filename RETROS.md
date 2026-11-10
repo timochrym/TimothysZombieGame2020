@@ -6,6 +6,18 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## LAN clarity for the full-screen games
+
+**Shipped:** the nine full-screen games skipped the host's snapshot step, so a LAN client stayed frozen on the
+previous game. The host now keeps sending (mode + lobby) from those games too; the client shows "The host is playing
+SAND LAB — local-only for now (play it on the host's screen)", and the host's arcade cards say "local only (no LAN
+yet)". Switching back to a LAN game (e.g. Brawl) brings the client straight back in.
+
+**Measured:** host Survival → Sand Lab → Brawl with a client attached: client follows to "powder" (message shown) and
+back to Brawl with 2 fighters; no errors.
+
+---
+
 ## Frontier goes underground (B3 "lower generated level") + all-games smoke test
 
 **Shipped:** three new frontier chunks in `levels.js`, in the eastward biome cycle between Thunderhead Peak and the
