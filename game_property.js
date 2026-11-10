@@ -60,7 +60,10 @@ var Rent = {
     canBuild: function(p) { var self = this; return this.owned(p).filter(function(s) { return s.k === "p" && s.h < 3 && self.fullSet(p, s.g) && p.cash >= Math.round(s.price / 2); }); },
 
     // ---------------- input (buttons are edge-triggered)
+    // is this seat played at THIS screen? (on a LAN client: the seat with my id)
+    mine: function(p) { if (typeof Net !== "undefined" && Net.role === "client") return p.pid === Net.pid; return !p.cpu && !p.pid; },
     keys: function(p) {
+        if (p.pid && typeof Net !== "undefined") { var nb = Net.peerButtons(p.pid); return { go: nb.go, no: nb.no, build: nb.build }; }
         var pad = (typeof Pads !== "undefined") ? Pads.state[p.i] : null, pa = pad && pad.active;
         var k = p.i === 0 ? { go: SpacePressed, no: !!Rent.k0no, build: !!Rent.k0b } : (p.i === 1 ? { go: !!PlayerInput[1].kbShoot, no: !!Rent.k1no, build: !!Rent.k1b } : { go: false, no: false, build: false });
         if (pa) { k.go = k.go || pad.up || pad.shoot; k.no = k.no || pad.run; k.build = k.build || pad.interact; }
@@ -155,6 +158,8 @@ var Rent = {
     update: function() {
         this.t++;
         if (this.msgT > 0) this.msgT--;
+        // LAN players take over CPU seats (and give them back when they leave)
+        if (typeof Net !== "undefined" && Net.role === "host" && Net.seatPeers(this.pl, function(i) { return "CPU " + (i + 1); })) this.say("LAN seats: " + this.pl.map(function(q) { return q.name; }).join(", "));
         var p = this.pl[this.turn];
         for (let i = 0; i < this.pl.length; i++) if (this.pl[i].hop > 0) this.pl[i].hop--;
         if (this.phase === "over") { var e0 = this.edge(this.pl[0]); if (this.t > 120 && e0.go) this.reset(); this.click = null; return; }
@@ -241,7 +246,7 @@ var Rent = {
         this.btns = [];
         var bY = cy + 52;
         if (this.phase === "over") uiText("🏆 " + this.winner.name + " wins! (Space for a new game)", cx, bY + 20, 16, this.winner.col, "center", "900");
-        else if (!P0.cpu) {
+        else if (this.mine(P0)) {
             if (this.phase === "roll") { this.button("ROLL", "go", cx - 120, bY, P0.col); this.button("BUILD", "build", cx + 10, bY, "#16a34a", !this.canBuild(P0).length); }
             else if (this.phase === "buy") { this.txt("Buy " + this.offer.name + " for $" + this.offer.price + "?", cx, bY - 2, 14, "#0f172a", "900"); this.button("BUY", "go", cx - 120, bY + 8, P0.col, P0.cash < this.offer.price); this.button("SKIP", "no", cx + 10, bY + 8, "#64748b"); }
         } else this.txt(P0.name + " is thinking…", cx, bY + 20, 14, "#166534", "900");
@@ -261,7 +266,8 @@ var Rent = {
         uiPanel(14, 10, 300, 48, "#16a34a");
         uiText("RENT RUSH", 28, 36, 20, "#86efac", "left", "900");
         uiText("Round " + Math.min(this.round, rentCfg.rounds) + " / " + rentCfg.rounds + "  ·  whole colour = 2× rent + houses", 28, 52, 11, "#cbd5e1", "left", "800");
-        uiText("P1: Space roll/buy · X skip · H build" + (multiplayer ? "   P2: Enter roll/buy · ' skip · . build" : "") + "   ·   or click the buttons   ·   Esc menu", cssW / 2, cssH - 12, 12, "rgba(220,230,240,0.7)", "center", "700");
+        var lanC = typeof Net !== "undefined" && Net.role === "client";
+        uiText(lanC ? "Your turn when your name is lit: Space roll / buy · S skip · E build" : ("P1: Space roll/buy · X skip · H build" + (multiplayer ? "   P2: Enter roll/buy · ' skip · . build" : "") + "   ·   or click the buttons   ·   LAN players can join   ·   Esc menu"), cssW / 2, cssH - 12, 12, "rgba(220,230,240,0.7)", "center", "700");
     },
     // plain (un-outlined) text for the light board surface
     txt: function(t, x, y, size, col, weight) { ctx.font = (weight || "800") + " " + Math.round(size) + "px " + UI_FONT; ctx.textAlign = "center"; ctx.fillStyle = col; ctx.fillText(t, x, y); },
@@ -286,6 +292,17 @@ GameModes.register({
     overTitle: "RENT RUSH",
     setupLevel: function() { Rent.reset(); },
     screenFrame: function() { Rent.update(); Rent.draw(); },
+    screenDraw: function() { Rent.draw(); },
+    netState: function() {
+        return { sp: Rent.sp.map(function(q) { return [q.owner === undefined ? -2 : q.owner, q.h || 0]; }), pl: Rent.pl.map(function(q) { return { i: q.i, name: q.name, cpu: q.cpu, pid: q.pid || null, pos: q.pos, cash: q.cash, out: q.out, jail: q.jail, col: q.col, hop: q.hop }; }),
+            turn: Rent.turn, round: Rent.round, phase: Rent.phase, d: Rent.d, pot: Rent.pot, log: Rent.log, msg: Rent.msg, msgT: Rent.msgT, offer: Rent.offer ? Rent.sp.indexOf(Rent.offer) : -1, win: Rent.winner ? Rent.winner.i : -1, players: rentCfg.players, rounds: rentCfg.rounds };
+    },
+    applyNetState: function(m) {
+        if (!Rent.sp.length) Rent.build();
+        m.sp.forEach(function(a, i) { if (Rent.sp[i] && a[0] !== -2) { Rent.sp[i].owner = a[0]; Rent.sp[i].h = a[1]; } });
+        Rent.pl = m.pl; Rent.turn = m.turn; Rent.round = m.round; Rent.phase = m.phase; Rent.d = m.d; Rent.pot = m.pot; Rent.log = m.log; Rent.msg = m.msg; Rent.msgT = m.msgT;
+        Rent.offer = m.offer >= 0 ? Rent.sp[m.offer] : null; Rent.winner = m.win >= 0 ? Rent.pl[m.win] : null; rentCfg.rounds = m.rounds;
+    },
     onClick: function(wx, wy, button) {
         if (button !== 0) return true;
         for (let i = 0; i < Rent.btns.length; i++) { var b = Rent.btns[i]; if (mouseX >= b[0] && mouseX <= b[0] + b[2] && mouseY >= b[1] && mouseY <= b[1] + b[3]) Rent.click = b[4]; }

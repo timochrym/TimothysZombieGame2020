@@ -29,7 +29,7 @@ var Flick = {
     scale: function() { return Math.min((cssW - 80) / (this.PW + 120), (cssH - 170) / (this.PH + 40)); },
     toScreen: function(x, y) { var s = this.scale(); return [cssW / 2 + x * s, cssH / 2 + 30 + y * s]; },
     toWorld: function(sx, sy) { var s = this.scale(); return [(sx - cssW / 2) / s, (sy - cssH / 2 - 30) / s]; },
-    human: function(team) { return team === 0 || tableCfg.vs === "p2"; },
+    human: function(team) { if (typeof Net !== "undefined" && Net.role === "client") return team === 1; return team === 0 || tableCfg.vs === "p2" || (team === 1 && !!Table.lanPid()); },
 
     shoot: function(d, ang, pow) {
         var sp = 4 + pow * 26;
@@ -123,8 +123,11 @@ var Flick = {
         if (this.phase === "goal") { if (--this.goalT <= 0) this.kickoff(this.nextKick); return; }
         if (this.phase !== "aim") return;
         if (!this.human(this.turn)) { if (++this.cpuT > 50) this.cpu(); return; }
-        // mouse: press on your disc, drag back, release
+        // mouse: press on your disc, drag back, release (not for the LAN player's turn: they use their keys)
+        var lanTurn = this.turn === 1 && Table.lanPid();
         var m = this.toWorld(mouseX, mouseY);
+        if (lanTurn) { this.drag = null; }
+        else {
         if (mouseDown && !this.drag) {
             for (let i = 0; i < this.discs.length; i++) { var d = this.discs[i]; if (d.t === this.turn && Math.hypot(d.x - m[0], d.y - m[1]) < d.r + 8) { this.drag = { i: i }; this.sel = i; } }
             if (!this.drag) this.mouseLock = true;
@@ -138,6 +141,7 @@ var Flick = {
             this.mouseLock = false;
         }
         if (this.drag) { var d2 = this.discs[this.drag.i], qx = d2.x - m[0], qy = d2.y - m[1]; this.aimA = Math.atan2(qy, qx); this.aimP = Math.min(1, Math.hypot(qx, qy) / 220); }
+        }
         // keyboard / pad aiming
         var team = this.turn, mine = this.discs.filter(function(q) { return q.t === team; });
         if (this.sel < 0 || this.discs[this.sel].t !== team) this.sel = this.discs.indexOf(mine[0]);
@@ -150,6 +154,7 @@ var Flick = {
         this.prevFire = ks.fire;
     },
     keys: function(team) {
+        if (team === 1 && Table.lanPid()) { var nb = Net.peerButtons(Table.lanPid()); return { left: nb.left, right: nb.right, up: nb.up, down: nb.down, fire: !!(Net.peers[Table.lanPid()].inp || {}).jt || !!(Net.peers[Table.lanPid()].inp || {}).sh, next: nb.build }; }
         var p = team === 0 || tableCfg.vs !== "p2" ? 0 : 1, pad = (typeof Pads !== "undefined") ? Pads.state[p] : null, pa = pad && pad.active;
         if (p === 0 || !multiplayer) return { left: WASDleftPressed || (pa && pad.left), right: WASDrightPressed || (pa && pad.right), up: WASDupPressed || (pa && pad.up), down: WASDdownPressed || (pa && pad.down), fire: SpacePressed || (pa && pad.shoot), next: !!Flick.tabDown || (pa && pad.jet) };
         return { left: ULDRleftPressed || (pa && pad.left), right: ULDRrightPressed || (pa && pad.right), up: ULDRupPressed || (pa && pad.up), down: ULDRdownPressed || (pa && pad.down), fire: !!PlayerInput[1].kbShoot || (pa && pad.shoot), next: !!PlayerInput[1].kbInteract || (pa && pad.jet) };
@@ -208,7 +213,7 @@ var Flick = {
 var Four = {
     C: 7, R: 6, g: null, turn: 0, over: false, win: -1, line: null, col: 3, drop: null, cpuT: 0,
     reset: function(first) { this.g = []; for (let c = 0; c < this.C; c++) this.g.push([]); this.turn = first || 0; this.over = false; this.win = -1; this.line = null; this.drop = null; this.cpuT = 0; },
-    human: function(t) { return t === 0 || tableCfg.vs === "p2"; },
+    human: function(t) { if (typeof Net !== "undefined" && Net.role === "client") return t === 1; return t === 0 || tableCfg.vs === "p2" || (t === 1 && !!Table.lanPid()); },
     play: function(c) {
         if (this.over || this.drop || this.g[c].length >= this.R) return false;
         this.g[c].push(this.turn);
@@ -275,9 +280,10 @@ var Four = {
         if (this.over) return;
         if (!this.human(this.turn)) { if (++this.cpuT > 30) { this.cpuT = 0; this.cpuMove(); } return; }
         var G = this.geo(), mc = Math.floor((mouseX - G.x0) / G.cs);
-        if (Four.mouseMoved && mc >= 0 && mc < this.C) this.col = mc;
+        if (Four.mouseMoved && mc >= 0 && mc < this.C && !(this.turn === 1 && Table.lanPid())) this.col = mc;
         var p = this.turn === 0 || tableCfg.vs !== "p2" || !multiplayer ? 0 : 1;
         var L = p ? ULDRleftPressed : WASDleftPressed, R = p ? ULDRrightPressed : WASDrightPressed, F = p ? !!PlayerInput[1].kbShoot : SpacePressed;
+        if (this.turn === 1 && Table.lanPid()) { var nb = Net.peerButtons(Table.lanPid()); L = nb.left; R = nb.right; F = nb.go; }
         var pad = (typeof Pads !== "undefined") ? Pads.state[p] : null;
         if (pad && pad.active) { L = L || pad.left; R = R || pad.right; F = F || pad.shoot; }
         if (L && !this.pL) this.col = Math.max(0, this.col - 1); if (R && !this.pR) this.col = Math.min(this.C - 1, this.col + 1);
@@ -303,10 +309,33 @@ var Four = {
         ctx.fillStyle = "#1d4ed8"; ctx.fill("evenodd");
         ctx.restore();
         if (this.line) { ctx.strokeStyle = "#fde047"; ctx.lineWidth = 8; ctx.lineCap = "round"; ctx.beginPath(); var p0 = this.line[0], p3 = this.line[3]; ctx.moveTo(G.x0 + (p0[0] + 0.5) * cs, G.y0 + (this.R - 1 - p0[1] + 0.5) * cs); ctx.lineTo(G.x0 + (p3[0] + 0.5) * cs, G.y0 + (this.R - 1 - p3[1] + 0.5) * cs); ctx.stroke(); }
-        var who = function(t) { return (t === 0 ? "RED" : "BLUE") + (tableCfg.vs === "cpu" ? (t === 0 ? " (you)" : " (CPU)") : ""); };
+        var who = function(t) {
+            var lanC = typeof Net !== "undefined" && Net.role === "client", lanName = Table.lanPid() ? Net.peers[Table.lanPid()].name : "";
+            if (lanC) return t === 1 ? "BLUE (you)" : "RED (host)";
+            if (lanName) return t === 1 ? "BLUE (" + lanName + ")" : "RED (you)";
+            return (t === 0 ? "RED" : "BLUE") + (tableCfg.vs === "cpu" ? (t === 0 ? " (you)" : " (CPU)") : "");
+        };
         uiPanel(cssW / 2 - 200, 64, 400, 44, TABLE_COLORS[this.over ? Math.max(0, this.win) : this.turn]);
         uiText(this.over ? (this.win < 0 ? "DRAW!  ·  Space / click for a rematch" : who(this.win) + " WINS!  ·  Space / click for a rematch") : who(this.turn) + "'s turn", cssW / 2, 92, 16, "#fff", "center", "900");
         uiText("Click a column or ←/→ (A/D) + Space to drop · four in a line wins · Esc: opponent / game", cssW / 2, cssH - 14, 12, "rgba(220,230,240,0.7)", "center", "700");
+    }
+};
+
+// LAN: the first LAN player takes BLUE (the CPU / P2 side)
+var Table = {
+    lanPid: function() { if (typeof Net === "undefined" || Net.role !== "host") return null; for (var k in Net.peers) return Net.peers[k].pid; return null; },
+    netState: function() {
+        return { g: tableCfg.game, vs: tableCfg.vs, lan: !!Table.lanPid(), lanName: Table.lanPid() ? Net.peers[Table.lanPid()].name : "",
+            f: { d: Flick.discs.map(function(q) { return [Math.round(q.x), Math.round(q.y), q.t]; }), b: [Math.round(Flick.ball.x), Math.round(Flick.ball.y)], turn: Flick.turn, phase: Flick.phase, score: Flick.score, sel: Flick.sel, aimA: Flick.aimA, aimP: Flick.aimP, msg: Flick.msg, msgT: Flick.msgT, win: Flick.winner },
+            q: { g: Four.g, turn: Four.turn, over: Four.over, win: Four.win, line: Four.line, col: Four.col } };
+    },
+    apply: function(m) {
+        tableCfg.game = m.g; tableCfg.vs = m.vs; Table.remote = m.lan; Table.remoteName = m.lanName;
+        var F = m.f;
+        if (!Flick.discs.length) Flick.kickoff(0);
+        F.d.forEach(function(a, i) { if (Flick.discs[i]) { Flick.discs[i].x = a[0]; Flick.discs[i].y = a[1]; Flick.discs[i].t = a[2]; } });
+        Flick.ball.x = F.b[0]; Flick.ball.y = F.b[1]; Flick.turn = F.turn; Flick.phase = F.phase; Flick.score = F.score; Flick.sel = F.sel; Flick.aimA = F.aimA; Flick.aimP = F.aimP; Flick.msg = F.msg; Flick.msgT = F.msgT; Flick.winner = F.win;
+        var Q = m.q; Four.g = Q.g; Four.turn = Q.turn; Four.over = Q.over; Four.win = Q.win; Four.line = Q.line; Four.col = Q.col; Four.drop = null;
     }
 };
 
@@ -335,11 +364,20 @@ GameModes.register({
         uiText((TABLE_GAMES.filter(function(g) { return g[0] === tableCfg.game; })[0] || ["", ""])[1] + "  ·  " + (tableCfg.vs === "cpu" ? "vs CPU (" + ["", "easy", "normal", "hard"][tableCfg.level] + ")" : "2 players"), 28, 52, 11, "#cbd5e1", "left", "800");
     },
 
+    screenDraw: function() {
+        // LAN client view: blue is me; reuse the normal drawing (client-side "human" = it's my turn)
+        if (tableCfg.game === "four") Four.draw(); else Flick.draw();
+        uiPanel(14, 10, 300, 48, "#22c55e");
+        uiText("TABLE GAMES  ·  you are BLUE", 28, 36, 16, "#86efac", "left", "900");
+        uiText("Four in a Row: ←/→ + Space   ·   Flick: ←/→ aim, ↑/↓ power, E next disc, Space shoot", 28, 52, 10, "#cbd5e1", "left", "700");
+    },
+    netState: function() { return Table.netState(); },
+    applyNetState: function(m) { Table.apply(m); },
     onClick: function(wx, wy, button) {
         if (button !== 0) return true;
         if (tableCfg.game === "four") {
             if (Four.over) { Four.reset(Four.win === 0 ? 1 : 0); return true; }
-            if (!Four.human(Four.turn)) return true;
+            if (!Four.human(Four.turn) || (Four.turn === 1 && Table.lanPid())) return true;
             var G = Four.geo(), c = Math.floor((mouseX - G.x0) / G.cs);
             if (c >= 0 && c < Four.C) { Four.col = c; Four.play(c); }
         }

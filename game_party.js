@@ -49,7 +49,10 @@ var Party = {
         this.say("Round 1 — " + this.pl[0].name + " rolls first!");
     },
     padFor: function(i) { var p = (typeof Pads !== "undefined") ? Pads.state[i] : null; return i >= 2 && p && p.active; },
+    keyName: function(P) { if (P.pid) return (typeof Net !== "undefined" && Net.role === "client" && P.pid === Net.pid) ? "Space" : P.name + "'s Space"; return ["Space", "Enter", "pad 3", "pad 4"][P.i]; },
     btn: function(i) {
+        var seat = this.pl[i];
+        if (seat && seat.pid && typeof Net !== "undefined") return Net.peerButtons(seat.pid).go;
         var pad = (typeof Pads !== "undefined") ? Pads.state[i] : null, pd = !!(pad && pad.active && (pad.shoot || pad.up));
         if (i === 0) return SpacePressed || mouseDown || pd;
         if (i === 1) return !!PlayerInput[1].kbShoot || ULDRupPressed || pd;
@@ -63,6 +66,7 @@ var Party = {
     update: function() {
         this.t++;
         if (this.msgT > 0) this.msgT--;
+        if (typeof Net !== "undefined" && Net.role === "host" && Net.seatPeers(this.pl, function(i) { return "CPU " + (i + 1); })) this.say("LAN seats: " + this.pl.map(function(q) { return q.name; }).join(", "));
         var P = this.pl[this.turn];
         if (this.phase === "intro") { if (this.t > 90) { this.phase = "roll"; this.t = 0; } }
         else if (this.phase === "roll") {
@@ -202,7 +206,7 @@ var Party = {
             uiText(P2.name + "'s turn", cx, cy - 64, 20, P2.col, "center", "900");
             ctx.fillStyle = "#f8fafc"; ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 4; this.round2(cx - 34, cy - 50, 68, 68, 12); ctx.fill(); ctx.stroke();
             uiText(String(this.phase === "move" ? this.steps : this.die), cx, cy + 2, 40, "#0f172a", "center", "900");
-            uiText(this.phase === "roll" ? (P2.cpu ? "rolling…" : "press " + ["Space", "Enter", "pad 3", "pad 4"][P2.i] + " to roll!") : (this.phase === "move" ? "moving…" : ""), cx, cy + 42, 14, "#e2e8f0", "center", "800");
+            uiText(this.phase === "roll" ? (P2.cpu ? "rolling…" : "press " + this.keyName(P2) + " to roll!") : (this.phase === "move" ? "moving…" : ""), cx, cy + 42, 14, "#e2e8f0", "center", "800");
         }
         if (this.phase === "over") {
             uiPanel(cx - 220, cy - 100, 440, 200, this.winner.col, 0.95);
@@ -238,7 +242,7 @@ var Party = {
         for (let i = 0; i < n; i++) {
             var P = this.pl[i], x = cx - (n * (lw + 14)) / 2 + i * (lw + 14), y = cssH / 2 + 30;
             uiPanel(x, y, lw, 120, P.col, 0.9);
-            uiText(P.name + (P.cpu ? "" : " (" + ["Space", "Enter", "pad 3", "pad 4"][i] + ")"), x + lw / 2, y + 26, 15, P.col, "center", "900");
+            uiText(P.name + (P.cpu ? "" : " (" + this.keyName(P) + ")"), x + lw / 2, y + 26, 15, P.col, "center", "900");
             var val = M.k === "mash" ? M.score[i] + " taps" : (!M.done[i] ? "…" : (M.k === "draw" ? (M.score[i] < 0 ? "TOO EARLY!" : (M.score[i] / 60).toFixed(2) + " s") : "off by " + M.score[i]));
             uiText(val, x + lw / 2, y + 74, 24, "#fff", "center", "900");
             if (M.k === "mash") { ctx.fillStyle = P.col; ctx.fillRect(x + 12, y + 92, (lw - 24) * Math.min(1, M.score[i] / 60), 12); }
@@ -260,6 +264,20 @@ GameModes.register({
     overTitle: "PARTY BOARD",
     setupLevel: function() { Party.reset(); },
     screenFrame: function() { Party.update(); Party.draw(); },
+    screenDraw: function() { Party.t++; Party.draw(); },
+    netState: function() {
+        var P = Party;
+        return { pl: P.pl.map(function(q) { return { i: q.i, name: q.name, cpu: q.cpu, pid: q.pid || null, pos: q.pos, coins: q.coins, stars: q.stars, hop: q.hop, col: q.col, wins: q.wins }; }),
+            sk: P.spaces.map(function(q) { return q.k; }), star: P.star, turn: P.turn, round: P.round, phase: P.phase, t: P.t, die: P.die, steps: P.steps, msg: P.msg, msgT: P.msgT,
+            mini: P.mini ? { k: P.mini.k, t: P.mini.t, score: P.mini.score, done: P.mini.done, go: P.mini.go, target: P.mini.target } : null, win: P.winner ? P.winner.i : -1, rounds: partyCfg.rounds };
+    },
+    applyNetState: function(m) {
+        var P = Party;
+        if (!P.spaces.length) P.build();
+        m.sk.forEach(function(k, i) { if (P.spaces[i]) P.spaces[i].k = k; });
+        P.pl = m.pl; P.star = m.star; P.turn = m.turn; P.round = m.round; P.phase = m.phase; P.t = m.t; P.die = m.die; P.steps = m.steps; P.msg = m.msg; P.msgT = m.msgT;
+        P.mini = m.mini; P.winner = m.win >= 0 ? P.pl[m.win] : null; partyCfg.rounds = m.rounds;
+    },
     onClick: function() { return true; },
     menuItems: function(items) {
         items.push({ id: "pt_hum", label: "Humans:  ◀  " + partyCfg.humans + " (P1 Space" + (partyCfg.humans > 1 ? ", P2 Enter" : "") + ")  ▶", hint: "gamepads 3-4 join as P3 / P4; the rest are CPUs", cycle: true });

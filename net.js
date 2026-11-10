@@ -164,6 +164,26 @@ var Net = {
         NetUI.render();
     },
 
+    // Turn-based full-screen games: LAN players take over CPU seats. list = the game's players; each seat may carry
+    // .pid (a LAN player) and .cpu. Returns true when seats changed. Freed seats go back to the CPU.
+    seatPeers: function(list, cpuName) {
+        if (this.role !== "host") return false;
+        var changed = false, self = this;
+        list.forEach(function(q, i) { if (q.pid && !self.peers[q.pid]) { q.pid = null; q.cpu = true; q.name = cpuName(i); changed = true; } });
+        for (var k in this.peers) {
+            var pr = this.peers[k];
+            if (list.some(function(q) { return q.pid === pr.pid; })) continue;
+            var seat = list.find(function(q) { return q.cpu && !q.pid && !q.out; });
+            if (seat) { seat.pid = pr.pid; seat.cpu = false; seat.name = pr.name.length <= 10 ? pr.name : "P" + (list.indexOf(seat) + 1); changed = true; }
+        }
+        return changed;
+    },
+    // buttons of a LAN player for turn-based games: go = Space / F / ↑, no = ↓ / S, build/extra = E, plus left / right
+    peerButtons: function(pid) {
+        var p = this.peers[pid], i = (p && p.inp) || {};
+        return { go: !!(i.jt || i.sh || i.u), no: !!i.d, build: !!i.it, left: !!i.l, right: !!i.r, up: !!i.u, down: !!i.d };
+    },
+
     // ================================================================== HOST
     hostAddPeer: function(pid, name) {
         var used = {};
@@ -617,7 +637,14 @@ var Net = {
             this.drawWaiting(this.hostInHub ? "The host is picking a game…" : (this.status || "Waiting for the host…"));
             return;
         }
-        // the full-screen games (board games, arenas, Sand Lab…) don't stream over LAN yet: say so instead of an empty world
+        // full-screen games: the ones with a draw-only path (turn-based board / table games) render the host's state;
+        // the rest don't stream over LAN yet, so say so instead of an empty world
+        if (GameModes.current && GameModes.current.flags && GameModes.current.flags.ownScreen && GameModes.has("screenDraw")) {
+            GameModes.call("screenDraw");
+            if (typeof drawBanners === "function") drawBanners();
+            if (this.menuOpen) this.drawClientMenu();
+            return;
+        }
         if (GameModes.current && GameModes.current.flags && GameModes.current.flags.ownScreen) {
             this.drawWaiting("The host is playing " + (GameModes.current.title || "a game") + " — local-only for now (play it on the host's screen)");
             return;

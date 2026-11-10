@@ -6,6 +6,23 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## LAN for the turn-based games (Rent Rush, Party Board, Table Games)
+
+**Shipped:** a draw-only LAN path for full-screen games: a mode can now offer `screenDraw()` plus `netState()` /
+`applyNetState()`, and LAN clients render the host's state with the game's own drawing instead of the "local-only"
+screen. Net helpers: `Net.seatPeers(players)` (LAN players take free CPU seats and give them back when they leave)
+and `Net.peerButtons(pid)` (Space / F / ↑ = go, ↓ = no, E = extra, ← →). Rent Rush and Party Board seat every LAN
+player; Table Games gives the first LAN player the blue side (Four in a Row and Flick Soccer with keys), and the
+host's mouse can't play their turn. Labels say who's who ("BLUE (you)" on the client, "BLUE (Bob)" on the host).
+
+**Measured:** host + client over the real relay: Rent Rush — Bob took the CPU 2 seat, rolled and bought 2 streets
+from the client, cash matches on both screens; Four in a Row — Bob's ←/→ + Space dropped a blue counter; Party
+Board — Bob rolled and mashed in the minigame (15 taps); no errors.
+
+**Left / known:** the real-time full-screen games (arenas, Jet Dash, Sand Lab) are still local-only.
+
+---
+
 ## Siege Birds: breakable stone
 
 **Shipped:** in Birds mode the fort's stone blocks (never the one the slingshot stands on) have 240 HP: a bird that
