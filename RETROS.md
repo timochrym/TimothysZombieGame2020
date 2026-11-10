@@ -6,6 +6,20 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Portal Lab — genre-feel pass (portal test chambers)
+
+**Shipped:** an aim reticle for mouse aiming — a faint line to where the portal beam would land, and at that spot a
+ghost portal outline (half blue, half orange) if the surface takes portals, or a red ✕ if it doesn't (non-white
+surface or a face too short). X closes your own portals (the chamber's fixed orange one stays).
+
+**Measured:** chamber 1: reticle on the white wall vs ✕ on the floor; F places, X clears; no errors.
+
+**Went wrong:** first picked Q to close portals — Q is already the alternate grab key → moved to X (reload, unused here).
+
+**Left / known:** reticle for gamepad aim, more chambers and gadgets (TODO.md).
+
+---
+
 ## Crate Lab — genre-feel pass (physics puzzle rooms)
 
 **Shipped:** wiring — every pressure plate and lever now draws a cable to whatever it powers (doors get a junction box,

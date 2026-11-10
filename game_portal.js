@@ -105,6 +105,32 @@ var Portals = {
         Components.spawnSparks(hit.x, hit.y, col, 8);
     },
 
+    // aim reticle: where the beam would land and whether a portal would stick there
+    drawAim: function() {
+        var ch = redGuy;
+        if (!ch || ch.dead || !useMouseAim || ch.padAiming || portalState.done) return;
+        var m = Components.getMouseWorldPos(), dx = m[0] - ch.x, dy = m[1] - (ch.y + 10), l = Math.hypot(dx, dy) || 1;
+        dx /= l; dy /= l;
+        var hit = this.raycast(ch.x, ch.y + 10, dx, dy);
+        if (!hit) return;
+        var o = hit.obj, ok = !!o.portalable && (hit.nx !== 0 ? o.h >= PORTAL_LEN + 10 : o.w >= PORTAL_LEN + 10);
+        var sx = wsx(hit.x), sy = wsy(hit.y), k = cameraScaleX;
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1; ctx.setLineDash([4, 8]);
+        ctx.beginPath(); ctx.moveTo(wsx(ch.x), wsy(ch.y + 10)); ctx.lineTo(sx, sy); ctx.stroke(); ctx.setLineDash([]);
+        if (ok) {
+            // a ghost of the portal outline on the face (left half blue, right half orange = "either fits")
+            var half = PORTAL_LEN / 2 * k, vert = hit.nx !== 0, C = this.colors[0];
+            ctx.lineWidth = 3; ctx.globalAlpha = 0.75;
+            ctx.strokeStyle = C[0]; ctx.beginPath(); ctx.ellipse(sx, sy, vert ? 7 : half, vert ? half : 7, 0, Math.PI * 0.5, Math.PI * 1.5); ctx.stroke();
+            ctx.strokeStyle = C[1]; ctx.beginPath(); ctx.ellipse(sx, sy, vert ? 7 : half, vert ? half : 7, 0, -Math.PI * 0.5, Math.PI * 0.5); ctx.stroke();
+        } else {
+            ctx.strokeStyle = "rgba(248,113,113,0.85)"; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(sx - 8, sy - 8); ctx.lineTo(sx + 8, sy + 8); ctx.moveTo(sx + 8, sy - 8); ctx.lineTo(sx - 8, sy + 8); ctx.stroke();
+        }
+        ctx.restore();
+    },
+
     fizzle: function(x, y, col) {
         Components.spawnSparks(x, y, "#94a3b8", 6);
         if (typeof SFX !== "undefined") SFX.play("fizzle", x, y);
@@ -408,6 +434,13 @@ GameModes.register({
 
     onKey: function(code) {
         if (code === "KeyR") { LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
+        if (code === "KeyX") {      // close your own portals (the fixed orange one stays)
+            var pr = Portals.pairFor(0);
+            for (let j = 0; j < 2; j++) if (pr[j] && pr[j] !== Portals.fixed) { Components.spawnSparks(pr[j].x, pr[j].y, pr[j].color, 6); pr[j] = null; }
+            Portals.syncNavLinks();
+            if (typeof SFX !== "undefined") SFX.play("fizzle");
+            return true;
+        }
         return false;
     },
 
@@ -418,6 +451,7 @@ GameModes.register({
     onRestart: function() { portalState.chamber = 0; LevelManager.selectLevel(PORTAL_CHAMBERS[0]); },
 
     drawWorld: function() { Portals.draw(); },
+    drawFront: function() { Portals.drawAim(); },
 
     drawHUD: function() {
         var lvl = LevelManager.getCurrentLevel();
@@ -441,7 +475,7 @@ GameModes.register({
             }
             px += 80;
         }
-        uiText("F / click BLUE · G / right-click ORANGE · E grab · R restart · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.75)", "center", "700");
+        uiText("F / click BLUE · G / right-click ORANGE · E grab · X close portals · R restart · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.75)", "center", "700");
     },
 
     menuItems: function(items) {

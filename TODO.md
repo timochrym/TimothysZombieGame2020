@@ -54,7 +54,10 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - [~] Crate Lab: DONE — visible wiring from every plate / lever to the door, lift or bridge it powers (grey when off,
       green with flowing current when on); a hint per room on H, offered after 45 s. STILL TO DO: more rooms (lasers &
       mirrors, conveyor belts, buttons with timers), a room-select grid with best times, an undo-free "reset crate" key.
-- [ ] Portal Lab, Brawl: same pass —
+- [~] Portal Lab: DONE — aim reticle shows where the beam lands and whether a portal will stick (blue/orange ghost
+      outline on white panels, red ✕ elsewhere); X closes your portals. STILL TO DO: more chambers (laser relays,
+      light bridges, turrets that ragdoll), pad-aim reticle, chamber-select grid.
+- [ ] Brawl: same pass —
       list each genre's core feel features and close the gaps.
 
 ## Your suggestions not built yet (backlog, all original games in the genre — no copied names/art)
