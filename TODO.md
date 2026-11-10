@@ -29,8 +29,13 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       (was already on), power-ups rising out of blocks (already there), course themes: Meadow / dark Cave with
       stalactites and crystals / bright Sky with drifting clouds (new `drawBack` hook).
       Left for the polish pass with you: crouch, a dedicated shell sprite, chunkier hero / enemy sprites (taste calls).
-- [ ] ⏸ PAUSED — Terra (sandbox): tools (pickaxe/axe tiers), crafting bench + recipes, torches & real light map, day/night with
-      night enemies, inventory screen, world save/load, ore veins and biomes underground.
+- [x] Terra (resumed after the other tasks, as "pause in favor of other tasks" implied): pickaxe tiers (hands → wood →
+      stone → iron → gold) gating stone / iron / gold / crystal and speeding mining up, crafting panel (C: planks,
+      workbench, torches, pickaxes, bricks — tools need a workbench nearby), torches + a per-tile light map (sky light
+      by time of day fading underground, torches, heroes' glow), day / night cycle (4 min) with monsters on the surface
+      at night (gone at dawn), inventory screen (I), save / load (K / L) + autosave every minute + continue on launch,
+      ore veins, a deep layer (deepstone + crystals), no game over (you wake at spawn). E shockwave to fight.
+      Still open: LAN sync of the tile grid (Terra is host-screen only on LAN), axes / swords, more biomes.
 - [x] Zombie Ball "Flail" style (pause menu → Style): one-button physics soccer — two big-headed, stiff-legged
       ragdoll players per team, tap = jump & kick, hold = tip forward, they stand back up; CPUs time presses.
 - [x] Flail polish: goalkeepers (on by default; they hold the goal line and spring straight up), modifiers in the
@@ -74,8 +79,8 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       (stepped shaft under timber roofing), a Deep Mine tunnel 560 px below the trail (scaffolds, ore crates, dynamite,
       knights / archers / bats) and a climb back to daylight, before the Deep Echo Caverns. (West of the start is
       unchanged: chunk heights chain west→east only.)
-- [ ] ⏸ PAUSED by you — B3 — Terraria-like generation + block-game capabilities → Terra (above). Next: save/load worlds, crafting
-      (planks from wood, torches), lighting from torches, enemies at night / in caves, LAN sync of the tile grid.
+- [x] B3 — Terraria-like generation + block-game capabilities → Terra (above): save/load, crafting, torch lighting,
+      night enemies done. LAN tile sync still open.
 - [x] B4 — Cell arena (agar-style) → **Blob Arena**: eat pellets and blobs 25% smaller, bigger = slower, split to lunge
       (pieces merge back after 9 s), eject mass, spiky viruses pop big blobs into pieces, 14 CPU blobs that flee /
       chase / lunge / dodge viruses, leaderboard, best mass, local P2 + pads. Next: LAN, teams, feeding viruses.

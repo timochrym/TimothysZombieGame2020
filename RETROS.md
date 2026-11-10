@@ -6,6 +6,27 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Terra resumed: tools, crafting, light, day/night, saving
+
+**Shipped:** you paused Terra "in favor of other tasks"; those are done, so it's back. Pickaxe tiers (hands → wooden →
+stone → iron → gold) decide what you can mine (stone needs wood, iron needs stone, gold and crystal need iron) and how
+fast. C opens a crafting panel (planks, workbench, torches, the pickaxes, bricks; tools need a workbench within a few
+tiles). Torches are placeable and light the caves through a per-tile light map (sky light by time of day that fades
+below the surface, torches radius 8, your own glow radius 5) — it replaces the old radial darkness. A 4-minute day /
+night cycle: at night monsters walk in on the surface and vanish at dawn; E shockwave fights back; no game over (you
+wake at spawn with your stuff). I = inventory, K / L = save / load (run-length encoded, ~38 KB), autosave every minute
+and the saved world is continued on launch, N twice = new world. Generation: ore veins instead of single specks, the
+world is 30% deeper with a deepstone layer holding crystals.
+
+**Measured:** fresh world: 28k deepstone, 190 crystal, 1087 coal / 653 iron / 263 gold in veins; hands can't dig
+stone (gated), wood → planks → workbench → wooden pickaxe → stone dug; torches crafted from wood + coal; at 21:45
+two night monsters spawned; save → change → load restored the grid checksum and tool; the original Terra test still
+passes; no errors.
+
+**Left / known:** LAN sync of the tile grid, axes / swords, more biomes.
+
+---
+
 ## Wobble Wheels over LAN
 
 **Shipped:** LAN players get a rider of their own in Wobble Wheels (an `addNetPlayer` hook: hidden seat hero + rider

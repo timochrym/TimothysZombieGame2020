@@ -6,8 +6,9 @@
 //   Only the tiles near the camera exist as collision boxes (merged into runs), so the world can be huge.
 // ============================================================================
 var TERRA = {
-    T: 40, W: 640, H: 170, TOP: 2400,               // tile size, columns, rows, world y of row 0's top edge
-    grid: null, seed: 1, chunks: {}, CH: 16, inv: {}, sel: 0, mineT: 0, mineAt: null, surface: [], tick: 0
+    T: 40, W: 640, H: 220, TOP: 2400,               // tile size, columns, rows, world y of row 0's top edge
+    grid: null, seed: 1, chunks: {}, CH: 16, inv: {}, sel: 0, mineT: 0, mineAt: null, surface: [], tick: 0,
+    tool: 0, time: 0.3, DAY: 60 * 240, panel: null, torches: null
 };
 // id: [name, color, solid, hardness (frames to mine), drop]
 var TILES = [
@@ -23,11 +24,29 @@ var TILES = [
     ["sand", "#d6c27a", true, 14, "sand"],
     ["bedrock", "#1f2937", true, 99999, null],
     ["planks", "#b07a3c", true, 22, "planks"],
-    ["brick", "#9e3b24", true, 45, "brick"]
+    ["brick", "#9e3b24", true, 45, "brick"],
+    ["workbench", "#8b5a2b", false, 20, "workbench"],
+    ["torch", "#fbbf24", false, 4, "torch"],
+    ["crystal", "#a78bfa", true, 70, "crystal"],
+    ["deepstone", "#3f3f55", true, 55, "stone"]
+];
+// pickaxe tier needed per tile (0 = hands) and the tool table: [name, mining speed multiplier]
+var TERRA_NEED = { stone: 1, coal: 1, brick: 1, iron: 2, gold: 3, crystal: 3, deepstone: 2 };
+var TERRA_TOOLS = [["hands", 1.7], ["wooden pickaxe", 1], ["stone pickaxe", 0.7], ["iron pickaxe", 0.5], ["gold pickaxe", 0.33]];
+// recipes: [label, gives {item: n} or {tool: tier}, cost {item: n}, needs a workbench nearby]
+var TERRA_RECIPES = [
+    ["4 planks", { planks: 4 }, { wood: 1 }, false],
+    ["Workbench", { workbench: 1 }, { planks: 6 }, false],
+    ["4 torches", { torch: 4 }, { wood: 1, coal: 1 }, false],
+    ["Wooden pickaxe", { tool: 1 }, { planks: 5 }, true],
+    ["Stone pickaxe", { tool: 2 }, { planks: 2, stone: 6 }, true],
+    ["Iron pickaxe", { tool: 3 }, { planks: 2, iron: 5 }, true],
+    ["Gold pickaxe", { tool: 4 }, { planks: 2, gold: 5, crystal: 1 }, true],
+    ["2 bricks", { brick: 2 }, { stone: 2 }, true]
 ];
 // texture per tile id (textures.js)
-var TERRA_TEX = [null, "tex_dirt", "grass_top", "stone_raw", "ore_coal", "ore_iron", "ore_gold", "log", "leaves", "sand", "bedrock", "wood_plank", "brick"];
-var TERRA_PLACEABLE = ["dirt", "stone", "sand", "planks", "brick", "wood", "coal", "iron", "gold"];
+var TERRA_TEX = [null, "tex_dirt", "grass_top", "stone_raw", "ore_coal", "ore_iron", "ore_gold", "log", "leaves", "sand", "bedrock", "wood_plank", "brick", "wood_plank", null, null, "bedrock"];
+var TERRA_PLACEABLE = ["dirt", "stone", "sand", "planks", "brick", "wood", "torch", "workbench", "coal", "iron", "gold"];
 var TILE_ID = {}; TILES.forEach(function(t, i) { TILE_ID[t[0]] = i; });
 
 // ---------------------------------------------------------------- deterministic noise
@@ -65,15 +84,23 @@ function terraGenerate(seed) {
                 var cv = terraNoise2(c, r * 1.6, 9) * 0.6 + terraNoise2(c + 500, r, 22) * 0.4;
                 if (cv > 0.66 - Math.min(0.08, depth / 900)) t = 0;
             }
-            if (t === TILE_ID.stone) {
-                var o = terraHash(c * 3 + 1, r * 5 + 2);
-                if (o < 0.035) t = TILE_ID.coal;
-                else if (depth > 25 && o < 0.052) t = TILE_ID.iron;
-                else if (depth > 55 && o < 0.062) t = TILE_ID.gold;
-            }
+            if (t === TILE_ID.stone && depth > 90) t = TILE_ID.deepstone;          // the deep layer: darker, harder rock
             g[r * W + c] = t;
         }
     }
+    // ore veins: seed points that grow into blobs (coal shallow, iron mid, gold deep, crystal in the deep layer)
+    var vein = function(id, count, minD, size) {
+        for (let n = 0; n < count; n++) {
+            var c = Math.floor(terraHash(n * 7 + id, 11) * W), r = Tr.surface[c] + minD + Math.floor(terraHash(n * 13 + id, 5) * (H - 6 - Tr.surface[c] - minD));
+            var len = size + Math.floor(terraHash(n, id) * size);
+            for (let k = 0; k < len; k++) {
+                if (r > 0 && r < H - 4 && c > 0 && c < W - 1) { var cur = g[r * W + c]; if (cur === TILE_ID.stone || cur === TILE_ID.deepstone) g[r * W + c] = id; }
+                var d = terraHash(n * 31 + k, id * 3);
+                if (d < 0.25) c++; else if (d < 0.5) c--; else if (d < 0.75) r++; else r--;
+            }
+        }
+    };
+    vein(TILE_ID.coal, 260, 4, 6); vein(TILE_ID.iron, 170, 22, 5); vein(TILE_ID.gold, 90, 50, 4); vein(TILE_ID.crystal, 70, 92, 4);
     // trees on forest grass
     for (let c = 3; c < W - 3; c++) {
         var b2 = terraNoise1(c, 90);
@@ -146,6 +173,49 @@ function terraSet(c, r, t) {
     if (Tr.chunks[k]) terraStream(k);
 }
 
+// ---------------------------------------------------------------- crafting / tools / saving
+function terraHas(cost) { for (var k in cost) if ((TERRA.inv[k] || 0) < cost[k]) return false; return true; }
+function terraNearBench(ch) {
+    var c0 = terraCol(ch.x), r0 = terraRow(ch.y);
+    for (let dr = -4; dr <= 4; dr++) for (let dc = -5; dc <= 5; dc++) if (terraGet(c0 + dc, r0 + dr) === TILE_ID.workbench) return true;
+    return false;
+}
+function terraCraft(i) {
+    var R = TERRA_RECIPES[i], ch = redGuy;
+    if (!R || !ch) return;
+    if (R[3] && !terraNearBench(ch)) { Components.addFloatingText("Needs a workbench nearby", ch.x, ch.y + 110, "#fca5a5", 15); return; }
+    if (R[1].tool !== undefined && TERRA.tool >= R[1].tool) { Components.addFloatingText("You already have a better pickaxe", ch.x, ch.y + 110, "#fca5a5", 15); return; }
+    if (!terraHas(R[2])) { Components.addFloatingText("Missing materials", ch.x, ch.y + 110, "#fca5a5", 15); return; }
+    for (var k in R[2]) TERRA.inv[k] -= R[2][k];
+    if (R[1].tool !== undefined) TERRA.tool = R[1].tool; else for (var g in R[1]) TERRA.inv[g] = (TERRA.inv[g] || 0) + R[1][g];
+    Components.addFloatingText("Crafted " + R[0] + "!", ch.x, ch.y + 110, "#bef264", 17);
+    if (typeof SFX !== "undefined") SFX.play("pickup");
+}
+// save / load: the grid is run-length encoded
+function terraSave(quiet) {
+    try {
+        var g = TERRA.grid, out = [], v = g[0], n = 0;
+        for (let i = 0; i < g.length; i++) { if (g[i] === v && n < 65000) n++; else { out.push(v, n); v = g[i]; n = 1; } }
+        out.push(v, n);
+        localStorage.setItem("timsTerraWorld", JSON.stringify({ seed: TERRA.seed, W: TERRA.W, H: TERRA.H, g: out, s: TERRA.surface, inv: TERRA.inv, tool: TERRA.tool, time: TERRA.time, x: redGuy ? redGuy.x : 0, y: redGuy ? redGuy.y : 0 }));
+        if (!quiet) showBanner("WORLD SAVED", "it also autosaves every minute", "#bef264");
+        return true;
+    } catch (e) { if (!quiet) showBanner("Couldn't save", "storage full?", "#f87171"); return false; }
+}
+function terraLoad() {
+    try {
+        var d = JSON.parse(localStorage.getItem("timsTerraWorld") || "null");
+        if (!d || d.W !== TERRA.W || d.H !== TERRA.H) return false;
+        var g = new Uint8Array(d.W * d.H), k = 0;
+        for (let i = 0; i < d.g.length; i += 2) { g.fill(d.g[i], k, k + d.g[i + 1]); k += d.g[i + 1]; }
+        TERRA.grid = g; TERRA.seed = d.seed; TERRA.surface = d.s; TERRA.inv = d.inv || {}; TERRA.tool = d.tool || 0; TERRA.time = d.time || 0.3; TERRA.chunks = {};
+        TERRA.loadPos = [d.x, d.y];
+        return true;
+    } catch (e) { return false; }
+}
+// light: 1 = full light. sky light by time of day (fading with depth), plus torches and the heroes' own glow
+function terraDaylight() { var t = TERRA.time; return Math.max(0.12, Math.min(1, 0.5 + Math.sin((t - 0.25) * Math.PI * 2) * 0.9)); }
+
 // ---------------------------------------------------------------- the mode
 GameModes.register({
     id: "terra",
@@ -153,38 +223,68 @@ GameModes.register({
     tagline: "Dig, mine and build in a deep generated world: biomes, caves, ores, trees.",
     color: "#84cc16",
     firstLevel: "terra_world",
-    flags: { waves: false, revive: false, jetpack: true, shooting: false, ability: false, ammo: false, noBedrock: true, scenery: false,
+    flags: { waves: false, revive: false, jetpack: true, shooting: false, ability: true, ammo: false, noBedrock: true, scenery: false,
         coopToggle: true, dash: true, wallJump: true, airJumps: 1, deepWorld: true },
     overTitle: "TERRA",
 
     setupLevel: function() {
-        if (!TERRA.grid) terraGenerate(TERRA.seed > 1 ? TERRA.seed : 0);
-        TERRA.chunks = {};
-        TERRA.inv = TERRA.inv && window.Object.keys(TERRA.inv).length ? TERRA.inv : { dirt: 20, planks: 20 };
+        if (!TERRA.grid && !terraLoad()) terraGenerate(TERRA.seed > 1 ? TERRA.seed : 0);
+        TERRA.chunks = {}; TERRA.panel = null;
+        TERRA.inv = TERRA.inv && window.Object.keys(TERRA.inv).length ? TERRA.inv : { dirt: 20, planks: 20, torch: 6 };
         var c = Math.floor(TERRA.W / 2);
         cameraTargetX = terraCX(c); cameraTargetY = terraCY(TERRA.surface[c]);
         terraStream();
     },
 
     createPlayers: function() {
-        var c = Math.floor(TERRA.W / 2), y = terraCY(TERRA.surface[c]) + 100;
-        ModeKit.makeHero(0, terraCX(c), y);
-        if (multiplayer) ModeKit.makeHero(1, terraCX(c) + 80, y); else blueGuy = null;
+        var c = Math.floor(TERRA.W / 2), y = terraCY(TERRA.surface[c]) + 100, x = terraCX(c);
+        if (TERRA.loadPos) { x = TERRA.loadPos[0]; y = TERRA.loadPos[1] + 20; TERRA.loadPos = null; }
+        ModeKit.makeHero(0, x, y);
+        if (multiplayer) ModeKit.makeHero(1, x + 80, y); else blueGuy = null;
+    },
+    // no game over: running out of health makes you wake up at the world spawn (inventory kept)
+    onDamage: function(ch, amount) {
+        if (!ch.isPlayer || amount >= 0) return false;
+        if (ch.invulnTimer > 0) return true;
+        ch.health += amount; ch.hitFlashTimer = 6; ch.invulnTimer = 20;
+        if (ch.health <= 0) {
+            var c = Math.floor(TERRA.W / 2);
+            ch.x = terraCX(c); ch.y = terraCY(TERRA.surface[c]) + 100; ch.xspeed = ch.yspeed = 0; ch.health = ch.maxHealth; ch.invulnTimer = 120;
+            showBanner("YOU FAINTED", "you wake up at the world spawn (your stuff is safe)", "#fca5a5");
+        }
+        return true;
     },
 
     canShoot: function() { return false; },
     onPad: function(i, b) { if (b === 8 && i === 0) { TERRA.sel = (TERRA.sel + 1) % TERRA_PLACEABLE.length; return true; } return false; },
 
     onKey: function(code) {
-        var m = /^Digit([1-9])$/.exec(code);
-        if (m) { TERRA.sel = Number(m[1]) - 1; return true; }
-        if (code === "KeyN") { terraGenerate(0); LevelManager.selectLevel("terra_world"); return true; }
+        var m = /^Digit([0-9])$/.exec(code);
+        if (m) {
+            var n = Number(m[1]) === 0 ? 10 : Number(m[1]);
+            if (TERRA.panel === "craft") terraCraft(n - 1); else TERRA.sel = Math.min(TERRA_PLACEABLE.length - 1, n - 1);
+            return true;
+        }
+        if (code === "Minus" && !TERRA.panel) { TERRA.sel = TERRA_PLACEABLE.length - 1; return true; }
+        if (code === "KeyC") { TERRA.panel = TERRA.panel === "craft" ? null : "craft"; return true; }
+        if (code === "KeyI" || code === "Tab") { TERRA.panel = TERRA.panel === "inv" ? null : "inv"; return true; }
+        if (code === "KeyK") { terraSave(false); return true; }
+        if (code === "KeyL") { if (terraLoad()) { LevelManager.selectLevel("terra_world"); showBanner("WORLD LOADED", "", "#bef264"); } else showBanner("No saved world", "K saves", "#fca5a5"); return true; }
+        if (code === "KeyN") { if (TERRA.panel === "newconfirm") { TERRA.panel = null; terraGenerate(0); TERRA.inv = { dirt: 20, planks: 20, torch: 6 }; TERRA.tool = 0; TERRA.time = 0.3; LevelManager.selectLevel("terra_world"); } else { TERRA.panel = "newconfirm"; } return true; }
+        if (TERRA.panel === "newconfirm") TERRA.panel = null;
         return false;
     },
 
     // right-click: place a block
     onSecondary: function(ch) { this.placeAt(ch); return true; },
-    onClick: function(wx, wy, button) { if (button === 2) { this.placeAt(redGuy, wx, wy); return true; } return false; },
+    onClick: function(wx, wy, button) {
+        if (TERRA.panel === "craft" && button === 0) {
+            var R = TERRA.craftRects || [];
+            for (let i = 0; i < R.length; i++) if (mouseX >= R[i][0] && mouseX <= R[i][0] + R[i][2] && mouseY >= R[i][1] && mouseY <= R[i][1] + R[i][3]) { terraCraft(R[i][4]); mouseDown = false; return true; }
+        }
+        if (button === 2) { this.placeAt(redGuy, wx, wy); return true; }
+        return false;
+    },
 
     // the tile a hero is working on: the one under the mouse, or (keys / gamepad) the first solid tile along the aim;
     // `place` asks for the empty tile just before it instead
@@ -222,6 +322,16 @@ GameModes.register({
     preUpdate: function() {
         TERRA.tick++;
         if (TERRA.tick % 20 === 0) terraStream();
+        TERRA.time = (TERRA.time + 1 / TERRA.DAY) % 1;
+        if (TERRA.tick % 3600 === 0) terraSave(true);                      // autosave every minute
+        // night: monsters come out on the surface (and go home at dawn)
+        var night = terraDaylight() < 0.35, hero = redGuy;
+        if (night && hero && !hero.dead && TERRA.tick % 360 === 0 && zombies.filter(function(z) { return !z.dead; }).length < 6) {
+            var side = Math.random() < 0.5 ? -1 : 1, zx = hero.x + side * (700 + Math.random() * 400), zc = Math.max(1, Math.min(TERRA.W - 2, terraCol(zx)));
+            var z = spawnZombie(Math.random() < 0.3 ? "BAT" : "NORMAL", terraCX(zc), terraCY(TERRA.surface[zc]) + 120);
+            if (z) { z.x = terraCX(zc); z.y = terraCY(TERRA.surface[zc]) + 120; z.terraNight = true; }
+        }
+        if (!night && TERRA.tick % 60 === 0) zombies.forEach(function(z) { if (z.terraNight && !z.dead) { z.dead = true; Components.spawnSparks(z.x, z.y, "#fde68a", 6); } });
         // mining: hold the shoot button / left mouse
         var ch = redGuy;
         if (!ch || ch.dead) return;
@@ -231,10 +341,15 @@ GameModes.register({
         var id = terraGet(t.c, t.r);
         if (!t.ok || id === 0 || id === TILE_ID.bedrock) { TERRA.mineT = 0; TERRA.mineAt = null; return; }
         var key = t.c + "," + t.r;
+        var need = TERRA_NEED[TILES[id][0]] || 0;
+        if (TERRA.tool < need) {
+            if (TERRA.mineAt !== key) { TERRA.mineAt = key; TERRA.mineT = 0; Components.addFloatingText("needs a " + TERRA_TOOLS[need][0] + " (C to craft)", terraCX(t.c), terraCY(t.r) + 50, "#fca5a5", 13); }
+            return;
+        }
         if (TERRA.mineAt !== key) { TERRA.mineAt = key; TERRA.mineT = 0; }
         TERRA.mineT++;
         if (TERRA.mineT % 8 === 0 && typeof SFX !== "undefined") SFX.play("ui", terraCX(t.c), terraCY(t.r), 0.2, 0.6);
-        if (TERRA.mineT >= TILES[id][3]) {
+        if (TERRA.mineT >= TILES[id][3] * TERRA_TOOLS[TERRA.tool][1]) {
             var drop = TILES[id][4];
             if (drop) TERRA.inv[drop] = (TERRA.inv[drop] || 0) + 1;
             terraSet(t.c, t.r, 0);
@@ -261,6 +376,23 @@ GameModes.register({
                 }
                 var t = TILES[id];
                 var sx = wsx(terraCX(cc) - T / 2);
+                if (id === TILE_ID.torch) {
+                    if (rr > Tr.surface[cc] + 1) { ctx.fillStyle = "#1c1917"; ctx.fillRect(sx, sy, sz, sz); }
+                    ctx.fillStyle = "#8b5a2b"; ctx.fillRect(sx + sz * 0.44, sy + sz * 0.4, sz * 0.12, sz * 0.6);
+                    ctx.fillStyle = (Tr.tick >> 3) & 1 ? "#fde047" : "#fb923c"; ctx.beginPath(); ctx.arc(sx + sz * 0.5, sy + sz * 0.33, sz * 0.16, 0, 7); ctx.fill();
+                    continue;
+                }
+                if (id === TILE_ID.workbench) {
+                    if (rr > Tr.surface[cc] + 1) { ctx.fillStyle = "#1c1917"; ctx.fillRect(sx, sy, sz, sz); }
+                    ctx.fillStyle = "#b07a3c"; ctx.fillRect(sx, sy + sz * 0.2, sz, sz * 0.22); ctx.fillStyle = "#6b4423"; ctx.fillRect(sx + sz * 0.1, sy + sz * 0.42, sz * 0.14, sz * 0.58); ctx.fillRect(sx + sz * 0.76, sy + sz * 0.42, sz * 0.14, sz * 0.58);
+                    continue;
+                }
+                if (id === TILE_ID.crystal) {
+                    ctx.fillStyle = "#3f3f55"; ctx.fillRect(sx, sy, sz, sz);
+                    ctx.fillStyle = "#c4b5fd"; ctx.beginPath(); ctx.moveTo(sx + sz * 0.3, sy + sz * 0.9); ctx.lineTo(sx + sz * 0.45, sy + sz * 0.15); ctx.lineTo(sx + sz * 0.6, sy + sz * 0.9); ctx.fill();
+                    ctx.fillStyle = "#a78bfa"; ctx.beginPath(); ctx.moveTo(sx + sz * 0.55, sy + sz * 0.9); ctx.lineTo(sx + sz * 0.72, sy + sz * 0.35); ctx.lineTo(sx + sz * 0.85, sy + sz * 0.9); ctx.fill();
+                    continue;
+                }
                 var texName = TERRA_TEX[id], tex = texName && TextureManager.canvases ? TextureManager.canvases[texName] : null;
                 if (tex && k > 0.15) { ctx.imageSmoothingEnabled = false; ctx.drawImage(tex, sx, sy, sz, sz); }
                 else { ctx.fillStyle = t[1]; ctx.fillRect(sx, sy, sz, sz); }
@@ -270,8 +402,7 @@ GameModes.register({
                     else if (id >= TILE_ID.coal && id <= TILE_ID.gold) { ctx.fillStyle = id === TILE_ID.coal ? "#111827" : (id === TILE_ID.iron ? "#e7c9a9" : "#fde047"); ctx.fillRect(sx + sz * 0.2, sy + sz * 0.25, sz * 0.22, sz * 0.22); ctx.fillRect(sx + sz * 0.58, sy + sz * 0.55, sz * 0.2, sz * 0.2); }
                     else if (id === TILE_ID.planks || id === TILE_ID.brick) { ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fillRect(sx, sy + sz * 0.48, sz, 1.5); }
                 }
-                var depth = rr - Tr.surface[cc];
-                if (depth > 6) { ctx.fillStyle = "rgba(0,0,0," + Math.min(0.55, (depth - 6) * 0.012).toFixed(3) + ")"; ctx.fillRect(sx, sy, sz, sz); }
+
             }
         }
         // mining crack + target outline
@@ -281,22 +412,34 @@ GameModes.register({
             var ox = wsx(terraCX(tg.c) - T / 2), oy = wsy(terraCY(tg.r) + T / 2);
             ctx.strokeStyle = tg.ok ? "rgba(255,255,255,0.7)" : "rgba(248,113,113,0.5)"; ctx.lineWidth = 2; ctx.strokeRect(ox, oy, sz, sz);
             if (TERRA.mineAt && TERRA.mineT > 0) {
-                var id2 = terraGet(tg.c, tg.r), f = Math.min(1, TERRA.mineT / Math.max(1, TILES[id2][3]));
+                var id2 = terraGet(tg.c, tg.r), f = Math.min(1, TERRA.mineT / Math.max(1, TILES[id2][3] * TERRA_TOOLS[TERRA.tool][1]));
                 ctx.strokeStyle = "rgba(0,0,0,0.8)"; ctx.beginPath(); ctx.moveTo(ox + sz * 0.5, oy); ctx.lineTo(ox + sz * (0.5 - f * 0.3), oy + sz * f); ctx.moveTo(ox + sz * 0.5, oy + sz * 0.3); ctx.lineTo(ox + sz * (0.5 + f * 0.4), oy + sz * (0.3 + f * 0.6)); ctx.stroke();
             }
         }
     },
 
+    // light map: every visible tile gets the brightest of sky light (by time of day, fading below the surface),
+    // torches (radius 8) and the heroes' own glow (radius 5); darkness is drawn tile by tile on top
     drawFront: function() {
-        // underground darkness with a light around each hero
-        var Tr = TERRA, ch = redGuy;
-        if (!ch) return;
-        var depth = terraRow(ch.y) - Tr.surface[Math.max(0, Math.min(Tr.W - 1, terraCol(ch.x)))];
-        if (depth < 6) return;
-        var a = Math.min(0.72, (depth - 6) * 0.03);
-        var g = ctx.createRadialGradient(wsx(ch.x), wsy(ch.y), 60, wsx(ch.x), wsy(ch.y), 420 * cameraScaleX + 120);
-        g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0," + a.toFixed(2) + ")");
-        ctx.fillStyle = g; ctx.fillRect(0, 0, cssW, cssH);
+        var Tr = TERRA, T = Tr.T, k = cameraScaleX;
+        var l = (0 - xc) / k, r = (cssW - xc) / k, top = yc / k, bot = (yc - cssH) / k;
+        var c0 = Math.max(0, terraCol(l) - 1), c1 = Math.min(Tr.W - 1, terraCol(r) + 1), r0 = Math.max(0, terraRow(top) - 1), r1 = Math.min(Tr.H - 1, terraRow(bot) + 1);
+        var lights = [], day = terraDaylight();
+        for (let rr = Math.max(0, r0 - 8); rr <= Math.min(Tr.H - 1, r1 + 8); rr++) for (let cc = Math.max(0, c0 - 8); cc <= Math.min(Tr.W - 1, c1 + 8); cc++) if (Tr.grid[rr * Tr.W + cc] === TILE_ID.torch) lights.push([cc, rr, 8]);
+        characters.forEach(function(h) { if (!h.dead && h.isPlayer) lights.push([terraCol(h.x), terraRow(h.y), 5]); });
+        var sz = T * k + 0.6;
+        for (let rr = r0; rr <= r1; rr++) {
+            var sy = wsy(terraCY(rr) + T / 2);
+            for (let cc = c0; cc <= c1; cc++) {
+                var depth = rr - Tr.surface[cc];
+                var lv = depth <= 0 ? day : day * Math.max(0, 1 - depth / 7);
+                for (let n = 0; n < lights.length; n++) { var L = lights[n], d = Math.abs(L[0] - cc) + Math.abs(L[1] - rr); if (d < L[2]) lv = Math.max(lv, 1 - d / L[2]); }
+                var dark = Math.min(0.92, 1 - lv);
+                if (dark > 0.04) { ctx.fillStyle = "rgba(4,6,14," + dark.toFixed(2) + ")"; ctx.fillRect(wsx(terraCX(cc) - T / 2), sy, sz, sz); }
+            }
+        }
+        // the night sky tint above ground
+        if (day < 0.9) { ctx.fillStyle = "rgba(10,14,40," + ((0.9 - day) * 0.35).toFixed(2) + ")"; ctx.fillRect(0, 0, cssW, cssH); }
     },
 
     drawHUD: function() {
@@ -304,17 +447,51 @@ GameModes.register({
         uiPanel(14, 14, 340, 60, "#84cc16");
         uiText("TERRA", 30, 42, 22, "#bef264", "left", "900");
         var depth = ch ? Math.max(0, terraRow(ch.y) - Tr.surface[Math.max(0, Math.min(Tr.W - 1, terraCol(ch.x)))]) : 0;
-        uiText("seed " + Tr.seed + "   depth " + depth + " m   N new world", 30, 64, 12, "#d9f99d", "left", "700");
+        var hrs = Math.floor(Tr.time * 24), mins = Math.floor((Tr.time * 24 - hrs) * 60), isNight = terraDaylight() < 0.35;
+        uiText((isNight ? "🌙 " : "☀ ") + ("0" + hrs).slice(-2) + ":" + ("0" + mins).slice(-2) + "   depth " + depth + " m   ⛏ " + TERRA_TOOLS[Tr.tool][0], 30, 64, 12, isNight ? "#c7d2fe" : "#d9f99d", "left", "700");
+        if (Tr.panel === "newconfirm") uiText("Press N again to make a NEW world (this one is lost unless you saved with K)", cssW / 2, 120, 16, "#fca5a5", "center", "900");
+        if (Tr.panel === "craft") {
+            var pw = 480, px = cssW / 2 - pw / 2, py = 110, bench = redGuy && terraNearBench(redGuy);
+            uiPanel(px, py, pw, 44 + TERRA_RECIPES.length * 34, "#bef264", 0.95);
+            uiText("CRAFTING  ·  " + (bench ? "workbench nearby ✔" : "no workbench nearby"), px + 16, py + 26, 14, "#bef264", "left", "900");
+            Tr.craftRects = [];
+            TERRA_RECIPES.forEach(function(R, i) {
+                var y = py + 40 + i * 34, can = terraHas(R[2]) && (!R[3] || bench) && !(R[1].tool !== undefined && Tr.tool >= R[1].tool);
+                ctx.fillStyle = can ? "rgba(132,204,22,0.18)" : "rgba(255,255,255,0.04)"; ctx.fillRect(px + 10, y, pw - 20, 30);
+                var cost = []; for (var kk in R[2]) cost.push(R[2][kk] + " " + kk + " (" + (Tr.inv[kk] || 0) + ")");
+                uiText((i + 1) + "  " + R[0], px + 18, y + 20, 13, can ? "#ecfccb" : "#94a3b8", "left", "900");
+                uiText(cost.join(" + ") + (R[3] ? "  · bench" : ""), px + pw - 18, y + 20, 11, can ? "#d9f99d" : "#64748b", "right", "700");
+                Tr.craftRects.push([px + 10, y, pw - 20, 30, i]);
+            });
+        }
+        if (Tr.panel === "inv") {
+            var items = window.Object.keys(Tr.inv).filter(function(kk) { return Tr.inv[kk] > 0; });
+            var iw = 420, ix = cssW / 2 - iw / 2, iy = 110;
+            uiPanel(ix, iy, iw, 70 + Math.ceil(items.length / 3) * 26, "#bef264", 0.95);
+            uiText("INVENTORY  ·  pickaxe: " + TERRA_TOOLS[Tr.tool][0], ix + 16, iy + 26, 14, "#bef264", "left", "900");
+            items.forEach(function(kk, i) { uiText(kk + " × " + Tr.inv[kk], ix + 20 + (i % 3) * 135, iy + 54 + Math.floor(i / 3) * 26, 13, "#ecfccb", "left", "800"); });
+        }
         var n = TERRA_PLACEABLE.length, bw = 58, x0 = cssW / 2 - n * (bw + 6) / 2, y0 = cssH - 88;
         for (let i = 0; i < n; i++) {
             var name = TERRA_PLACEABLE[i], col = TILES[TILE_ID[name]][1], bx = x0 + i * (bw + 6), on = i === Tr.sel;
             ctx.fillStyle = on ? "rgba(132,204,22,0.3)" : "rgba(15,23,42,0.85)"; ctx.fillRect(bx, y0, bw, 50);
             ctx.strokeStyle = on ? "#bef264" : "#475569"; ctx.lineWidth = 2; ctx.strokeRect(bx, y0, bw, 50);
             ctx.fillStyle = col; ctx.fillRect(bx + 17, y0 + 8, 24, 24);
-            uiText((i + 1) + " " + name + " ×" + (Tr.inv[name] || 0), bx + bw / 2, y0 + 45, 9, on ? "#ecfccb" : "#94a3b8", "center", "800");
+            uiText((i < 9 ? i + 1 : (i === 9 ? 0 : "-")) + " " + name + " ×" + (Tr.inv[name] || 0), bx + bw / 2, y0 + 45, 9, on ? "#ecfccb" : "#94a3b8", "center", "800");
         }
-        uiText("Left mouse / F mine · right mouse / G place · 1-9 pick block · Space jetpack · N new world · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.75)", "center", "700");
+        uiText("Left mouse / F mine · right mouse / G place · 1-0 / wheel pick block · C craft · I inventory · E shockwave · K save · L load · N new world · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.75)", "center", "700");
     }
 });
 
 ModeKit.addLevel("terra_world", { name: "⛏ Terra: Generated World", mode: "terra", wavesEnabled: false, spawnP1: [0, 200], spawnP2: [80, 200], layout: [], title: "Generated World" });
+
+// mouse wheel cycles the hotbar in Terra
+(function() {
+    var cv = typeof canvas !== "undefined" ? canvas : document.querySelector("canvas");
+    if (!cv) return;
+    cv.addEventListener("wheel", function(e) {
+        if (!GameModes.current || GameModes.current.id !== "terra" || paused) return;
+        TERRA.sel = (TERRA.sel + (e.deltaY > 0 ? 1 : -1) + TERRA_PLACEABLE.length) % TERRA_PLACEABLE.length;
+        e.preventDefault(); e.stopPropagation();
+    }, { passive: false, capture: true });
+})();
