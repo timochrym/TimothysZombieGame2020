@@ -6,6 +6,27 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Party Board (new game, B4 — dice board party)
+
+**Shipped:** `game_party.js` (ownScreen): a 28-space loop on a green island. Each turn the die spins until you hit your
+button (P1 Space, P2 Enter, gamepads 3-4 join as P3/P4, the rest are CPUs that roll on their own), your piece hops
+along: passing START +5, BLUE +3, RED -3, "?" = one of five events (treasure, pickpocket the richest, warp next to
+the star, coin rain, the star flies away). Passing the ★ with 20 coins buys a star, and it moves. After everyone has
+moved: a minigame — MASH (most taps in 5 s), QUICK DRAW (fastest press after GO, pressing early disqualifies),
+STOP IT (stop a running counter on a target) — winners +10 coins. 5/10/15/20 rounds; most stars (then coins) wins,
+with a final ranking. Pause menu: humans, players, rounds, new party.
+
+**Measured:** an unattended 2-round party (P1 pressing on a rhythm, 3 CPUs) went intro → rolls → moves → events →
+mini:draw / stop / mash → results → winner, then restarted; stars were bought in the 5-round run; no errors.
+
+**Went wrong:** (1) a "human" P3/P4 without a gamepad would have had no button and hung the game on their turn →
+P3/P4 are human only while their pad is connected. (2) The bottom row of spaces sat under the score panels → the
+board now fits between the message bar and the panels.
+
+**Left / known:** more minigames (reuse the arcade games), items, branching paths (TODO.md).
+
+---
+
 ## Word Lab (new game, B4 — type-a-thing sandbox)
 
 **Shipped:** `game_words.js`, built on the normal platformer engine (hero, physics, monsters, gadgets). Five rooms —

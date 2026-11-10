@@ -86,7 +86,10 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       spinning), missiles that lock on behind a blinking ! warning, laser beams that charge then fire, coin ribbons,
       shield bubble, best distance + banked coins, local P2 on the same run, pads. Next: a coin shop (outfits,
       jetpack styles), vehicles to ride, daily missions.
-- [ ] B4 — Board party (mario-party-style): dice board + quick minigames between turns, stars/coins.
+- [~] B4 — Board party → **Party Board**: 2-4 players (P1 Space, P2 Enter, pads 3-4 join, rest CPUs), 28-space loop,
+      blue/red/event spaces, a star that moves after each purchase (20 coins), 5 random events, a minigame every
+      round (Mash, Quick Draw, Stop It), 5-20 rounds, results. STILL TO DO: more minigames (re-use Jet Dash / Worm
+      Arena / Flick Soccer as minigames), items, branching board paths, more boards.
 - [ ] B4 — Property board game (monopoly-style, original): buy, trade, build, rent.
 - [x] B4 — Powder toy (falling sand) → **Sand Lab**: sand, water, wall, fire, oil, plant, lava, stone, steam, wood +
       eraser; lava+water → stone & steam, fire spreads through oil/plants/wood, plants grow into water, steam rains back
