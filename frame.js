@@ -1161,6 +1161,7 @@ function pauseItems() {
             { id: "shit", label: "Hit-stop on big hits:  " + (settings.hitStop ? "ON" : "OFF"), hint: "Freezes a few frames on heavy impacts" },
             { id: "shidpi", label: "Sharp hi-DPI graphics:  " + (settings.hiDPI ? (renderScaleAutoReduced ? "ON (auto-reduced for speed)" : "ON") : "OFF"), hint: "Turn off if the game runs slowly" },
             { id: "sglow", label: "Glow effects:  " + (settings.glow ? (glowAutoDisabled ? "ON (auto-reduced for speed)" : "ON") : "OFF"), hint: "Turn off for more FPS on slower computers" },
+            { id: "ssquare", label: "Character look:  " + (settings.squareChars ? "Classic squares" : "Detailed"), hint: "Classic squares = the original 2020 blocky look" },
             { id: "help", label: "Controls help:  " + (devOpts.showHelp ? "ON" : "OFF"), hint: "Shows the key cheat-sheet" },
             { id: "back", label: "◀  Back", hint: "Esc" }
         ];
@@ -1206,6 +1207,7 @@ function pauseActivate(id, dir) {
     if (id === "svol") { SFX.setVolume(Math.round((settings.volume + (dir || 1) * 0.1) * 10) / 10); if (settings.volume > 1) SFX.setVolume(1); return; }
     if (id === "sshake") { settings.shake = Math.max(0, Math.min(1, Math.round((settings.shake + (dir || 1) * 0.25) * 4) / 4)); saveSettings(); return; }
     if (id === "sglow") { settings.glow = !settings.glow; glowAutoDisabled = false; saveSettings(); return; }
+    if (id === "ssquare") { settings.squareChars = !settings.squareChars; saveSettings(); return; }
     if (id === "shit") { settings.hitStop = !settings.hitStop; saveSettings(); return; }
     if (id === "shidpi") { settings.hiDPI = !settings.hiDPI; renderScaleAutoReduced = false; saveSettings(); applyCanvasSize(); xcMaster = w / 2; ycMaster = h / 2; return; }
     if (GameModes.call("onMenu", id, dir)) return;

@@ -33,7 +33,7 @@ In Character.handleCharacterCollision (character.js): if a hero lands on an enem
 (higher if jump is held), and skip the hero's contact damage for a few frames. Add mode hooks
 onStomp(hero, foe) and onContact(hero, foe); returning true means the mode handled it.
 
-### 2. Square-character toggle
+### 2. Square-character toggle [DONE]
 Add settings.squareChars (fx.js settings, persisted) and a Settings row
 "Character look: Detailed / Classic squares". In Character.createCharacter, after the aura, draw a
 rounded square in the character's color with eyes that look the way it faces (enemies: angry brows

@@ -565,7 +565,43 @@ var Ragdolls = {
         ctx.save();
         ctx.globalAlpha = rd.alpha();
         if (rd.kind === "blob") this.drawBlob(rd);
+        else if (typeof settings !== "undefined" && settings.squareChars) this.drawSquare(rd);
         else this.drawHumanoid(rd);
+        ctx.restore();
+    },
+
+    // "Classic squares" look: one rounded square rotated to the neck-pelvis angle
+    drawSquare: function(rd) {
+        var P = rd.pts.map(this.sp);
+        var neck = P[1], pelvis = P[2];
+        var ang = Math.atan2(pelvis[0] - neck[0], pelvis[1] - neck[1]);
+        var k = rd.k;
+        var o = rd.owner;
+        var w = (o ? o.s1 : 48 * k) * cameraScaleX, h = (o ? o.s2 : 72 * k) * cameraScaleY;
+        var cx = (P[0][0] + (P[8][0] + P[10][0]) / 2) / 2, cy = (P[0][1] + (P[8][1] + P[10][1]) / 2) / 2;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(-ang);
+        var r = Math.min(w, h) * 0.18;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(-w / 2, -h / 2, w, h, r); else ctx.rect(-w / 2, -h / 2, w, h);
+        ctx.fillStyle = (o && o.color) || rd.style.body;
+        ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = "#0a0f16"; ctx.stroke();
+        // X-eyes for corpses, plain eyes for a knocked-down live body
+        var eyeR = Math.max(2, Math.min(w, h) * 0.1);
+        ctx.strokeStyle = "#0a0f16"; ctx.fillStyle = "#ffffff"; ctx.lineWidth = Math.max(1.5, eyeR * 0.5);
+        for (var e = -1; e <= 1; e += 2) {
+            var ex = e * w * 0.2, ey = -h * 0.18;
+            if (rd.life >= 0) {
+                ctx.beginPath();
+                ctx.moveTo(ex - eyeR, ey - eyeR); ctx.lineTo(ex + eyeR, ey + eyeR);
+                ctx.moveTo(ex + eyeR, ey - eyeR); ctx.lineTo(ex - eyeR, ey + eyeR);
+                ctx.stroke();
+            } else {
+                ctx.beginPath(); ctx.arc(ex, ey, eyeR, 0, Math.PI * 2); ctx.fill();
+            }
+        }
         ctx.restore();
     },
 

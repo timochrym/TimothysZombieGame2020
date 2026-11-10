@@ -1507,7 +1507,9 @@ class Character {
 
         // Custom Distinct Artwork for Non-Zombie Enemy Archetypes (Bats, Slimes, Archers, Knights, Mages, Bosses)
         var customEnemyTypes = ["BAT", "SLIME", "MINI_SLIME", "ARCHER", "KNIGHT", "MAGE", "BOSS_KING"];
-        if (isEnemyChar) {
+        if (typeof settings !== "undefined" && settings.squareChars) {
+            this.drawSquareBody(drawX, drawY, drawW, drawH, drawColor);
+        } else if (isEnemyChar) {
             this.drawEnemyChar(drawX, drawY, drawW, drawH);
         } else if (this.isZombie && customEnemyTypes.indexOf(this.zombiePower) !== -1) {
             ctx.save();
@@ -1641,6 +1643,37 @@ class Character {
     teamColor() {
         if (this.isPlayer) return this.isZombie ? "#c77dff" : this.accent();
         return "#ff3b4a";
+    }
+
+    // "Classic squares" look (settings.squareChars): the original blocky 2020 style with eyes that follow facing
+    drawSquareBody(x, y, w, h, color) {
+        var facing = this.xspeed > 0.3 ? 1 : (this.xspeed < -0.3 ? -1 : (this.lastFacing || 1));
+        this.lastFacing = facing;
+        var enemy = this.isZombie && !this.isPlayer;
+        ctx.fillStyle = color;
+        this.roundRectPath(x, y, w, h, Math.min(w, h) * 0.18);
+        ctx.fill();
+        this.outlineBox(x, y, w, h, 3);
+        var eyeR = Math.max(2, Math.min(w, h) * 0.11);
+        var eyeY = y + h * 0.32;
+        var cx = x + w / 2 + facing * w * 0.1;
+        var look = facing * eyeR * 0.45;
+        for (var e = -1; e <= 1; e += 2) {
+            var ex = cx + e * w * 0.2;
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath(); ctx.arc(ex, eyeY, eyeR, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = enemy ? "#ff2e3e" : "#111111";
+            ctx.beginPath(); ctx.arc(ex + look, eyeY + eyeR * 0.1, eyeR * 0.5, 0, Math.PI * 2); ctx.fill();
+            if (enemy) {
+                // angry brows slanting down toward the middle
+                ctx.strokeStyle = "#111111";
+                ctx.lineWidth = Math.max(1.5, eyeR * 0.45);
+                ctx.beginPath();
+                ctx.moveTo(ex - e * eyeR * 1.2, eyeY - eyeR * 1.7);
+                ctx.lineTo(ex + e * eyeR * 1.1, eyeY - eyeR * 1.05);
+                ctx.stroke();
+            }
+        }
     }
 
     roundRectPath(x, y, w, h, r) {

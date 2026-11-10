@@ -3,7 +3,7 @@
 // ============================================================================
 
 // ---- Persisted player settings (Pause menu -> Settings) ----
-var settings = { volume: 0.6, shake: 1, hitStop: true, hiDPI: true, glow: true };
+var settings = { volume: 0.6, shake: 1, hitStop: true, hiDPI: true, glow: true, squareChars: false };
 try {
     var savedSettings = JSON.parse(localStorage.getItem("timsZombieGameSettings") || "null");
     if (savedSettings) {
@@ -12,6 +12,7 @@ try {
         if (typeof savedSettings.hitStop === "boolean") settings.hitStop = savedSettings.hitStop;
         if (typeof savedSettings.hiDPI === "boolean") settings.hiDPI = savedSettings.hiDPI;
         if (typeof savedSettings.glow === "boolean") settings.glow = savedSettings.glow;
+        if (typeof savedSettings.squareChars === "boolean") settings.squareChars = savedSettings.squareChars;
     }
 } catch (e) {}
 
