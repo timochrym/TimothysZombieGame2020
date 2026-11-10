@@ -259,6 +259,7 @@ var Gadgets = {
                     if (Math.abs(c.x - g.x) < 70 && Math.abs(bot - g.y) < 120 && (c.respawnX !== g.x)) {
                         c.respawnX = g.x; c.respawnY = g.y + hh + 10;
                         if (!g.active) { g.active = true; Components.addFloatingText("CHECKPOINT!", g.x, g.y + 200, "#4ade80", 18); if (typeof SFX !== "undefined") SFX.play("pickup", g.x, g.y); }
+                        GameModes.call("onCheckpoint", c, g);
                     }
                 } else if (g.type === "key") {
                     if (!g.taken && Math.hypot(c.x - g.x, c.y - g.y) < 70) {

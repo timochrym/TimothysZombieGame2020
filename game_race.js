@@ -5,7 +5,7 @@
 //   Best times + a ghost of your best run are saved per course. 2 players race head-to-head.
 // ============================================================================
 var RACE_COURSES = [];
-var raceSave = { best: {}, ghost: {}, medals: {}, course: 0 };
+var raceSave = { best: {}, ghost: {}, medals: {}, splits: {}, course: 0 };
 try { var _rs = JSON.parse(localStorage.getItem("timsParkourRush") || "null"); if (_rs) { for (var _k in _rs) raceSave[_k] = _rs[_k]; } } catch (e) {}
 function saveRace() { try { localStorage.setItem("timsParkourRush", JSON.stringify(raceSave)); } catch (e) {} }
 
@@ -206,6 +206,8 @@ GameModes.register({
         raceSave.course = Math.max(0, RACE_COURSES.indexOf(LevelManager.currentLevelKey));
         Race.phase = "ready"; Race.timer = 150; Race.time = 0;
         Race.finish = {}; Race.rec = []; Race.newBest = false; Race.endTimer = 0; Race.hurry = undefined;
+        Race.splits = []; Race.splitShow = null;
+        if (!raceSave.splits) raceSave.splits = {};
         var g = raceSave.ghost[LevelManager.currentLevelKey];
         Race.ghost = (g && g.length) ? g : null;
     },
@@ -243,6 +245,19 @@ GameModes.register({
         if (Race.phase === "run" && multiplayer && Race.hurry !== undefined && --Race.hurry <= 0) this.finishRace();
     },
 
+    // speedrun splits: P1's time at each checkpoint vs the splits of the best run
+    onCheckpoint: function(c, g) {
+        if (Race.phase !== "run" || c.playerIndex !== 0) return;
+        var cps = Gadgets.list.filter(function(q) { return q.type === "checkpoint"; }).sort(function(a, b) { return a.x - b.x; });
+        var i = cps.indexOf(g);
+        if (i < 0 || Race.splits[i] !== undefined) return;
+        Race.splits[i] = Race.time;
+        var old = (raceSave.splits[LevelManager.currentLevelKey] || [])[i];
+        var d = old !== undefined ? (Race.time - old) / 60 : null;
+        Race.splitShow = { i: i, t: Race.time, d: d, until: Race.time + 180 };
+        if (d !== null) Components.addFloatingText((d <= 0 ? "-" : "+") + Math.abs(d).toFixed(2), c.x, c.y + 150, d <= 0 ? "#4ade80" : "#f87171", 22);
+    },
+
     onExit: function(c, g) {
         if (Race.phase !== "run" || Race.finish[c.playerIndex] !== undefined) { g.done = false; return; }
         Race.finish[c.playerIndex] = Race.time;
@@ -265,6 +280,7 @@ GameModes.register({
                 Race.newBest = true;
                 raceSave.best[key] = t;
                 raceSave.ghost[key] = Race.rec.slice();
+                raceSave.splits[key] = Race.splits.slice();
             }
             raceSave.medals[key] = Math.max(raceSave.medals[key] || 0, raceMedal(key, t));
             saveRace();
@@ -320,11 +336,28 @@ GameModes.register({
         uiText("🥇 " + par[0] + "s   🥈 " + par[1] + "s   🥉 " + par[2] + "s" + (raceSave.medals[key] ? "   earned: " + MEDAL_NAMES[raceSave.medals[key]] : ""), 30, 110, 11, "#64748b", "left", "700");
         // big timer
         uiText(raceFmt(Race.time), cssW / 2, 96, 34, Race.phase === "run" ? "#ffffff" : "#ffd23f", "center", "900");
+        if (Race.splitShow && Race.time < Race.splitShow.until) {
+            var sp = Race.splitShow, good = sp.d !== null && sp.d <= 0;
+            uiPanel(cssW / 2 - 110, 138, 220, 34, sp.d === null ? "#38bdf8" : (good ? "#4ade80" : "#f87171"), 0.9);
+            uiText("CP " + (sp.i + 1) + "  " + raceFmt(sp.t) + (sp.d === null ? "" : "   " + (good ? "-" : "+") + Math.abs(sp.d).toFixed(2)), cssW / 2, 161, 16, sp.d === null ? "#e2e8f0" : (good ? "#86efac" : "#fca5a5"), "center", "900");
+        }
+        // speed lines when you're really moving
+        if (redGuy && !redGuy.dead && Race.phase === "run") {
+            var spd = Math.hypot(redGuy.xspeed, redGuy.yspeed);
+            if (spd > 13) {
+                var a = Math.min(0.35, (spd - 13) * 0.04), dir = redGuy.xspeed >= 0 ? 1 : -1;
+                ctx.strokeStyle = "rgba(255,255,255," + a.toFixed(3) + ")"; ctx.lineWidth = 2;
+                for (let i = 0; i < 14; i++) {
+                    var ly = ((i * 97 + Race.time * 3) % cssH), lx = (i % 2 ? cssW - 40 : 40) + ((Race.time * 23 + i * 61) % 120) * -dir, len = 60 + (i * 37) % 90;
+                    ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx - dir * len, ly); ctx.stroke();
+                }
+            }
+        }
         if (Race.phase === "ready") {
             var c = Math.ceil(Race.timer / 50);
             uiText(c > 0 ? String(c) : "GO!", cssW / 2, cssH / 2 - 40, 110, "#38bdf8", "center", "900");
         }
-        if (Race.hurry !== undefined && Race.phase === "run") uiText("HURRY! " + Math.ceil(Race.hurry / 60), cssW / 2, 132, 20, "#ff6b6b", "center", "900");
+        if (Race.hurry !== undefined && Race.phase === "run") uiText("HURRY! " + Math.ceil(Race.hurry / 60), cssW / 2, 196, 20, "#ff6b6b", "center", "900");
         // course progress bar
         var exitG = null;
         for (let i = 0; i < Gadgets.list.length; i++) if (Gadgets.list[i].type === "exit") exitG = Gadgets.list[i];

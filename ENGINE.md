@@ -96,6 +96,8 @@ Every hook is optional. The engine calls `GameModes.call("hook", ...)` at these 
 | `canShoot(ch)` / `canBreak(ch)` | May this hero fire right now / smash bricks |
 | `enemyAI(z)` | Drive an enemy yourself (set its `left/right/upPressed`); return `true` to skip the built-in AI |
 | `onBlockHit(ch, g)` / `onCoin(ch, g)` / `onGoal(ch, g, frac)` / `onBrickBreak(ch, g)` | Platform gadget events |
+| `onCheckpoint(ch, g)` | A hero touched a checkpoint gadget (every new touch; splits in Parkour Rush) |
+| `runMult(ch)` -> number | Multiplies a player's run speed cap each frame (Stomp Squad: hold RUN for ×1.55) |
 | `onContact(hero, foe)` | A hero touches an enemy from the side/below. Return `true` to skip the default contact damage (e.g. star power) |
 | `onExplosion(x, y, radius, power)` | Any explosion |
 | `onExit(ch, gadget)` / `onHazard(ch, gadget)` | A hero reaches an exit gadget / touches spikes. Return `true` from `onHazard` to cancel the kill |

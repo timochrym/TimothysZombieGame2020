@@ -48,7 +48,10 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       score runs until the dummy comes to rest, best saved; damage heat-map (head / torso / limbs drift from yellow to
       bruised red); slow-mo on huge hits. STILL TO DO: more scenarios (cliff + car, highway, half-pipe), vehicles to
       launch the dummy in, pose picker before the push, replay of the run, a closer camera in Stair Drop.
-- [ ] Parkour Rush, Crate Lab, Portal Lab, Brawl: same pass —
+- [~] Parkour Rush: DONE — speedrun splits (time at each checkpoint vs your best run's split, green −/red +, saved
+      with the best), speed lines when you're really moving, new engine hook onCheckpoint. STILL TO DO: slide-under
+      gaps and vault/ledge-grab moves, a level select showing medals, a per-checkpoint quick restart key.
+- [ ] Crate Lab, Portal Lab, Brawl: same pass —
       list each genre's core feel features and close the gaps.
 
 ## Your suggestions not built yet (backlog, all original games in the genre — no copied names/art)

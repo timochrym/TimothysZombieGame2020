@@ -6,6 +6,22 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Parkour Rush — genre-feel pass (speedrun courses)
+
+**Shipped:** speedrun splits — each checkpoint P1 reaches shows the split time and the difference to the best run's
+split (green −0.68 / red +0.42, also as a pop-up), and the splits are saved with a new best; speed lines stream past
+the screen edges once you go fast; a new engine hook `onCheckpoint(ch, gadget)` (documented use: Parkour Rush).
+
+**Measured:** run 1 reached CP1 at 1.82 s (no comparison yet), run 2 at 1.13 s → "−0.68" in green, splits saved with
+the new best; Stomp Squad (which also uses checkpoints) regression unchanged.
+
+**Went wrong:** the split box first sat on top of the course progress bar → moved below it (and the 2-player
+"HURRY!" text too, which had the same overlap).
+
+**Left / known:** slides/vaults, medal level select, checkpoint restart key (TODO.md).
+
+---
+
 ## Crash Lab — genre-feel pass (dummy dismount)
 
 **Shipped:** a second scenario, **Stair Drop** (pause menu → Scenario): the dummy stands on top of a 14-step stone
