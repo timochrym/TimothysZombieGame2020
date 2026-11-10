@@ -91,6 +91,8 @@ Every hook is optional. The engine calls `GameModes.call("hook", ...)` at these 
 | `onSecondary(ch)` | Right-click / LB. Return `true` to consume it |
 | `onKey(code, e)` | Key pressed. Return `true` to consume it |
 | `onDamage(ch, amount, kx, ky, attacker)` | A character is hurt. Return `true` to cancel the damage |
+| `onStomp(hero, foe)` | A hero landed on an enemy's head (engine-wide head stomps: 35 x `rpgDamageMult` damage, bounce higher while jump is held, ~10 frames without contact damage). Return `true` to replace the default damage + bounce |
+| `onContact(hero, foe)` | A hero touches an enemy from the side/below. Return `true` to skip the default contact damage (e.g. star power) |
 | `onExplosion(x, y, radius, power)` | Any explosion |
 | `onExit(ch, gadget)` / `onHazard(ch, gadget)` | A hero reaches an exit gadget / touches spikes. Return `true` from `onHazard` to cancel the kill |
 | `menuItems(items)` / `onMenu(id, dir)` | Add pause-menu rows. Set `cycle: true` for ◀ ▶ rows; `dir` is ±1 for the arrows and empty for Enter |

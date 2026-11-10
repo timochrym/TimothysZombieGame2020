@@ -27,7 +27,7 @@ headless Chromium before committing.
 
 ## Sections (build in order)
 
-### 1. Head stomps (engine-wide)
+### 1. Head stomps (engine-wide) [DONE]
 In Character.handleCharacterCollision (character.js): if a hero lands on an enemy from above
 (hero clearly above, falling or level), damage the enemy (~35 x rpgDamageMult), bounce the hero
 (higher if jump is held), and skip the hero's contact damage for a few frames. Add mode hooks

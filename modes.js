@@ -25,6 +25,9 @@
 //   onSecondary(ch)                               right-click / alt-fire -> return true to consume
 //   onKey(code, e)                                keyboard hook -> return true to consume
 //   onDamage(ch, amount, kx, ky, attacker)        a character is damaged -> return true to consume
+//   onStomp(hero, foe)                            hero landed on an enemy's head -> return true to replace the
+//                                                 default stomp (35 dmg + bounce); hero still gets contact i-frames
+//   onContact(hero, foe)                          hero touches an enemy (not a stomp) -> return true to skip contact damage
 //   onExplosion(x, y, radius, power)              any explosion in the world
 //   onExit(ch, gadget) / onHazard(ch, gadget)     gadget events (level exit reached / spikes touched)
 //   menuItems(items) / onMenu(id, dir)            add / handle pause-menu rows (row.cycle = true for ◀ ▶)

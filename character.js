@@ -455,7 +455,7 @@ class Character {
         // Enemies hit by a hero immediately know where they are; knights block frontal chip damage with the shield
         if (!this.isPlayer && attacker && attacker.isPlayer) {
             this.alertTimer = 600;
-            if (this.zombiePower == "KNIGHT" && amount > -40 && this.dashTimer <= 0) {
+            if (this.zombiePower == "KNIGHT" && amount > -40 && this.dashTimer <= 0 && !this.stompHit) {
                 var facingToward = ((attacker.x - this.x) * (this.lastFacing || 1)) > 0;
                 if (facingToward) {
                     amount *= 0.4;
@@ -802,6 +802,8 @@ class Character {
         }
         if (this.invulnTimer > 0) this.invulnTimer--;
         if (this.hitCooldown > 0) this.hitCooldown--;
+        if (this.stompGrace > 0) this.stompGrace--;
+        if (this.stompCd > 0) this.stompCd--;
         if (this.staggerTimer > 0) {
             this.staggerTimer--;
             this.leftPressed = this.rightPressed = this.upPressed = false;
@@ -1297,7 +1299,10 @@ class Character {
                 if (CollisionDetector.collision(this, [0, stepY], allObjects)) {
                     var hitY = this.collidedWith;
                     this.y += stepY + this.yOver;
-                    this.handleCharacterCollision(hitY);
+                    if (this.handleCharacterCollision(hitY) === "stomp" && this.yspeed > 0) {
+                        stepY = 0;                                             // keep the stomp bounce; don't damp it
+                        continue;
+                    }
 
                     if (hitY && hitY.isBumper && this.yspeed <= 0 && !(this.isPlayer && this.downPressed)) {
                         this.yspeed = hitY.bounceForce;
@@ -1419,11 +1424,49 @@ class Character {
         var victim = this.isPlayer ? this : other;
         var bully = this.isPlayer ? other : this;
         if (bully.frozenTimer > 0) return;
+        // Hero vs enemy only: head stomps, then the mode's contact hook, then default contact damage
+        if (victim.isPlayer && !bully.isPlayer) {
+            if (victim.stompGrace > 0) return;                    // just bounced off a head: no contact damage
+            if (Character.isStomp(victim, bully)) {
+                victim.stompGrace = 10;
+                bully.stompCd = 8;
+                if (!(GameModes.has("onStomp") && GameModes.call("onStomp", victim, bully))) {
+                    Character.applyStomp(victim, bully);
+                }
+                return "stomp";
+            }
+            if (GameModes.has("onContact") && GameModes.call("onContact", victim, bully)) return;
+        }
         var mult = victim.isZombie ? 0.5 : 1;
         var dmg = -9, kx = 3;
         if (bully.dashTimer > 0 && bully.zombiePower == "TANK") { dmg = -26; kx = 7; }
         else if (bully.dashTimer > 0 && bully.zombiePower == "KNIGHT") { dmg = -16; kx = 5; }
         victim.takeDamage(dmg * mult, (victim.x > bully.x ? kx : -kx), 1.5, bully);
+    }
+
+    // Hero is clearly on top of the foe and falling (or level) relative to it
+    static isStomp(hero, foe) {
+        if (hero.dead || foe.dead || hero.ragdollTimer > 0 || foe.stompCd > 0) return false;
+        var feet = hero.y - hero.s2 / 2;
+        var head = foe.y + foe.s2 / 2;
+        if (hero.y <= foe.y) return false;
+        if (feet < head - Math.min(18, foe.s2 * 0.3)) return false;           // too far down the foe's side
+        if (Math.abs(hero.x - foe.x) > (hero.s1 + foe.s1) * 0.5 - 2) return false;
+        return hero.yspeed - (foe.yspeed || 0) <= 0.5;
+    }
+
+    static applyStomp(hero, foe) {
+        foe.stompHit = true;                                                   // bypasses the knight's frontal shield
+        foe.takeDamage(-35 * rpgDamageMult * devOpts.playerDamage, (foe.x >= hero.x ? 1.5 : -1.5), -1, hero);
+        foe.stompHit = false;
+        foe.scaleX = 1.35; foe.scaleY = 0.6;                                  // squash
+        hero.yspeed = hero.upPressed ? 12.5 : 8;                              // hold jump to bounce higher
+        hero.jump = false;
+        hero.onGround = false;
+        hero.coyoteTimer = 0;
+        hero.scaleX = 0.86; hero.scaleY = 1.16;
+        Components.spawnSparks(hero.x, hero.y - hero.s2 / 2, "#ffe066", 7);
+        if (typeof SFX !== "undefined") SFX.play("boing", hero.x, hero.y, 0.9, 1.3);
     }
 
     createCharacter() {
