@@ -267,6 +267,7 @@ class Components {
     }
 
     static healthBar(object) {
+        if (object.isZombie && GameModes.flag("noEnemyBars", false)) return;      // e.g. Stomp Squad: stomp-based foes show no bars
         if (typeof brawl !== "undefined" && brawl.active && object.isPlayer) {
             // Brawl: a name tag with the damage percent instead of a health bar
             var bcx = object.x * cameraScaleX + xc;

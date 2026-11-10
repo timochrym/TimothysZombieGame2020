@@ -119,8 +119,8 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - Pathfinding: "60 FPS with 60+ enemies" met for the JS budget, not in headless software rendering; frontier pathing ~1 ms.
 - LAN: bandwidth is per client through the relay (~340 KB/s with 60 enemies); mode HUD state only synced for Stomp
   Squad and Bed Brawl; minecarts/rails and Terra tiles not visible on LAN clients; Wobble Wheels has no LAN riders.
-- Stomp Squad: courses tuned by eye; fireballs don't bounce; enemies show unneeded health bars; bubble co-op and
-  courses 2-3 only smoke-tested.
+- Stomp Squad: courses tuned by eye; bubble co-op and courses 2-3 only smoke-tested. (Fireballs now bounce along the
+  ground; enemy health bars are hidden via the new `noEnemyBars` flag.)
 - Level Studio: no multi-level campaigns; mover end points are numbers (not draggable); no thumbnails.
 - Building: hold-to-spam can feel unresponsive over your own last piece.
 - Bed Brawl: bots don't use the pathfinder's bridge/tower edges; one map; slow restock at the start.

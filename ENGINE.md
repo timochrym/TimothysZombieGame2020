@@ -68,6 +68,7 @@ Flags switch shared engine features. A flag you leave out keeps the engine defau
 | `airJumps` | 1 | Extra jumps in the air (0 = no double jump) |
 | `bigPads` | off | Bounce pads and portal flings may exceed the normal vertical speed cap |
 | `flight` | off | Double-tap jump to fly (W/S rise and sink). Also available in any game via the dev panel's **Creative flight** toggle |
+| `noEnemyBars` | off | Hide enemy health bars (stomp-based games) |
 | `ownScreen` | off | The mode draws the whole screen itself: each frame calls its `screenFrame()` hook instead of simulating and drawing the platformer world (grid sims, board games — Sand Lab). Input: the usual key flags, `mouseX`/`mouseY` (screen px), `mouseDown`, and `onKey` / `onClick` |
 
 A mode can change its own flags at runtime. For example, Zombie Ball sets

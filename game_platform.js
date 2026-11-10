@@ -299,7 +299,7 @@ GameModes.register({
     color: "#f59e0b",
     firstLevel: function() { return PLAT_LEVELS[0]; },
     flags: { waves: false, revive: false, jetpack: false, shooting: true, ability: false, ammo: false, noBedrock: true, scenery: true,
-        coopToggle: true, dash: false, wallJump: true, airJumps: 0, enemiesPassive: true, playerControl: true },
+        coopToggle: true, dash: false, wallJump: true, airJumps: 0, enemiesPassive: true, playerControl: true, noEnemyBars: true },
     overTitle: "GAME OVER",
     againLabel: "Play again",
 
@@ -525,6 +525,14 @@ GameModes.register({
             var hs = Plat.heroes();
             for (let i = 0; i < hs.length; i++) Plat.sizes[hs[i].playerIndex] = 0;
             if (hs.length) { showBanner("TIME UP!", "", "#f87171"); platAllDown(hs[0]); }
+        }
+        // fire-flower shots are fireballs: they arc down and bounce along the ground
+        for (let i = 0; i < lazers.length; i++) {
+            var fb = lazers[i];
+            if (!fb.owner || !fb.owner.isPlayer) continue;
+            if (!fb.platFire) { fb.platFire = true; fb.bounces = 8; fb.life = 150; fb.xspeed = Math.sign(fb.xspeed || 1) * 11; fb.yspeed = -2; fb.speed = 11; fb.homing = false; }
+            fb.yspeed = Math.max(-12, fb.yspeed - 0.75);
+            if (fb.yspeed > 8) fb.yspeed = 8;                      // after a floor bounce: a fixed little hop
         }
         var heroes = Plat.heroes();
         var free = heroes.filter(function(c) { return !c.platBubble; });

@@ -6,6 +6,17 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Stomp Squad: bouncing fireballs, no enemy health bars
+
+**Shipped:** fire-flower shots in Stomp Squad are now fireballs — they leave at a fixed speed, arc down under gravity
+and hop along the floor (up to 8 bounces, reusing the ricochet code). New engine flag `noEnemyBars` hides enemy health
+bars; Stomp Squad turns it on (foes there are stomped, not whittled down).
+
+**Measured:** one shot hopped from x 210 to 947 with y bouncing between 17 and 68 (floor at ~0); platformer regression
+run unchanged; no errors.
+
+---
+
 ## Players panel: per-seat Human / CPU / Off toggles
 
 **Shipped:** a `seats()` mode hook; the 👥 Players panel renders it as one row per seat with 🎮 Human / 🤖 CPU / — Off
