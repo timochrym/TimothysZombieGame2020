@@ -693,7 +693,55 @@ var Studio = {
         yc = 48 + (cssH - 48) / 2 + this.cam.y * this.cam.z;
     },
 
+    // ---- gamepad editing (first connected pad): a world cursor, A place / select / hold to drag, B delete / cancel,
+    //      X rotate, Y play-test, LB/RB palette, LT/RT zoom, right stick pan, Start save, Back close
+    padTick: function() {
+        var gps = (navigator.getGamepads && navigator.getGamepads()) || [], g = null;
+        for (let i = 0; i < gps.length; i++) if (gps[i] && gps[i].connected) { g = gps[i]; break; }
+        if (!g) { this.pad = null; return; }
+        var B = function(i) { return !!(g.buttons[i] && g.buttons[i].pressed); }, pv = this.padPrev || {}, now = {}, edge = function(i) { now[i] = B(i); return now[i] && !pv[i]; };
+        for (let i = 0; i < 16; i++) now[i] = B(i);
+        var dz = function(v) { return Math.abs(v) < 0.2 ? 0 : v; };
+        if (!this.pad) { this.pad = { x: this.cam.x, y: this.cam.y }; this.say("🎮 Gamepad editing: stick moves the cursor · A place / select (hold to drag) · B delete · LB/RB pieces · Y play-test"); }
+        var c = this.pad, z = this.cam.z, sp = 9 / z;
+        var mx = dz(g.axes[0] || 0) + (B(15) ? 1 : 0) - (B(14) ? 1 : 0), my = -dz(g.axes[1] || 0) + (B(12) ? 1 : 0) - (B(13) ? 1 : 0);
+        c.x += mx * sp; c.y += my * sp;
+        this.cam.x += dz(g.axes[2] || 0) * 14 / z; this.cam.y -= dz(g.axes[3] || 0) * 14 / z;
+        // keep the cursor on screen: the camera follows it near the edges
+        var vw = (cssW - 490) / 2 / z * 0.8, vh = (cssH - 48) / 2 / z * 0.8;
+        if (c.x > this.cam.x + vw) this.cam.x = c.x - vw; if (c.x < this.cam.x - vw) this.cam.x = c.x + vw;
+        if (c.y > this.cam.y + vh) this.cam.y = c.y - vh; if (c.y < this.cam.y - vh) this.cam.y = c.y + vh;
+        if (B(6)) this.cam.z = Math.max(0.15, this.cam.z * 0.98); if (B(7)) this.cam.z = Math.min(2.5, this.cam.z * 1.02);
+        this.mouse = this.mouse || {}; this.mouse.wx = c.x; this.mouse.wy = c.y;
+        // A: place, or select what's under the cursor and drag it while held
+        if (edge(0)) {
+            if (this.tool === "place" && this.tpl) this.place(c.x, c.y);
+            else { var hit = this.hitTest(c.x, c.y); this.sel = hit ? [hit] : []; if (hit) { this.pushUndo(); this.padDrag = { x: c.x, y: c.y, start: [hit.x, hit.y] }; } this.renderInspector(); }
+        }
+        if (this.padDrag && B(0) && this.sel.length) { var e = this.sel[0]; e.x = this.padDrag.start[0] + this.snapV(c.x - this.padDrag.x); e.y = this.padDrag.start[1] + this.snapV(c.y - this.padDrag.y); this.padMoved = true; }
+        if (this.padDrag && !B(0)) { this.padDrag = null; if (this.padMoved) { this.padMoved = false; this.changed(true); } }
+        if (edge(1)) { if (this.tool === "place") { this.tool = "select"; this.tpl = null; this.renderPalette(); } else this.deleteSel(); }
+        if (edge(2)) this.rotateSel();
+        if (edge(3)) this.playtest();
+        if (edge(4) || edge(5)) {
+            var refs = this.paletteRefs || [], cur = refs.findIndex(function(p) { return p && p[0] === Studio.tplLabel; });
+            var nx = (cur + (now[5] ? 1 : -1) + refs.length) % Math.max(1, refs.length), p = refs[nx];
+            if (p) { this.tool = "place"; this.tpl = p[2]; this.tplLabel = p[0]; this.sel = []; this.renderPalette(); this.renderInspector(); this.say("Piece: " + p[0]); }
+        }
+        if (edge(9)) this.save();
+        if (edge(8)) { this.padPrev = now; this.close(); return; }
+        this.padPrev = now;
+    },
+    drawPadCursor: function() {
+        if (!this.pad) return;
+        var x = wsx(this.pad.x), y = wsy(this.pad.y);
+        ctx.strokeStyle = "#fde047"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x - 14, y); ctx.lineTo(x + 14, y); ctx.moveTo(x, y - 14); ctx.lineTo(x, y + 14); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.stroke();
+    },
+
     tick: function() {
+        this.padTick();
         // pan with WASD (when not typing)
         var sp = 14 / this.cam.z;
         if (!this.sel.length || !this.drag) {
@@ -712,6 +760,7 @@ var Studio = {
         for (let i = 0; i < zombies.length; i++) { try { zombies[i].createCharacter(); } catch (e) {} }
         this.drawMarkers();
         this.drawSelection();
+        this.drawPadCursor();
         this.drawHint();
         if (this.toastT > 0) this.toastT--;
     },
@@ -812,6 +861,7 @@ var Studio = {
         var midX = 210 + (cssW - 490) / 2;
         var tool = this.tool === "place" ? ("Placing: " + this.tplLabel + " — click to place, Esc to stop") : "Select: click · Shift+click adds · drag empty space to box-select · drag handles to resize";
         uiText(tool, midX, cssH - 34, 13, "#e2e8f0", "center", "800");
+        if (this.pad) { uiText("🎮 stick cursor · right stick pan · A place / select (hold = drag) · B delete / cancel · X rotate · LB/RB pieces · LT/RT zoom · Y play-test · Start save · Back close", midX, cssH - 14, 11, "rgba(253,224,71,0.85)", "center", "700"); return; }
         uiText("Right/middle-drag or WASD pan · wheel zoom · Del delete · Ctrl+D duplicate · Ctrl+C/V · Ctrl+Z/Y · R rotate · F flip ramp · G grid · H frame all · P play-test", midX, cssH - 14, 11, "rgba(203,213,225,0.75)", "center", "700");
         if (this.toastT > 0) {
             ctx.save(); ctx.globalAlpha = Math.min(1, this.toastT / 30);

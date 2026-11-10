@@ -10,7 +10,9 @@ Last updated: after Vehicles (backlog B2), during Terra (B3) and controller supp
 - [x] **Controller support** — 4 pads (3-4 take CPU slots), build mode on Select (LB/RB piece, X material, RT place,
       LT take back), LT punch, Y vehicles/shops, menus (Arcade, pause, Players/LAN close with B), Siege (stick aim +
       RT fire), Crash Lab (RT uses the tool at the aim point, Select cycles tools), Terra (Select cycles blocks).
-- [ ] Controller: Level Studio has no gamepad editing (mouse/keyboard only); Wobble Wheels P3/P4; button remapping.
+- [x] Controller: Level Studio gamepad editing (cursor, A place/select/drag, B delete, X rotate, LB/RB pieces, LT/RT
+      zoom, Y play-test, Start save, Back close); Wobble Wheels pads 3-4 get their own riders.
+- [ ] Controller: button remapping screen (keyboard + pad) — next.
 - [x] **Textures for the new blocks** — 21 new pixel textures (textures.js) used by building pieces, Terra tiles,
       platformer pipes / used blocks, Bed Brawl beds, Siege glass, Crash Lab spikes; all listed in Level Studio.
 - [ ] More textures still to do: vehicles (car body, cart), rails, Bed Brawl pedestals/generators, Wobble Wheels

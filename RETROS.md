@@ -6,6 +6,19 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Controllers: Level Studio gamepad editing, Wobble Wheels pads 3-4
+
+**Shipped:** Level Studio works with a gamepad — a yellow world cursor on the left stick / D-pad (the camera follows it
+near the edges; right stick pans), A places the current piece or selects what's under the cursor and drags it while
+held (grid-snapped), B deletes or cancels placing, X rotates, LB/RB step through the palette, LT/RT zoom, Y
+play-tests, Start saves, Back closes; the hint line switches to the pad legend. Wobble Wheels: gamepads 3 and 4 now
+get riders of their own (there are no CPUs to take over), joining mid-course and leaving on unplug.
+
+**Measured:** with a simulated pad: RB → "Block", A placed it (7 entities), hold-A + stick dragged it 1200 up, B
+deleted it (6), Studio stayed open; a pad-3 rider joined and drove to x 1438, unplugging removed it.
+
+---
+
 ## LAN for the real-time full-screen games (arenas, Jet Dash, Sand Lab)
 
 **Shipped:** a `netInput()` hook — a full-screen game can send its own controls from a LAN client (steering angle,
