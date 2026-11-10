@@ -347,6 +347,16 @@ GameModes.register({
 
     preUpdate: function() {
         Wheels.t++;
+        // gamepads 3-4 get riders of their own (there are no CPUs here to take over)
+        if (typeof Pads !== "undefined") for (let i = 2; i < 4; i++) {
+            var on = Pads.state[i] && Pads.state[i].active, rider = Wheels.riders.find(function(r) { return r.wheelsSlot === i; });
+            if (on && !rider) {
+                var lvl = LevelManager.getCurrentLevel(), sx = Wheels.cpReached >= 0 ? Wheels.cps[Wheels.cpReached] : lvl.spawnP1[0];
+                var seat = ModeKit.makeHero(i, sx - i * 200, 150, { label: "P" + (i + 1) }); seat.dead = true; seat.noCollide = true;
+                Wheels.riders.push(wheelsSpawn(i, sx - i * 200, 150, seat));
+                showBanner("P" + (i + 1) + " JOINS!", "gamepad " + (i + 1) + ": stick lean, A drive, B / X special", "#7ff0ff");
+            } else if (!on && rider) { Ragdolls.remove(rider); Wheels.riders.splice(Wheels.riders.indexOf(rider), 1); }
+        }
         if (Wheels.phase === "ready" && Wheels.t > 60) Wheels.phase = "ride";
         for (let i = 0; i < Wheels.riders.length; i++) if (Wheels.phase === "ride") wheelsDrive(Wheels.riders[i]);
     },
