@@ -11,8 +11,8 @@ var WHEELS_VEHICLES = {
     cart:       { label: "Cart", pts: [[-52, -42, 24, "w"], [52, -42, 24, "w"], [-8, 0, 8, "seat"], [46, 18, 8, "bar"], [-56, 14, 8, "tail"]], accel: 0.5, cap: 17, special: "hop", hop: 13, cd: 90, sp: "Space: big jump" }
 };
 var WHEELS_COURSES = [];
-var wheelsSave = { vehicle: "bike", best: {} };
-try { var _ws = JSON.parse(localStorage.getItem("timsWobbleWheels") || "null"); if (_ws) { wheelsSave.vehicle = _ws.vehicle || "bike"; wheelsSave.best = _ws.best || {}; } } catch (e) {}
+var wheelsSave = { vehicle: "bike", best: {}, ghost: {} };
+try { var _ws = JSON.parse(localStorage.getItem("timsWobbleWheels") || "null"); if (_ws) { wheelsSave.vehicle = _ws.vehicle || "bike"; wheelsSave.best = _ws.best || {}; wheelsSave.ghost = _ws.ghost || {}; } } catch (e) {}
 function saveWheels() { try { localStorage.setItem("timsWobbleWheels", JSON.stringify(wheelsSave)); } catch (e) {} }
 
 var Wheels = { riders: [], mines: [], logs: [], spikes: [], cps: [], finishX: 0, time: 0, phase: "ready", t: 0, done: {} };
@@ -105,6 +105,14 @@ function wheelsSpawn(slot, x, y, hero) {
     return rd;
 }
 
+// eject: the rider lets go and is flung up and forward (a deliberate bail-out; counts as a crash for the run)
+function wheelsEject(rd) {
+    if (rd.crashed) return;
+    rd.joints.forEach(function(j) { j.broken = true; });
+    for (let i = 0; i < rd.vbase; i++) { var p = rd.pts[i]; p.py = p.y - 16; p.px = p.x - 9; }
+    Components.addFloatingText("EJECT!", rd.pts[0].x, rd.pts[0].y + 80, "#fde047", 24);
+    wheelsCrash(rd);
+}
 function wheelsCrash(rd) {
     if (rd.crashed) return;
     rd.crashed = true;
@@ -310,7 +318,7 @@ GameModes.register({
         Wheels.logs = [];
         Wheels.finishX = lvl.finishX; Wheels.cps = lvl.cps || [];
         var sameCourse = Wheels.cpKey === LevelManager.currentLevelKey;
-        Wheels.riders = []; Wheels.time = 0; Wheels.phase = "ready"; Wheels.t = 0; Wheels.done = {};
+        Wheels.riders = []; Wheels.time = 0; Wheels.phase = "ready"; Wheels.t = 0; Wheels.done = {}; Wheels.rec = [];
         if (!sameCourse) Wheels.crashes = 0;
         Wheels.cpReached = Wheels.cpReached && Wheels.cpKey === LevelManager.currentLevelKey ? Wheels.cpReached : -1;
         Wheels.cpKey = LevelManager.currentLevelKey;
@@ -345,6 +353,7 @@ GameModes.register({
     },
 
     onKey: function(code) {
+        if (code === "KeyE" || code === "Slash") { var who = code === "KeyE" ? 0 : 1, r = Wheels.riders.find(function(q) { return q.wheelsSlot === who && !q.netPeer; }); if (r && Wheels.phase === "ride") wheelsEject(r); return true; }
         if (code === "KeyR") { LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
         if (code === "KeyV") { var ks = window.Object.keys(WHEELS_VEHICLES); wheelsSave.vehicle = ks[(ks.indexOf(wheelsSave.vehicle) + 1) % ks.length]; saveWheels(); Wheels.cpReached = -1; LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
         return false;
@@ -384,6 +393,8 @@ GameModes.register({
 
     update: function() {
         if (Wheels.phase === "ride") Wheels.time++;
+        var r0 = Wheels.riders.find(function(r) { return r.wheelsSlot === 0 && !r.netPeer; });
+        if (r0 && Wheels.phase === "ride" && Wheels.time % 4 === 0 && !r0.crashed && Wheels.rec.length < 9000) Wheels.rec.push(Math.round(r0.pts[r0.vbase].x), Math.round(r0.pts[r0.vbase].y), Math.round(r0.pts[r0.vbase + 1].x), Math.round(r0.pts[r0.vbase + 1].y));
         wheelsTraps();
         var lvl = LevelManager.getCurrentLevel();
         for (let i = 0; i < Wheels.riders.length; i++) {
@@ -397,7 +408,7 @@ GameModes.register({
                 Wheels.done[i] = Wheels.time;
                 var key = LevelManager.currentLevelKey + ":" + wheelsSave.vehicle;
                 var newBest = !wheelsSave.best[key] || Wheels.time < wheelsSave.best[key];
-                if (newBest && Wheels.cpReached < 0) { wheelsSave.best[key] = Wheels.time; saveWheels(); }
+                if (newBest && Wheels.cpReached < 0) { wheelsSave.best[key] = Wheels.time; if (i === 0) wheelsSave.ghost[key] = Wheels.rec.slice(); saveWheels(); }
                 showBanner("FINISH!  " + (Wheels.time / 60).toFixed(2) + "s", (Wheels.cpReached >= 0 ? "(from a checkpoint - no record)" : (newBest ? "NEW BEST!" : "best " + (wheelsSave.best[key] / 60).toFixed(2) + "s")), "#fde047");
                 if (typeof SFX !== "undefined") SFX.play("clear");
                 Wheels.phase = "done"; Wheels.endT = 200;
@@ -411,6 +422,16 @@ GameModes.register({
     },
 
     drawWorld: function() {
+        // ghost of your best run on this course + vehicle
+        var gk = LevelManager.currentLevelKey + ":" + wheelsSave.vehicle, G = wheelsSave.ghost[gk];
+        if (G && G.length && Wheels.phase !== "ready") {
+            var gi = Math.min(Math.floor(Wheels.time / 4), G.length / 4 - 1) * 4, a = [wsx(G[gi]), wsy(G[gi + 1])], b2 = [wsx(G[gi + 2]), wsy(G[gi + 3])], gr = 26 * cameraScaleX;
+            ctx.save(); ctx.globalAlpha = 0.35; ctx.strokeStyle = "#a5f3fc"; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.arc(a[0], a[1], gr, 0, 7); ctx.stroke(); ctx.beginPath(); ctx.arc(b2[0], b2[1], gr, 0, 7); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo((a[0] + b2[0]) / 2, Math.min(a[1], b2[1]) - 50 * cameraScaleX); ctx.lineTo(b2[0], b2[1]); ctx.stroke();
+            ctx.globalAlpha = 0.7; uiText("GHOST", (a[0] + b2[0]) / 2, Math.min(a[1], b2[1]) - 62 * cameraScaleX, 11, "#a5f3fc", "center", "900");
+            ctx.restore();
+        }
         var k = cameraScaleX;
         for (let m = 0; m < Wheels.mines.length; m++) {
             var mn = Wheels.mines[m], sx = wsx(mn[0]), sy = wsy(mn[1]);
@@ -444,7 +465,7 @@ GameModes.register({
             uiText("P" + (i + 1) + " fuel", 22, fy0 + 13, 10, "#fdba74", "left", "800");
         }
         if (Wheels.phase === "ready") uiText("GET READY", cssW / 2, cssH / 2 - 60, 48, "#fdba74", "center", "900");
-        uiText("W/S drive & brake · A/D lean (flips = -0.5 s) · " + WHEELS_VEHICLES[wheelsSave.vehicle].sp + " · R restart · V vehicle" + (multiplayer ? " · P2: arrows" : "") + " · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.75)", "center", "700");
+        uiText("W/S drive & brake · A/D lean (flips = -0.5 s) · " + WHEELS_VEHICLES[wheelsSave.vehicle].sp + " · E eject · R restart · V vehicle" + (multiplayer ? " · P2: arrows" : "") + " · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.75)", "center", "700");
     },
 
     menuItems: function(items) {

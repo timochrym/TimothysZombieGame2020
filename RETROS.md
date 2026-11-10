@@ -6,6 +6,17 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Wobble Wheels: eject + best-run ghost
+
+**Shipped:** E (P2 /) ejects — the rider lets go and is flung up and forward (a deliberate bail-out that counts as a
+crash). A ghost outline of your best run (per course and vehicle, recorded every 4 frames, only from full runs)
+rides along with you.
+
+**Measured:** a full run saved a 200-sample ghost (best 202 frames) and it shows on the next attempt; E broke every
+joint and ended the run; no errors.
+
+---
+
 ## Table Games: Air Hockey
 
 **Shipped:** a third table game — Air Hockey: an air-hole rink with goal mouths, RED on the mouse (or WASD), BLUE as a

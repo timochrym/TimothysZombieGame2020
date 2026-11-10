@@ -54,7 +54,8 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - [~] Wobble Wheels: DONE — vehicle specials on Space/F (P2 Enter, pad B/X/RB): bike bunny-hop, cart big jump,
       wheelchair rocket with a fuel bar; flips counted in the air (each ≈full turn landed = -0.5 s), slow-mo on crashes;
       FIXED the wheelchair (it tipped onto its back at spawn and crawled — now upright with a backrest, 10× faster).
-      STILL TO DO: more courses + a course select with medals, eject button, ghost of your best run, more vehicles
+      E eject (bail out, flung off), ghost of your best run per course + vehicle. STILL TO DO: more courses + a course
+      select with medals, more vehicles
       (pogo, scooter, shopping trolley), destructible obstacles, hazards that react (falling platforms, fans).
 - [~] Crash Lab: DONE — "Stair Drop" scenario (pause → Scenario): one push from the top of a 14-step staircase, the
       score runs until the dummy comes to rest, best saved; damage heat-map (head / torso / limbs drift from yellow to
