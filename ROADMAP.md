@@ -126,7 +126,7 @@ the middle) feed a shop for blocks, weapons and armor. You respawn while your be
 enemy bed, then eliminate them. 2-player local PvP plus CPU bots that bridge toward the enemy,
 fight and break beds. CPU bots use Pathfinder with buildable edges enabled.
 
-### 8. 3D view toggle (settings.view3d)
+### 8. 3D view toggle (settings.view3d) [DONE] (depth.js)
 Render-only "2.5D". Each static box/ramp polygon gets side faces extruded toward a vanishing point
 at screen centre, shaded by face normal. Draw all side faces first, then all front faces.
 Characters stay billboards. Gameplay stays 2D. Be honest that true 3D would need a new engine.

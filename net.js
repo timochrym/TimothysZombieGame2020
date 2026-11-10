@@ -640,6 +640,7 @@ var Net = {
 
         var safe = function(fn) { try { fn(); } catch (e) { if (!Net._warned) { Net._warned = true; console.warn("net draw", e); } } };
         safe(function() { if (typeof BackgroundMosaic !== "undefined") BackgroundMosaic.draw(ctx); });
+        safe(function() { if (typeof Depth !== "undefined" && Depth.on()) Depth.drawSides(staticObjects.concat(movingObjects)); });
         for (let i = 0; i < staticObjects.length; i++) safe(function() { if (!staticObjects[i].dead) staticObjects[i].staticObject(); });
         safe(function() { if (typeof Gadgets !== "undefined") Gadgets.draw(); });
         safe(function() { GameModes.call("drawWorld"); });

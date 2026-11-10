@@ -6,6 +6,22 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## 2.5D view — ROADMAP section 8
+
+**Shipped:** `depth.js` + Settings → "3D view (2.5D)". Every level piece and crate gets side faces extruded toward a
+vanishing point near the screen centre, culled to the faces that point at the eye, shaded by direction (tops lit,
+undersides dark), drawn far-to-near before all front faces. Characters stay flat. Works on LAN clients too.
+
+**Honest limit:** this is a camera trick. Gameplay, collisions and physics are still 2D; real 3D would need a new
+engine (WebGL rendering + 3D physics), which is out of scope for this codebase.
+
+**Measured:** 60 FPS with it on in Overworld Arena and Parkour Rush 2 (61 off). No errors.
+
+**Left / known:** the vanishing point is fixed to the screen, so depth shifts slightly as the camera pans (intended
+parallax); textured faces are flat-shaded, not textured.
+
+---
+
 ## Bed Brawl (Bed Wars) — ROADMAP section 7
 
 **Shipped:** `game_bedwars.js`: two team islands over the void plus a diamond island; beds with HP (shoot them or

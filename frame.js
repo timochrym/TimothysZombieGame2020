@@ -1047,7 +1047,8 @@ function frame() {
     GameModes.call("update");
     if (typeof Build !== "undefined") Build.update();
 
-    // Draw Static Map Objects
+    // Draw Static Map Objects (2.5D view: every side face first, then the fronts)
+    if (typeof Depth !== "undefined" && Depth.on()) Depth.drawSides(staticObjects.concat(movingObjects));
     for (let i = 0; i < staticObjects.length; i++) {
         staticObjects[i].staticObject();
     }
@@ -1172,6 +1173,7 @@ function pauseItems() {
             { id: "shit", label: "Hit-stop on big hits:  " + (settings.hitStop ? "ON" : "OFF"), hint: "Freezes a few frames on heavy impacts" },
             { id: "shidpi", label: "Sharp hi-DPI graphics:  " + (settings.hiDPI ? (renderScaleAutoReduced ? "ON (auto-reduced for speed)" : "ON") : "OFF"), hint: "Turn off if the game runs slowly" },
             { id: "sglow", label: "Glow effects:  " + (settings.glow ? (glowAutoDisabled ? "ON (auto-reduced for speed)" : "ON") : "OFF"), hint: "Turn off for more FPS on slower computers" },
+            { id: "s3d", label: "3D view (2.5D):  " + (settings.view3d ? "ON" : "OFF"), hint: "Looks only: blocks get depth, gameplay stays 2D" },
             { id: "ssquare", label: "Character look:  " + (settings.squareChars ? "Classic squares" : "Detailed"), hint: "Classic squares = the original 2020 blocky look" },
             { id: "help", label: "Controls help:  " + (devOpts.showHelp ? "ON" : "OFF"), hint: "Shows the key cheat-sheet" },
             { id: "back", label: "◀  Back", hint: "Esc" }
@@ -1220,6 +1222,7 @@ function pauseActivate(id, dir) {
     if (id === "svol") { SFX.setVolume(Math.round((settings.volume + (dir || 1) * 0.1) * 10) / 10); if (settings.volume > 1) SFX.setVolume(1); return; }
     if (id === "sshake") { settings.shake = Math.max(0, Math.min(1, Math.round((settings.shake + (dir || 1) * 0.25) * 4) / 4)); saveSettings(); return; }
     if (id === "sglow") { settings.glow = !settings.glow; glowAutoDisabled = false; saveSettings(); return; }
+    if (id === "s3d") { settings.view3d = !settings.view3d; saveSettings(); return; }
     if (id === "ssquare") { settings.squareChars = !settings.squareChars; saveSettings(); return; }
     if (id === "shit") { settings.hitStop = !settings.hitStop; saveSettings(); return; }
     if (id === "shidpi") { settings.hiDPI = !settings.hiDPI; renderScaleAutoReduced = false; saveSettings(); applyCanvasSize(); xcMaster = w / 2; ycMaster = h / 2; return; }
