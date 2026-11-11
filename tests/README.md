@@ -34,6 +34,7 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node inspector.js           # Inspect tab picks beds, generators, fighters, riders; match card; zombie unchanged
     node studio_wheels.js       # Level Studio builds / opens Wobble Wheels courses; saved ones join the course select
     node studio_brawl.js        # Level Studio builds / opens Brawl stages; saved ones join the stage rotation
+    node studio_siege_words.js  # Level Studio builds / opens Siege forts and Word Lab rooms
     node lan_play.js            # starts server.js on 8099: a host + 2 joiners, positions match, client FPS
 
 Each prints its numbers and then the page errors (`[]` = none). See ROADMAP.md, "Your named feedback items".

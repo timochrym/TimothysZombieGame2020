@@ -21,7 +21,7 @@ var STUDIO_TEXTURES = ["brick", "grass_dirt", "castle_stone", "dojo_wood", "lab_
 var STUDIO_ENEMIES = ["NORMAL", "SLIME", "BAT", "ARCHER", "KNIGHT", "MAGE", "LEAPER", "EXPLODER", "TANK", "SPITTER", "BOSS_KING"];
 var STUDIO_PLAT_ENEMIES = ["walker", "hopper", "flyer", "spiky", "tank"];
 var STUDIO_MODES = [["survival", "Zombie Survival (waves)"], ["creative", "Creative (fly & build)"], ["platform", "Stomp Squad (platformer)"],
-                    ["puzzle", "Crate Lab (puzzle)"], ["race", "Parkour Rush (race)"], ["portal", "Portal Lab"], ["wheels", "Wobble Wheels (course)"], ["brawl", "Brawl (stage)"]];
+                    ["puzzle", "Crate Lab (puzzle)"], ["race", "Parkour Rush (race)"], ["portal", "Portal Lab"], ["wheels", "Wobble Wheels (course)"], ["brawl", "Brawl (stage)"], ["siege", "Ragdoll Siege (fort)"], ["words", "Word Lab (room)"]];
 
 // palette: category -> [ [label, icon, template] ]
 var STUDIO_PALETTE = [
@@ -90,7 +90,13 @@ var STUDIO_PALETTE = [
         ["Main stage", "🏟", { cat: "layout", type: "box", name: "Main Stage", w: 2000, h: 360, color: "#4a5568", texture: "castle_stone", kind: "block" }],
         ["Floating platform", "➖", { cat: "layout", type: "box", name: "Platform", w: 600, h: 60, color: "#b84a27", texture: "brick", kind: "platform" }],
         ["Fighter spawn", "🥊", { cat: "bspawn" }]
-    ], ["brawl"]]
+    ], ["brawl"]],
+    ["Siege fort", [
+        ["Crate", "📦", { cat: "layout", type: "crate", name: "Crate", size: 80, w: 80, h: 80, color: "#c98c4a", texture: "crate_plank" }],
+        ["Plank", "🪵", { cat: "layout", type: "crate", name: "Plank", w: 400, h: 28, color: "#b07a3e", texture: "dojo_wood" }],
+        ["Stone pillar", "🗿", { cat: "layout", type: "box", name: "Stone", w: 120, h: 400, color: "#6b7280", texture: "castle_stone", kind: "block" }],
+        ["TNT barrel", "🧨", { cat: "layout", type: "crate", name: "TNT Barrel", size: 70, explosive: true }]
+    ], ["siege"]]
 ];
 
 var Studio = {
@@ -137,6 +143,8 @@ var Studio = {
         }
         if (lvl.finishX !== undefined) d.ents.push({ cat: "wfinish", x: lvl.finishX, y: 0 });
         if (lvl.brawlSpawns) lvl.brawlSpawns.forEach(function(p) { d.ents.push({ cat: "bspawn", x: p[0], y: p[1] }); });
+        if (lvl.siege) { lvl.siege.enemies.forEach(function(z) { d.ents.push({ cat: "enemy", power: z[2] || "NORMAL", x: z[0], y: z[1] + 40 }); }); d.ammo = lvl.siege.ammo.join(", "); }
+        if (lvl.task) { d.task = lvl.task; d.par = lvl.par; }
         if (lvl.spawnP1) d.ents.push({ cat: "spawn", player: 1, x: lvl.spawnP1[0], y: lvl.spawnP1[1] });
         if (lvl.spawnP2) d.ents.push({ cat: "spawn", player: 2, x: lvl.spawnP2[0], y: lvl.spawnP2[1] });
         return this.withIds(d);
@@ -184,6 +192,17 @@ var Studio = {
             def.brawlSpawns = sp.slice(0, 4); def.spawnP1 = sp[0]; def.spawnP2 = sp[1];
             def.wavesEnabled = false;
         }
+        if (doc.mode === "siege") {
+            // the fort's zombies are the Studio's enemy pieces; ammo and the camera's focus come from the document
+            def.siege = { enemies: def.studioSpawns.enemies.map(function(z) { return [z.x, z.y - 40, z.power]; }), ammo: (doc.ammo || "dummy, dummy, dummy").split(/[,\s]+/).filter(Boolean), focusX: 700 };
+            def.studioSpawns.enemies = [];
+            var xs = def.layout.filter(function(o) { return o.type === "crate"; }).map(function(o) { return o.x; });
+            if (xs.length) def.siege.focusX = Math.round(xs.reduce(function(a, b) { return a + b; }, 0) / xs.length);
+            // the slingshot needs its stone base
+            if (typeof SIEGE_ANCHOR !== "undefined" && !def.layout.some(function(o) { return Math.abs(o.x - SIEGE_ANCHOR.x) < 120 && o.type === "box" && o.name === "Stone"; }))
+                def.layout.push({ type: "box", name: "Stone", x: SIEGE_ANCHOR.x, y: 100, w: 170, h: 200, color: "#6b7280", texture: "castle_stone", kind: "block" });
+        }
+        if (doc.mode === "words") { def.task = doc.task || "Reach the star!"; def.par = Number(doc.par) || 2; }
         if (doc.mode === "wheels") {
             // Wobble Wheels reads traps / finish / checkpoints from the level itself
             var tr = { mines: [], logs: [], spikes: [] }, fin = null, maxX = -Infinity;
@@ -1201,6 +1220,17 @@ var Studio = {
                  "<p class='muted'><b>Linking:</b> give a door an <b>id</b>, then put that id in a plate's or lever's <b>links</b>.</p>" +
                  "<p class='muted'><b>Game rules</b> (top bar) decide how the level plays: waves, lives, goals…</p>");
             var ds = document.getElementById("st-del-sel"); if (ds) ds.onclick = function() { self.deleteSel(); };
+            // settings for the whole level that a game needs (Word Lab task + par, Siege ammo)
+            var extra = this.doc.mode === "words" ? [["task", "Task text", "text", "Reach the star!"], ["par", "Word par", "number", 2]] :
+                        this.doc.mode === "siege" ? [["ammo", "Ammo (in order)", "text", "dummy, dummy, dummy"]] : [];
+            if (!this.sel.length && extra.length) {
+                var box = document.createElement("div");
+                box.innerHTML = "<h3 style='margin-top:14px'>" + (this.doc.mode === "words" ? "Word Lab room" : "Siege fort") + "</h3>" +
+                    extra.map(function(f) { return "<label>" + f[1] + "<input id='std-" + f[0] + "' type='" + f[2] + "' value='" + esc(self.doc[f[0]] !== undefined ? self.doc[f[0]] : f[3]) + "'></label>"; }).join("") +
+                    (this.doc.mode === "siege" ? "<p class='muted'>Ammo: dummy, heavy, bomb (one shot each). Enemy pieces become the fort's zombies.</p>" : "<p class='muted'>Put a ⭐ Star (Gadgets) where it has to be reached.</p>");
+                this.ui.right.appendChild(box);
+                extra.forEach(function(f) { var el = document.getElementById("std-" + f[0]); el.onchange = function() { self.pushUndo(); self.doc[f[0]] = f[2] === "number" ? Number(el.value) : el.value; self.autosave(); }; });
+            }
             return;
         }
         var e = this.sel[0];

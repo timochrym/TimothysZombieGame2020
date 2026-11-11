@@ -6,6 +6,19 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Level Studio: Siege forts and Word Lab rooms
+
+**Shipped:** rules "Ragdoll Siege (fort)" (palette: crate, plank, stone pillar, TNT; enemy pieces become the fort's
+zombies; an ammo list such as "dummy, heavy, bomb"; the sling's stone base is added if missing) and "Word Lab (room)"
+(a ⭐ star, a task line and a word par). The level-wide settings appear in the Studio inspector when nothing is
+selected. Built-in forts and rooms open with their zombies / ammo / task / par.
+
+**Measured (`tests/studio_siege_words.js`):** fort 2 opened with 3 zombies and ammo "dummy, heavy, dummy"; with ammo
+changed to "bomb, heavy" it play-tested as Siege with 3 zombies and those 2 shots; a new room with task "Get up to the
+star with one word!" and par 1 play-tested, showed the task, and "fly" + reaching the star cleared it; no errors.
+
+---
+
 ## Level Studio: Brawl stages
 
 **Shipped:** rules "Brawl (stage)" with a Brawl palette (main stage, floating platform, fighter spawn). The Studio works
