@@ -167,3 +167,6 @@ var ModeKit = {
         return items;
     }
 };
+
+// Game-specific cheats (Cheats panel -> Game tab -> "This game"). Runs that use a time/score cheat don't save records.
+var gameCheats = { raceFreeze: false, portalAnywhere: false, siegeUnlimited: false, platLives: false, brawlTaken: 1 };

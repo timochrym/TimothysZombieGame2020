@@ -196,15 +196,17 @@ Shared (first, as you asked: "Focus on shared game library assets though first")
 - [x] BUG: Zombie Ball — the ball sometimes goes invisible. → Rendering / LAN sync and shared-key fixes; regression tests added. Please report any remaining local case.
 - [x] BUG: Table Games / Flick Soccer — player 2 can't move their discs on their turn. → Rendering / LAN sync and shared-key fixes; regression tests added. Please report any remaining local case.
 - [x] S7 Enemy AI pathfinding: graph invalidation, moving-platform coordinates, and flow-loop prevention improved. Further terrain-specific tuning may remain; original request: (your words: "And enemey AI path finding still needs to improve").
-- [~] S6 Arena, Jet Dash and board-game cheats added; exhaustive coverage remains. Cheats for every game, incl. Worm / Blob / Tank Arena (god mode, size, speed, stat points).
-Each game:
-- [ ] Worm Arena: boost doesn't work properly; cheats.   - [ ] Tank Arena: too hard; cheats.   - [ ] Blob Arena: cheats.
-- [ ] Jet Dash: look and behave closer to the genre.     - [ ] Stomp Squad: look / behave more like the genre; the
-      bouncing after jumps is weird.                     - [ ] Infinite Frontier: rebrand (its name borrows another game's).
-- [ ] Wobble Wheels: closer to the genre.                - [ ] Zombie Ball: a real soccer ball; a mode where players only
-      jump and kick a leg out (at least as a character option) — under an original name.
-- [ ] Sand Lab: many more options and customization.     - [ ] Terra: a creative mode for quick testing.
-- [ ] Ragdoll Siege: Birds as the default.               - [ ] Make multiplayer fun; games closer to their genre.
+- [~] S6 Cheats: arenas, Jet Dash, board games (other agent) + Parkour Rush freeze clock, Portal Lab portals anywhere, Siege unlimited shots, Stomp Squad infinite lives, Brawl damage taken (`tests/game_cheats.js`). Generic god mode / flight / jetpack / ammo cover every world game. Word Lab, Crash Lab, Table Games: setup rows only.
+Each game (ticked = built and covered by a test; checked against tests/roadmap_regressions.js + roadmap_features.js):
+- [x] Worm Arena: boost fixed (it latched on) + cheats.  - [x] Tank Arena: difficulty setting (Players / shared) + cheats.
+- [x] Blob Arena: cheats (invincible, speed, mass).       - [x] Wildwood Frontier: renamed from "Infinite Frontier".
+- [x] Zombie Ball: real soccer ball by default; "Style: Flail (one button)" = players only jump and kick a leg out.
+- [x] Terra: creative mode (free placing, instant mining, no damage, flight). - [x] Ragdoll Siege: Birds is the default.
+- [~] Sand Lab: ice, acid, gunpowder, seeds + brush size/shape/density/speed controls; more is always possible.
+- [~] Stomp Squad: the weird bounce after landing is fixed (shared landing fix); look/feel closer to the genre still open.
+- [~] Jet Dash: coin magnet + starting shield you buy with banked coins; look/feel closer to the genre still open.
+- [~] Wobble Wheels: Wind Works course (fans, updrafts, smash gates); closer to the genre still open.
+- [ ] Make multiplayer fun; games closer to their genre — needs your play-through to say which games feel off.
 Your words: "Boost in slither io does not work properly. THeyre should also be cheat settings / Diepo is too hard and has
 not cheats / Agario should have cheats / Jet pack joride needs to look and behave a lot closer to the first game / The
 characters awlays have a gun / ammo is annoying / THeyre should be some fightning methods instead of just dash / Add more

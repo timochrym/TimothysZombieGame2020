@@ -417,6 +417,7 @@ function brawlApplyHit(victim, amount, kx, ky, attacker) {
         if (victim.shieldHP <= 0) { victim.shieldHP = 0; victim.shielding = false; victim.dizzyT = 70; Components.addFloatingText("SHIELD BREAK!", victim.x, victim.y + 90, "#fca5a5", 20); }
         return;
     }
+    if (!victim.isCPU && gameCheats.brawlTaken !== 1) { dmg *= gameCheats.brawlTaken; if (dmg <= 0) { Components.spawnSparks(victim.x, victim.y, "#fde68a", 3); return; } }
     var pct = Math.max(1, dmg * 0.35);
     victim.damagePct += pct;
     if (attacker && attacker !== victim && attacker.isPlayer) { victim.brLastBy = attacker; victim.brLastT = brawl.tick; attacker.brDealt = (attacker.brDealt || 0) + pct; }

@@ -246,7 +246,7 @@ function platAllDown(ch) {
         if (rd && rd.style) rd.style.dead = true;
     }
     for (let i = 0; i < characters.length; i++) if (characters[i].isPlayer) characters[i].dead = true;
-    Plat.lives--;
+    if (!gameCheats.platLives) Plat.lives--;
     Plat.phase = Plat.lives > 0 ? "dead" : "over";
     Plat.phaseT = 150;
     showBanner(Plat.lives > 0 ? "TOO BAD!" : "GAME OVER", Plat.lives > 0 ? ("Lives left: " + Plat.lives) : "Press Esc for the menu", Plat.lives > 0 ? "#fca5a5" : "#f87171");

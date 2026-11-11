@@ -206,7 +206,7 @@ GameModes.register({
         raceSave.course = Math.max(0, RACE_COURSES.indexOf(LevelManager.currentLevelKey));
         Race.phase = "ready"; Race.timer = 150; Race.time = 0;
         Race.finish = {}; Race.rec = []; Race.newBest = false; Race.endTimer = 0; Race.hurry = undefined;
-        Race.splits = []; Race.splitShow = null;
+        Race.splits = []; Race.splitShow = null; Race.cheated = gameCheats.raceFreeze;
         if (!raceSave.splits) raceSave.splits = {};
         var g = raceSave.ghost[LevelManager.currentLevelKey];
         Race.ghost = (g && g.length) ? g : null;
@@ -229,7 +229,7 @@ GameModes.register({
 
     update: function() {
         if (Race.phase === "run") {
-            Race.time++;
+            if (gameCheats.raceFreeze) Race.cheated = true; else Race.time++;
             // record P1 every 2 frames for the ghost
             if (redGuy && Race.time % 2 === 0 && Race.finish[0] === undefined && Race.rec.length < 12000) {
                 Race.rec.push(Math.round(redGuy.x), Math.round(redGuy.y));
@@ -276,7 +276,7 @@ GameModes.register({
         var key = LevelManager.currentLevelKey;
         var t = Race.finish[0];
         if (t !== undefined) {
-            if (!raceSave.best[key] || t < raceSave.best[key]) {
+            if (!Race.cheated && (!raceSave.best[key] || t < raceSave.best[key])) {
                 Race.newBest = true;
                 raceSave.best[key] = t;
                 raceSave.ghost[key] = Race.rec.slice();

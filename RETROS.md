@@ -6,6 +6,29 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Picked up from the other agent's handoff + game cheats where there were none
+
+**Asked:** "Continue where the other agent left off." Its branch (`codex/arcade-handoff-fixes`, commit 1e05e4a) builds on
+`main`; this branch now carries it plus the work below.
+**Checked first:** all four of its suites pass here (roadmap_regressions, roadmap_features, lan_soccer, arcade_smoke).
+It reported the fists combo test logging punch/punch/punch (36 damage). Here it is punch/punch/kick (44) every time, even
+with three copies running at once. The game runs at a fixed 60 Hz, so the code was fine; the test waited on the wall
+clock, so a busy machine could split or drop a key tap. It now waits on game frames.
+**Shipped (S6):** cheats for the games that had none of their own (Cheats panel → Game tab → "This game"):
+Parkour Rush *Freeze the clock* (a run that used it never saves a best time), Portal Lab *Portals stick to any wall*,
+Ragdoll Siege *Unlimited shots*, Stomp Squad *Infinite lives*, Brawl *Damage you take* (Normal / Half / Quarter / None,
+humans only, so CPUs still get launched). The generic cheats (god mode, jetpack, creative flight, infinite ammo) already
+appear in every game with a world; they only re-show every 15 ticks, which made an early count look like zero.
+**Also:** the per-game checklist in TODO.md now ticks what the other agent finished but left unticked (Worm boost, arena
+cheats, Terra creative, Birds default, Wildwood Frontier, Zombie Ball ball; the one-button jump-and-kick style was already
+built as "Style: Flail").
+**Went wrong:** the Siege cheat test failed at first because the level's intro fly-by was still playing, which skips all
+game logic. The test now skips the intro; the cheat itself was fine.
+**Left:** Word Lab, Crash Lab and Table Games still have only the generic or setup rows. S2 (playing as any object in
+every game) and S5 (per-player win/loss history) are partial; the genre-feel items need your play-through.
+
+---
+
 ## Fists, unlimited ammo by default, and a "ragdoll when hit" setting (every game)
 
 **Asked:** "The characters always have a gun / ammo is annoying / There should be some fighting methods instead of just

@@ -76,7 +76,7 @@ var Portals = {
         var hit = this.raycast(ch.x, ch.y + 10, dx, dy);
         var endX = hit ? hit.x : ch.x + dx * 3600, endY = hit ? hit.y : ch.y + 10 + dy * 3600;
         this.beams.push({ x1: ch.x, y1: ch.y + 10, x2: endX, y2: endY, color: col, life: 14 });
-        if (!hit || !hit.obj.portalable) { this.fizzle(endX, endY, col); return; }
+        if (!hit || !(hit.obj.portalable || gameCheats.portalAnywhere)) { this.fizzle(endX, endY, col); return; }
         var o = hit.obj, half = PORTAL_LEN / 2;
         if (hit.nx !== 0) {
             if (o.h < PORTAL_LEN + 10) { this.fizzle(endX, endY, col); return; }
@@ -123,7 +123,7 @@ var Portals = {
         var d = this.aimDir(ch), dx = d[0], dy = d[1];
         var hit = this.raycast(ch.x, ch.y + 10, dx, dy);
         if (!hit) return;
-        var o = hit.obj, ok = !!o.portalable && (hit.nx !== 0 ? o.h >= PORTAL_LEN + 10 : o.w >= PORTAL_LEN + 10);
+        var o = hit.obj, ok = !!(o.portalable || gameCheats.portalAnywhere) && (hit.nx !== 0 ? o.h >= PORTAL_LEN + 10 : o.w >= PORTAL_LEN + 10);
         var sx = wsx(hit.x), sy = wsy(hit.y), k = cameraScaleX;
         ctx.save();
         ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1; ctx.setLineDash([4, 8]);

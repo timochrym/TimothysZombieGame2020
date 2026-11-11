@@ -484,6 +484,7 @@ GameModes.register({
             Siege.settleT++;
             if (!moving || Siege.settleT > 300) {
                 if (alive === 0) this.endLevel(true);
+                else if (Siege.shotIdx >= Siege.shots.length && gameCheats.siegeUnlimited) { Siege.shots.push(Siege.shots[Siege.shots.length - 1]); Siege.phase = "aim"; Siege.rd = null; }
                 else if (Siege.shotIdx >= Siege.shots.length) this.endLevel(false);
                 else { Siege.phase = "aim"; Siege.rd = null; }
             }

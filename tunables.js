@@ -7,6 +7,7 @@
 // ============================================================================
 var GAME_TUNABLES = {
     brawl: [
+        { label: "Damage you take", type: "choice", options: [[1, "Normal"], [0.5, "Half"], [0.25, "Quarter"], [0, "None (can't be launched)"]], get: function() { return gameCheats.brawlTaken; }, set: function(v) { gameCheats.brawlTaken = Number(v); }, note: "humans only" },
         { label: "Stocks (lives)", type: "range", min: 1, max: 9, step: 1, get: function() { return brawlCfg.stocks; }, set: function(v) { brawlCfg.stocks = v; if (typeof saveBrawlCfg === "function") saveBrawlCfg(); }, note: "next match" },
         { label: "CPU skill", type: "choice", options: [[1, "Easy"], [2, "Normal"], [3, "Hard"]], get: function() { return brawlCfg.cpuLevel; }, set: function(v) { brawlCfg.cpuLevel = v; if (typeof saveBrawlCfg === "function") saveBrawlCfg(); } }
     ],
@@ -29,6 +30,18 @@ var GAME_TUNABLES = {
     ],
     property: [
         { label: "Rounds", type: "range", min: 5, max: 60, step: 1, get: function() { return rentCfg.rounds; }, set: function(v) { rentCfg.rounds = v; } }
+    ],
+    race: [
+        { label: "Freeze the clock", type: "toggle", get: function() { return !!gameCheats.raceFreeze; }, set: function(v) { gameCheats.raceFreeze = !!v; }, note: "runs with it on don't save a best time" }
+    ],
+    portal: [
+        { label: "Portals stick to any wall", type: "toggle", get: function() { return !!gameCheats.portalAnywhere; }, set: function(v) { gameCheats.portalAnywhere = !!v; } }
+    ],
+    siege: [
+        { label: "Unlimited shots", type: "toggle", get: function() { return !!gameCheats.siegeUnlimited; }, set: function(v) { gameCheats.siegeUnlimited = !!v; } }
+    ],
+    platform: [
+        { label: "Infinite lives", type: "toggle", get: function() { return !!gameCheats.platLives; }, set: function(v) { gameCheats.platLives = !!v; } }
     ],
     creative: [
         { label: "Noclip (fly through walls)", type: "toggle", get: function() { return !!creativeCfg.noclip; }, set: function(v) { creativeCfg.noclip = v; } },
