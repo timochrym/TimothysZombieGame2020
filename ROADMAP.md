@@ -29,6 +29,22 @@ headless Chromium before committing.
 
 - LAN multiplayer: `node server.js`, then 📡 LAN -> Host / Join. See ENGINE.md "LAN multiplayer". [DONE]
 
+## Your named feedback items — what "done" means, and the check that proves it
+
+Each line is the bar I hold the item to, and a script in `tests/` that re-checks it (`node <file>` from `tests/`).
+
+| Your words | Done when | Check | Last result |
+| :--- | :--- | :--- | :--- |
+| "Soccer physics like character, like the actual character" | the ball is a real zombie ragdoll (same Verlet body as characters) and the players are full characters that ragdoll when tackled | `zombieball_seats.js` | ragdoll ball (11 points), tackled P1 ragdolls, no errors |
+| "The blocks bounce randomly in the ragdoll siege game" | after bodies land in every fort and things settle: 0 crate bounces, 0 movement, 0 zombies dying on their own | `siege_rest.js` | all 5 forts: 0 / 0 / 0 |
+| "(Add an option to do angry birds)" | a Birds ammo mode in the Siege pause menu, with the same 0-bounce bar | `siege_rest.js birds` | all 5 forts: 0 / 0 / 0 |
+| "Dev improvement" | the old dev screen is replaced by the Level Studio: place, drag, resize, edit in an inspector, undo/redo, save into the level list, play-test and come back, game handed back untouched on close | `studio.js` | all steps pass, play-test exit returns to the editor |
+| "Better multiplayer experience" | LAN: a host and 2 joiners play the same match, joiners move on every screen, clients at 60 FPS; local: pads 3-4 take CPU seats and every menu works on a pad | `lan_play.js`, `gamepad.js` | positions match host/client, 60 FPS; pad claimed a CPU seat, built, punched, paused |
+| "Better multiplayer and cpu toggles, make it way more clear" | one Players panel (👥 button / pause menu) with per-seat Human / CPU / Off, line-up formats, and a summary of who is who shown in the top bar and at match start | `players.js`, `zombieball_seats.js` | 1v1 → 2v2 summary "P1 + CPU1 vs CPU2 + CPU3", seats Human/CPU/Off shown |
+
+Still needs you: the final play-through ("we'll work on perfecting all of the features together"), and a look at the
+Control Panel's Start LAN game button on your machine.
+
 ## Sections (build in order)
 
 ### 1. Head stomps (engine-wide) [DONE]
