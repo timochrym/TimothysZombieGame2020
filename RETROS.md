@@ -6,6 +6,18 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Wobble Wheels: Scooter and Trolley
+
+**Shipped:** two more vehicles (V / pause menu): a green Scooter — small wheels, tall bar, quick, Space kick-pushes
+for a speed burst once a second; and a shopping Trolley — slow but hard to tip, Space does a little hop. Best times,
+ghosts and course-select medals are kept per vehicle as before.
+
+**Measured (`tests/wheels_vehicles.js`, W held for 5 s on Hill Hop):** trolley 2462 px and still upright; scooter
+with kicks 4079 px (about the bike's 4185) before crashing at the jump gap, where the W-only bike also lands badly.
+**Went wrong:** the first trolley (accel 0.42, 14 px wheels) stalled on the first ramp at 1174 px; now 0.56 / 17 px.
+
+---
+
 ## Table Games: Hill Cannons (artillery)
 
 **Shipped:** a fourth table game — two cannons on generated hills; ←/→ angle, ↑/↓ power, Space fires (or hold the
