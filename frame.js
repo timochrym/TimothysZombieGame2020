@@ -904,7 +904,7 @@ function drawHUD() {
     }
 
     // ---------- Controls cheat-sheet ----------
-    if (devOpts.showHelp && helpTimer > 0 && !(typeof SummonManager !== "undefined" && SummonManager.isOpen)) {
+    if (devOpts.showHelp && helpTimer > 0 && !(typeof SummonManager !== "undefined" && SummonManager.isOpen) && !(typeof TouchUI !== "undefined" && TouchUI.on && !TouchUI.helpAsked)) {
         helpTimer--;
         var fade = Math.min(1, helpTimer / 60);
         var hw = multiplayer ? 640 : 560;

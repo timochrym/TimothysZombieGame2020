@@ -6,7 +6,8 @@
 //   node server.js --open     also opens the game in this computer's browser, ready to host
 //                             (what the "Start LAN Game" launchers and the Control Panel button run)
 //
-// Then open the printed http://192.168.x.x:8080 address on each computer / tablet on the same Wi-Fi.
+// Then open the printed http://192.168.x.x:8080 address on each computer / tablet / phone on the same Wi-Fi
+// (touch screens get on-screen buttons: touch.js).
 // The first browser that presses "Host" runs the game; everyone else who joins sends their controls
 // and sees the host's world. No npm packages needed: plain Node.js (v14+).
 // ============================================================================

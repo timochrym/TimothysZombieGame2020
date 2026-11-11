@@ -6,6 +6,25 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Touch controls (phones and tablets, also as LAN players)
+
+**Why:** the LAN instructions say "open the link on every computer, tablet or phone", but the game had no touch input
+at all: a phone could tap Join and then do nothing — it looked exactly like "LAN doesn't work".
+
+**Shipped:** `touch.js`. On a touch screen (or after the first touch) on-screen buttons appear: ◀ ▶ ▲ ▼ on the left,
+Jet / Dash / Smash / Grab on the right, ⏸ (Esc) at the bottom. They send the same key events a keyboard does, so every
+game, the pause menu and the LAN client understand them. One finger on the game area is the mouse (hover, press,
+release, click), so the Arcade, menus and board games work by tapping and you aim + shoot by touching where you want
+to fire; quick taps are held for ~70 ms so they register. The buttons hide while a menu owns the screen; the keyboard
+cheat-sheet is hidden on touch devices.
+
+**Measured:** emulated Pixel 7 — tapping the first Arcade card started Zombie Survival, holding ▶ walked 550 px,
+holding on the screen fired 3 rounds, ⏸ paused (`tests/touch_phone.js`); as a LAN joiner it tapped 📡 and Join,
+got into the host's game, and holding ▶ moved its hero on the host's screen (`tests/lan_phone.js`); the desktop LAN
+tests still pass. **Went wrong:** the first version was called `Touch`, which overwrote the browser's own `Touch` class.
+
+---
+
 ## LAN fix: wrong join address, firewall, clearer failures
 
 **Reported:** "The LAN won't work at the moment."
