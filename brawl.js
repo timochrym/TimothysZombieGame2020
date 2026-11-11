@@ -256,7 +256,22 @@ function updateBrawl() {
         if (brawl.itemTimer <= 0) {
             brawl.itemTimer = 700 + Math.random() * 400;
             var ix = st.centerX + (Math.random() - 0.5) * (st.maxX - st.minX) * 0.35;
-            spawnPowerUp(ix, st.topY + 260 + Math.random() * 300);
+            // every other drop is a throwable bomb: G / right-click picks it up, click throws, it blows on impact
+            brawl.dropN = (brawl.dropN || 0) + 1;
+            if (brawl.dropN % 2 === 0) {
+                var bomb = Object.addCrate(ix, st.topY + 520, 54, "#1f2937", { explosive: true, name: "Bomb" });
+                bomb.brawlBomb = brawl.tick;
+                if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                Components.addFloatingText("💣 BOMB!  G grab · click throw", ix, st.topY + 620, "#fca5a5", 18);
+            } else spawnPowerUp(ix, st.topY + 260 + Math.random() * 300);
+        }
+        // unused bombs fizzle out after 25 s so the stage never fills up
+        for (let i = movingObjects.length - 1; i >= 0; i--) {
+            var bo = movingObjects[i];
+            if (bo.brawlBomb !== undefined && !bo.heldBy && !bo.dead && brawl.tick - bo.brawlBomb > 1500) {
+                Components.spawnSparks(bo.x, bo.y, "#94a3b8", 8); movingObjects.splice(i, 1);
+                if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            }
         }
         var alive = characters.filter(function(c) { return !c.eliminated; });
         if (alive.length <= 1) {

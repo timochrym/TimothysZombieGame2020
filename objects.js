@@ -326,6 +326,7 @@ class Object {
         if (!hitObj) return;
         var speedMag = Math.hypot(this.xspeed, this.yspeed);
         if (this.thrownTimer > 0 || speedMag > 10) {
+            if (this.explosive && hitObj === this.thrownBy && this.thrownTimer > 0) return;   // not in the thrower's own hands
             if (this.explosive && (hitObj instanceof Character || speedMag > 14)) {
                 this.takeDamage(-999);
                 return;

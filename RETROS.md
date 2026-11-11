@@ -6,6 +6,19 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Brawl: throwable bombs
+
+**Shipped:** every other Brawl item drop is a bomb: grab it (G / right-click), click to throw, it explodes on impact
+with the usual percent-based knockback; bullets set it off too; unused bombs fizzle after 25 s.
+
+**Bug found on the way (all games):** a thrown TNT barrel or bomb counted the thrower as "hit" the moment it left their
+hands and blew up on them (P1 took 34 % from their own throw). Explosives now ignore their thrower while in flight.
+
+**Measured (`tests/brawl_bomb.js`):** the item timer dropped a bomb; P1 grabbed one and threw it at the CPU: CPU +14 %,
+P1 0 %; no errors.
+
+---
+
 ## Course select for Parkour Rush, Crate Lab, Portal Lab and Wobble Wheels
 
 **Shipped:** one shared grid (`courseselect.js`) opened from each game's pause menu: every course / room / chamber
