@@ -6,6 +6,19 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Table Games: Hill Cannons (artillery)
+
+**Shipped:** a fourth table game — two cannons on generated hills; ←/→ angle, ↑/↓ power, Space fires (or hold the
+mouse to aim, release to fire). Shells carry a per-turn wind, carve craters (so a hit cannon often ends up in a pit
+it has to lob out of), and deal damage by distance; 100 HP each. The CPU simulates a grid of shots and adds aim noise
+by skill. Pass-and-play and LAN (the joiner is BLUE; terrain, cannons, shell and wind sync).
+
+**Measured (`tests/table_cannons.js`):** a match vs the hard CPU ended BLUE wins after 3 hits (100 → 59 → 11 → 0);
+over LAN the CPU left BLUE's turn to the joiner, their ← raised the angle 130 → 155 and Space fired, the client saw
+the same terrain (161 points) and HP; no errors.
+
+---
+
 ## Bed Brawl: Fireball
 
 **Shipped:** a ☄ Fireball pedestal (24 iron): a small, nearly weightless bomb launched fast along your aim; it bursts

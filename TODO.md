@@ -123,9 +123,9 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       down; brush size, pause, fast-forward, save/load. Next: more elements (acid, ice, gunpowder, seeds), gamepad cursor.
 - [~] B4 — 2-player minigame pack → **Table Games**: Flick Soccer (5 discs a side, drag-back flicks, posts, goals, first
       to 3, CPU that picks the best disc/angle, keyboard/pad aiming) and Four in a Row (minimax CPU, 3 skills), vs CPU or
-      pass-and-play; Air Hockey (real time: mouse / WASD vs CPU, arrows or a LAN player; first to 7). STILL TO DO: more
-      minigames (pool-style cue game, darts, word grid, tanks artillery),
-      online/LAN turns.
+      pass-and-play; Air Hockey (real time: mouse / WASD vs CPU, arrows or a LAN player; first to 7); Hill Cannons
+      (turn-based artillery: craters, wind, CPU that simulates its shots, pass-and-play or a LAN player): DONE.
+      STILL TO DO: more minigames (pool-style cue game, darts, word grid).
 
 ## UI pass (your request: top bars, pause menus, Studio, inspector, builders, LAN start)
 - [x] Top bar: 4 compact buttons + grouped ☰ menu, dims while playing, no HUD overlap, adapts to narrow windows.

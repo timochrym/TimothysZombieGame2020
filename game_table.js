@@ -9,7 +9,7 @@
 var tableCfg = { game: "flick", vs: "cpu", level: 2 };
 try { var _tb = JSON.parse(localStorage.getItem("timsTableGames") || "null"); if (_tb) for (var _k in _tb) tableCfg[_k] = _tb[_k]; } catch (e) {}
 function saveTable() { try { localStorage.setItem("timsTableGames", JSON.stringify(tableCfg)); } catch (e) {} }
-var TABLE_GAMES = [["flick", "Flick Soccer"], ["four", "Four in a Row"], ["hockey", "Air Hockey"]];
+var TABLE_GAMES = [["flick", "Flick Soccer"], ["four", "Four in a Row"], ["hockey", "Air Hockey"], ["arty", "Hill Cannons"]];
 var TABLE_COLORS = ["#ef4444", "#3b82f6"];
 
 // ---------------------------------------------------------------- FLICK SOCCER
@@ -418,12 +418,164 @@ var Hockey = {
 };
 
 // LAN: the first LAN player takes BLUE (the CPU / P2 side)
+// ---------------------------------------------------------------- HILL CANNONS (turn-based artillery)
+//   Two cannons on rolling hills that crater where shells land. ←/→ (A/D) angle, ↑/↓ (W/S) power, Space fire
+//   (or hold the mouse: aim + power follow the pointer, release fires). Wind changes every turn. 100 HP each.
+var Arty = {
+    W: 1600, N: 160, G: 0.25,
+    reset: function(first) {
+        var seed = Math.random() * 10;
+        this.h = [];
+        for (let i = 0; i <= this.N; i++) { var x = i / this.N; this.h.push(260 + Math.sin(x * 6.3 + seed) * 70 + Math.sin(x * 17 + seed * 2) * 28 + Math.sin(x * Math.PI) * 120); }
+        this.tank = [{ x: 200, hp: 100, ang: 50, pow: 60 }, { x: this.W - 200, hp: 100, ang: 130, pow: 60 }];
+        this.turn = first || 0; this.shell = null; this.boom = null; this.over = false; this.win = -1; this.cpuT = 0; this.trail = [];
+        this.newWind();
+    },
+    newWind: function() { this.wind = Math.round((Math.random() * 2 - 1) * 10) / 100; },     // -0.10 .. 0.10 per frame
+    human: function(t) { if (typeof Net !== "undefined" && Net.role === "client") return t === 1; return t === 0 || tableCfg.vs === "p2" || (t === 1 && !!Table.lanPid()); },
+    ground: function(x) { var f = Math.max(0, Math.min(this.N, x / this.W * this.N)), i = Math.floor(f), t = f - i; return this.h[i] * (1 - t) + this.h[Math.min(this.N, i + 1)] * t; },
+    muzzle: function(t) { var T = this.tank[t], a = T.ang * Math.PI / 180; return [T.x + Math.cos(a) * 34, this.ground(T.x) + 22 + Math.sin(a) * 34]; },
+    fire: function() {
+        if (this.shell || this.over) return;
+        var T = this.tank[this.turn], a = T.ang * Math.PI / 180, v = T.pow * 0.22, m = this.muzzle(this.turn);
+        this.shell = { x: m[0], y: m[1], vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0 };
+        this.trail = [];
+        if (typeof SFX !== "undefined") SFX.play("shoot", 0, 0, 0.9, 0.6);
+    },
+    // one simulated flight (also used by the CPU to search for a shot); returns where it lands
+    simulate: function(t, ang, pow) {
+        var a = ang * Math.PI / 180, v = pow * 0.22, T = this.tank[t];
+        var x = T.x + Math.cos(a) * 34, y = this.ground(T.x) + 22 + Math.sin(a) * 34, vx = Math.cos(a) * v, vy = Math.sin(a) * v;
+        for (let i = 0; i < 1200; i++) {
+            vx += this.wind; vy -= this.G; x += vx; y += vy;
+            if (x < -200 || x > this.W + 200) return { x: x, y: y, out: true };
+            if (y <= this.ground(x)) return { x: x, y: y };
+        }
+        return { x: x, y: y, out: true };
+    },
+    explode: function(x, y) {
+        var R = 70;
+        for (let i = 0; i <= this.N; i++) { var gx = i / this.N * this.W, d = Math.abs(gx - x); if (d < R) { var dip = Math.sqrt(R * R - d * d); this.h[i] = Math.max(40, Math.min(this.h[i], y - dip + R * 0.35)); } }
+        for (let k = 0; k < 2; k++) {
+            var T = this.tank[k], dd = Math.hypot(T.x - x, this.ground(T.x) + 14 - y);
+            if (dd < R + 30) { var dmg = Math.round(55 * (1 - dd / (R + 30)) + 10); T.hp = Math.max(0, T.hp - dmg); T.hit = 40; T.lastDmg = dmg; }
+        }
+        this.boom = { x: x, y: y, t: 0 };
+        if (typeof SFX !== "undefined") SFX.play("explode", 0, 0, 0.7);
+        var dead = this.tank.map(function(T) { return T.hp <= 0; });
+        if (dead[0] || dead[1]) { this.over = true; this.win = dead[0] && dead[1] ? -1 : (dead[0] ? 1 : 0); }
+    },
+    cpuMove: function() {
+        var me = this.turn, foe = this.tank[1 - me], best = null, lvl = tableCfg.level;
+        for (let a = me === 0 ? 20 : 100; a <= (me === 0 ? 80 : 160); a += 4) for (let p = 30; p <= 100; p += 4) {
+            var r = this.simulate(me, a, p); if (r.out) continue;
+            var d = Math.abs(r.x - foe.x) + (Math.abs(r.x - this.tank[me].x) < 110 ? 999 : 0);
+            if (!best || d < best.d) best = { a: a, p: p, d: d };
+        }
+        if (!best) best = { a: this.tank[me].ang, p: 60 };
+        var noise = [0, 9, 4, 1.2][lvl];
+        this.tank[me].ang = Math.round(best.a + (Math.random() * 2 - 1) * noise);
+        this.tank[me].pow = Math.max(20, Math.min(100, Math.round(best.p + (Math.random() * 2 - 1) * noise)));
+        this.fire();
+    },
+    geo: function() { var s = Math.min((cssW - 40) / this.W, (cssH - 150) / 620); return { s: s, x0: cssW / 2 - this.W * s / 2, base: cssH - 40 }; },
+    sx: function(x) { var g = this.geo(); return g.x0 + x * g.s; },
+    sy: function(y) { var g = this.geo(); return g.base - y * g.s; },
+    update: function() {
+        var T = this.tank;
+        for (let k = 0; k < 2; k++) if (T[k].hit > 0) T[k].hit--;
+        if (this.boom && ++this.boom.t > 40) this.boom = null;
+        if (this.shell) {
+            var S = this.shell;
+            for (let sub = 0; sub < 2; sub++) {
+                S.vx += this.wind; S.vy -= this.G; S.x += S.vx; S.y += S.vy; S.t++;
+                if (S.t % 2 === 0) this.trail.push([S.x, S.y]);
+                if (S.x < -200 || S.x > this.W + 200 || S.y <= this.ground(S.x)) {
+                    if (S.x >= -200 && S.x <= this.W + 200) this.explode(S.x, Math.max(S.y, this.ground(S.x)));
+                    this.shell = null;
+                    if (!this.over) { this.turn = 1 - this.turn; this.newWind(); this.cpuT = 0; }
+                    break;
+                }
+            }
+            return;
+        }
+        if (this.over || this.boom) return;
+        if (!this.human(this.turn)) { if (++this.cpuT > 50) this.cpuMove(); return; }
+        if (typeof Net !== "undefined" && Net.role === "client") return;
+        var me = T[this.turn], p = this.turn === 0 || tableCfg.vs !== "p2" ? 0 : 1, lan = this.turn === 1 && Table.lanPid();
+        var L, R, U, D, F;
+        if (lan) { var inp = (Net.peers[lan] && Net.peers[lan].inp) || {}; L = !!inp.l; R = !!inp.r; U = !!inp.u; D = !!inp.d; F = !!(inp.sh || inp.jt); }
+        else if (p === 0) { L = WASDleftPressed; R = WASDrightPressed; U = WASDupPressed; D = WASDdownPressed; F = SpacePressed; }
+        else { L = ULDRleftPressed; R = ULDRrightPressed; U = ULDRupPressed; D = ULDRdownPressed; F = !!PlayerInput[1].kbShoot; }
+        var pad = (typeof Pads !== "undefined" && !lan) ? Pads.state[p] : null;
+        if (pad && pad.active) { L = L || pad.left; R = R || pad.right; U = U || pad.up; D = D || pad.down; F = F || pad.shoot; }
+        if (L) me.ang = Math.min(178, me.ang + 1); if (R) me.ang = Math.max(2, me.ang - 1);
+        if (U) me.pow = Math.min(100, me.pow + 0.6); if (D) me.pow = Math.max(10, me.pow - 0.6);
+        // mouse: hold to aim (angle and power follow the pointer), release to fire
+        if (!lan && p === 0 && mouseDown) {
+            var mz = this.muzzle(this.turn), g = this.geo(), wx = (mouseX - g.x0) / g.s, wy = (g.base - mouseY) / g.s;
+            me.ang = Math.max(2, Math.min(178, Math.round(Math.atan2(wy - mz[1], wx - mz[0]) * 180 / Math.PI)));
+            me.pow = Math.max(10, Math.min(100, Math.round(Math.hypot(wx - mz[0], wy - mz[1]) / 5)));
+            this.mouseAim = true;
+        } else if (this.mouseAim && !mouseDown) { this.mouseAim = false; this.fire(); }
+        if (F && !this.pF) this.fire();
+        this.pF = F;
+    },
+    draw: function() {
+        var self = this, g = this.geo();
+        var sky = ctx.createLinearGradient(0, 0, 0, cssH); sky.addColorStop(0, "#0c1a33"); sky.addColorStop(1, "#1e3a5f");
+        ctx.fillStyle = sky; ctx.fillRect(0, 0, cssW, cssH);
+        // hills
+        ctx.beginPath(); ctx.moveTo(this.sx(0), cssH);
+        for (let i = 0; i <= this.N; i++) ctx.lineTo(this.sx(i / this.N * this.W), this.sy(this.h[i]));
+        ctx.lineTo(this.sx(this.W), cssH); ctx.closePath();
+        ctx.fillStyle = "#3f6212"; ctx.fill(); ctx.strokeStyle = "#84cc16"; ctx.lineWidth = 3; ctx.stroke();
+        // cannons
+        for (let k = 0; k < 2; k++) {
+            var T = this.tank[k], gx = this.sx(T.x), gy = this.sy(this.ground(T.x)), a = T.ang * Math.PI / 180, sc = g.s;
+            ctx.save(); ctx.translate(gx, gy);
+            ctx.strokeStyle = "#0f172a"; ctx.lineWidth = 10 * sc + 2; ctx.lineCap = "round";
+            ctx.beginPath(); ctx.moveTo(0, -22 * sc); ctx.lineTo(Math.cos(a) * 34 * sc, -22 * sc - Math.sin(a) * 34 * sc); ctx.stroke();
+            ctx.fillStyle = T.hit > 0 && T.hit % 6 < 3 ? "#fff" : TABLE_COLORS[k];
+            ctx.beginPath(); ctx.arc(0, -14 * sc, 22 * sc, Math.PI, 0); ctx.fill(); ctx.fillRect(-30 * sc, -14 * sc, 60 * sc, 14 * sc);
+            ctx.restore();
+            uiBar(gx - 40, gy - 70 * sc - 14, 80, 8, T.hp / 100, TABLE_COLORS[k]);
+            if (T.hit > 0) uiText("-" + T.lastDmg, gx, gy - 70 * sc - 24 - (40 - T.hit), 16, "#fde047", "center", "900");
+        }
+        // trail + shell + aim preview
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        this.trail.forEach(function(p) { ctx.fillRect(self.sx(p[0]) - 1.5, self.sy(p[1]) - 1.5, 3, 3); });
+        if (this.shell) { ctx.fillStyle = "#fde047"; ctx.beginPath(); ctx.arc(this.sx(this.shell.x), this.sy(this.shell.y), 5, 0, 7); ctx.fill(); }
+        if (!this.shell && !this.over && this.human(this.turn)) {
+            var M = this.muzzle(this.turn), T2 = this.tank[this.turn], a2 = T2.ang * Math.PI / 180, len = 30 + T2.pow * 0.9;
+            ctx.strokeStyle = TABLE_COLORS[this.turn]; ctx.setLineDash([5, 6]); ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(this.sx(M[0]), this.sy(M[1])); ctx.lineTo(this.sx(M[0] + Math.cos(a2) * len), this.sy(M[1] + Math.sin(a2) * len)); ctx.stroke(); ctx.setLineDash([]);
+        }
+        if (this.boom) { var b = this.boom; ctx.fillStyle = "rgba(251,146,60," + (1 - b.t / 40) + ")"; ctx.beginPath(); ctx.arc(this.sx(b.x), this.sy(b.y), (20 + b.t * 1.6) * g.s * 2, 0, 7); ctx.fill(); }
+        // HUD: whose turn, angle / power, wind
+        var who = function(t) {
+            var lanC = typeof Net !== "undefined" && Net.role === "client", lanName = Table.lanPid() ? Net.peers[Table.lanPid()].name : "";
+            if (lanC) return t === 1 ? "BLUE (you)" : "RED (host)";
+            if (lanName) return t === 1 ? "BLUE (" + lanName + ")" : "RED (you)";
+            return (t === 0 ? "RED" : "BLUE") + (tableCfg.vs === "cpu" ? (t === 0 ? " (you)" : " (CPU)") : "");
+        };
+        var Tt = this.tank[this.turn];
+        uiPanel(cssW / 2 - 230, 64, 460, 54, TABLE_COLORS[this.over ? Math.max(0, this.win) : this.turn]);
+        uiText(this.over ? (this.win < 0 ? "BOTH DOWN — DRAW!" : who(this.win) + " WINS!") + "  ·  Space for a rematch" : who(this.turn) + "'s shot" + (this.shell ? "…" : ""), cssW / 2, 88, 16, "#fff", "center", "900");
+        var wtxt = this.wind === 0 ? "calm" : (this.wind > 0 ? "→ " : "← ") + Math.round(Math.abs(this.wind) * 100);
+        uiText("angle " + Math.round(Tt.ang > 90 ? 180 - Tt.ang : Tt.ang) + "°   power " + Math.round(Tt.pow) + "   wind " + wtxt, cssW / 2, 108, 12, "#cbd5e1", "center", "800");
+        uiText("←/→ angle · ↑/↓ power · Space fire (or hold the mouse to aim, release to fire) · Esc: opponent / game", cssW / 2, cssH - 14, 12, "rgba(220,230,240,0.7)", "center", "700");
+    }
+};
+
+// ---------------------------------------------------------------- the glue: which game is on, LAN state
 var Table = {
     lanPid: function() { if (typeof Net === "undefined" || Net.role !== "host") return null; for (var k in Net.peers) return Net.peers[k].pid; return null; },
     netState: function() {
         return { g: tableCfg.game, vs: tableCfg.vs, lan: !!Table.lanPid(), lanName: Table.lanPid() ? Net.peers[Table.lanPid()].name : "",
             f: { d: Flick.discs.map(function(q) { return [Math.round(q.x), Math.round(q.y), q.t]; }), b: [Math.round(Flick.ball.x), Math.round(Flick.ball.y)], turn: Flick.turn, phase: Flick.phase, score: Flick.score, sel: Flick.sel, aimA: Flick.aimA, aimP: Flick.aimP, msg: Flick.msg, msgT: Flick.msgT, win: Flick.winner },
             q: { g: Four.g, turn: Four.turn, over: Four.over, win: Four.win, line: Four.line, col: Four.col },
+            a: Arty.h ? { h: Arty.h.map(Math.round), k: Arty.tank.map(function(T) { return [T.x, T.hp, Math.round(T.ang), Math.round(T.pow), T.hit || 0, T.lastDmg || 0]; }), t: Arty.turn, s: Arty.shell ? [Math.round(Arty.shell.x), Math.round(Arty.shell.y)] : null, w: Arty.wind, o: Arty.over, win: Arty.win, b: Arty.boom ? [Arty.boom.x, Arty.boom.y, Arty.boom.t] : null } : null,
             h: { m: Hockey.m.map(function(M) { return [Math.round(M.x), Math.round(M.y)]; }), p: [Math.round(Hockey.puck.x), Math.round(Hockey.puck.y)], s: Hockey.score, ph: Hockey.phase, w: Hockey.winner, msg: Hockey.msg, mt: Hockey.msgT } };
     },
     apply: function(m) {
@@ -433,6 +585,7 @@ var Table = {
         F.d.forEach(function(a, i) { if (Flick.discs[i]) { Flick.discs[i].x = a[0]; Flick.discs[i].y = a[1]; Flick.discs[i].t = a[2]; } });
         Flick.ball.x = F.b[0]; Flick.ball.y = F.b[1]; Flick.turn = F.turn; Flick.phase = F.phase; Flick.score = F.score; Flick.sel = F.sel; Flick.aimA = F.aimA; Flick.aimP = F.aimP; Flick.msg = F.msg; Flick.msgT = F.msgT; Flick.winner = F.win;
         if (m.h) { if (!Hockey.puck) Hockey.reset(); m.h.m.forEach(function(a, i) { Hockey.m[i].x = a[0]; Hockey.m[i].y = a[1]; }); Hockey.puck.x = m.h.p[0]; Hockey.puck.y = m.h.p[1]; Hockey.score = m.h.s; Hockey.phase = m.h.ph; Hockey.winner = m.h.w; Hockey.msg = m.h.msg; Hockey.msgT = m.h.mt; }
+        if (m.a) { var A = m.a; if (!Arty.h) Arty.reset(0); Arty.h = A.h; A.k.forEach(function(k, i) { var T = Arty.tank[i]; T.x = k[0]; T.hp = k[1]; T.ang = k[2]; T.pow = k[3]; T.hit = k[4]; T.lastDmg = k[5]; }); Arty.turn = A.t; Arty.shell = A.s ? { x: A.s[0], y: A.s[1] } : null; Arty.wind = A.w; Arty.over = A.o; Arty.win = A.win; Arty.boom = A.b ? { x: A.b[0], y: A.b[1], t: A.b[2] } : null; if (Arty.shell) Arty.trail.push([Arty.shell.x, Arty.shell.y]); else Arty.trail = Arty.trail.slice(-200); }
         var Q = m.q; Four.g = Q.g; Four.turn = Q.turn; Four.over = Q.over; Four.win = Q.win; Four.line = Q.line; Four.col = Q.col; Four.drop = null;
     }
 };
@@ -443,7 +596,7 @@ ModeKit.addLevel("table_games", { name: "🎲 Table Games", mode: "table", waves
 GameModes.register({
     id: "table",
     title: "TABLE GAMES",
-    tagline: "2-player minigames: tabletop flick soccer, four in a row and air hockey. Vs CPU, pass-and-play or LAN.",
+    tagline: "2-player minigames: tabletop flick soccer, four in a row, air hockey and hill cannons. Vs CPU, pass-and-play or LAN.",
     color: "#22c55e",
     firstLevel: "table_games",
     flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: false },
@@ -451,9 +604,9 @@ GameModes.register({
 
     seats: function() {
         return [{ label: "RED", options: ["human"], value: "human", set: function() {} },
-            { label: "BLUE", options: ["human", "cpu"], value: tableCfg.vs === "p2" ? "human" : "cpu", note: "human = pass-and-play (or a LAN player takes BLUE)", set: function(v) { tableCfg.vs = v === "human" ? "p2" : "cpu"; multiplayer = v === "human"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); } }];
+            { label: "BLUE", options: ["human", "cpu"], value: tableCfg.vs === "p2" ? "human" : "cpu", note: "human = pass-and-play (or a LAN player takes BLUE)", set: function(v) { tableCfg.vs = v === "human" ? "p2" : "cpu"; multiplayer = v === "human"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); } }];
     },
-    setupLevel: function() { multiplayer = tableCfg.vs === "p2"; Flick.reset(); Four.reset(0); Hockey.reset(); this.lastMouse = [mouseX, mouseY]; },
+    setupLevel: function() { multiplayer = tableCfg.vs === "p2"; Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); this.lastMouse = [mouseX, mouseY]; },
 
     screenFrame: function() {
         Four.mouseMoved = Math.hypot(mouseX - this.lastMouse[0], mouseY - this.lastMouse[1]) > 2;
@@ -461,6 +614,7 @@ GameModes.register({
         Hockey.mouseMoved = Four.mouseMoved || (Hockey.mouseMoved && !(WASDleftPressed || WASDrightPressed || WASDupPressed || WASDdownPressed));
         if (tableCfg.game === "four") { Four.update(); Four.draw(); }
         else if (tableCfg.game === "hockey") { Hockey.update(); Hockey.draw(); if (Hockey.phase === "over" && SpacePressed) Hockey.reset(); }
+        else if (tableCfg.game === "arty") { Arty.update(); Arty.draw(); if (Arty.over && SpacePressed && !Arty.pF) Arty.reset(Arty.win === 0 ? 1 : 0); Arty.pF = SpacePressed; }
         else { Flick.update(); Flick.draw(); }
         if (tableCfg.game === "flick" && Flick.phase === "over" && (SpacePressed || (mouseDown && !Flick.mouseLock))) { Flick.reset(); Flick.mouseLock = true; }
         uiPanel(14, 10, 280, 48, "#22c55e");
@@ -470,7 +624,7 @@ GameModes.register({
 
     screenDraw: function() {
         // LAN client view: blue is me; reuse the normal drawing (client-side "human" = it's my turn)
-        if (tableCfg.game === "four") Four.draw(); else if (tableCfg.game === "hockey") Hockey.draw(); else Flick.draw();
+        if (tableCfg.game === "four") Four.draw(); else if (tableCfg.game === "hockey") Hockey.draw(); else if (tableCfg.game === "arty") Arty.draw(); else Flick.draw();
         uiPanel(14, 10, 300, 48, "#22c55e");
         uiText("TABLE GAMES  ·  you are BLUE", 28, 36, 16, "#86efac", "left", "900");
         uiText("Four in a Row: ←/→ + Space   ·   Flick: ←/→ aim, ↑/↓ power, E next disc, Space shoot", 28, 52, 10, "#cbd5e1", "left", "700");
@@ -502,11 +656,11 @@ GameModes.register({
     },
     onMenu: function(id, dir) {
         if (id === "tb_game") { var gi = TABLE_GAMES.findIndex(function(g) { return g[0] === tableCfg.game; }); tableCfg.game = TABLE_GAMES[(gi + (dir || 1) + TABLE_GAMES.length) % TABLE_GAMES.length][0]; saveTable(); return true; }
-        if (id === "tb_vs") { tableCfg.vs = tableCfg.vs === "cpu" ? "p2" : "cpu"; multiplayer = tableCfg.vs === "p2"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); return true; }
+        if (id === "tb_vs") { tableCfg.vs = tableCfg.vs === "cpu" ? "p2" : "cpu"; multiplayer = tableCfg.vs === "p2"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); return true; }
         if (id === "tb_lvl") { tableCfg.level = ((tableCfg.level - 1 + (dir || 1) + 3) % 3) + 1; saveTable(); return true; }
-        if (id === "tb_new") { closePause(); Flick.reset(); Four.reset(0); Hockey.reset(); return true; }
+        if (id === "tb_new") { closePause(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); return true; }
         return false;
     },
-    onRestart: function() { Flick.reset(); Four.reset(0); Hockey.reset(); },
-    overSub: function() { return "Flick soccer · four in a row · air hockey"; }
+    onRestart: function() { Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); },
+    overSub: function() { return "Flick soccer · four in a row · air hockey · hill cannons"; }
 });
