@@ -166,6 +166,46 @@ function wordPetsDraw() {
     }
 }
 
+// water: a block of water where you swim (sink slowly, W / Space strokes up) and crates float to the top
+wordDef("water pool lake river pond sea ocean", function(x, y, a) {
+    // the surface sits a little above the pointer; the water fills down to the ground under it (or 300 deep)
+    var w = Math.round(420 * a.s), top = y + 40, bottom = top - Math.round(300 * a.s);
+    for (let i = 0; i < staticObjects.length; i++) { var o = staticObjects[i], ot = o.y + o.h / 2; if (!o.dead && Math.abs(o.x - x) < o.w / 2 && ot < top && ot > bottom) bottom = ot; }
+    WordLab.waters.push({ x: x, y: (top + bottom) / 2, w: w, h: top - bottom, t: 0 });
+}, "water");
+function wordWaterAt(x, y) { for (let i = 0; i < WordLab.waters.length; i++) { var W = WordLab.waters[i]; if (Math.abs(x - W.x) < W.w / 2 && Math.abs(y - W.y) < W.h / 2) return W; } return null; }
+function wordWaterUpdate() {
+    if (!WordLab.waters.length) return;
+    for (let i = 0; i < characters.length; i++) {
+        var c = characters[i];
+        if (c.dead || !wordWaterAt(c.x, c.y)) { c.swimming = false; continue; }
+        c.swimming = true;
+        c.yspeed = Math.max(-3, c.yspeed * 0.9 + gravity * 0.75);                 // nearly weightless: sink slowly
+        c.xspeed *= 0.92;
+        var up = c.isPlayer && ((c.playerIndex === 1 ? ULDRupPressed : WASDupPressed) || (c.playerIndex === 0 && SpacePressed));
+        if (up) c.yspeed = Math.max(c.yspeed, 5.5);
+        if (Math.random() < 0.05) Components.spawnSparks(c.x, c.y + c.s2 / 2, "#bae6fd", 1);
+    }
+    for (let i = 0; i < movingObjects.length; i++) {
+        var o = movingObjects[i];
+        if (o.dead || o.heldBy || !wordWaterAt(o.x, o.y)) continue;
+        o.yspeed = Math.min(4, o.yspeed * 0.85 + gravity * 1.25);                 // floats up to the surface
+        o.xspeed *= 0.94;
+    }
+}
+function wordWaterDraw() {
+    for (let i = 0; i < WordLab.waters.length; i++) {
+        var W = WordLab.waters[i], k = cameraScaleX, x0 = wsx(W.x - W.w / 2), top = wsy(W.y + W.h / 2), wpx = W.w * k, hpx = W.h * k;
+        W.t++;
+        ctx.save(); ctx.globalAlpha = 0.45; ctx.fillStyle = "#38bdf8";
+        ctx.beginPath(); ctx.moveTo(x0, top + hpx);
+        for (let sx = 0; sx <= wpx; sx += 10) ctx.lineTo(x0 + sx, top + Math.sin((sx / k + W.t * 3) * 0.03) * 4 * k);
+        ctx.lineTo(x0 + wpx, top + hpx); ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 0.8; ctx.strokeStyle = "#e0f2fe"; ctx.lineWidth = 2; ctx.stroke();
+        ctx.restore();
+    }
+}
+
 // verbs change your hero instead of making a thing
 var WORD_VERBS = {};
 function wordVerb(names, fn) { names.split(" ").forEach(function(n) { WORD_VERBS[n] = fn; }); }
@@ -177,7 +217,7 @@ wordVerb("heal", function(h) { h.health = h.maxHealth; Components.addFloatingTex
 var WORD_BANNED = ["star", "stars", "goal", "win", "flag", "key", "teleport", "portal", "god"];
 
 var WordLab = {
-    open: false, input: null, used: 0, log: [], msg: "", msgT: 0, doneT: 0, done: false,
+    open: false, input: null, used: 0, log: [], waters: [], msg: "", msgT: 0, doneT: 0, done: false,
 
     ensureInput: function() {
         if (this.input) return this.input;
@@ -237,7 +277,7 @@ var WordLab = {
         }
         if (!p.noun) {
             var guess = p.unknown[0] || text;
-            this.say("I don't know \"" + guess + "\" yet — try a crate, stairs, trampoline, balloon, rope, tnt, car, knight, dog… or a verb: fly, grow, shrink", "#fca5a5");
+            this.say("I don't know \"" + guess + "\" yet — try a crate, stairs, trampoline, balloon, rope, tnt, car, knight, dog, water… or a verb: fly, grow, shrink", "#fca5a5");
             return;
         }
         var m = Components.getMouseWorldPos(), x = m[0], y = m[1];
@@ -303,7 +343,7 @@ GameModes.register({
             for (let i = staticObjects.length - 1; i >= 0; i--) { var o = staticObjects[i]; if (o.name === "Floor" && o.w > 2500) staticObjects.splice(i, 1); }
         }
         Gadgets.load(lvl.gadgets);
-        WordLab.used = 0; WordLab.log = []; WordLab.done = false; WordLab.doneT = 0; WordLab.close();
+        WordLab.used = 0; WordLab.log = []; WordLab.waters = []; WordLab.done = false; WordLab.doneT = 0; WordLab.close();
         wordsSave.room = Math.max(0, WORD_ROOMS.indexOf(key)); saveWords();
         jetpackEnabled = false;
         zombies.length = 0;
@@ -313,6 +353,7 @@ GameModes.register({
 
     update: function() {
         wordPetsUpdate();
+        wordWaterUpdate();
         // balloons rise gently (a steady climb you can ride), not like a rocket
         for (let i = 0; i < movingObjects.length; i++) { var bo = movingObjects[i]; if (bo.gravityMult < 0 && bo.yspeed > 3.2) bo.yspeed = 3.2; }
         // holding a balloon (G) lifts you; let go to drop
@@ -348,7 +389,7 @@ GameModes.register({
         return true;
     },
 
-    drawFront: function() { wordPetsDraw(); },
+    drawFront: function() { wordPetsDraw(); wordWaterDraw(); },
 
     drawHUD: function() {
         var lvl = LevelManager.getCurrentLevel(), n = WORD_ROOMS.indexOf(LevelManager.currentLevelKey), best = wordsSave.best[LevelManager.currentLevelKey] || 0;

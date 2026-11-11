@@ -6,6 +6,19 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Word Lab: water
+
+**Shipped:** "water" (pool, lake, river, sea…) makes a block of water whose surface is just above the pointer and
+which fills down to the ground beneath it (or 300 deep in mid-air; size words work). In it you're nearly weightless —
+you sink slowly and W / Space strokes you up — and crates, balls and barrels float to the surface. Drawn as a
+see-through pool with a moving wavy surface.
+
+**Measured (`tests/word_water.js`):** "big water" at the hero: surface 200, bottom on the floor at 0; a dropped crate
+floated to 200; holding W swam the hero up and out at the surface; no errors. **Went wrong:** the first pool hung
+300 deep from the pointer straight through the floor; it now stops at the ground.
+
+---
+
 ## Table Games: Word Hunt
 
 **Shipped:** a seventh table game — 8 words from a list of 40 game words (ZOMBIE, PORTAL, RAGDOLL, TROLLEY…) hidden in a
