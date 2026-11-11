@@ -22,7 +22,7 @@ var BRAWL_OPPONENTS = [
     ["p2+1cpu", "Player 2 + 1 CPU"], ["p2+2cpu", "Player 2 + 2 CPUs"]
 ];
 var BRAWL_CPU_NAMES = ["", "Easy", "Normal", "Hard"];
-var BRAWL_STAGES = ["brawl_battlefield", "brawl_plaza", "brawl_skybridge"];
+var BRAWL_STAGES = ["brawl_battlefield", "brawl_plaza", "brawl_skybridge", "brawl_gearworks"];
 
 try {
     var savedBrawl = JSON.parse(localStorage.getItem("timsZombieGameBrawlCfg") || "null");

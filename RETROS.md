@@ -6,6 +6,16 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Brawl: Gearworks stage
+
+**Shipped:** a fourth Brawl stage — a metal deck whose ends slope away into the blast zone (no ledge to catch, so
+recovering low is harder), a lift platform sweeping from side to side above it, and a small hub on top.
+
+**Measured (`tests/brawl_gearworks.js`):** the stage loads with its lift (a mover gadget) moving; a 12 s fight vs the
+CPU ran (the idle P1 lost a stock, the CPU dealt 16 %); no errors.
+
+---
+
 ## Bed Brawl: Bridge Egg
 
 **Shipped:** a 🥚 Bridge Egg pedestal (20 iron): the egg flies the way you face (tilting a little with your aim) and

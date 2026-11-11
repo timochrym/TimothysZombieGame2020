@@ -16,6 +16,7 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node wheels_vehicles.js     # Wobble Wheels: trolley and scooter ride Hill Hop (distance, upright, crash)
     node crash_cliff.js         # Crash Lab: scenario menu cycles, Cliff Fall scores a push and saves the best
     node bedbrawl_egg.js        # Bed Brawl: a bridge egg lays a walkable bridge level with your feet
+    node brawl_gearworks.js     # Brawl: the Gearworks stage loads, its lift moves, a fight runs
     node lan_play.js            # starts server.js on 8099: a host + 2 joiners, positions match, client FPS
 
 Each prints its numbers and then the page errors (`[]` = none). See ROADMAP.md, "Your named feedback items".

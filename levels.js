@@ -258,6 +258,24 @@ class LevelManager {
             ]
         };
 
+        this.builtInLevels["brawl_gearworks"] = {
+            name: "⚔ Brawl: Gearworks", isBrawl: true, _scaled: true, wavesEnabled: false,
+            spawnP1: [-700, 160], spawnP2: [700, 160],
+            stageTopY: 80, stageCenterX: 0,
+            blast: { minX: -3600, maxX: 3600, minY: -1400, maxY: 2700 },
+            brawlSpawns: [[-700, 160], [700, 160], [-250, 160], [250, 160]],
+            // a main deck with slopes that run off both ends, and a lift that sweeps across above it
+            layout: [
+                { type: "box", name: "Main Deck", x: 0, y: -100, w: 1600, h: 360, color: "#52525b", texture: "metal_plate", kind: "block" },
+                { type: "ramp", name: "West Slope", x: -1050, y: -20, w: 500, h: 200, dir: "right", color: "#71717a", texture: "metal_plate" },
+                { type: "ramp", name: "East Slope", x: 1050, y: -20, w: 500, h: 200, dir: "left", color: "#71717a", texture: "metal_plate" },
+                { type: "box", name: "Gear Hub", x: 0, y: 900, w: 360, h: 60, color: "#a16207", texture: "dojo_wood", kind: "platform" }
+            ],
+            gadgets: [
+                { type: "mover", x: -900, y: 520, w: 420, h: 40, x2: 900, y2: 520, speed: 3 }
+            ]
+        };
+
         // Every built-in structure is built at STRUCT_SCALE (2x): scale layouts about the ground line (x = 0, y = 40)
         for (var lk in this.builtInLevels) {
             if (lk === "infinite_frontier" || this.builtInLevels[lk].isBrawl) continue;
