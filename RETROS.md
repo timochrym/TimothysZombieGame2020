@@ -6,6 +6,21 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Course select for Parkour Rush, Crate Lab, Portal Lab and Wobble Wheels
+
+**Shipped:** one shared grid (`courseselect.js`) opened from each game's pause menu: every course / room / chamber
+as a card with its number, name, best time and medal (Parkour: saved medals; Wobble Wheels: medals from the course par
+for the vehicle you're on), locked ones greyed out, the current one outlined. Mouse, arrows + Enter, Esc. Portal Lab
+now records best times per chamber.
+
+**Also:** Portal Lab still carried lines and chamber names echoing the game it's modelled on (a cake joke, a famous
+momentum quote, "Companion" crate); all replaced with original wording ("First Light", "Fling Theory", "Crate Courier").
+
+**Measured (`tests/course_select.js`):** all four open from the pause menu; Parkour and Wheels: → + Enter loaded
+course 2; Crate Lab / Portal Lab show 7 / 4 locked cards and clicking the open one loads it; no errors.
+
+---
+
 ## Wobble Wheels: course 4 "Crumble Run" (falling platforms)
 
 **Shipped:** a new trap — crumbling slabs: land on one and it shakes for ~1 s, then drops away (falls and fades). Course

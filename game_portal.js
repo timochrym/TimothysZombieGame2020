@@ -1,14 +1,14 @@
 // ============================================================================
 // GAME: PORTAL LAB  -  test chambers with a two-portal gun
 //   F / left-click / RT  = BLUE portal      G / right-click / LB = ORANGE portal      E / Y = grab crate
-//   Portals only stick to WHITE panels. Momentum is conserved: "speedy thing goes in, speedy thing comes out."
+//   Portals only stick to WHITE panels. Momentum is conserved: fall fast into one portal, fly fast out of the other.
 //   Glass blocks bodies but lets the portal beam through. Co-op: each player gets their own portal pair.
 // ============================================================================
 var PORTAL_LEN = 170;
 var PORTAL_CHAMBERS = [];
-var portalState = { chamber: 0, unlocked: 1, time: 0, done: false, doneTimer: 0 };
-try { var _pp = JSON.parse(localStorage.getItem("timsPortalLab") || "null"); if (_pp) { portalState.unlocked = _pp.unlocked || 1; portalState.chamber = Math.min(_pp.chamber || 0, portalState.unlocked - 1); } } catch (e) {}
-function savePortal() { try { localStorage.setItem("timsPortalLab", JSON.stringify({ unlocked: portalState.unlocked, chamber: portalState.chamber })); } catch (e) {} }
+var portalState = { chamber: 0, unlocked: 1, time: 0, done: false, doneTimer: 0, best: {} };
+try { var _pp = JSON.parse(localStorage.getItem("timsPortalLab") || "null"); if (_pp) { portalState.unlocked = _pp.unlocked || 1; portalState.best = _pp.best || {}; portalState.chamber = Math.min(_pp.chamber || 0, portalState.unlocked - 1); } } catch (e) {}
+function savePortal() { try { localStorage.setItem("timsPortalLab", JSON.stringify({ unlocked: portalState.unlocked, chamber: portalState.chamber, best: portalState.best })); } catch (e) {} }
 
 var Portals = {
     pairs: {},
@@ -289,7 +289,7 @@ function chamber(n, title, spawn, layout, gadgets, extra) {
 }
 
 // 1 - one fixed orange portal: just place blue and walk through
-chamber(0, "Hello, Portal", [-1100, 60], [
+chamber(0, "First Light", [-1100, 60], [
     pBox(-1400, 1400, -400, 0, { name: "Floor" }),
     pBox(-1600, -1400, -400, 1600, { name: "Left Wall", p: true }),
     pBox(1400, 1600, -400, 1600, { name: "Right Wall" }),
@@ -327,7 +327,7 @@ chamber(2, "Step Right Up", [-1100, 60], [
 ]);
 
 // 4 - momentum fling across the spike pit
-chamber(3, "Speedy Thing", [300, 1140], [
+chamber(3, "Fling Theory", [300, 1140], [
     pBox(-2000, -1300, -800, -600, { name: "Pit Floor" }),
     pBox(-1300, -500, -800, 0, { name: "Exit Platform" }),
     pBox(-500, -400, -800, 2300, { name: "Glass", glass: true }),
@@ -338,20 +338,20 @@ chamber(3, "Speedy Thing", [300, 1140], [
     pBox(2000, 2200, -1000, 2500, { name: "Right Wall" }),
     pBox(-2200, 2200, 2300, 2500, { name: "Ceiling" })
 ], [
-    { type: "sign", x: 200, y: 1100, text: "Speedy thing goes in, speedy thing comes out!\nBlue at the bottom of the shaft, orange on the far left wall\n(through the glass), then jump into the shaft." },
+    { type: "sign", x: 200, y: 1100, text: "Fall fast, fly fast: speed carries through a portal!\nBlue at the bottom of the shaft, orange on the far left wall\n(through the glass), then jump into the shaft." },
     { type: "spikes", x: -1650, y: -600, w: 700 },
     { type: "exit", x: -800, y: 0 }
 ]);
 
 // 5 - fetch the crate from the sealed alcove
-chamber(4, "Companion Crate", [-200, 60], [
+chamber(4, "Crate Courier", [-200, 60], [
     pBox(-1600, 1600, -400, 0, { name: "Floor" }),
     pBox(-1800, -1600, -400, 1800, { name: "Left Wall", p: true }),
     pBox(1600, 1800, -400, 1800, { name: "Right Wall" }),
     pBox(-1800, 1800, 1600, 1800, { name: "Ceiling" }),
     pBox(-1600, -850, 800, 900, { name: "Alcove Glass", glass: true }),
     pBox(-890, -850, 900, 1600, { name: "Alcove Glass", glass: true }),
-    { type: "crate", name: "Companion Crate", x: -1200, y: 960, size: 80, color: "#f472b6", texture: "crate_plank" }
+    { type: "crate", name: "Courier Crate", x: -1200, y: 960, size: 80, color: "#f472b6", texture: "crate_plank" }
 ], [
     { type: "sign", x: 100, y: 0, text: "The crate is sealed in the glass alcove up high.\nOne portal low on the white wall, one INSIDE the alcove (shoot through the glass).\nGrab the crate with E, portal back out, put it on the plate." },
     { type: "plate", x: 450, y: 0, w: 170, links: ["d5"] },
@@ -362,7 +362,7 @@ chamber(4, "Companion Crate", [-200, 60], [
 GameModes.register({
     id: "portal",
     title: "PORTAL LAB",
-    tagline: "Two-portal gun test chambers. Momentum is conserved. Cake not included.",
+    tagline: "Two-portal gun puzzle rooms. Momentum is conserved.",
     color: "#38bdf8",
     firstLevel: function() { return PORTAL_CHAMBERS[Math.min(portalState.chamber, portalState.unlocked - 1)]; },
     flags: { waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, noBedrock: true, scenery: false, coopToggle: true, dash: false, wallJump: false, airJumps: 0, enemiesPassive: true },
@@ -432,7 +432,8 @@ GameModes.register({
         if (portalState.done) return;
         portalState.done = true;
         portalState.doneTimer = 130;
-        var c = portalState.chamber;
+        var c = portalState.chamber, bk = PORTAL_CHAMBERS[c], bt = Math.round(portalState.time / 6) / 10;
+        if (bk && (!portalState.best[bk] || bt < portalState.best[bk])) portalState.best[bk] = bt;
         portalState.unlocked = Math.max(portalState.unlocked, Math.min(PORTAL_CHAMBERS.length, c + 2));
         portalState.chamber = Math.min(PORTAL_CHAMBERS.length - 1, c + 1);
         savePortal();
@@ -455,7 +456,7 @@ GameModes.register({
     },
 
     overSub: function(over) {
-        return over ? ("All " + PORTAL_CHAMBERS.length + " test chambers complete. The cake is still a lie.") : ("Test chamber " + (portalState.chamber + 1) + " / " + PORTAL_CHAMBERS.length);
+        return over ? ("All " + PORTAL_CHAMBERS.length + " test chambers complete. Lab notes filed.") : ("Test chamber " + (portalState.chamber + 1) + " / " + PORTAL_CHAMBERS.length);
     },
 
     onRestart: function() { portalState.chamber = 0; LevelManager.selectLevel(PORTAL_CHAMBERS[0]); },
@@ -490,10 +491,17 @@ GameModes.register({
 
     menuItems: function(items) {
         items.push({ id: "pt_ch", label: "Chamber:  ◀  " + (portalState.chamber + 1) + " / " + PORTAL_CHAMBERS.length + "  (" + portalState.unlocked + " unlocked)  ▶", hint: "Enter loads it", cycle: true });
+        items.push({ id: "pt_select", label: "🗺 Chamber select…", hint: "all chambers and best times" });
         items.push({ id: "pt_restart", label: "Restart chamber  (R)", hint: "" });
     },
 
     onMenu: function(id, dir) {
+        if (id === "pt_select") {
+            var name = function(k) { var L = LevelManager.getAllLevels()[k] || {}; return (L.title || L.name || k).replace(/^[^A-Za-z0-9]+/, ""); };
+            CourseSelect.open({ title: "🌀 Portal Lab — chambers", items: PORTAL_CHAMBERS.map(function(k, i) { return { name: name(k), best: portalState.best[k] ? portalState.best[k] + "s" : "", locked: i >= portalState.unlocked, current: k === LevelManager.currentLevelKey }; }),
+                onPick: function(i) { portalState.chamber = i; LevelManager.selectLevel(PORTAL_CHAMBERS[i]); } });
+            return true;
+        }
         if (id === "pt_ch") {
             if (dir) portalState.chamber = (portalState.chamber + dir + portalState.unlocked) % portalState.unlocked;
             else { closePause(); LevelManager.selectLevel(PORTAL_CHAMBERS[portalState.chamber]); }

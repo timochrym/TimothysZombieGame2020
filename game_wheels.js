@@ -521,10 +521,21 @@ GameModes.register({
     menuItems: function(items) {
         var n = Math.max(0, WHEELS_COURSES.indexOf(LevelManager.currentLevelKey));
         items.push({ id: "wh_course", label: "Course:  ◀  " + (n + 1) + " / " + WHEELS_COURSES.length + "  ▶", hint: "", cycle: true });
+        items.push({ id: "wh_select", label: "🗺 Course select…", hint: "best times + medals for the " + WHEELS_VEHICLES[wheelsSave.vehicle].label });
         items.push({ id: "wh_vehicle", label: "Vehicle:  ◀  " + WHEELS_VEHICLES[wheelsSave.vehicle].label + "  ▶", hint: "V", cycle: true });
     },
     onMenu: function(id, dir) {
         if (id === "wh_course") { var n = Math.max(0, WHEELS_COURSES.indexOf(LevelManager.currentLevelKey)); Wheels.cpReached = -1; closePause(); LevelManager.selectLevel(WHEELS_COURSES[(n + (dir || 1) + WHEELS_COURSES.length) % WHEELS_COURSES.length]); return true; }
+        if (id === "wh_select") {
+            var name = function(k) { var L = LevelManager.getAllLevels()[k] || {}; return (L.title || L.name || k).replace(/^[^A-Za-z0-9]+/, ""); };
+            CourseSelect.open({ title: "🚲 Wobble Wheels — courses", note: "times for the " + WHEELS_VEHICLES[wheelsSave.vehicle].label + " (V switches vehicle)",
+                items: WHEELS_COURSES.map(function(k) {
+                    var b = wheelsSave.best[k + ":" + wheelsSave.vehicle], par = (LevelManager.getAllLevels()[k] || {}).par || [30, 45, 60], s = b / 60;
+                    return { name: name(k), best: b ? s.toFixed(2) + "s" : "", medal: !b ? 0 : s <= par[0] ? 3 : s <= par[1] ? 2 : s <= par[2] ? 1 : 0, current: k === LevelManager.currentLevelKey };
+                }),
+                onPick: function(i) { Wheels.cpReached = -1; LevelManager.selectLevel(WHEELS_COURSES[i]); } });
+            return true;
+        }
         if (id === "wh_vehicle") { var ks = window.Object.keys(WHEELS_VEHICLES); wheelsSave.vehicle = ks[(ks.indexOf(wheelsSave.vehicle) + (dir || 1) + ks.length) % ks.length]; saveWheels(); Wheels.cpReached = -1; closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
         return false;
     },

@@ -272,6 +272,7 @@ GameModes.register({
 
     menuItems: function(items) {
         items.push({ id: "pz_room", label: "Room:  ◀  " + (puzzleState.room + 1) + " / " + PUZZLE_ROOMS.length + "  (" + puzzleState.unlocked + " unlocked)  ▶", hint: "Enter loads the room", cycle: true });
+        items.push({ id: "pz_select", label: "🗺 Room select…", hint: "all rooms and best times" });
         items.push({ id: "pz_restart", label: "Restart this room  (R)", hint: "" });
     },
 
@@ -279,6 +280,12 @@ GameModes.register({
         if (id === "pz_room") {
             if (dir) { puzzleState.room = (puzzleState.room + dir + puzzleState.unlocked) % puzzleState.unlocked; }
             else { closePause(); LevelManager.selectLevel(PUZZLE_ROOMS[puzzleState.room]); }
+            return true;
+        }
+        if (id === "pz_select") {
+            var name = function(k) { var L = LevelManager.getAllLevels()[k] || {}; return (L.title || L.name || k).replace(/^[^A-Za-z0-9]+/, ""); };
+            CourseSelect.open({ title: "📦 Crate Lab — rooms", items: PUZZLE_ROOMS.map(function(k, i) { return { name: name(k), best: puzzleState.best[k] ? puzzleState.best[k] + "s" : "", locked: i >= puzzleState.unlocked, current: k === LevelManager.currentLevelKey }; }),
+                onPick: function(i) { puzzleState.room = i; LevelManager.selectLevel(PUZZLE_ROOMS[i]); } });
             return true;
         }
         if (id === "pz_restart") { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }

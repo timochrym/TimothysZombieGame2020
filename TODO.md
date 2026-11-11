@@ -55,22 +55,23 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       wheelchair rocket with a fuel bar; flips counted in the air (each ≈full turn landed = -0.5 s), slow-mo on crashes;
       FIXED the wheelchair (it tipped onto its back at spawn and crawled — now upright with a backrest, 10× faster).
       E eject (bail out, flung off), ghost of your best run per course + vehicle. Course 4 "Crumble Run" with
-      crumbling slabs (shake, then drop) over a shallow pit: DONE. STILL TO DO: a course select with medals, more
-      vehicles (pogo, scooter, shopping trolley), destructible obstacles, fans.
+      crumbling slabs (shake, then drop) over a shallow pit, and a course select with medals per vehicle: DONE. STILL TO
+      DO: more vehicles (pogo, scooter, shopping trolley), destructible obstacles, fans.
 - [~] Crash Lab: DONE — "Stair Drop" scenario (pause → Scenario): one push from the top of a 14-step staircase, the
       score runs until the dummy comes to rest, best saved; damage heat-map (head / torso / limbs drift from yellow to
       bruised red); slow-mo on huge hits. STILL TO DO: more scenarios (cliff + car, highway, half-pipe), vehicles to
       launch the dummy in, pose picker before the push, replay of the run. (Closer camera in Stair Drop: DONE.)
 - [~] Parkour Rush: DONE — speedrun splits (time at each checkpoint vs your best run's split, green −/red +, saved
       with the best), speed lines when you're really moving, new engine hook onCheckpoint. STILL TO DO: slide-under
-      gaps and vault/ledge-grab moves, a level select showing medals. (T = back to your last checkpoint: DONE.)
+      gaps and vault/ledge-grab moves. (T = back to your last checkpoint, course select with medals: DONE.)
 - [~] Crate Lab: DONE — visible wiring from every plate / lever to the door, lift or bridge it powers (grey when off,
       green with flowing current when on); a hint per room on H, offered after 45 s. STILL TO DO: more rooms (lasers &
-      mirrors, conveyor belts, buttons with timers), a room-select grid with best times. (T = crates back to where they
-      started, without restarting the room: DONE.)
+      mirrors, conveyor belts, buttons with timers). (T = crates back where they started, room-select grid with best
+      times and locks: DONE.)
 - [~] Portal Lab: DONE — aim reticle shows where the beam lands and whether a portal will stick (blue/orange ghost
       outline on white panels, red ✕ elsewhere); X closes your portals. STILL TO DO: more chambers (laser relays,
-      light bridges, turrets that ragdoll), chamber-select grid. (Reticle for pad / P2 aim, in each player's colours: DONE.)
+      light bridges, turrets that ragdoll). (Reticle for pad / P2 aim; chamber-select grid with best times; chamber names
+      made original: DONE.)
 - [~] Brawl: DONE — KO blast (a beam of the fighter's colour fires in from the edge they flew out of), the damage
       percent jolts when hit, results table on GAME! (KOs credited to the last hitter within 5 s, falls, damage dealt),
       eliminated panels no longer show the percent under "OUT"; ledge grab (catch the stage lip while falling, UP climbs,
