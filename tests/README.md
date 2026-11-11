@@ -33,6 +33,7 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node tuning_panel.js        # Cheats & tuning: per-game settings, rows that don't apply are hidden
     node inspector.js           # Inspect tab picks beds, generators, fighters, riders; match card; zombie unchanged
     node studio_wheels.js       # Level Studio builds / opens Wobble Wheels courses; saved ones join the course select
+    node studio_brawl.js        # Level Studio builds / opens Brawl stages; saved ones join the stage rotation
     node lan_play.js            # starts server.js on 8099: a host + 2 joiners, positions match, client FPS
 
 Each prints its numbers and then the page errors (`[]` = none). See ROADMAP.md, "Your named feedback items".

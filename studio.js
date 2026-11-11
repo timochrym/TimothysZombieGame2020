@@ -21,7 +21,7 @@ var STUDIO_TEXTURES = ["brick", "grass_dirt", "castle_stone", "dojo_wood", "lab_
 var STUDIO_ENEMIES = ["NORMAL", "SLIME", "BAT", "ARCHER", "KNIGHT", "MAGE", "LEAPER", "EXPLODER", "TANK", "SPITTER", "BOSS_KING"];
 var STUDIO_PLAT_ENEMIES = ["walker", "hopper", "flyer", "spiky", "tank"];
 var STUDIO_MODES = [["survival", "Zombie Survival (waves)"], ["creative", "Creative (fly & build)"], ["platform", "Stomp Squad (platformer)"],
-                    ["puzzle", "Crate Lab (puzzle)"], ["race", "Parkour Rush (race)"], ["portal", "Portal Lab"], ["wheels", "Wobble Wheels (course)"]];
+                    ["puzzle", "Crate Lab (puzzle)"], ["race", "Parkour Rush (race)"], ["portal", "Portal Lab"], ["wheels", "Wobble Wheels (course)"], ["brawl", "Brawl (stage)"]];
 
 // palette: category -> [ [label, icon, template] ]
 var STUDIO_PALETTE = [
@@ -85,7 +85,12 @@ var STUDIO_PALETTE = [
         ["Spike strip", "🔺", { cat: "wtrap", kind: "spikes", w: 200 }],
         ["Crumble slab", "🪨", { cat: "layout", type: "box", name: "Crumble slab", w: 400, h: 40, color: "#a8a29e", texture: "stone_raw", kind: "block" }],
         ["Finish line", "🏁", { cat: "wfinish" }]
-    ], ["wheels"]]
+    ], ["wheels"]],
+    ["Brawl", [
+        ["Main stage", "🏟", { cat: "layout", type: "box", name: "Main Stage", w: 2000, h: 360, color: "#4a5568", texture: "castle_stone", kind: "block" }],
+        ["Floating platform", "➖", { cat: "layout", type: "box", name: "Platform", w: 600, h: 60, color: "#b84a27", texture: "brick", kind: "platform" }],
+        ["Fighter spawn", "🥊", { cat: "bspawn" }]
+    ], ["brawl"]]
 ];
 
 var Studio = {
@@ -131,6 +136,7 @@ var Studio = {
             (lvl.traps.spikes || []).forEach(function(sp) { d.ents.push({ cat: "wtrap", kind: "spikes", x: sp[0], y: sp[1], w: sp[2] }); });
         }
         if (lvl.finishX !== undefined) d.ents.push({ cat: "wfinish", x: lvl.finishX, y: 0 });
+        if (lvl.brawlSpawns) lvl.brawlSpawns.forEach(function(p) { d.ents.push({ cat: "bspawn", x: p[0], y: p[1] }); });
         if (lvl.spawnP1) d.ents.push({ cat: "spawn", player: 1, x: lvl.spawnP1[0], y: lvl.spawnP1[1] });
         if (lvl.spawnP2) d.ents.push({ cat: "spawn", player: 2, x: lvl.spawnP2[0], y: lvl.spawnP2[1] });
         return this.withIds(d);
@@ -164,6 +170,20 @@ var Studio = {
         }
         def.spawnP1 = p1 || [0, 120];
         def.spawnP2 = p2 || [def.spawnP1[0] + 100, def.spawnP1[1]];
+        if (doc.mode === "brawl") {
+            // a floating stage: the widest solid block is "the stage"; blast zones sit well outside everything
+            var L = def.layout.filter(function(o) { return o.type === "box" || o.type === "ramp"; }), main = null, bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
+            L.forEach(function(o) { bx0 = Math.min(bx0, o.x - o.w / 2); bx1 = Math.max(bx1, o.x + o.w / 2); by0 = Math.min(by0, o.y - o.h / 2); by1 = Math.max(by1, o.y + o.h / 2); if (o.kind !== "platform" && (!main || o.w > main.w)) main = o; });
+            if (!main) main = { x: 0, y: -100, w: 2000, h: 360 };
+            if (!isFinite(bx0)) { bx0 = -1000; bx1 = 1000; by0 = -300; by1 = 100; }
+            def.isBrawl = true;
+            def.stageTopY = main.y + main.h / 2; def.stageCenterX = main.x;
+            def.blast = { minX: bx0 - 1400, maxX: bx1 + 1400, minY: by0 - 1000, maxY: by1 + 1900 };
+            var sp = doc.ents.filter(function(e) { return e.cat === "bspawn" || e.cat === "spawn"; }).map(function(e) { return [e.x, e.y]; });
+            for (let i = sp.length; i < 4; i++) sp.push([main.x + (i % 2 ? 1 : -1) * main.w * (0.15 + 0.12 * i), def.stageTopY + 80]);
+            def.brawlSpawns = sp.slice(0, 4); def.spawnP1 = sp[0]; def.spawnP2 = sp[1];
+            def.wavesEnabled = false;
+        }
         if (doc.mode === "wheels") {
             // Wobble Wheels reads traps / finish / checkpoints from the level itself
             var tr = { mines: [], logs: [], spikes: [] }, fin = null, maxX = -Infinity;
@@ -382,6 +402,7 @@ var Studio = {
         if (e.cat === "item") return { x: e.x, y: e.y, w: 56, h: 56 };
         if (e.cat === "spawn") return { x: e.x, y: e.y, w: 70, h: 90 };
         if (e.cat === "wfinish") return { x: e.x, y: e.y + 150, w: 60, h: 300 };
+        if (e.cat === "bspawn") return { x: e.x, y: e.y, w: 70, h: 90 };
         if (e.cat === "wtrap") return e.kind === "log" ? { x: e.x, y: e.y, w: 120, h: 120 } : e.kind === "spikes" ? { x: e.x, y: e.y + 15, w: e.w || 200, h: 30 } : { x: e.x, y: e.y + 12, w: 50, h: 24 };
         switch (t) {
             case "plate": return { x: e.x, y: e.y - 10, w: e.w || 160, h: 20 };
@@ -916,6 +937,9 @@ var Studio = {
                 var def = (typeof PowerUpDefs !== "undefined" && PowerUpDefs[e.power]) || { icon: "?", color: "#fff" };
                 ctx.fillStyle = def.color; ctx.beginPath(); ctx.arc(sx, sy, 28 * z + 4, 0, 7); ctx.fill();
                 ctx.fillStyle = "#0a0f16"; ctx.font = "800 " + Math.round(22 * z + 8) + "px " + UI_FONT; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(def.icon || "?", sx, sy + 1);
+            } else if (e.cat === "bspawn") {
+                ctx.fillStyle = "#facc15"; ctx.globalAlpha = 0.8; ctx.fillRect(sx - 35 * z, sy - 45 * z, 70 * z, 90 * z); ctx.globalAlpha = 1;
+                ctx.fillStyle = "#0a0f16"; ctx.font = "900 " + Math.round(24 * z + 8) + "px " + UI_FONT; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("🥊", sx, sy);
             } else if (e.cat === "wtrap" || e.cat === "wfinish") {
                 ctx.textAlign = "center"; ctx.textBaseline = "middle";
                 if (e.cat === "wfinish") {

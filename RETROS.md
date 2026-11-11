@@ -6,6 +6,20 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Level Studio: Brawl stages
+
+**Shipped:** rules "Brawl (stage)" with a Brawl palette (main stage, floating platform, fighter spawn). The Studio works
+out what Brawl needs from the layout: the widest solid block is the stage (its top and centre), the blast zones sit
+1400 px beyond the sides and well above / below everything, and up to 4 spawns come from the spawn pieces (filled in
+across the stage if there are fewer). Built-in stages open with their spawns; saved stages join Brawl's stage rotation
+and are remembered as the chosen stage across reloads.
+
+**Measured (`tests/studio_brawl.js`):** Skybridge opened (4 spawns, 6 pieces); a new 3-piece stage play-tested as a
+real match (fight phase, P1 + CPU), pushing P1 past the edge cost a stock (3 → 2); the rotation went Plaza → Skybridge
+→ Gearworks → My Arena → Battlefield; no errors.
+
+---
+
 ## Connecting the games and the Level Studio (step 3, first game: Wobble Wheels)
 
 **Shipped:** Wobble Wheels can be built in the Level Studio. Pick the rules "Wobble Wheels (course)" and a Wobble

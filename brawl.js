@@ -30,7 +30,7 @@ try {
         if (BRAWL_OPPONENTS.some(function(o) { return o[0] === savedBrawl.opponents; })) brawlCfg.opponents = savedBrawl.opponents;
         if (savedBrawl.cpuLevel >= 1 && savedBrawl.cpuLevel <= 3) brawlCfg.cpuLevel = savedBrawl.cpuLevel;
         if (savedBrawl.stocks >= 1 && savedBrawl.stocks <= 9) brawlCfg.stocks = savedBrawl.stocks;
-        if (BRAWL_STAGES.indexOf(savedBrawl.stage) !== -1) brawlCfg.stage = savedBrawl.stage;
+        if (BRAWL_STAGES.indexOf(savedBrawl.stage) !== -1 || /^studio_/.test(savedBrawl.stage || "")) brawlCfg.stage = savedBrawl.stage;      // built-in or Level Studio stage
     }
 } catch (e) {}
 
@@ -52,9 +52,11 @@ function cycleBrawlOpponents(dir) {
 }
 
 function cycleBrawlStage(dir) {
-    var idx = Math.max(0, BRAWL_STAGES.indexOf(brawlCfg.stage));
-    idx = (idx + dir + BRAWL_STAGES.length) % BRAWL_STAGES.length;
-    brawlCfg.stage = BRAWL_STAGES[idx];
+    // built-in stages plus any made in the Level Studio
+    var all = BRAWL_STAGES.concat(window.Object.keys(LevelManager.customLevels || {}).filter(function(k) { return LevelManager.customLevels[k].isBrawl; }));
+    var idx = Math.max(0, all.indexOf(brawlCfg.stage));
+    idx = (idx + dir + all.length) % all.length;
+    brawlCfg.stage = all[idx];
     saveBrawlCfg();
 }
 
