@@ -6,6 +6,17 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Bed Brawl: Fireball
+
+**Shipped:** a ☄ Fireball pedestal (24 iron): a small, nearly weightless bomb launched fast along your aim; it bursts
+on the first thing it hits, knocking players back and blasting placed blocks — the answer to a turtled bed. Uses the
+new per-object `gravityMult` and the thrower-safe explosives fix.
+
+**Measured (`tests/bedbrawl_fireball.js`):** bought for 24 iron (30 → 6), flew level at 26 px/frame and burst at the
+wall 480 px away; all 4 built blocks of the wall destroyed; no errors.
+
+---
+
 ## Brawl: throwable bombs
 
 **Shipped:** every other Brawl item drop is a bomb: grab it (G / right-click), click to throw, it explodes on impact

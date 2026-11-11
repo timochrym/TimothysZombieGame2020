@@ -49,7 +49,8 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       "spare birds" rule (a design call).
 - [~] Bed Brawl: DONE — kill feed (kills, FINAL KILLs, void falls, beds, upgrades), team upgrades bought with mid-island
       diamonds (Forge ×2 = faster generator, Sharp = +25% team damage; bots buy them too), sudden death at 5:00 breaks
-      every bed, armor now goes to 3 from gold, cleaner shop labels. STILL TO DO: fireball & bridge-egg style items,
+      every bed, armor now goes to 3 from gold, cleaner shop labels; ☄ Fireball (24 iron: flies straight along your aim
+      and bursts on impact, blasting placed blocks): DONE. STILL TO DO: a bridge-building item,
       pickaxe tiers for breaking defenses, more maps / 4 teams, emerald-tier mid resource.
 - [~] Wobble Wheels: DONE — vehicle specials on Space/F (P2 Enter, pad B/X/RB): bike bunny-hop, cart big jump,
       wheelchair rocket with a fuel bar; flips counted in the air (each ≈full turn landed = -0.5 s), slow-mo on crashes;

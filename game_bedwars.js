@@ -19,6 +19,7 @@ var BW_SHOP = [
     { id: "blaster", label: "Blaster +", icon: "🔫", cost: { gold: 6 } },
     { id: "armor", label: "Armor +", icon: "🛡", cost: { gold: 10 } },
     { id: "tnt", label: "TNT", icon: "🧨", cost: { gold: 4 } },
+    { id: "fireball", label: "Fireball", icon: "☄", cost: { iron: 24 } },     // flies straight where you aim and blasts blocks / players
     { id: "forge", label: "Team Forge", icon: "⚒", cost: { diamond: 2 } },       // team upgrades: diamonds from the middle island
     { id: "sharp", label: "Team Sharp", icon: "🗡", cost: { diamond: 3 } }
 ];
@@ -122,10 +123,23 @@ function bwBuy(ch, item) {
     else if (item.id === "armor") ch.bwArmor = Math.min(3, (ch.bwArmor || 0) + 1);
     else if (item.id === "forge") { up.forge++; bwFeed(BW_TEAMS[bwTeamOf(ch)].name + " bought Forge " + up.forge + " (faster generator)", BW_TEAMS[bwTeamOf(ch)].color); }
     else if (item.id === "sharp") { up.sharp = 1; bwFeed(BW_TEAMS[bwTeamOf(ch)].name + " bought Sharp (+25% team damage)", BW_TEAMS[bwTeamOf(ch)].color); }
+    else if (item.id === "fireball") bwFireball(ch);
     else if (item.id === "tnt") { var t = Object.addCrate(ch.x + (ch.lastFacing || 1) * 90, ch.y + 60, 70, "#e84545", { explosive: true, name: "TNT Barrel" }); t.xspeed = (ch.lastFacing || 1) * 6; t.yspeed = 6; if (typeof rebuildAllObjects === "function") rebuildAllObjects(); }
     Components.addFloatingText("+" + item.label, ch.x, ch.y + 110, "#86efac", 15);
     if (typeof SFX !== "undefined") SFX.play("pickup", ch.x, ch.y);
     return true;
+}
+
+// a fireball: a small, nearly weightless bomb launched fast along your aim; it bursts on whatever it hits
+function bwFireball(ch) {
+    var rad = Math.radians(ch.degree || 90), dx = Math.sin(rad), dy = Math.cos(rad);
+    if (Math.abs(dx) < 0.2 && Math.abs(dy) < 0.2) { dx = ch.lastFacing || 1; dy = 0; }
+    var f = Object.addCrate(ch.x + dx * 80, ch.y + 20 + dy * 80, 40, "#f97316", { explosive: true, name: "Fireball" });
+    f.gravityMult = 0.04; f.gravity = gravity * 0.04; f.maxspeed = 40;
+    f.xspeed = dx * 26; f.yspeed = dy * 26;
+    f.thrownBy = ch; f.thrownTimer = 50; f.bwFire = true;
+    if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+    if (typeof SFX !== "undefined") SFX.play("shockwave", ch.x, ch.y, 0.6, 1.4);
 }
 
 // ---------------------------------------------------------------- CPU bots

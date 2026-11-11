@@ -11,6 +11,7 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node gamepad.js             # fake pads: Arcade, pad 3 takes a CPU seat, build mode, punch, pause
     node course_select.js       # course / room / chamber select in Parkour, Crate Lab, Portal Lab, Wobble Wheels
     node brawl_bomb.js          # Brawl: a bomb drops, P1 grabs and throws it, it hurts the CPU and not the thrower
+    node bedbrawl_fireball.js   # Bed Brawl: buy a fireball, it flies level and blasts a 4-block wall
     node lan_play.js            # starts server.js on 8099: a host + 2 joiners, positions match, client FPS
 
 Each prints its numbers and then the page errors (`[]` = none). See ROADMAP.md, "Your named feedback items".
