@@ -31,6 +31,7 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node table_wordhunt.js      # Table Games: Word Hunt grid is valid, mouse + keyboard finds, CPU finds
     node word_water.js          # Word Lab: water fills to the ground, crates float, the hero swims up
     node tuning_panel.js        # Cheats & tuning: per-game settings, rows that don't apply are hidden
+    node inspector.js           # Inspect tab picks beds, generators, fighters, riders; match card; zombie unchanged
     node lan_play.js            # starts server.js on 8099: a host + 2 joiners, positions match, client FPS
 
 Each prints its numbers and then the page errors (`[]` = none). See ROADMAP.md, "Your named feedback items".

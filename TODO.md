@@ -159,8 +159,10 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 
 ## Connecting games and tools (your question: "connect all the games so the inspector menus and the games interact")
 - [x] Step 1 — per-game settings in the Game tab + shared rows hidden where they do nothing (`tunables.js`).
-- [ ] Step 2 — `inspect(x, y)` hook: select and edit game objects (riders, beds, generators, pool balls, Terra tiles,
-      pets) in the Inspect tab and the Studio inspector; a match-state card for the full-screen games.
+- [x] Step 2 — `inspect.js`: Edit-mode clicks pick game objects (Bed Brawl beds / generators / player resources, Brawl
+      fighters' % and stocks, Wobble Wheels riders (eject, restart), the Crash Lab dummy, Word Lab pets and water, any
+      player or ragdoll) with their own sliders and buttons; full-screen games show a live match card (Table Games,
+      Rent Rush, Party Board). Still open here: Terra tiles; the Level Studio inspector uses its own document fields.
 - [ ] Step 3 — `studio` hook: build Wobble Wheels courses, Brawl stages, Siege forts, Bed Brawl maps, Word Lab rooms in
       the Level Studio; saved ones appear in that game's course select.
 

@@ -6,6 +6,22 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Connecting the games and the inspector (step 2 of 3)
+
+**Shipped:** `inspect.js`. Before, Edit mode could only pick blocks, crates and enemies. Now a click asks the game
+first: Bed Brawl beds (health, repair), generators (speed, drop 5 now) and players (health, iron / gold / diamond);
+Brawl fighters (damage %, stocks); Wobble Wheels riders (crashed?, engine power, eject, restart); the Crash Lab dummy
+(damage, new dummy, launch); Word Lab pets (size, send home) and water (width, drain); and, in any game, heroes / CPU
+players (health, max health, speed) and ragdolls. Each shows as a card on the Inspect tab with live values and a dashed
+outline on the object. Full-screen games show a live match card (Table Games scores, Rent Rush cash, Party Board stars).
+
+**Measured (`tests/inspector.js`):** bed picked and its slider set its health to ~20; generator picked; Brawl fighter
+picked and set to 150 %; rider picked and ejected; Table Games match card listed game / opponent / scores; a Survival
+zombie still opens the old inspector. **Went wrong (test only):** the zombie walked off the clicked spot during a 200 ms
+wait — the test now clicks right after spawning.
+
+---
+
 ## Connecting the games and the tuning panel (step 1 of 3)
 
 **Asked:** "How can we connect all the games so that the inspector menus and the games interact well with each other."

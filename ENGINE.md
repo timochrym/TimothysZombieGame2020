@@ -267,3 +267,11 @@ They show as "<GAME> — its own settings" at the top. The shared rows are tagge
 ones that would do nothing in the current game; the panel says how many are hidden. Next steps in the same spirit:
 an `inspect(x, y)` hook so the Inspect tab can select game objects (riders, beds, pool balls…), and a `studio` hook
 so more games can be built in the Level Studio.
+
+## Game inspector (`inspect.js`)
+
+In the Cheats & tuning panel's ✋ Edit mode a click asks the game first: `mode.inspect(x, y)` or `GAME_INSPECT[id]`,
+then the generic inspectors (any hero / CPU player, any ragdoll), then the old block / crate / enemy inspector. A hit
+is described as `{ title, sub, pos(), fields: [rows like tunables], actions: [{ label, fn }] }` and shown as a card on
+the Inspect tab (values refresh live, the object gets a dashed outline in the world). Full-screen games show
+`mode.matchState()` / `GAME_MATCH_STATE[id]` (a list of [label, value]) instead.

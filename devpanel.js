@@ -291,11 +291,33 @@ var DevUI = {
         if (isFinite(mn) && isFinite(mx) && mx > mn) el.style.setProperty("--pct", (((v - mn) / (mx - mn)) * 100) + "%");
     },
 
+    refreshGameCard: function() {
+        var d = typeof GameInspect !== "undefined" && GameInspect.sel, card = document.getElementById("sp-game-card");
+        if (!d || !card) return;
+        (d.fields || []).forEach(function(r, i) {
+            var v = r.get(), el = card.querySelector('[data-gc="' + i + '"]'), lab = card.querySelector('[data-gc-val="' + i + '"]');
+            if (el && document.activeElement !== el) { if (el.type === "checkbox") el.checked = !!v; else el.value = v; if (el.type === "range") DevUI.paintRange(el); }
+            if (lab) lab.textContent = String(v);
+        });
+    },
+    // full-screen games: a live read-out of the match on the Inspect tab
+    syncMatchState: function() {
+        var box = document.getElementById("sp-match-state"); if (!box || typeof GAME_MATCH_STATE === "undefined") return;
+        var m = GameModes.current, own = GameModes.flag("ownScreen", false), fn = m && (typeof m.matchState === "function" ? m.matchState : GAME_MATCH_STATE[m.id]);
+        if (!own) { box.style.display = "none"; return; }
+        var rows = []; try { rows = fn ? fn() : []; } catch (e) { rows = []; }
+        box.style.display = "block";
+        box.innerHTML = '<div class="dp-section"><div class="dp-title"><span>' + (m.title || "") + ' — match</span></div>' +
+            (rows.length ? rows.map(function(r) { return '<div class="dp-row"><label>' + r[0] + '</label><span class="dp-val" style="width:auto;flex:1;text-align:left">' + r[1] + '</span></div>'; }).join("") : '<p class="dp-hint">This game draws its own screen — nothing to pick here. Its settings are on the Game tab.</p>') + '</div>';
+        ["sp-no-selection"].forEach(function(id) { var e = document.getElementById(id); if (e) e.style.display = "none"; });
+    },
+
     // the Game tab follows the game that's on: its own settings first, shared rows only where they do something
     NEED: { waves: { t: ["waves"], o: ["spawnRate", "maxEnemies", "powerUpRate"] }, enemies: { t: ["paths"], o: ["enemyHealth", "enemyDamage"] },
             world: { t: ["god", "jetpack"], o: ["flight", "infiniteAmmo", "friendlyFire", "showHitboxes", "bouncyRagdolls", "playerDamage", "gravityMult"], id: ["dp-zoom"] }, coop: { t: ["coop"] } },
     syncGame: function(panel) {
         if (typeof GameTuning === "undefined" || !GameModes.current) return;
+        this.refreshGameCard(); this.syncMatchState();
         var hidden = 0;
         for (var need in this.NEED) {
             var N = this.NEED[need], show = GameTuning.applies(need), els = [];
@@ -747,6 +769,8 @@ SummonManager.buildUI = function() {
 
         <!-- ================= INSPECT ================= -->
         <div class="dp-page" data-page="inspect">
+            <div id="sp-game-card" style="display:none"></div>
+            <div id="sp-match-state" style="display:none"></div>
             <div class="dp-empty" id="sp-no-selection">Nothing selected.<br>Switch to <b>✋ Edit</b> mode and click an object,<br>or pick one from the <b>Objects</b> tab.</div>
             <div id="sp-inspector" style="display:none">
                 <div class="dp-section">
@@ -1068,7 +1092,36 @@ SummonManager.setSelectedHP = function(v) {
     if (o && o instanceof Character) { o.maxHealth = v; o.health = v; }
 };
 
+// a game object picked through GameInspect (inspect.js): a card with its own fields and actions
+SummonManager.selectGameItem = function(d) {
+    this.selectedObject = null;
+    GameInspect.sel = d;
+    var card = document.getElementById("sp-game-card");
+    ["sp-inspector", "sp-no-selection"].forEach(function(id) { var e = document.getElementById(id); if (e) e.style.display = "none"; });
+    if (!card) return;
+    card.style.display = "block";
+    card.innerHTML = '<div class="dp-section"><div class="dp-title"><span>' + d.title + '</span><button class="sp-small-btn" id="sp-gc-close">✕</button></div>' +
+        (d.sub ? '<p class="dp-hint" style="margin-top:0">' + d.sub + '</p>' : "") +
+        (d.fields || []).map(function(r, i) {
+            if (r.type === "text") return '<div class="dp-row"><label>' + r.label + '</label><span class="dp-val" style="width:auto;flex:1;text-align:left" data-gc-val="' + i + '"></span></div>';
+            if (r.type === "toggle") return '<label class="dp-toggle"><input type="checkbox" data-gc="' + i + '"><span class="dp-switch"></span><span>' + r.label + '</span></label>';
+            if (r.type === "choice") return '<div class="dp-row"><label>' + r.label + '</label><select class="dp-select" data-gc="' + i + '">' + r.options.map(function(o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join("") + '</select></div>';
+            return '<div class="dp-row"><label>' + r.label + '</label><input type="range" class="dp-range" data-gc="' + i + '" min="' + r.min + '" max="' + r.max + '" step="' + r.step + '"><span class="dp-val" data-gc-val="' + i + '"></span></div>';
+        }).join("") +
+        ((d.actions || []).length ? '<div class="dp-grid3" style="margin-top:8px">' + d.actions.map(function(a, i) { return '<button class="dp-btn" data-gca="' + i + '">' + a.label + '</button>'; }).join("") + '</div>' : "") + '</div>';
+    card.querySelectorAll("[data-gc]").forEach(function(el) {
+        var r = d.fields[Number(el.dataset.gc)];
+        el.addEventListener(el.type === "range" ? "input" : "change", function() { r.set(el.type === "checkbox" ? el.checked : Number(el.value)); DevUI.refreshGameCard(); });
+    });
+    card.querySelectorAll("[data-gca]").forEach(function(b) { b.onclick = function() { d.actions[Number(b.dataset.gca)].fn(); DevUI.refreshGameCard(); }; });
+    document.getElementById("sp-gc-close").onclick = function() { SummonManager.selectObject(null); };
+    DevUI.refreshGameCard();
+    if (this.isOpen) DevUI.switchTab("inspect");
+};
+
 SummonManager.selectObject = function(obj) {
+    GameInspect.sel = null;
+    var gcard = document.getElementById("sp-game-card"); if (gcard) gcard.style.display = "none";
     this.selectedObject = obj;
     var insp = document.getElementById("sp-inspector");
     var empty = document.getElementById("sp-no-selection");

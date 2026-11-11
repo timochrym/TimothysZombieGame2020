@@ -456,7 +456,13 @@ class SummonManager {
                     }
                 }
 
-                // 2. Otherwise check if clicking an object body (Alt/Shift/Ctrl + Drag = Duplicate & Drag!)
+                // 2. Something the game itself is made of (beds, riders, fighters, pets...) - see inspect.js
+                if (typeof GameInspect !== "undefined" && !(e.altKey || e.shiftKey || e.ctrlKey || e.metaKey)) {
+                    var gi = GameInspect.find(wx, wy);
+                    if (gi) { this.selectGameItem(gi); return true; }
+                }
+
+                // 3. Otherwise check if clicking an object body (Alt/Shift/Ctrl + Drag = Duplicate & Drag!)
                 var hit = this.getObjectAtWorld(wx, wy);
                 if (hit && (e.altKey || e.shiftKey || e.ctrlKey || e.metaKey)) {
                     var dup = this.cloneObject(hit, 0, 0);
@@ -570,6 +576,11 @@ class SummonManager {
     }
 
     static drawOverlay() {
+        // outline the game object picked in the Inspect tab
+        if (typeof GameInspect !== "undefined" && GameInspect.sel && GameInspect.sel.pos && this.isOpen) {
+            try { var gp = GameInspect.sel.pos(), r = 46 * cameraScaleX + 10 + Math.sin(performance.now() * 0.008) * 4;
+                ctx.save(); ctx.strokeStyle = "#22d3ee"; ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.beginPath(); ctx.arc(wsx(gp[0]), wsy(gp[1]), r, 0, 7); ctx.stroke(); ctx.restore(); } catch (e) {}
+        }
         var isPlacingOrDragging = (this.paletteDragging || this.toolMode == "place" || this.draggingObject || this.resizingObject || this.showGrid);
         if (isPlacingOrDragging) {
             this.drawWorldGrid();
