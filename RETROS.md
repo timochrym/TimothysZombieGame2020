@@ -6,6 +6,26 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## UI pass 2: Level Studio in and out
+
+**Shipped:** opening the Studio no longer throws your game away. The world is parked and handed back untouched when
+you close it (same score, wave and positions) unless you play-tested, which has to replace the world. Opening from a
+game shows a start card instead of silently dropping you into your last edit: edit a copy of the level you were
+playing, continue the autosave, start blank, or open a saved level (Esc/B goes straight back). The toolbar went from
+18 controls in a scrolling strip to one line that fits 820 px: name, rules, waves, ▶ Play-test, undo/redo, one grid
+picker, a 📁 File menu (new, copy current, save, saved levels with delete, export/import, start screen, cheats),
+a panel toggle (Tab) and a clear ◀ Back button. Side panels shrink on small windows and the camera, framing and hint
+lines follow their real width. The palette has a search box (type, Enter picks the first match). The inspector shows
+position and size as pairs first and uses readable names ("links (door ids)", "open until powered").
+
+**Measured:** score 1234 and the hero's position survived open → edit a copy → close at 1280 and 820 wide; after a
+play-test, close reloads the original level; the old Studio regression test (place, drag, inspector, undo/redo,
+save, play-test, exit back) passes; gamepad editing test passes; no console errors.
+
+**Went wrong:** the first toolbar still overflowed at 820 px (1027 px of controls); short labels below 980 px fixed it.
+
+---
+
 ## UI pass 1: compact top bar, adaptive pause menu
 
 **Shipped:** the six-button top-right strip (which covered HUD text and wrapped at narrow widths) is now four icon

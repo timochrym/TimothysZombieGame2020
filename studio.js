@@ -181,13 +181,47 @@ var Studio = {
     // ------------------------------------------------------------------ open / close
     toggle: function() { if (this.isOpen) this.close(); else this.open(); },
 
+    // the game you were playing is parked (not reloaded) while you edit, and handed back untouched when you
+    // close the Studio - unless you play-tested, which had to replace the world
+    park: function() {
+        var P = { staticObjects: staticObjects, movingObjects: movingObjects, zombies: zombies, characters: characters, lazers: lazers,
+            particles: particles, powerUps: powerUps, coinOrbs: coinOrbs, floatingTexts: floatingTexts, afterImages: afterImages,
+            redGuy: redGuy, blueGuy: blueGuy, levelKey: LevelManager.currentLevelKey, mode: GameModes.current && GameModes.current.id };
+        if (typeof treasureChests !== "undefined") P.treasureChests = treasureChests;
+        if (typeof Ragdolls !== "undefined") P.ragdolls = Ragdolls.list;
+        if (typeof Gadgets !== "undefined") P.gadgets = { list: Gadgets.list, byId: Gadgets.byId, keys: Gadgets.keys, starsGot: Gadgets.starsGot, starsTotal: Gadgets.starsTotal, deaths: Gadgets.deaths };
+        if (typeof Vehicles !== "undefined") P.vehicles = { cars: Vehicles.cars, carts: Vehicles.carts, rails: Vehicles.rails };
+        if (typeof Components !== "undefined") P.comps = { rings: Components.rings, bolts: Components.bolts, corpses: Components.corpses };
+        this.parked = P;
+    },
+
+    unpark: function() {
+        var P = this.parked;
+        this.parked = null;
+        if (!P) return false;
+        staticObjects = P.staticObjects; movingObjects = P.movingObjects; zombies = P.zombies; characters = P.characters; lazers = P.lazers;
+        particles = P.particles; powerUps = P.powerUps; coinOrbs = P.coinOrbs; floatingTexts = P.floatingTexts; afterImages = P.afterImages;
+        redGuy = P.redGuy; blueGuy = P.blueGuy;
+        if (P.treasureChests) treasureChests = P.treasureChests;
+        if (P.ragdolls) Ragdolls.list = P.ragdolls;
+        if (P.gadgets) for (var k in P.gadgets) Gadgets[k] = P.gadgets[k];
+        if (P.vehicles) for (var v in P.vehicles) Vehicles[v] = P.vehicles[v];
+        if (P.comps) for (var c in P.comps) Components[c] = P.comps[c];
+        if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+        if (typeof StaticGrid !== "undefined") StaticGrid.build();
+        if (typeof Pathfinder !== "undefined") try { Pathfinder.rebuildGraph(true); } catch (e) {}
+        return true;
+    },
+
     open: function(editKey) {
         if (typeof Net !== "undefined" && Net.role === "client") return;
         if (this.playtesting) { this.endPlaytest(); return; }
         if (typeof paused !== "undefined" && paused && typeof closePause === "function") closePause();
         if (typeof Hub !== "undefined" && Hub.isOpen) Hub.close();
         if (typeof SummonManager !== "undefined" && SummonManager.isOpen) SummonManager.togglePanel();
+        var fresh = !this.prevLevelKey;           // coming from a game (not back from a play-test)
         this.prevLevelKey = this.prevLevelKey || LevelManager.currentLevelKey;
+        if (fresh) { this.park(); this.tested = false; }
         if (!this.doc) {
             var auto = null;
             try { auto = JSON.parse(localStorage.getItem("timsLevelStudioAutosave") || "null"); } catch (e) {}
@@ -202,6 +236,7 @@ var Studio = {
         this.rebuild();
         this.frameAll();
         this.renderAll();
+        if (fresh && !editKey) this.showStart(); else this.hideStart();
     },
 
     close: function() {
@@ -212,16 +247,54 @@ var Studio = {
         this.tool = "select"; this.tpl = null; this.sel = []; this.drag = null;
         document.body.classList.remove("studio-open");
         if (this.ui) this.ui.root.style.display = "none";
+        this.hideStart();
         var back = this.prevLevelKey || "classic_arena";
         this.prevLevelKey = null;
+        var P = this.parked;
+        // nothing replaced the game while editing: give it back exactly as it was (score, wave, positions)
+        if (P && !this.tested && P.levelKey === LevelManager.currentLevelKey && P.mode === (GameModes.current && GameModes.current.id) && this.unpark()) {
+            if (typeof Components !== "undefined" && Components.addFloatingText && characters[0]) Components.addFloatingText("BACK IN THE GAME", characters[0].x, characters[0].y + 120, "#7ff0ff", 18);
+            return;
+        }
+        this.parked = null;
         LevelManager.selectLevel(LevelManager.getAllLevels()[back] ? back : "classic_arena");
     },
+
+    // ---- start card: what do you want to edit? (shown when you open the Studio from a game)
+    showStart: function() {
+        if (!this.ui) return;
+        var self = this, esc = function(s) { return String(s).replace(/[&<>"']/g, function(c) { return "&#" + c.charCodeAt(0) + ";"; }); };
+        var cur = LevelManager.getAllLevels()[this.prevLevelKey] || {};
+        var curName = (cur.name || this.prevLevelKey || "this level").replace(/^[^A-Za-z0-9]+/, "");
+        var auto = null;
+        try { auto = JSON.parse(localStorage.getItem("timsLevelStudioAutosave") || "null"); } catch (e) {}
+        var saved = window.Object.keys(this.savedAll());
+        var card = this.ui.start;
+        var h = "<h2>🛠 Level Studio</h2><p class='muted'>Your game is paused and kept exactly as it is — close the Studio to carry on.</p>" +
+            "<button class='sc' id='ss-cur'><b>✏ Edit a copy of “" + esc(curName) + "”</b><span>start from the level you were just playing</span></button>" +
+            (auto && auto.ents ? "<button class='sc' id='ss-auto'><b>↻ Continue “" + esc(auto.name || "My Level") + "”</b><span>your last edit, " + auto.ents.length + " pieces (autosaved)</span></button>" : "") +
+            "<button class='sc' id='ss-new'><b>＋ New blank level</b><span>a walled room with two player starts</span></button>" +
+            (saved.length ? "<div class='ss-saved'><span class='muted'>Saved levels</span>" + saved.map(function(n, i) { return "<button data-n='" + i + "'>📂 " + esc(n) + "</button>"; }).join("") + "</div>" : "") +
+            "<div class='ss-foot'><button id='ss-back'>◀ Back to the game (B)</button></div>";
+        card.innerHTML = "<div class='ss-card'>" + h + "</div>";
+        card.style.display = "flex";
+        var pick = function(fn) { return function() { fn(); self.sel = []; self.undoStack = []; self.redoStack = []; self.rebuild(); self.frameAll(); self.renderAll(); self.hideStart(); }; };
+        card.querySelector("#ss-cur").onclick = pick(function() { self.doc = self.docFromLevel(self.prevLevelKey); });
+        var a = card.querySelector("#ss-auto"); if (a) a.onclick = pick(function() {});
+        card.querySelector("#ss-new").onclick = pick(function() { self.doc = self.newDoc(); });
+        card.querySelectorAll(".ss-saved button").forEach(function(b) { b.onclick = pick(function() { var d = self.savedAll()[saved[Number(b.dataset.n)]]; if (d) self.doc = self.withIds(JSON.parse(JSON.stringify(d))); }); });
+        card.querySelector("#ss-back").onclick = function() { self.close(); };
+    },
+    hideStart: function() { if (this.ui && this.ui.start) this.ui.start.style.display = "none"; },
+    startShown: function() { return this.ui && this.ui.start && this.ui.start.style.display !== "none"; },
 
     autosave: function() { try { localStorage.setItem("timsLevelStudioAutosave", JSON.stringify(this.doc)); } catch (e) {} },
 
     // ------------------------------------------------------------------ play-test
     playtest: function() {
         this.autosave();
+        this.hideStart();
+        this.tested = true;
         var def = this.docToDef(this.doc);
         LevelManager.builtInLevels["__studio_test"] = def;
         this.isOpen = false;
@@ -492,7 +565,7 @@ var Studio = {
             b = Math.min(b, Math.max(bb.y - bb.h / 2, -400)); t = Math.max(t, bb.y + bb.h / 2);
         });
         if (!isFinite(l)) return;
-        var vw = cssW - 500, vh = cssH - 90;
+        var vw = Math.max(200, cssW - (this.lw || 0) - (this.rw || 0) - 20), vh = cssH - 90;
         this.cam.x = (l + r) / 2; this.cam.y = (b + t) / 2;
         this.cam.z = Math.max(0.05, Math.min(1.2, Math.min(vw / (r - l + 200), vh / (t - b + 200))));
     },
@@ -659,7 +732,9 @@ var Studio = {
         var c = e.code;
         if (!down) { this.keys[c === "Space" ? "Space" : c] = false; return; }
         var ctrl = e.ctrlKey || e.metaKey;
+        if (this.startShown()) { if (c === "KeyB" || c === "Escape") { this.close(); e.preventDefault(); } return; }
         if (c === "Space") { this.keys.Space = true; e.preventDefault(); return; }
+        if (c === "Tab") { this.togglePanels(); e.preventDefault(); return; }
         this.keys[c] = true;
         if (ctrl && c === "KeyZ") { if (e.shiftKey) this.redo(); else this.undo(); }
         else if (ctrl && c === "KeyY") this.redo();
@@ -689,7 +764,8 @@ var Studio = {
     applyCamera: function() {
         cameraScaleX = cameraScaleY = this.cam.z;
         cameraTargetX = this.cam.x; cameraTargetY = this.cam.y;
-        xc = 210 + (cssW - 210 - 280) / 2 - this.cam.x * this.cam.z;
+        var lw = this.lw || 0, rw = this.rw || 0;
+        xc = lw + (cssW - lw - rw) / 2 - this.cam.x * this.cam.z;
         yc = 48 + (cssH - 48) / 2 + this.cam.y * this.cam.z;
     },
 
@@ -708,7 +784,7 @@ var Studio = {
         c.x += mx * sp; c.y += my * sp;
         this.cam.x += dz(g.axes[2] || 0) * 14 / z; this.cam.y -= dz(g.axes[3] || 0) * 14 / z;
         // keep the cursor on screen: the camera follows it near the edges
-        var vw = (cssW - 490) / 2 / z * 0.8, vh = (cssH - 48) / 2 / z * 0.8;
+        var vw = (cssW - (this.lw || 0) - (this.rw || 0)) / 2 / z * 0.8, vh = (cssH - 48) / 2 / z * 0.8;
         if (c.x > this.cam.x + vw) this.cam.x = c.x - vw; if (c.x < this.cam.x - vw) this.cam.x = c.x + vw;
         if (c.y > this.cam.y + vh) this.cam.y = c.y - vh; if (c.y < this.cam.y - vh) this.cam.y = c.y + vh;
         if (B(6)) this.cam.z = Math.max(0.15, this.cam.z * 0.98); if (B(7)) this.cam.z = Math.min(2.5, this.cam.z * 1.02);
@@ -858,53 +934,93 @@ var Studio = {
     },
 
     drawHint: function() {
-        var midX = 210 + (cssW - 490) / 2;
+        var lw = this.lw || 0, aw = cssW - lw - (this.rw || 0) - 24, midX = lw + (cssW - lw - (this.rw || 0)) / 2;
+        // fit a line into the editing area: shrink a little, else fall back to the shorter wording
+        var fit = function(long, short, y, size, color, weight) {
+            ctx.save(); ctx.font = weight + " " + size + "px " + UI_FONT;
+            var t = long, wdt = ctx.measureText(t).width;
+            if (wdt > aw && short) { t = short; wdt = ctx.measureText(t).width; }
+            ctx.restore();
+            uiText(t, midX, y, wdt > aw ? Math.max(9, Math.floor(size * aw / wdt)) : size, color, "center", weight);
+        };
         var tool = this.tool === "place" ? ("Placing: " + this.tplLabel + " — click to place, Esc to stop") : "Select: click · Shift+click adds · drag empty space to box-select · drag handles to resize";
-        uiText(tool, midX, cssH - 34, 13, "#e2e8f0", "center", "800");
-        if (this.pad) { uiText("🎮 stick cursor · right stick pan · A place / select (hold = drag) · B delete / cancel · X rotate · LB/RB pieces · LT/RT zoom · Y play-test · Start save · Back close", midX, cssH - 14, 11, "rgba(253,224,71,0.85)", "center", "700"); return; }
-        uiText("Right/middle-drag or WASD pan · wheel zoom · Del delete · Ctrl+D duplicate · Ctrl+C/V · Ctrl+Z/Y · R rotate · F flip ramp · G grid · H frame all · P play-test", midX, cssH - 14, 11, "rgba(203,213,225,0.75)", "center", "700");
+        fit(tool, this.tool === "place" ? "Placing " + this.tplLabel + " · Esc stops" : "Click selects · Shift adds · drag to box-select", cssH - 34, 13, "#e2e8f0", "800");
+        if (this.pad) fit("🎮 stick cursor · right stick pan · A place / select (hold = drag) · B delete / cancel · X rotate · LB/RB pieces · LT/RT zoom · Y play-test · Start save · Back close",
+                          "🎮 A place/select · B delete · X rotate · LB/RB pieces · Y test", cssH - 14, 11, "rgba(253,224,71,0.85)", "700");
+        else fit("Right/middle-drag or WASD pan · wheel zoom · Del delete · Ctrl+D duplicate · Ctrl+C/V · Ctrl+Z/Y · R rotate · F flip ramp · G grid · H frame all · Tab panels · P play-test",
+                 "WASD pan · wheel zoom · Del · Ctrl+Z · R rotate · H frame · Tab panels · P test", cssH - 14, 11, "rgba(203,213,225,0.75)", "700");
         if (this.toastT > 0) {
             ctx.save(); ctx.globalAlpha = Math.min(1, this.toastT / 30);
-            uiText(this.toast, midX, 80, 18, "#facc15", "center", "900");
+            fit(this.toast, null, 80, 18, "#facc15", "900");
             ctx.restore();
         }
     },
 
     // ------------------------------------------------------------------ DOM UI
     buildUI: function() {
-        if (this.ui) { this.ui.root.style.display = "block"; return; }
+        if (this.ui) { this.ui.root.style.display = "block"; this.layout(); return; }
         var css = document.createElement("style");
         css.textContent =
-            "body.studio-open .top-bar-btn, body.studio-open #level-select-dropdown { display:none !important }" +
+            "body.studio-open #top-right-bar, body.studio-open #level-select-dropdown { display:none !important }" +
             "#mario-maker-dock { display:none !important }" +
-            "#studio-root{position:fixed;inset:0;pointer-events:none;z-index:1500;font-family:'Segoe UI',Arial,sans-serif;color:#e2e8f0}" +
+            "#studio-root{position:fixed;inset:0;pointer-events:none;z-index:1500;font-family:'Segoe UI',Arial,sans-serif;color:#e2e8f0;--lw:210px;--rw:280px}" +
+            "#studio-root.nopanels{--lw:0px;--rw:0px}#studio-root.nopanels #studio-left,#studio-root.nopanels #studio-right{display:none}" +
+            "#studio-top .narrow{display:none}#st-name{width:130px}#st-mode{max-width:200px}" +
+            "@media (max-width:980px){#studio-root{--lw:172px;--rw:228px}#studio-top .wide{display:none}#studio-top .narrow{display:inline}#st-name{width:96px}#st-mode{max-width:130px}#studio-top{gap:4px;padding:0 6px}}" +
             "#studio-root>div{pointer-events:auto;background:rgba(15,23,42,.96);border-color:#334155;border-style:solid}" +
-            "#studio-top{position:absolute;left:0;right:0;top:0;height:48px;border-width:0 0 1px;display:flex;align-items:center;gap:6px;padding:0 10px;overflow-x:auto;white-space:nowrap}" +
-            "#studio-left{position:absolute;left:0;top:48px;bottom:0;width:210px;border-width:0 1px 0 0;overflow-y:auto;padding:8px}" +
-            "#studio-right{position:absolute;right:0;top:48px;bottom:0;width:280px;border-width:0 0 0 1px;overflow-y:auto;padding:10px}" +
+            "#studio-top{position:absolute;left:0;right:0;top:0;height:48px;border-width:0 0 1px;display:flex;align-items:center;gap:6px;padding:0 10px;white-space:nowrap}" +
+            "#studio-top .sep{width:1px;height:26px;background:#334155;margin:0 2px}#studio-top .grow{flex:1}" +
+            "#studio-left{position:absolute;left:0;top:48px;bottom:0;width:var(--lw);box-sizing:border-box;border-width:0 1px 0 0;overflow-y:auto;padding:8px}" +
+            "#studio-right{position:absolute;right:0;top:48px;bottom:0;width:var(--rw);box-sizing:border-box;border-width:0 0 0 1px;overflow-y:auto;padding:10px}" +
             "#studio-root button,#studio-root select,#studio-root input{font:inherit;font-size:13px}" +
             "#studio-root button{background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:7px;padding:5px 9px;cursor:pointer}" +
             "#studio-root button:hover{background:#334155}#studio-root button.on{background:#2563eb;border-color:#60a5fa}" +
-            "#studio-root button.go{background:#16a34a;border-color:#4ade80;font-weight:800}" +
+            "#studio-root button.go{background:#16a34a;border-color:#4ade80;font-weight:800}#studio-root button.go:hover{background:#15803d}" +
+            "#studio-root button.back{background:#0e7490;border-color:#22d3ee;font-weight:800}" +
             "#studio-root select,#studio-root input{background:#0b1220;color:#e2e8f0;border:1px solid #475569;border-radius:6px;padding:4px 6px}" +
             "#studio-left h4{margin:10px 2px 4px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#94a3b8;cursor:pointer}" +
             "#studio-left .pi{display:flex;align-items:center;gap:7px;width:100%;text-align:left;margin:2px 0;padding:5px 7px}" +
+            "#studio-left .pf{width:100%;box-sizing:border-box;margin:0 0 4px}" +
             "#studio-right label{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:5px 0;font-size:12px;color:#cbd5e1}" +
-            "#studio-right label input,#studio-right label select{width:140px}#studio-right label input[type=checkbox]{width:auto}" +
-            "#studio-right h3{margin:4px 0 8px;font-size:15px}#studio-right .muted{color:#94a3b8;font-size:12px;line-height:1.45}" +
+            "#studio-right label input,#studio-right label select{width:58%;box-sizing:border-box}#studio-right label input[type=checkbox]{width:auto}" +
+            "#studio-right h3{margin:4px 0 8px;font-size:15px}#studio-right .muted,#studio-start .muted{color:#94a3b8;font-size:12px;line-height:1.45}" +
+            "#studio-file{position:absolute;top:46px;display:none;flex-direction:column;min-width:240px;max-height:70vh;overflow-y:auto;border-width:1px;border-radius:10px;padding:6px;box-shadow:0 12px 30px rgba(0,0,0,.5)}" +
+            "#studio-file button{text-align:left;border:0 !important;background:transparent !important;padding:7px 9px !important;border-radius:6px !important;display:flex;justify-content:space-between;gap:14px}" +
+            "#studio-file button:hover{background:#1e3a5f !important}#studio-file small{color:#94a3b8}#studio-file .fh{font-size:11px;color:#94a3b8;letter-spacing:.08em;text-transform:uppercase;margin:6px 8px 2px}" +
+            "#studio-file .fr{display:flex}#studio-file .fr button:first-child{flex:1}" +
+            "#studio-start{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(3,7,18,.72) !important;border:0 !important}" +
+            "#studio-start .ss-card{width:min(460px,92vw);max-height:88vh;overflow-y:auto;background:#0f172a;border:1px solid #22d3ee;border-radius:14px;padding:18px 20px;box-shadow:0 20px 60px rgba(0,0,0,.6)}" +
+            "#studio-start h2{margin:0 0 4px;color:#facc15;font-size:22px}" +
+            "#studio-start .sc{display:block;width:100%;text-align:left;margin:8px 0;padding:10px 12px !important}#studio-start .sc b{display:block;font-size:15px}#studio-start .sc span{color:#94a3b8;font-size:12px}" +
+            "#studio-start .ss-saved{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}#studio-start .ss-saved .muted{width:100%}" +
+            "#studio-start .ss-foot{margin-top:14px;text-align:right}" +
             "#studio-testbar{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:1600;background:#16a34a;color:#fff;border:0;border-radius:8px;padding:8px 14px;font:800 14px 'Segoe UI',Arial;cursor:pointer;display:none}";
         document.head.appendChild(css);
         var root = document.createElement("div");
         root.id = "studio-root";
-        root.innerHTML = "<div id='studio-top'></div><div id='studio-left'></div><div id='studio-right'></div>";
+        root.innerHTML = "<div id='studio-top'></div><div id='studio-left'></div><div id='studio-right'></div><div id='studio-file'></div><div id='studio-start'></div>";
         var stop = function(e) { e.stopPropagation(); };
         ["mousedown", "mouseup", "click", "wheel", "keydown", "keyup"].forEach(function(ev) { root.addEventListener(ev, stop); });
         document.body.appendChild(root);
-        this.ui = { root: root, top: root.querySelector("#studio-top"), left: root.querySelector("#studio-left"), right: root.querySelector("#studio-right"), collapsed: {} };
+        this.ui = { root: root, top: root.querySelector("#studio-top"), left: root.querySelector("#studio-left"), right: root.querySelector("#studio-right"),
+                    file: root.querySelector("#studio-file"), start: root.querySelector("#studio-start"), collapsed: {} };
+        var self = this;
+        // clicking anywhere else closes the File menu
+        window.addEventListener("mousedown", function(e) { if (self.ui.file.style.display === "flex" && !self.ui.file.contains(e.target) && e.target.id !== "st-file-btn") self.ui.file.style.display = "none"; }, true);
+        window.addEventListener("resize", function() { self.layout(); });
         // power-up items for the palette
         var items = STUDIO_PALETTE.filter(function(c) { return c[0] === "Items"; })[0];
         if (items && !items[1].length && typeof PowerUpDefs !== "undefined") for (var k in PowerUpDefs) items[1].push([PowerUpDefs[k].label.toLowerCase(), PowerUpDefs[k].icon, { cat: "item", power: k }]);
+        this.layout();
     },
+
+    // side panel widths (they shrink on small windows and hide with Tab) drive the editing camera
+    layout: function() {
+        if (!this.ui) return;
+        this.lw = this.ui.left.offsetParent ? this.ui.left.offsetWidth : 0;
+        this.rw = this.ui.right.offsetParent ? this.ui.right.offsetWidth : 0;
+    },
+    togglePanels: function() { this.ui.root.classList.toggle("nopanels"); this.layout(); this.say(this.ui.root.classList.contains("nopanels") ? "Panels hidden (Tab shows them)" : "Panels shown"); },
 
     renderAll: function() { this.renderTop(); this.renderPalette(); this.renderInspector(); },
     renderStatus: function() {},
@@ -912,61 +1028,96 @@ var Studio = {
     renderTop: function() {
         if (!this.ui) return;
         var d = this.doc, self = this;
-        var saved = window.Object.keys(this.savedAll());
         var esc = function(s) { return String(s).replace(/[&<>"']/g, function(c) { return "&#" + c.charCodeAt(0) + ";"; }); };
-        var h = "<b style='color:#facc15;margin-right:4px'>🛠 LEVEL STUDIO</b>" +
-            "<input id='st-name' value='" + esc(d.name) + "' title='Level name' style='width:130px'>" +
-            "<select id='st-mode' title='Which game\\'s rules apply'>" + STUDIO_MODES.map(function(m) { return "<option value='" + m[0] + "'" + (d.mode === m[0] ? " selected" : "") + ">" + m[1] + "</option>"; }).join("") + "</select>" +
-            "<label title='Zombie waves'><input type='checkbox' id='st-waves'" + (d.waves ? " checked" : "") + "> waves</label>" +
-            "<button class='go' id='st-play'>▶ Play-test (P)</button>" +
-            "<button id='st-undo' title='Ctrl+Z'>↶</button><button id='st-redo' title='Ctrl+Y'>↷</button>" +
-            "<button id='st-snap' class='" + (this.snap ? "on" : "") + "' title='G'>Grid " + this.grid + "</button>" +
-            "<select id='st-gridsize'>" + [10, 20, 40, 80, 160].map(function(g) { return "<option" + (g === self.grid ? " selected" : "") + ">" + g + "</option>"; }).join("") + "</select>" +
-            "<button id='st-new'>New</button><button id='st-editcur' title='Turn the level you were playing into a document'>Edit current level</button>" +
-            "<button id='st-save' title='Ctrl+S'>💾 Save</button>" +
-            "<select id='st-load'><option value=''>Load…</option>" + saved.map(function(n) { return "<option>" + esc(n) + "</option>"; }).join("") + "</select>" +
-            "<button id='st-del' title='Delete the saved level picked in Load'>🗑</button>" +
-            "<button id='st-export'>⬇ Export JSON</button><button id='st-import'>⬆ Import</button><input type='file' id='st-file' accept='.json,application/json' style='display:none'>" +
-            "<button id='st-cheats' title='The old developer panel: cheats, tuning, god mode'>🧪 Cheats & tuning</button>" +
-            "<button id='st-close' title='B'>✕ Close</button>";
+        var gameName = (GameModes.current && GameModes.current.title) || "game";
+        var h = "<b style='color:#facc15'>🛠<span class='wide'> STUDIO</span></b>" +
+            "<input id='st-name' value='" + esc(d.name) + "' title='Level name'>" +
+            "<select id='st-mode' title='Game rules: which game this level plays as'>" + STUDIO_MODES.map(function(m) { return "<option value='" + m[0] + "'" + (d.mode === m[0] ? " selected" : "") + ">" + m[1] + "</option>"; }).join("") + "</select>" +
+            "<label title='Zombie waves on/off' style='font-size:12px'><input type='checkbox' id='st-waves'" + (d.waves ? " checked" : "") + "><span class='wide'> waves</span><span class='narrow'>🧟</span></label>" +
+            "<span class='sep'></span>" +
+            "<button class='go' id='st-play' title='Play it now (P). Come back with ` or the green button.'>▶<span class='wide'> Play-test</span><span class='narrow'> Test</span></button>" +
+            "<span class='sep'></span>" +
+            "<button id='st-undo' title='Undo (Ctrl+Z)'>↶</button><button id='st-redo' title='Redo (Ctrl+Y)'>↷</button>" +
+            "<select id='st-grid' title='Snap to grid (G toggles)'><option value='0'" + (this.snap ? "" : " selected") + ">Snap off</option>" + [10, 20, 40, 80, 160].map(function(g) { return "<option value='" + g + "'" + (self.snap && g === self.grid ? " selected" : "") + ">Grid " + g + "</option>"; }).join("") + "</select>" +
+            "<button id='st-file-btn' title='New, open, save, export, import'>📁<span class='wide'> File</span> ▾</button>" +
+            "<button id='st-panels' title='Hide / show the side panels (Tab)'>◫</button>" +
+            "<span class='grow'></span>" +
+            "<button class='back' id='st-close' title='Close the Studio and carry on playing " + esc(gameName) + " (B)'>◀ Back<span class='wide'> to the game</span></button>";
         this.ui.top.innerHTML = h;
         var $ = function(id) { return document.getElementById(id); };
         $("st-name").onchange = function() { self.pushUndo(); self.doc.name = this.value; self.autosave(); };
-        $("st-mode").onchange = function() { self.pushUndo(); self.doc.mode = this.value; self.changed(); };
+        $("st-mode").onchange = function() { self.pushUndo(); self.doc.mode = this.value; self.changed(); this.blur(); };
         $("st-waves").onchange = function() { self.pushUndo(); self.doc.waves = this.checked; self.autosave(); };
         $("st-play").onclick = function() { self.playtest(); };
         $("st-undo").onclick = function() { self.undo(); };
         $("st-redo").onclick = function() { self.redo(); };
-        $("st-snap").onclick = function() { self.snap = !self.snap; self.renderTop(); };
-        $("st-gridsize").onchange = function() { self.grid = Number(this.value); self.snap = true; self.renderTop(); };
-        $("st-new").onclick = function() { self.pushUndo(); self.doc = self.newDoc(); self.sel = []; self.rebuild(); self.frameAll(); self.renderAll(); };
-        $("st-editcur").onclick = function() { self.pushUndo(); self.doc = self.docFromLevel(self.prevLevelKey || LevelManager.currentLevelKey); self.sel = []; self.rebuild(); self.frameAll(); self.renderAll(); self.say("Editing a copy of the current level"); };
-        $("st-save").onclick = function() { self.save(); };
-        $("st-load").onchange = function() { if (this.value) self.load(this.value); };
-        $("st-del").onclick = function() { var v = $("st-load").value; if (v && confirm("Delete saved level \"" + v + "\"?")) self.removeSaved(v); };
-        $("st-export").onclick = function() { self.exportJSON(); };
-        $("st-import").onclick = function() { $("st-file").click(); };
-        $("st-file").onchange = function() { if (this.files[0]) self.importJSON(this.files[0]); this.value = ""; };
-        $("st-cheats").onclick = function() { if (typeof SummonManager !== "undefined") SummonManager.togglePanel(); };
+        $("st-grid").onchange = function() { var g = Number(this.value); self.snap = g > 0; if (g) self.grid = g; this.blur(); };
+        $("st-file-btn").onclick = function() { self.toggleFile(this); };
+        $("st-panels").onclick = function() { self.togglePanels(); };
         $("st-close").onclick = function() { self.close(); };
+    },
+
+    toggleFile: function(btn) {
+        var m = this.ui.file, self = this;
+        if (m.style.display === "flex") { m.style.display = "none"; return; }
+        var esc = function(s) { return String(s).replace(/[&<>"']/g, function(c) { return "&#" + c.charCodeAt(0) + ";"; }); };
+        var saved = window.Object.keys(this.savedAll());
+        var cur = LevelManager.getAllLevels()[this.prevLevelKey] || {};
+        var it = function(id, label, key) { return "<button id='" + id + "'><span>" + label + "</span><small>" + (key || "") + "</small></button>"; };
+        m.innerHTML = "<div class='fh'>Level</div>" +
+            it("sf-new", "＋ New blank level") +
+            it("sf-cur", "✏ Edit a copy of “" + esc((cur.name || "current level").replace(/^[^A-Za-z0-9]+/, "")) + "”") +
+            it("sf-save", "💾 Save “" + esc(this.doc.name) + "”", "Ctrl+S") +
+            "<div class='fh'>Saved levels" + (saved.length ? "" : " — none yet") + "</div>" +
+            saved.map(function(n, i) { return "<div class='fr'><button data-o='" + i + "'><span>📂 " + esc(n) + "</span></button><button data-d='" + i + "' title='Delete'><span>🗑</span></button></div>"; }).join("") +
+            "<div class='fh'>Share</div>" +
+            it("sf-export", "⬇ Export as a .json file") + it("sf-import", "⬆ Import a .json file") + "<input type='file' id='st-file' accept='.json,application/json' style='display:none'>" +
+            "<div class='fh'>More</div>" +
+            it("sf-start", "🏁 Start screen") +
+            it("sf-cheats", "🧪 Cheats & tuning panel");
+        var r = btn.getBoundingClientRect();
+        m.style.left = Math.max(6, Math.min(window.innerWidth - 260, r.left)) + "px";
+        m.style.display = "flex";
+        var done = function(fn) { return function() { m.style.display = "none"; fn(); }; };
+        var $ = function(id) { return document.getElementById(id); };
+        $("sf-new").onclick = done(function() { self.pushUndo(); self.doc = self.newDoc(); self.sel = []; self.rebuild(); self.frameAll(); self.renderAll(); self.say("New level (Ctrl+Z brings the old one back)"); });
+        $("sf-cur").onclick = done(function() { self.pushUndo(); self.doc = self.docFromLevel(self.prevLevelKey || LevelManager.currentLevelKey); self.sel = []; self.rebuild(); self.frameAll(); self.renderAll(); self.say("Editing a copy of the current level"); });
+        $("sf-save").onclick = done(function() { self.save(); });
+        m.querySelectorAll("[data-o]").forEach(function(b) { b.onclick = done(function() { self.load(saved[Number(b.dataset.o)]); }); });
+        m.querySelectorAll("[data-d]").forEach(function(b) { b.onclick = done(function() { var n = saved[Number(b.dataset.d)]; if (confirm("Delete saved level \"" + n + "\"?")) self.removeSaved(n); }); });
+        $("sf-export").onclick = done(function() { self.exportJSON(); });
+        $("sf-import").onclick = function() { $("st-file").click(); };
+        $("st-file").onchange = function() { if (this.files[0]) self.importJSON(this.files[0]); this.value = ""; m.style.display = "none"; };
+        $("sf-start").onclick = done(function() { self.showStart(); });
+        $("sf-cheats").onclick = done(function() { if (typeof SummonManager !== "undefined") SummonManager.togglePanel(); });
     },
 
     renderPalette: function() {
         if (!this.ui) return;
         var self = this, h = "", idx = 0;
         this.paletteRefs = [];
+        var q = (this.palFilter || "").toLowerCase().trim();
         STUDIO_PALETTE.forEach(function(cat) {
-            var closed = self.ui.collapsed[cat[0]];
+            var list = q ? cat[1].filter(function(p) { return (p[0] + " " + cat[0]).toLowerCase().indexOf(q) !== -1; }) : cat[1];
+            if (q && !list.length) return;
+            var closed = !q && self.ui.collapsed[cat[0]];
             h += "<h4 data-cat='" + cat[0] + "'>" + (closed ? "▸ " : "▾ ") + cat[0] + "</h4>";
             if (closed) return;
-            cat[1].forEach(function(p) {
+            list.forEach(function(p) {
                 var on = self.tool === "place" && self.tplLabel === p[0];
                 h += "<button class='pi" + (on ? " on" : "") + "' data-i='" + idx + "'><span>" + p[1] + "</span><span>" + p[0] + "</span></button>";
                 self.paletteRefs[idx++] = p;
             });
         });
-        this.ui.left.innerHTML = "<div style='display:flex;gap:4px;margin-bottom:4px'><button id='st-tool-sel' class='" + (this.tool === "select" ? "on" : "") + "' style='flex:1'>↖ Select</button></div>" + h;
+        var hadFocus = document.activeElement && document.activeElement.id === "st-pfind";
+        this.ui.left.innerHTML = "<div style='display:flex;gap:4px;margin-bottom:4px'><button id='st-tool-sel' class='" + (this.tool === "select" ? "on" : "") + "' style='flex:1'>↖ Select</button></div>" +
+            "<input id='st-pfind' class='pf' placeholder='🔍 Find a piece…' value='" + String(this.palFilter || "").replace(/'/g, "&#39;") + "'>" +
+            (h || "<p class='muted' style='font-size:12px;color:#94a3b8'>No piece matches.</p>");
         document.getElementById("st-tool-sel").onclick = function() { self.tool = "select"; self.tpl = null; self.renderPalette(); };
+        var pf = document.getElementById("st-pfind");
+        pf.oninput = function() { self.palFilter = this.value; self.renderPalette(); };
+        pf.onkeydown = function(e) { if (e.key === "Escape") { self.palFilter = ""; self.renderPalette(); this.blur(); } else if (e.key === "Enter") { var first = self.ui.left.querySelector("button.pi"); if (first) first.click(); this.blur(); } };
+        if (hadFocus) { pf.focus(); pf.setSelectionRange(pf.value.length, pf.value.length); }
         this.ui.left.querySelectorAll("button.pi").forEach(function(b) {
             b.onclick = function() { var p = self.paletteRefs[Number(b.dataset.i)]; self.tool = "place"; self.tpl = p[2]; self.tplLabel = p[0]; self.sel = []; self.renderPalette(); self.renderInspector(); };
         });
@@ -997,7 +1148,21 @@ var Studio = {
         // useful optional fields
         var extra = e.cat === "layout" ? ["name", "color", "texture", "kind", "portalable"].concat(e.type === "crate" ? ["weight"] : []) : e.cat === "gadget" ? (({ door: ["id", "need"], plate: ["links"], switch: ["links"], mover: ["id", "needsPower"], sign: ["text"], qblock: ["item"], brick: ["item"] })[e.type] || []) : [];
         extra.forEach(function(k) { if (keys.indexOf(k) === -1) keys.push(k); });
+        // position and size first (in pairs), then the rest A-Z with readable names
+        var first = ["x", "y", "w", "h"];
+        keys.sort(function(a, b) { var ia = first.indexOf(a), ib = first.indexOf(b); if (ia !== -1 || ib !== -1) return (ia === -1 ? 9 : ia) - (ib === -1 ? 9 : ib); return a < b ? -1 : 1; });
+        var NAMES = { x: "x", y: "y", w: "width", h: "height", id: "id (links target)", links: "links (door ids)", need: "opens when", power: e.cat === "item" ? "item" : "type",
+                      invert: "open until powered", needsPower: "needs power", portalable: "portal surface", kind: "surface", dx2: "travel x", dy2: "travel y", player: "player" };
+        var pairs = [];
+        if (keys.indexOf("x") !== -1 && keys.indexOf("y") !== -1) pairs.push(["x", "y", "position"]);
+        if (keys.indexOf("w") !== -1 && keys.indexOf("h") !== -1) pairs.push(["w", "h", "size"]);
+        pairs.forEach(function(pr) {
+            h += "<label>" + pr[2] + "<span style='display:flex;gap:4px;width:58%'>" +
+                 "<input type='number' id='sti-" + pr[0] + "' value='" + e[pr[0]] + "' title='" + NAMES[pr[0]] + "' style='width:50%'>" +
+                 "<input type='number' id='sti-" + pr[1] + "' value='" + e[pr[1]] + "' title='" + NAMES[pr[1]] + "' style='width:50%'></span></label>";
+        });
         keys.forEach(function(k) {
+            if (pairs.some(function(pr) { return pr[0] === k || pr[1] === k; })) return;
             var v = e[k], id = "sti-" + k, inp;
             if (k === "texture") inp = "<select id='" + id + "'><option value=''>(none)</option>" + STUDIO_TEXTURES.map(function(t) { return "<option" + (v === t ? " selected" : "") + ">" + t + "</option>"; }).join("") + "</select>";
             else if (k === "kind") inp = "<select id='" + id + "'>" + ["", "block", "wall", "platform", "stairs", "slope", "slide"].map(function(t) { return "<option value='" + t + "'" + (v === t ? " selected" : "") + ">" + (t || "(auto)") + "</option>"; }).join("") + "</select>";
@@ -1012,7 +1177,7 @@ var Studio = {
             else if (k === "text") inp = "<textarea id='" + id + "' rows='3' style='width:140px;background:#0b1220;color:#e2e8f0;border:1px solid #475569;border-radius:6px'>" + esc(v || "") + "</textarea>";
             else if (k === "color") inp = "<input type='color' id='" + id + "' value='" + (/^#[0-9a-f]{6}$/i.test(v || "") ? v : "#888888") + "'>";
             else inp = "<input id='" + id + "' value='" + esc(v === undefined ? "" : v) + "'>";
-            h += "<label>" + k + inp + "</label>";
+            h += "<label>" + esc(NAMES[k] || k) + inp + "</label>";
         });
         h += "<div style='margin-top:10px;display:flex;gap:6px;flex-wrap:wrap'><button id='st-dup'>⧉ Duplicate</button><button id='st-delone'>🗑 Delete</button>" +
              (e.cat === "layout" && (e.type === "ramp" || e.type === "box") ? "<button id='st-rot'>⟳ Rotate</button>" : "") +

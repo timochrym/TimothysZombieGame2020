@@ -207,6 +207,11 @@ format), `gadget` (Gadgets format; movers store `dx2/dy2` relative to their star
 for enemies/items, spawned by `Studio.afterReset()` at the end of `resetGame`). Saving also registers the level in
 `LevelManager.customLevels`, so it shows up in the level list. While editing, `simFrozen` is true and `tick()` calls
 `Studio.tick()` instead of `frame()`. During play-test, exits and goal poles return to the editor.
+Opening from a game calls `Studio.park()`, which keeps references to every world array (statics, characters, zombies,
+gadgets, vehicles, ragdolls...) so `rebuild()` can replace them freely; `close()` hands them back with `unpark()` and
+the game carries on exactly where it was. A play-test replaces the world for real, so after one, closing reloads the
+level you came from. The start card (`showStart`) picks what to edit; side-panel widths (`Studio.lw/rw`, Tab hides
+them) drive the editing camera.
 `createMap()` now loads a level's `gadgets` for any game whose `setupLevel` didn't.
 
 ## LAN multiplayer (`server.js` + `net.js`)
