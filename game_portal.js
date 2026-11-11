@@ -71,12 +71,7 @@ var Portals = {
         if (!ch || ch.dead) return;
         var lvl = LevelManager.getCurrentLevel();
         if (which === 1 && lvl.onlyBlue) { Components.addFloatingText("This chamber has a fixed orange portal", ch.x, ch.y + 90, "#fb923c", 14); return; }
-        var dx, dy;
-        if (ch.playerIndex === 0 && useMouseAim && !ch.padAiming) {
-            var m = Components.getMouseWorldPos();
-            dx = m[0] - ch.x; dy = m[1] - (ch.y + 10);
-        } else { var rad = Math.radians(ch.degree); dx = Math.sin(rad); dy = Math.cos(rad); }
-        var l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+        var d = this.aimDir(ch), dx = d[0], dy = d[1];
         var col = this.colors[Math.min(1, ch.playerIndex)][which];
         var hit = this.raycast(ch.x, ch.y + 10, dx, dy);
         var endX = hit ? hit.x : ch.x + dx * 3600, endY = hit ? hit.y : ch.y + 10 + dy * 3600;
@@ -105,12 +100,27 @@ var Portals = {
         Components.spawnSparks(hit.x, hit.y, col, 8);
     },
 
-    // aim reticle: where the beam would land and whether a portal would stick there
+    // the direction a hero's portal gun points: the mouse for P1, otherwise the stick / keyboard aim angle
+    aimDir: function(ch) {
+        var dx, dy;
+        if (ch.playerIndex === 0 && useMouseAim && !ch.padAiming) { var m = Components.getMouseWorldPos(); dx = m[0] - ch.x; dy = m[1] - (ch.y + 10); }
+        else { var rad = Math.radians(ch.degree); dx = Math.sin(rad); dy = Math.cos(rad); }
+        var l = Math.hypot(dx, dy) || 1;
+        return [dx / l, dy / l];
+    },
+
+    // aim reticle for every local hero (mouse, gamepad stick or P2 keys): where the beam would land and
+    // whether a portal would stick there
     drawAim: function() {
-        var ch = redGuy;
-        if (!ch || ch.dead || !useMouseAim || ch.padAiming || portalState.done) return;
-        var m = Components.getMouseWorldPos(), dx = m[0] - ch.x, dy = m[1] - (ch.y + 10), l = Math.hypot(dx, dy) || 1;
-        dx /= l; dy /= l;
+        if (portalState.done) return;
+        for (let i = 0; i < characters.length; i++) {
+            var c = characters[i];
+            if (c.isPlayer && !c.isCPU && !c.isRemote && !c.dead) this.drawAimFor(c);
+        }
+    },
+
+    drawAimFor: function(ch) {
+        var d = this.aimDir(ch), dx = d[0], dy = d[1];
         var hit = this.raycast(ch.x, ch.y + 10, dx, dy);
         if (!hit) return;
         var o = hit.obj, ok = !!o.portalable && (hit.nx !== 0 ? o.h >= PORTAL_LEN + 10 : o.w >= PORTAL_LEN + 10);
@@ -120,7 +130,7 @@ var Portals = {
         ctx.beginPath(); ctx.moveTo(wsx(ch.x), wsy(ch.y + 10)); ctx.lineTo(sx, sy); ctx.stroke(); ctx.setLineDash([]);
         if (ok) {
             // a ghost of the portal outline on the face (left half blue, right half orange = "either fits")
-            var half = PORTAL_LEN / 2 * k, vert = hit.nx !== 0, C = this.colors[0];
+            var half = PORTAL_LEN / 2 * k, vert = hit.nx !== 0, C = this.colors[Math.min(1, ch.playerIndex)];
             ctx.lineWidth = 3; ctx.globalAlpha = 0.75;
             ctx.strokeStyle = C[0]; ctx.beginPath(); ctx.ellipse(sx, sy, vert ? 7 : half, vert ? half : 7, 0, Math.PI * 0.5, Math.PI * 1.5); ctx.stroke();
             ctx.strokeStyle = C[1]; ctx.beginPath(); ctx.ellipse(sx, sy, vert ? 7 : half, vert ? half : 7, 0, -Math.PI * 0.5, Math.PI * 0.5); ctx.stroke();

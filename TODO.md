@@ -70,7 +70,7 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       started, without restarting the room: DONE.)
 - [~] Portal Lab: DONE — aim reticle shows where the beam lands and whether a portal will stick (blue/orange ghost
       outline on white panels, red ✕ elsewhere); X closes your portals. STILL TO DO: more chambers (laser relays,
-      light bridges, turrets that ragdoll), pad-aim reticle, chamber-select grid.
+      light bridges, turrets that ragdoll), chamber-select grid. (Reticle for pad / P2 aim, in each player's colours: DONE.)
 - [~] Brawl: DONE — KO blast (a beam of the fighter's colour fires in from the edge they flew out of), the damage
       percent jolts when hit, results table on GAME! (KOs credited to the last hitter within 5 s, falls, damage dealt),
       eliminated panels no longer show the percent under "OUT"; ledge grab (catch the stage lip while falling, UP climbs,

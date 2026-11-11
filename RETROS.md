@@ -6,6 +6,17 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Portal Lab: reticle for every local player
+
+**Shipped:** the "where will my portal land" reticle was mouse-only for P1. It now shows for every local hero —
+mouse, gamepad stick or P2's keyboard aim — in that player's portal colours, using the same aim direction as the
+shot itself (`Portals.aimDir`).
+
+**Measured:** stick aim at 90° → direction (1, 0) and one reticle drawn; mouse aim unchanged; the old reticle /
+placement test still passes; no errors.
+
+---
+
 ## Word Lab: verbs, rope, balloon + a respawn bug
 
 **Shipped:** verbs that change your hero (fly, grow, shrink, normal, heal); "rope" / "vine" (a column of footholds);
