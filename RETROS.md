@@ -6,6 +6,18 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Character detail: ragdolls and the square look
+
+**Shipped:** ragdoll limbs and torsos get a soft highlight stripe when they're drawn thick enough to see it (close
+zoom), and the feet are boots pointing along the shin instead of dots. The classic square look got small hands at its
+sides and two feet under the body; both swing / step while walking.
+
+**Measured:** the square hero shows hands and stepping feet in a zoomed screenshot; no errors in Crash Lab or Survival.
+**Not seen:** the ragdoll highlight only draws at close zoom and my screenshot didn't get close enough — unverified
+by eye.
+
+---
+
 ## Crash Lab props
 
 **Shipped:** the heavy weight is riveted iron with a "1 TON" label; the wrecking ball hangs on a chain of links and is

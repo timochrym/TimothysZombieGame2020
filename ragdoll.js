@@ -628,6 +628,11 @@ var Ragdolls = {
         ctx.strokeStyle = col;
         ctx.lineWidth = lw;
         ctx.stroke();
+        // close up: a soft highlight down the limb so bodies read as round, not flat
+        if (lw > 6 && typeof col === "string" && col.charAt(0) === "#") {
+            ctx.save(); ctx.globalAlpha = 0.45; ctx.strokeStyle = Components.shade(col, 45); ctx.lineWidth = lw * 0.3;
+            ctx.translate(-lw * 0.18, -lw * 0.18); ctx.stroke(); ctx.restore();
+        }
     },
 
     drawHumanoid: function(rd) {
@@ -687,8 +692,14 @@ var Ragdolls = {
         // hands & feet
         ctx.fillStyle = s.limb;
         for (let hI of [4, 6]) { ctx.beginPath(); ctx.arc(P[hI][0], P[hI][1], Math.max(2, 4.5 * k * s.thick), 0, Math.PI * 2); ctx.fill(); }
+        // boots: a rounded shoe pointing along the shin, toe forward
         ctx.fillStyle = "#1f2937";
-        for (let fI of [8, 10]) { ctx.beginPath(); ctx.arc(P[fI][0], P[fI][1], Math.max(2, 5.5 * k * Math.max(0.7, s.thick)), 0, Math.PI * 2); ctx.fill(); }
+        for (let fI of [8, 10]) {
+            var kn = P[fI - 1], ft = P[fI], sa = Math.atan2(ft[1] - kn[1], ft[0] - kn[0]), fr = Math.max(2, 5.5 * k * Math.max(0.7, s.thick));
+            ctx.save(); ctx.translate(ft[0], ft[1]); ctx.rotate(sa - Math.PI / 2);
+            ctx.beginPath(); ctx.ellipse(fr * 0.5, 0, fr * 1.5, fr, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+        }
 
         this.drawHead(rd, P[0], P[1], k);
     },

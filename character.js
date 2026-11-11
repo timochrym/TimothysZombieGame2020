@@ -1661,6 +1661,18 @@ class Character {
         var facing = this.xspeed > 0.3 ? 1 : (this.xspeed < -0.3 ? -1 : (this.lastFacing || 1));
         this.lastFacing = facing;
         var enemy = this.isZombie && !this.isPlayer;
+        // little feet (they step while walking) and hands at the sides (they swing) - drawn first, body on top
+        var walk = this.onGround && Math.abs(this.xspeed) > 0.6 ? Math.sin(performance.now() * 0.018 + (this.id || 0)) : 0;
+        var dark = Components.shade(color, -45);
+        ctx.fillStyle = dark; ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 2;
+        for (var f = 0; f < 2; f++) {
+            var fx = x + w * (f ? 0.56 : 0.16) + (f ? -walk : walk) * w * 0.07, fy = y + h - h * 0.06 - Math.max(0, (f ? -walk : walk)) * h * 0.06;
+            this.roundRectPath(fx, fy, w * 0.28, h * 0.14, h * 0.05); ctx.fill(); ctx.stroke();
+        }
+        for (var hs = -1; hs <= 1; hs += 2) {
+            var hx = x + w / 2 + hs * w * 0.54, hy = y + h * 0.6 + hs * walk * h * 0.05;
+            ctx.beginPath(); ctx.arc(hx, hy, Math.max(2, w * 0.1), 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill(); ctx.stroke();
+        }
         ctx.fillStyle = color;
         this.roundRectPath(x, y, w, h, Math.min(w, h) * 0.18);
         ctx.fill();
