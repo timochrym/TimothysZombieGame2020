@@ -6,6 +6,19 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Wobble Wheels: course 4 "Crumble Run" (falling platforms)
+
+**Shipped:** a new trap — crumbling slabs: land on one and it shakes for ~1 s, then drops away (falls and fades). Course
+4 runs four of them over a shallow pit (falling in costs time; a ramp leads back up), then a bounce pad, a log, a mine,
+spikes and two more slabs near the finish.
+
+**Measured:** a rider held at ~13 px/frame stayed on top of the slabs the whole way (lowest y 230 vs slab top 200) while
+all four crumbled behind; a slow rider dropped into the pit and could drive on. **Went wrong:** the first layout put a
+full-height block after the slabs, a wall inside the pit that trapped anyone who fell (now a thin ledge); the first pit
+was 500 px deep and flipped the bike (now 240).
+
+---
+
 ## Portal Lab: reticle for every local player
 
 **Shipped:** the "where will my portal land" reticle was mouse-only for P1. It now shows for every local hero —

@@ -59,6 +59,18 @@ function wheelsCourse(n, title, layout, traps, finishX, cps, par) {
     A(L, WK.ground(4300, 4700, 600)); A(L, WK.ramp(4700, 600, 5300, 0)); A(L, WK.ground(5300, 8200, 0));
     A(L, WK.ramp(6200, 0, 6800, 300)); A(L, WK.ground(6800, 7000, 300));
     wheelsCourse(2, "Big Air", L, { mines: [[3000, 0], [3700, 0], [5700, 0]], logs: [[3800, 900]], spikes: [[7300, 0, 240]], groundAt: function(x) { return 0; } }, 7900, [2950, 5400], [28, 40, 55]);
+    // 4: Crumble Run - slabs over a pit shake when you land on them, then drop away; keep moving
+    L = [];
+    A(L, WK.ground(-800, 900, 0)); A(L, WK.ramp(900, 0, 1200, 200));
+    A(L, WK.ground(1200, 3400, -40)); A(L, WK.ramp(3400, -40, 3700, 120)); A(L, WK.ground(3700, 3900, 120)); A(L, WK.ramp(3900, 120, 4100, 0));   // shallow pit: the slow way round
+    [[1210, 1640], [1680, 2140], [2180, 2640], [2680, 3150]].forEach(function(sl) {
+        L.push({ type: "box", name: "Crumble slab", x: (sl[0] + sl[1]) / 2, y: 180, w: sl[1] - sl[0], h: 40, color: "#a8a29e", texture: "stone_raw", kind: "block" });
+    });
+    L.push({ type: "box", name: "Ledge", x: 3500, y: 180, w: 700, h: 40, color: "#5d8a3a", texture: "grass_dirt", kind: "block" });   // solid: the pit runs underneath
+    A(L, WK.ground(4100, 5200, 0)); A(L, WK.pad(4600, 0));
+    A(L, WK.ground(5200, 5400, 360)); A(L, WK.ramp(5400, 360, 5900, 0)); A(L, WK.ground(5900, 7600, 0));
+    [[6200, 6600], [6800, 7200]].forEach(function(sl) { L.push({ type: "box", name: "Crumble slab", x: (sl[0] + sl[1]) / 2, y: 20, w: sl[1] - sl[0], h: 40, color: "#a8a29e", texture: "stone_raw", kind: "block" }); });
+    wheelsCourse(3, "Crumble Run", L, { mines: [[4300, 0]], logs: [[5000, 900]], spikes: [[6400, 0, 160]] }, 7300, [3950], [30, 42, 58]);
 })();
 
 // ---------------------------------------------------------------- vehicle + rider body (one Verlet body)
@@ -278,6 +290,33 @@ function wheelsTraps() {
         }
     }
     for (let l = 0; l < Wheels.logs.length; l++) { var b = Wheels.logs[l]; b.pts[0].x = b.pts[0].px = b.pin[0]; b.pts[0].y = b.pts[0].py = b.pin[1]; b.wake(); }
+    wheelsDrops();
+}
+
+// crumbling slabs: a wheel or body on top starts a 55-frame shake, then the slab falls away
+function wheelsDrops() {
+    var changed = false;
+    for (let d = 0; d < (Wheels.drops || []).length; d++) {
+        var D = Wheels.drops[d], o = D.o;
+        if (D.t < 0) {
+            var top = o.y + o.h / 2;
+            for (let r = 0; r < Wheels.riders.length && D.t < 0; r++) {
+                var P = Wheels.riders[r].pts;
+                for (let i = 0; i < P.length; i++) if (Math.abs(P[i].x - o.x) < o.w / 2 && P[i].y - P[i].r < top + 6 && P[i].y > top - 10) { D.t = 0; break; }
+            }
+            continue;
+        }
+        D.t++;
+        if (D.t < 55) { o.x += (D.t % 4 < 2 ? 3 : -3); if (D.t % 8 === 0) Components.spawnSparks(o.x + (Math.random() - 0.5) * o.w, top, "#a8a29e", 2); }
+        else if (D.t === 55) {
+            var k = staticObjects.indexOf(o); if (k !== -1) staticObjects.splice(k, 1);
+            changed = true;
+            for (let q = 0; q < 6; q++) Components.spawnSparks(o.x - o.w / 2 + q * o.w / 5, o.y, "#78716c", 3);
+            if (typeof SFX !== "undefined") SFX.play("kill", o.x, o.y);
+            D.fallY = o.y; D.vy = 0;
+        } else if (D.fallY !== undefined && D.t < 175) { D.vy -= 0.9; D.fallY += D.vy; }       // the falling slab (drawn below)
+    }
+    if (changed) { if (typeof rebuildAllObjects === "function") rebuildAllObjects(); if (typeof StaticGrid !== "undefined") StaticGrid.build(); }
 }
 
 function wheelsMakeLog(x, len) {
@@ -317,6 +356,7 @@ GameModes.register({
         Wheels.spikes = (tr.spikes || []).map(function(s) { return [s[0], s[1], s[2]]; });
         Wheels.logs = [];
         Wheels.finishX = lvl.finishX; Wheels.cps = lvl.cps || [];
+        Wheels.drops = staticObjects.filter(function(o) { return o.name === "Crumble slab"; }).map(function(o) { return { o: o, t: -1, y0: o.y }; });
         var sameCourse = Wheels.cpKey === LevelManager.currentLevelKey;
         Wheels.riders = []; Wheels.time = 0; Wheels.phase = "ready"; Wheels.t = 0; Wheels.done = {}; Wheels.rec = [];
         if (!sameCourse) Wheels.crashes = 0;
@@ -422,6 +462,16 @@ GameModes.register({
     },
 
     drawWorld: function() {
+        // crumbled slabs falling away
+        (Wheels.drops || []).forEach(function(D) {
+            if (D.fallY === undefined || D.t >= 175) return;
+            var o = D.o, k = cameraScaleX;
+            ctx.save(); ctx.globalAlpha = Math.max(0, 1 - (D.t - 55) / 120);
+            ctx.translate(wsx(o.x), wsy(D.fallY)); ctx.rotate((D.t - 55) * 0.01);
+            ctx.fillStyle = "#a8a29e"; ctx.fillRect(-o.w / 2 * k, -o.h / 2 * k, o.w * k, o.h * k);
+            ctx.strokeStyle = "#57534e"; ctx.lineWidth = 2; ctx.strokeRect(-o.w / 2 * k, -o.h / 2 * k, o.w * k, o.h * k);
+            ctx.restore();
+        });
         // ghost of your best run on this course + vehicle
         var gk = LevelManager.currentLevelKey + ":" + wheelsSave.vehicle, G = wheelsSave.ghost[gk];
         if (G && G.length && Wheels.phase !== "ready") {
