@@ -312,6 +312,32 @@ var DevUI = {
         ["sp-no-selection"].forEach(function(id) { var e = document.getElementById(id); if (e) e.style.display = "none"; });
     },
 
+    // the mash-up section: every mix-in as "game default / on / off", plus the shared settings
+    syncMashup: function() {
+        var rowsEl = document.getElementById("dp-mash-rows"), box = document.getElementById("dp-mash");
+        if (!rowsEl || typeof Mashup === "undefined") return;
+        var world = Mashup.world();
+        box.style.display = world ? "" : "none";
+        var key = GameModes.current ? GameModes.current.id : "";
+        if (this.mashFor !== key) {
+            this.mashFor = key;
+            rowsEl.innerHTML = MASHUP_MIX.map(function(m) {
+                return '<div class="dp-row" title="from ' + m[2] + '"><label style="width:150px">' + m[1] + '<br><small style="color:#94a3b8;font-weight:600">from ' + m[2] + '</small></label>' +
+                    '<select class="dp-select" data-mash="' + m[0] + '"><option value="default"></option><option value="on">On</option><option value="off">Off</option></select></div>';
+            }).join("");
+            rowsEl.querySelectorAll("[data-mash]").forEach(function(el) { el.addEventListener("change", function() { Mashup.set(el.dataset.mash, el.value); DevUI.toast(el.options[el.selectedIndex].text.replace(/\s*\(.*/, "") + ": " + MASHUP_MIX.find(function(m) { return m[0] === el.dataset.mash; })[1]); DevUI.syncMashup(); }); });
+            var sh = document.getElementById("dp-shared-rows");
+            sh.innerHTML = SHARED_TUNABLES.map(function(r, i) { return '<div class="dp-row"><label style="width:150px">' + r.label + '</label><select class="dp-select" data-shared="' + i + '">' + r.options.map(function(o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join("") + '</select></div>'; }).join("");
+            sh.querySelectorAll("[data-shared]").forEach(function(el) { el.addEventListener("change", function() { SHARED_TUNABLES[Number(el.dataset.shared)].set(Number(el.value)); DevUI.toast("CPU skill set for every game"); }); });
+        }
+        rowsEl.querySelectorAll("[data-mash]").forEach(function(el) {
+            var id = el.dataset.mash, def = Mashup.gameDefault(id);
+            el.options[0].text = "Game default (" + (def ? "on" : "off") + ")";
+            if (document.activeElement !== el) el.value = Mashup.mix[id] === undefined ? "default" : (Mashup.mix[id] ? "on" : "off");
+        });
+        document.querySelectorAll("#dp-shared-rows [data-shared]").forEach(function(el) { if (document.activeElement !== el) el.value = SHARED_TUNABLES[Number(el.dataset.shared)].get(); });
+    },
+
     // the Game tab follows the game that's on: its own settings first, shared rows only where they do something
     NEED: { waves: { t: ["waves"], o: ["spawnRate", "maxEnemies", "powerUpRate"] }, enemies: { t: ["paths"], o: ["enemyHealth", "enemyDamage"] },
             world: { t: ["god", "jetpack"], o: ["flight", "infiniteAmmo", "friendlyFire", "showHitboxes", "bouncyRagdolls", "playerDamage", "gravityMult"], id: ["dp-zoom"] }, coop: { t: ["coop"] } },
@@ -329,6 +355,7 @@ var DevUI = {
         panel.querySelectorAll("[data-need]").forEach(function(e) { e.style.display = GameTuning.applies(e.dataset.need) ? "" : "none"; });
         var note = document.getElementById("dp-hidden-note");
         if (note) note.textContent = hidden ? "(" + hidden + " that don't apply to this game are hidden)" : "";
+        this.syncMashup();
         // "This game" section: rebuilt when the game changes, values refreshed every sync
         var box = document.getElementById("dp-own"), rowsEl = document.getElementById("dp-own-rows"), id = GameModes.current.id;
         var rows = GameTuning.rows();
@@ -667,6 +694,10 @@ SummonManager.buildUI = function() {
     sec("Make & tune");
     row("", "🛠", "Level Studio", "Build, play-test and share levels", "B", function() { closeTopMenu(); Studio.open(); });
     row("summon-toggle-btn", "🧪", "Cheats & tuning", "Dev panel: sliders, spawning, god mode", "", function() { closeTopMenu(); SummonManager.togglePanel(); });
+    row("tm-mash", "🧩", "Mash-up", "Mix other games' parts into this one", "", function() {
+        closeTopMenu(); if (!SummonManager.isOpen) SummonManager.togglePanel(); DevUI.switchTab("game");
+        var m = document.getElementById("dp-mash"); if (m) setTimeout(function() { m.scrollIntoView({ block: "start" }); }, 50);
+    });
     var god = row("god-mode-btn", "⚡", "God mode", "Invincible + unlimited everything", "V", function() { SummonManager.toggleGodMode(); DevUI.sync(); });
     god.style.display = "none";
     sec("Settings");
@@ -816,6 +847,12 @@ SummonManager.buildUI = function() {
             <div class="dp-section" id="dp-own" style="display:none">
                 <div class="dp-title"><span id="dp-own-title">This game</span></div>
                 <div id="dp-own-rows"></div>
+            </div>
+            <div class="dp-section" id="dp-mash">
+                <div class="dp-title"><span>🧩 Mash-up — mix in from other games</span></div>
+                <div id="dp-mash-rows"></div>
+                <div class="dp-title" style="margin-top:10px"><span>Shared by every game</span></div>
+                <div id="dp-shared-rows"></div>
             </div>
             <div class="dp-section">
                 <div class="dp-title"><span>Toggles</span><span id="dp-hidden-note" style="text-transform:none;letter-spacing:0;font-weight:600"></span></div>

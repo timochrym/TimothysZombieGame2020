@@ -508,6 +508,7 @@ function resetGame() {
     }
     GameModes.call("onReset");
     if (typeof Studio !== "undefined") Studio.afterReset();
+    if (typeof Mashup !== "undefined") Mashup.afterReset();
 }
 
 // Partner revive: hold your interact key next to a fallen (undead) teammate
@@ -835,6 +836,7 @@ function drawHeroCard(ch, x, y) {
 
 function drawHUD() {
     if (!redGuy) return;
+    if (typeof Mashup !== "undefined") Mashup.drawHUD();
     if (GameModes.has("drawHUD")) { GameModes.call("drawHUD"); drawBanners(); drawCrosshair(); return; }
     if (brawl.active) { drawBrawlHUD(); return; }
     ctx.textBaseline = "alphabetic";
@@ -995,7 +997,8 @@ function frame() {
     }
 
     var wavesPaused = (typeof SummonManager !== "undefined" && SummonManager.pauseWaves);
-    if (!wavesPaused && !brawl.active && GameModes.flag("waves", true)) {
+    var mashWaves = typeof Mashup !== "undefined" && Mashup.mix.waves === true;       // mash-up: zombies even in Brawl
+    if (!wavesPaused && (!brawl.active || mashWaves) && GameModes.flag("waves", true)) {
         if (zombiesRemainingToSpawn > 0) {
             zombieSpawnTimer--;
             if (zombieSpawnTimer <= 0 && countHunters() < devOpts.maxEnemies && !gameOver) {
@@ -1065,6 +1068,7 @@ function frame() {
     updateBrawl();
     if (typeof Gadgets !== "undefined") Gadgets.update();
     GameModes.call("update");
+    if (typeof Mashup !== "undefined") Mashup.tick();
     if (typeof Build !== "undefined") Build.update();
     if (typeof Feel !== "undefined") Feel.update();
     if (typeof Vehicles !== "undefined") Vehicles.update();
@@ -1115,6 +1119,7 @@ function frame() {
     Components.updateParticles();
     Components.drawEffects();
     GameModes.call("drawFront");
+    if (typeof Mashup !== "undefined") Mashup.drawFront();
     if (typeof Build !== "undefined") Build.drawFront();
     if (typeof Feel !== "undefined") Feel.drawFront();
     Components.updateFloatingTexts();

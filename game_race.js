@@ -303,7 +303,9 @@ GameModes.register({
         // T: straight back to your last checkpoint (the clock keeps running; not counted as a fall)
         if (code === "KeyT" && redGuy && !redGuy.dead && Race.phase === "run") {
             var c = redGuy;
-            c.x = c.respawnX !== undefined ? c.respawnX : c.spawnX; c.y = c.respawnY !== undefined ? c.respawnY : c.spawnY;
+            // no checkpoint yet: back to the start of the course (never to an unset spawn = NaN)
+            var start = LevelManager.getCurrentLevel().spawnP1 || [0, 120];
+            c.x = c.respawnX !== undefined ? c.respawnX : start[0]; c.y = c.respawnY !== undefined ? c.respawnY : start[1] + 40;
             c.xspeed = c.yspeed = 0; c.invulnTimer = 30;
             if (c.liveRagdoll && typeof Ragdolls !== "undefined") { Ragdolls.remove(c.liveRagdoll); c.liveRagdoll = null; c.ragdollTimer = 0; }
             Components.spawnSparks(c.x, c.y, "#7ff0ff", 10);

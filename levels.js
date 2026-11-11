@@ -345,7 +345,7 @@ class LevelManager {
         var lvl = all[key];
 
         if (typeof SummonManager !== "undefined") {
-            SummonManager.pauseWaves = !lvl.wavesEnabled;
+            SummonManager.pauseWaves = !lvl.wavesEnabled && !(typeof Mashup !== "undefined" && Mashup.mix.waves === true);     // mash-up waves stay on
             var btn = document.getElementById("sp-wave-btn");
             if (btn) {
                 btn.textContent = SummonManager.pauseWaves ? "▶ Resume Waves" : "⏸ Waves";

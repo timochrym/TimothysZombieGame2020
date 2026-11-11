@@ -37,6 +37,7 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node studio_siege_words.js  # Level Studio builds / opens Siege forts and Word Lab rooms
     node inspector_terra.js     # Inspect tab picks and changes a Terra tile
     node studio_bedbrawl.js     # Level Studio opens / edits a Bed Brawl map (beds, generators, shops, spawns)
+    node mashup.js              # Mash-up: mix waves, building, word magic, a pet, jetpack into Parkour Rush
     node lan_play.js            # starts server.js on 8099: a host + 2 joiners, positions match, client FPS
 
 Each prints its numbers and then the page errors (`[]` = none). See ROADMAP.md, "Your named feedback items".

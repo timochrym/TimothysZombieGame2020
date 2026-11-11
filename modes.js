@@ -64,6 +64,7 @@ var GameModes = {
     },
 
     flag: function(name, def) {
+        if (typeof Mashup !== "undefined") { var o = Mashup.override(name); if (o !== undefined) return o; }     // mash-up mix-ins win
         var f = this.current && this.current.flags;
         return (f && f[name] !== undefined) ? f[name] : def;
     },

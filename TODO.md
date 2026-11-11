@@ -173,6 +173,11 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       Bed Brawl maps: DONE (islands, red / blue beds, generators, shop rows, the diamond generator and team spawns
       are pieces; Bed Brawl now reads them from the level, with the old positions as the default).
 
+## Mash-ups and shared settings (your request: "each game should share more settings… I want to be able to mash up games")
+- [x] `mashup.js`: per mix-in "game default / on / off" for any game with a world — zombie waves, building, jetpack,
+      blaster, dash, extra air jump, word magic (Y), item drops, a pet dog — saved between sessions; ☰ → 🧩 Mash-up.
+- [x] Shared settings: one CPU skill for every game. (More shared settings come with the theme / character work below.)
+
 ## Known issues / polish found while building (from RETROS.md)
 - LAN: all nine new games work over LAN now (turn-based ones seat LAN players in CPU seats; Worm / Blob / Tank Arena
   give each LAN player their own worm / blob / tank; Jet Dash adds them as runners; Sand Lab lets them paint into the

@@ -6,6 +6,24 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Mash-ups: mix any game's parts into another
+
+**Asked:** "each game should share more settings and options among each other — I want to be able to mash up games."
+**Shipped:** `mashup.js`. Every game with a world gets a 🧩 Mash-up section on the Game tab (also ☰ → Mash-up): zombie
+waves, building (C), jetpack, blaster, dash, extra air jump, word magic (Y, from Word Lab), item drops (power-ups and
+bombs, from Brawl) and a pet dog — each "game default (on/off) / on / off", saved between sessions. Flag mix-ins
+override `GameModes.flag()`; the others run their own small loop. Zombie waves now also work inside Brawl. A shared
+"CPU skill (every game)" sets Brawl, Zombie Ball and Table Games at once. Board / table / arena games are left alone.
+
+**Measured (`tests/mashup.js` and checks):** Parkour Rush with waves + building + word magic + pet + jetpack: zombies
+spawn (1 → 5 in 8 s) and come back after a restart, Y + "big crate" made a crate, C entered build mode, the pet came
+back on restart; Brawl + waves: zombies 1 → 5 while the fight ran; shared CPU skill set 3 / 3 / 3; "default" restored
+everything. **Bugs found on the way:** Parkour's T ("back to checkpoint") before any checkpoint sent the hero to an
+unset spawn (NaN — gone); the "waves paused" switch kept mixed-in waves from spawning and every level load re-paused
+them; word magic moved from T to Y because T means something in Parkour and Crate Lab.
+
+---
+
 ## Level Studio: Bed Brawl maps (step 3 done)
 
 **Shipped:** Bed Brawl's beds, generators, shop rows and spawns were fixed numbers in its code; it now reads them from

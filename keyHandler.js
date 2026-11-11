@@ -50,6 +50,7 @@ function keyDownHandler(e) {
         return;
     }
     if (paused) { pauseKey(e); return; }
+    if (typeof Mashup !== "undefined" && Mashup.onKey(c)) { e.preventDefault(); return; }
     if (GameModes.call("onKey", c, e)) { e.preventDefault(); return; }
 
     if (k == "ArrowRight") { ULDRrightPressed = true; e.preventDefault(); }
