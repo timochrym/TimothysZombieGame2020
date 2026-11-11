@@ -82,8 +82,18 @@ function arenaRows() { return [
 GAME_TUNABLES.snake = arenaRows().concat([
     { label: "Human length", type: "range", min: 14, max: 600, step: 10, get: function() { var w = Snake.worms.find(arenaHuman); return w ? Math.round(w.len) : 24; }, set: function(v) { Snake.worms.filter(arenaHuman).forEach(function(w) { w.len = v; }); } }
 ]);
-GAME_TUNABLES.cells = arenaRows().concat([
-    { label: "Human mass", type: "range", min: 20, max: 2000, step: 20, get: function() { var p = Cells.players.find(arenaHuman); return p ? Math.round(Cells.mass(p)) : 20; }, set: function(v) { Cells.players.filter(arenaHuman).forEach(function(p) { var bs = Cells.mine(p); bs.forEach(function(b) { b.m = v / bs.length; }); }); } }
+GAME_TUNABLES.cells = [
+    // ---- game settings (saved) ----
+    { label: "CPU blobs", type: "range", min: 0, max: 40, step: 1, get: function() { return cellsCfg.bots; }, set: function(v) { cellsCfg.bots = v; saveCellsCfg(); }, note: "changes live" },
+    { label: "Food on the map", type: "range", min: 300, max: 4000, step: 100, get: function() { return cellsCfg.food; }, set: function(v) { cellsCfg.food = v; saveCellsCfg(); } },
+    { label: "Decay (big blobs shrink)", type: "choice", options: CELL_DECAY, get: function() { return cellsCfg.decay; }, set: function(v) { cellsCfg.decay = Number(v); saveCellsCfg(); } },
+    { label: "Decay grows with size", type: "toggle", get: function() { return cellsCfg.decayGrow; }, set: function(v) { cellsCfg.decayGrow = !!v; saveCellsCfg(); }, note: "the bigger, the faster it shrinks" },
+    { label: "Spawn shield (seconds)", type: "range", min: 0, max: 8, step: 1, get: function() { return cellsCfg.shield; }, set: function(v) { cellsCfg.shield = v; saveCellsCfg(); } },
+    { label: "Power-up pickups", type: "toggle", get: function() { return cellsCfg.powerups; }, set: function(v) { cellsCfg.powerups = !!v; saveCellsCfg(); }, note: "speed, shield, magnet, mass" },
+    { label: "Humans start at mass", type: "range", min: 20, max: 1000, step: 20, get: function() { return cellsCfg.startMass; }, set: function(v) { cellsCfg.startMass = v; saveCellsCfg(); }, note: "next spawn" }
+].concat(arenaRows(), [
+    // ---- cheats ----
+    { label: "Set human size now", type: "range", min: 20, max: 20000, step: 20, get: function() { var p = Cells.players.find(arenaHuman); return p ? Math.round(Cells.mass(p)) : 20; }, set: function(v) { Cells.players.filter(arenaHuman).forEach(function(p) { var bs = Cells.mine(p); bs.forEach(function(b) { b.m = v / bs.length; }); }); } }
 ]);
 GAME_TUNABLES.tanks = arenaRows().concat([
     { label: "CPU difficulty", type: "choice", options: [[1, "Easy"], [2, "Normal"], [3, "Hard"]], get: function() { return arenaCheats.tankSkill; }, set: function(v) { setTankSkill(v); } },

@@ -10,6 +10,15 @@ var CEL = { W: 5200, H: 5200, PELLETS: 2000, CPUS: 14, VIRUSES: 14, MAXCELLS: 12
 var CEL_NAMES = ["Bubbles", "Gloop", "Jelly", "Mochi", "Pudding", "Slurp", "Dumpling", "Marsh", "Puddle", "Gumdrop", "Wobble", "Bean", "Nugget", "Pebble", "Sprout"];
 var CEL_COLORS = ["#f472b6", "#a78bfa", "#34d399", "#fbbf24", "#60a5fa", "#f87171", "#2dd4bf", "#fb923c", "#c084fc", "#a3e635", "#e879f9", "#38bdf8", "#facc15", "#4ade80"];
 var cellsSave = { best: 0 };
+// Game settings (Cheats panel -> Game tab, saved). decay: share of its mass a blob loses per tick; decayGrow: the rate
+// climbs with size (a blob of 800 loses twice as fast as the base rate); shield: seconds a fresh spawn can't be eaten.
+var CELL_DECAY = [[0, "Off"], [0.00015, "Slow"], [0.0004, "Normal"], [0.001, "Fast"], [0.0025, "Brutal"]];
+var cellsCfg = { bots: 14, food: 2000, decay: 0.00015, decayGrow: false, shield: 3, startMass: 20, powerups: true };
+try { var _cc = JSON.parse(localStorage.getItem("timsBlobArenaCfg") || "null"); if (_cc) for (var _ck in cellsCfg) if (typeof _cc[_ck] === typeof cellsCfg[_ck]) cellsCfg[_ck] = _cc[_ck]; } catch (e) {}
+function saveCellsCfg() { try { localStorage.setItem("timsBlobArenaCfg", JSON.stringify(cellsCfg)); } catch (e) {} }
+// Pickups borrowed from the main games' power-ups: run fast, can't be eaten, pull food in, or a lump of mass.
+var CELL_POWERS = { speed: { icon: "⚡", col: "#facc15", t: 480, name: "SPEED" }, shield: { icon: "🛡", col: "#38bdf8", t: 420, name: "SHIELD" },
+                    magnet: { icon: "🧲", col: "#f472b6", t: 540, name: "MAGNET" }, mass: { icon: "➕", col: "#4ade80", t: 0, name: "+60 MASS" } };
 try { var _cs = JSON.parse(localStorage.getItem("timsBlobArena") || "null"); if (_cs) cellsSave.best = _cs.best || 0; } catch (e) {}
 
 var Cells = {
@@ -32,17 +41,25 @@ var Cells = {
         });
         this.players = this.players.filter(function(q) { return !q.gone; });
     },
+    // match the number of CPU blobs to the setting while the game runs (no restart needed)
+    syncBots: function() {
+        var cpus = this.players.filter(function(p) { return p.human === undefined; });
+        for (let i = cpus.length; i < cellsCfg.bots; i++) this.addPlayer({ name: CEL_NAMES[i % CEL_NAMES.length] + (i >= CEL_NAMES.length ? " " + (Math.floor(i / CEL_NAMES.length) + 1) : ""), color: CEL_COLORS[i % CEL_COLORS.length] });
+        for (let i = cpus.length - 1; i >= cellsCfg.bots; i--) { var gone = cpus[i]; this.blobs = this.blobs.filter(function(b) { return b.pl !== gone; }); this.players.splice(this.players.indexOf(gone), 1); }
+    },
+    protectedNow: function(pl) { return arenaProtected(pl) || (pl.fx && pl.fx.shield > 0); },
     speed: function(m) { return 9 * Math.pow(m, -0.24); },
     mass: function(pl) { var s = 0; for (let i = 0; i < this.blobs.length; i++) if (this.blobs[i].pl === pl) s += this.blobs[i].m; return s; },
     mine: function(pl) { return this.blobs.filter(function(b) { return b.pl === pl; }); },
 
     reset: function() {
         this.players = []; this.blobs = []; this.pellets = []; this.viruses = []; this.t = 0;
-        for (let i = 0; i < CEL.PELLETS; i++) this.addPellet();
+        for (let i = 0; i < cellsCfg.food; i++) this.addPellet();
         for (let i = 0; i < CEL.VIRUSES; i++) this.addVirus();
         this.addPlayer({ human: 0, name: "P1", color: "#ff5a5f" });
         if (multiplayer) this.addPlayer({ human: 1, name: "P2", color: "#3da5ff" });
-        for (let i = 0; i < CEL.CPUS; i++) this.addPlayer({ name: CEL_NAMES[i % CEL_NAMES.length], color: CEL_COLORS[i % CEL_COLORS.length] });
+        this.pickups = [];
+        for (let i = 0; i < cellsCfg.bots; i++) this.addPlayer({ name: CEL_NAMES[i % CEL_NAMES.length] + (i >= CEL_NAMES.length ? " " + (Math.floor(i / CEL_NAMES.length) + 1) : ""), color: CEL_COLORS[i % CEL_COLORS.length] });
     },
     rndPos: function(pad) { return [(Math.random() - 0.5) * (CEL.W - pad * 2), (Math.random() - 0.5) * (CEL.H - pad * 2)]; },
     addPellet: function(x, y, m, col) { if (x === undefined) { var p = this.rndPos(20); x = p[0]; y = p[1]; } this.pellets.push({ x: x, y: y, m: m || 1, col: col || CEL_COLORS[(Math.random() * CEL_COLORS.length) | 0], vx: 0, vy: 0 }); },
@@ -61,8 +78,10 @@ var Cells = {
             if (ok) break;
             p = this.rndPos(400);
         }
-        pl.alive = true; pl.deadT = 0; pl.peak = 20;
-        this.blobs.push({ pl: pl, x: p[0], y: p[1], m: 20, vx: 0, vy: 0, mergeT: 0 });
+        var m0 = pl.human !== undefined ? Math.max(20, cellsCfg.startMass) : 20;
+        pl.alive = true; pl.deadT = 0; pl.peak = m0;
+        pl.fx = { speed: 0, shield: Math.round(cellsCfg.shield * 60), magnet: 0 };       // fresh spawns can't be eaten for a moment
+        this.blobs.push({ pl: pl, x: p[0], y: p[1], m: m0, vx: 0, vy: 0, mergeT: 0 });
     },
 
     // ---------------- input: every player ends up with an aim point and split / eject presses
@@ -161,11 +180,12 @@ var Cells = {
         // move
         for (let i = 0; i < B.length; i++) {
             var b = B[i], pl = b.pl, dx = pl.aimX - b.x, dy = pl.aimY - b.y, L = Math.hypot(dx, dy) || 1;
-            var sp = this.speed(b.m) * Math.min(1, L / 60) * arenaSpeed(pl);
+            var sp = this.speed(b.m) * Math.min(1, L / 60) * arenaSpeed(pl) * (pl.fx && pl.fx.speed > 0 ? 1.6 : 1);
             b.x += dx / L * sp + b.vx; b.y += dy / L * sp + b.vy;
             b.vx *= 0.9; b.vy *= 0.9;
             if (b.mergeT > 0) b.mergeT--;
-            if (b.m > 220) b.m *= 0.99985;                           // big blobs slowly shrink
+            // decay: blobs above 100 lose a share of their mass every tick; with "grows with size" the share climbs too
+            if (cellsCfg.decay > 0 && b.m > 100) b.m -= b.m * cellsCfg.decay * (cellsCfg.decayGrow ? 1 + b.m / 800 : 1);
             var r = this.rad(b.m);
             b.x = Math.max(-CEL.W / 2 + r * 0.5, Math.min(CEL.W / 2 - r * 0.5, b.x));
             b.y = Math.max(-CEL.H / 2 + r * 0.5, Math.min(CEL.H / 2 - r * 0.5, b.y));
@@ -182,7 +202,7 @@ var Cells = {
         // eat other blobs
         for (let i = 0; i < B.length; i++) for (let j = 0; j < B.length; j++) {
             var e = B[i], f = B[j];
-            if (i === j || e.dead || f.dead || e.pl === f.pl || arenaProtected(f.pl) || e.m < f.m * 1.25) continue;
+            if (i === j || e.dead || f.dead || e.pl === f.pl || this.protectedNow(f.pl) || e.m < f.m * 1.25) continue;
             var rd = Math.hypot(f.x - e.x, f.y - e.y);
             if (rd < this.rad(e.m) - this.rad(f.m) * 0.4) {
                 e.m += f.m; f.dead = true;
@@ -220,7 +240,35 @@ var Cells = {
             }
         }
         this.blobs = B.filter(function(q) { return !q.dead; });
-        while (this.pellets.length < CEL.PELLETS) this.addPellet();
+        if (this.pellets.length > cellsCfg.food + 200) this.pellets.length = cellsCfg.food;
+        while (this.pellets.length < cellsCfg.food) this.addPellet();
+        if (this.t % 30 === 0) this.syncBots();
+        // power-up timers, magnet pull, pickups
+        for (let i = 0; i < this.players.length; i++) {
+            var fp = this.players[i], fx = fp.fx;
+            if (!fx) continue;
+            if (fx.speed > 0) fx.speed--; if (fx.shield > 0) fx.shield--;
+            if (fx.magnet > 0) {
+                fx.magnet--;
+                for (let k = 0; k < this.pellets.length; k++) { var mp = this.pellets[k], mdx = fp.cx - mp.x, mdy = fp.cy - mp.y; if (Math.abs(mdx) < 420 && Math.abs(mdy) < 420) { var md = Math.hypot(mdx, mdy) || 1; if (md < 420) { mp.x += mdx / md * 7; mp.y += mdy / md * 7; } } }
+            }
+        }
+        this.pickups = this.pickups || [];
+        if (cellsCfg.powerups && this.pickups.length < 7 && this.t % 240 === 0) { var pp = this.rndPos(300), kinds = ["speed", "shield", "magnet", "mass"]; this.pickups.push({ x: pp[0], y: pp[1], kind: kinds[(Math.random() * kinds.length) | 0] }); }
+        if (!cellsCfg.powerups && this.pickups.length) this.pickups = [];
+        for (let u = this.pickups.length - 1; u >= 0; u--) {
+            var pu = this.pickups[u];
+            for (let i = 0; i < this.blobs.length; i++) {
+                var ub = this.blobs[i];
+                if (Math.hypot(ub.x - pu.x, ub.y - pu.y) < this.rad(ub.m) + 26) {
+                    var PW = CELL_POWERS[pu.kind], upl = ub.pl;
+                    upl.fx = upl.fx || { speed: 0, shield: 0, magnet: 0 };
+                    if (pu.kind === "mass") ub.m += 60; else upl.fx[pu.kind] = PW.t;
+                    if (upl.human !== undefined) { showBanner(PW.icon + " " + PW.name, "", PW.col); if (typeof SFX !== "undefined") SFX.play("pickup", ub.x, ub.y); }
+                    this.pickups.splice(u, 1); break;
+                }
+            }
+        }
         // players: track peaks, respawn CPUs
         for (let i = 0; i < this.players.length; i++) {
             var pl2 = this.players[i];
@@ -273,6 +321,14 @@ var Cells = {
         }
         // blobs smallest-last so big ones go under (you see what's about to be eaten)
         var all = this.blobs.slice().sort(function(a, b) { return a.m - b.m; });
+        var PU = this.pickups || [];
+        for (let i = 0; i < PU.length; i++) {
+            var pk = PU[i], pks = this.toScreen(pk.x, pk.y), PWd = CELL_POWERS[pk.kind], pr = 26 * Z * (1 + Math.sin(this.t * 0.08 + i) * 0.08);
+            if (pks[0] < -60 || pks[1] < -60 || pks[0] > cssW + 60 || pks[1] > cssH + 60) continue;
+            ctx.fillStyle = "#0f172a"; ctx.strokeStyle = PWd.col; ctx.lineWidth = Math.max(2, 4 * Z);
+            ctx.beginPath(); ctx.arc(pks[0], pks[1], pr, 0, 7); ctx.fill(); ctx.stroke();
+            ctx.font = Math.max(10, Math.round(26 * Z)) + "px " + UI_FONT; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#fff"; ctx.fillText(PWd.icon, pks[0], pks[1] + 1); ctx.textBaseline = "alphabetic";
+        }
         for (let i = 0; i < all.length; i++) this.drawBlob(all[i], Z);
         // viruses on top of small blobs, under nothing
         for (let i = 0; i < this.viruses.length; i++) {
@@ -293,6 +349,12 @@ var Cells = {
         var n = 28;
         for (let k = 0; k <= n; k++) { var a = k / n * Math.PI * 2, w = 1 + Math.sin(a * 5 + this.t * 0.08 + b.x * 0.01) * 0.02; ctx.lineTo(s[0] + Math.cos(a) * r * w, s[1] + Math.sin(a) * r * w); }
         ctx.closePath(); ctx.fill(); ctx.stroke();
+        var fxd = b.pl.fx;
+        if (fxd && (fxd.shield > 0 || fxd.speed > 0 || fxd.magnet > 0)) {      // a ring shows what this blob has: blue = can't be eaten, yellow = fast, pink = magnet
+            ctx.strokeStyle = fxd.shield > 0 ? "#38bdf8" : (fxd.speed > 0 ? "#facc15" : "#f472b6"); ctx.lineWidth = Math.max(2, 4 * Z);
+            ctx.setLineDash([10 * Z + 4, 8 * Z + 3]); ctx.lineDashOffset = -this.t * 0.6;
+            ctx.beginPath(); ctx.arc(s[0], s[1], r + 6 * Z + 3, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+        }
         if (r > 14) uiText(b.pl.name, s[0], s[1] + Math.min(18, r * 0.25) * 0.35, Math.max(10, Math.min(28, r * 0.35)), "#ffffff", "center", "900");
         if (r > 30) uiText(String(Math.round(b.m)), s[0], s[1] + Math.min(28, r * 0.35), Math.max(9, Math.min(16, r * 0.18)), "rgba(255,255,255,0.8)", "center", "800");
     },
@@ -339,7 +401,7 @@ GameModes.register({
     seats: function() {
         return [{ label: "P1", options: ["human"], value: "human", set: function() {} },
             { label: "P2 (arrows / pad 2)", options: ["human", "off"], value: multiplayer ? "human" : "off", set: function(v) { multiplayer = v === "human"; Cells.reset(); } },
-            { label: "CPU opponents", count: true, value: CEL.CPUS, min: 0, max: 24, set: function(v) { CEL.CPUS = Math.max(0, Math.min(24, v)); Cells.reset(); } }];
+            { label: "CPU opponents", count: true, value: cellsCfg.bots, min: 0, max: 40, set: function(v) { cellsCfg.bots = Math.max(0, Math.min(40, v)); saveCellsCfg(); Cells.syncBots(); } }];
     },
     setupLevel: function() { Cells.reset(); },
 
@@ -384,8 +446,10 @@ GameModes.register({
         var st = {
             pl: Cells.players.map(function(p) { return { n: p.name, c: p.color, h: p.human === undefined ? -1 : p.human, p: p.pid || null, a: p.alive ? 1 : 0, pk: Math.round(p.peak), dt: p.deadT, by: p.by ? p.by.name : "" }; }),
             b: Cells.blobs.map(function(bb) { return [Cells.players.indexOf(bb.pl), Math.round(bb.x), Math.round(bb.y), Math.round(bb.m), bb.id || (bb.id = Cells.nextBlobId = (Cells.nextBlobId || 0) + 1)]; }),
-            v: Cells.viruses.map(function(v) { return [Math.round(v.x), Math.round(v.y)]; })
+            v: Cells.viruses.map(function(v) { return [Math.round(v.x), Math.round(v.y)]; }),
+            u: (Cells.pickups || []).map(function(u) { return [Math.round(u.x), Math.round(u.y), u.kind]; })
         };
+        st.pl.forEach(function(o, i) { var f = Cells.players[i].fx; if (f && (f.shield > 0 || f.speed > 0 || f.magnet > 0)) o.fx = [f.speed > 0 ? 1 : 0, f.shield > 0 ? 1 : 0, f.magnet > 0 ? 1 : 0]; });
         // Food changes slowly, so it only goes 5x a second: everything inside each LAN player's view (alive or watching,
         // and wider when their blob is big and the view zooms out). Dropped food carries its owner's colour.
         Cells.netTick = (Cells.netTick || 0) + 1;
@@ -398,7 +462,8 @@ GameModes.register({
         return st;
     },
     applyNetState: function(m) {
-        Cells.players = m.pl.map(function(o) { return { name: o.n, color: o.c, human: o.h === -1 ? undefined : o.h, pid: o.p, alive: !!o.a, peak: o.pk, deadT: o.dt, by: o.by ? { name: o.by } : null, cx: 0, cy: 0 }; });
+        Cells.players = m.pl.map(function(o) { return { name: o.n, color: o.c, human: o.h === -1 ? undefined : o.h, pid: o.p, alive: !!o.a, peak: o.pk, deadT: o.dt, by: o.by ? { name: o.by } : null, cx: 0, cy: 0, fx: o.fx ? { speed: o.fx[0], shield: o.fx[1], magnet: o.fx[2] } : null }; });
+        Cells.pickups = (m.u || []).map(function(a) { return { x: a[0], y: a[1], kind: a[2] }; });
         // match each blob to the one it was last packet (by id) so it can glide instead of jumping
         var old = {};
         Cells.blobs.forEach(function(bb) { if (bb.id) old[bb.id] = bb; });

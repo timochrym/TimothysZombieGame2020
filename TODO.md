@@ -6,9 +6,9 @@ Last updated: after the UI pass (top bar, pause menu, Level Studio, one-click LA
 ## Your list of 2026-11-11 (evening) — order: multiplayer, then menus/tools, then games. Live status: PROGRESS.md
 - [x] LAN: joiners' browsers calculate their own hero locally so play is fluid; smaller packets. → 70 → 15 ms to first movement, 120 → 55 KB/s (`tests/lan_perf.js`). Needs your feel-test on two real devices.
 - [x] LAN: player 2 can't see the food I drop in Blob Arena.   - [x] Player 2 movement in the soccer game (Flail style had no team for a second player and didn't draw on a joiner's screen). Check: `tests/lan_joiner.js`.
-- [ ] Blob Arena: game settings (decay rate, increasing decay), size cheat, more players (slider / custom amount),
-      interacts with other things already coded.
-- [ ] Cheat menu: the always-on drag-out toolbar is hideous — only show it when placing.
+- [x] Blob Arena: game settings (decay rate, decay that grows with size), size cheat, more players (0–40 slider, live),
+      spawn shield, power-up pickups borrowed from the other games. Check: `tests/blob_settings.js`.
+- [x] Cheat menu: the always-on drag-out toolbar — now only on Build + Place; arenas hide what doesn't apply. `tests/panel_dock.js`.
 - [ ] Zombie game: can't select the other levels.
 - [ ] Brawl: combo hits are way too strong.
 - [ ] Enemy tracking and pathfinding is still bad.

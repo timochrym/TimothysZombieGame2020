@@ -6,6 +6,24 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Cheat menu without the always-on toolbar; Blob Arena game settings and pickups
+
+**Asked:** "The cheat menu always having this drag out toolbar is hideous" and "[Blob Arena] should have game settings
+like if there is a decay rate, if that rate increases. Cheats for changing the size… Add more players if desired, a
+slider… Add ability to interact with other things we have already coded."
+**Shipped:** the piece row shows only on Build + Place; panel opens on Game; arenas / boards / tables hide Build,
+Objects, Level, hero-only shared rows and the enemy spawner; own-setting labels wrap. Blob Arena: CPU blobs 0–40 live,
+food amount, five decay rates plus "grows with size", spawn shield, start mass, size cheat to 20,000, and four
+power-up pickups reusing the main games' power-up idea (speed, shield, magnet, mass), synced to LAN joiners.
+**Numbers** (`tests/blob_settings.js`, a 2000-mass blob over 200 ticks): decay off 2000, slow 1941, brutal 1212,
+brutal + grows 609. Fresh spawn under a 900-mass blob: safe with the 3 s shield, eaten with 0 s.
+**Went wrong:** my test advanced the arena clock twice per step, so the every-30-ticks bot sync was skipped on odd
+runs; and one check failed when the blob ate a pellet on the same tick as a pickup. Both were test faults.
+**Left:** the Build / Inspect / Objects / Level tabs themselves are unchanged inside; the inspector's "every field"
+work and the editor hand are still to do. Worm and Tank Arena have cheats but not this depth of settings.
+
+---
+
 ## LAN joiner bugs: Blob Arena food, and the soccer game's second player
 
 **Asked:** "player 2 can't see the food I drop" (Blob Arena) and "Player 2 movement for the soccer game does not work."

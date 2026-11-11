@@ -18,6 +18,19 @@ short play-through list from you per game. Your notes on what feels off are the 
 
 ## Log
 
+### 2026-11-11 — shipped: cheat menu cleanup + Blob Arena settings
+- **Cheat menu:** the "drag to place" row no longer sits on screen whenever the panel is open. It appears only on the
+  Build tab in Place mode. The panel opens on the Game tab (the cheats). Full-screen games (arenas, boards, tables) show
+  only the tabs that work there, and hide hero-only settings and the enemy spawner. Long labels wrap instead of running
+  into their sliders. Leaving the Build tab drops back to Play so a stray click can't place something.
+- **Blob Arena settings** (Game tab, saved): CPU blobs 0–40 (changes live), food on the map, decay Off / Slow / Normal
+  / Fast / Brutal, "decay grows with size", spawn shield seconds (new: fresh spawns can't be eaten for 3 s, shown as a
+  blue ring), humans' starting mass, and a "set human size now" cheat up to 20,000.
+- **Borrowed from the other games:** power-up pickups in the arena — speed, shield, magnet (pulls food in) and a lump
+  of mass. LAN joiners see pickups and the rings too.
+Checks: `tests/panel_dock.js`, `tests/blob_settings.js`.
+**Next:** Survival level select ("can't select the other levels"), then Brawl combo balance.
+
 ### 2026-11-11 — shipped: the two LAN joiner bugs (Blob Arena food, soccer)
 - **Blob Arena, "player 2 can't see the food I drop":** worse than reported: a joiner whose blob was dead saw no food
   at all (the host only sent food near living LAN players), big zoomed-out blobs lost food at the edges, and dropped

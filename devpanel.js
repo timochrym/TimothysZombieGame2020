@@ -327,7 +327,8 @@ var DevUI = {
             }).join("");
             rowsEl.querySelectorAll("[data-mash]").forEach(function(el) { el.addEventListener("change", function() { Mashup.set(el.dataset.mash, el.value); DevUI.toast(el.options[el.selectedIndex].text.replace(/\s*\(.*/, "") + ": " + MASHUP_MIX.find(function(m) { return m[0] === el.dataset.mash; })[1]); DevUI.syncMashup(); }); });
             var sh = document.getElementById("dp-shared-rows");
-            sh.innerHTML = SHARED_TUNABLES.map(function(r, i) { return '<div class="dp-row"><label style="width:150px">' + r.label + '</label><select class="dp-select" data-shared="' + i + '">' + r.options.map(function(o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join("") + '</select></div>'; }).join("");
+            sh.innerHTML = SHARED_TUNABLES.map(function(r, i) { return '<div class="dp-row"' + (r.need ? ' data-need="' + r.need + '"' : '') + '><label style="width:150px">' + r.label.replace(" (every game)", "") + '</label><select class="dp-select" data-shared="' + i + '">' + r.options.map(function(o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join("") + '</select></div>'; }).join("");
+            sh.querySelectorAll("[data-need]").forEach(function(e) { e.style.display = GameTuning.applies(e.dataset.need) ? "" : "none"; });
             sh.querySelectorAll("[data-shared]").forEach(function(el) { el.addEventListener("change", function() { var row = SHARED_TUNABLES[Number(el.dataset.shared)]; row.set(el.value); DevUI.toast(row.label.replace(" (every game)", "") + " set for every game"); }); });
         }
         rowsEl.querySelectorAll("[data-mash]").forEach(function(el) {
@@ -343,7 +344,7 @@ var DevUI = {
             world: { t: ["god", "jetpack"], o: ["flight", "infiniteAmmo", "friendlyFire", "showHitboxes", "bouncyRagdolls", "playerDamage", "gravityMult"], id: ["dp-zoom"] }, coop: { t: ["coop"] } },
     syncGame: function(panel) {
         if (typeof GameTuning === "undefined" || !GameModes.current) return;
-        this.refreshGameCard(); this.syncMatchState();
+        this.refreshGameCard(); this.syncMatchState(); this.syncDock();
         var hidden = 0;
         for (var need in this.NEED) {
             var N = this.NEED[need], show = GameTuning.applies(need), els = [];
@@ -436,6 +437,22 @@ var DevUI = {
         for (let i = 0; i < pages.length; i++) pages[i].classList.toggle("active", pages[i].getAttribute("data-page") === name);
         SummonManager.activeTab = name;
         if (name === "objects") SummonManager.refreshObjectList();
+        // leaving the Build tab drops back to playing, so a stray click never places or drags anything
+        if (name !== "build" && name !== "inspect" && SummonManager.toolMode !== "shoot") SummonManager.setToolMode("shoot");
+        this.syncDock();
+    },
+
+    // The row of pieces along the bottom belongs to placing things: it only shows on the Build tab, in Place mode,
+    // in a game that has a world to build in. (It used to sit there whenever the panel was open.)
+    syncDock: function() {
+        var dock = document.getElementById("mario-maker-dock");
+        if (!dock) return;
+        var world = !GameModes.flag("ownScreen", false);
+        dock.classList.toggle("open", !!SummonManager.isOpen && world && SummonManager.activeTab === "build" && SummonManager.toolMode === "place");
+        // full-screen games (arenas, boards, tables) have nothing to build, list or save: only show the tabs that work there
+        var hide = { build: !world, objects: !world, level: !world };
+        document.querySelectorAll(".dp-tab").forEach(function(t) { var k = t.getAttribute("data-tab"); if (k in hide) t.style.display = hide[k] ? "none" : ""; });
+        if (!world && hide[SummonManager.activeTab]) this.switchTab("game");
     },
 
     bind: function(panel) {
@@ -592,6 +609,8 @@ SummonManager.buildUI = function() {
         .dp-hint { font-size: 11px; color: var(--dp-dim); margin: 4px 0 0; line-height: 1.35; }
         .dp-row { display: flex; align-items: center; gap: 8px; margin: 7px 0; }
         .dp-row label { width: 104px; white-space: nowrap; flex: 0 0 auto; color: #c3d5e2; font-weight: 600; }
+        #dp-own-rows .dp-row label, #dp-shared-rows .dp-row label { width: 150px; white-space: normal; line-height: 1.2; }
+        #dp-own-rows .dp-row .dp-range, #dp-own-rows .dp-row .dp-select, #dp-shared-rows .dp-row .dp-select { flex: 1 1 0; min-width: 0; }
         .dp-val { width: 52px; text-align: right; font-variant-numeric: tabular-nums; color: var(--dp-accent2); font-weight: 800; flex: 0 0 auto; }
         .dp-range { -webkit-appearance: none; appearance: none; flex: 1; height: 8px; border-radius: 8px; --pct: 50%; background: linear-gradient(90deg, #22d3ee var(--pct), rgba(255,255,255,.16) var(--pct)); outline: none; min-width: 0; }
         .dp-range::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg, #67e8f9, #22d3ee); border: 2px solid #04121c; box-shadow: 0 0 10px rgba(34,211,238,.6); cursor: pointer; }
@@ -757,16 +776,16 @@ SummonManager.buildUI = function() {
     panel.innerHTML = `
         <div class="dp-head"><b>🧪 Cheats &amp; tuning</b><span id="dp-live"></span><button class="dp-x" title="Close (Esc)" onclick="SummonManager.togglePanel()">✕</button></div>
         <div class="dp-tabs">
-            <button class="dp-tab active" data-tab="build">🧱 Build</button>
+            <button class="dp-tab active" data-tab="game">🎮 Game</button>
+            <button class="dp-tab" data-tab="build">🧱 Build</button>
             <button class="dp-tab" data-tab="inspect">🔍 Inspect</button>
-            <button class="dp-tab" data-tab="game">🎮 Game</button>
             <button class="dp-tab" data-tab="objects">📋 Objects</button>
             <button class="dp-tab" data-tab="level">💾 Level</button>
         </div>
         <div class="dp-body">
 
         <!-- ================= BUILD ================= -->
-        <div class="dp-page active" data-page="build">
+        <div class="dp-page" data-page="build">
             <div class="dp-section">
                 <div class="dp-title"><span>Cursor mode</span><span id="sp-mode-hint">Click: Shoot | R-Click: Grab</span></div>
                 <div class="dp-seg">
@@ -774,7 +793,7 @@ SummonManager.buildUI = function() {
                     <button id="mode-place" onclick="SummonManager.setToolMode('place')">➕ Place</button>
                     <button id="mode-select" onclick="SummonManager.setToolMode('select')">✋ Edit</button>
                 </div>
-                <p class="dp-hint">Pick an item from the "Drag to place" dock (drag it out, or click it then use <b>Place</b>). In <b>Edit</b> mode drag objects, pull edge handles to resize, hold <kbd>Alt</kbd> to copy.</p>
+                <p class="dp-hint"><b>Play</b>: the game as normal. <b>Place</b>: a row of pieces appears along the bottom — drag one onto the map, or click it and then click the map. <b>Edit</b>: drag objects, pull edge handles to resize, hold <kbd>Alt</kbd> to copy.</p>
             </div>
             <div class="dp-section">
                 <div class="dp-title"><span>New object</span><span id="dp-size-label"></span></div>
@@ -843,7 +862,7 @@ SummonManager.buildUI = function() {
         </div>
 
         <!-- ================= GAME ================= -->
-        <div class="dp-page" data-page="game">
+        <div class="dp-page active" data-page="game">
             <div class="dp-section" id="dp-own" style="display:none">
                 <div class="dp-title"><span id="dp-own-title">This game</span></div>
                 <div id="dp-own-rows"></div>
@@ -893,7 +912,7 @@ SummonManager.buildUI = function() {
                     <div class="dp-row" style="margin:0"><input type="number" id="dp-wave-num" class="dp-num" style="width:44px" value="5" min="1" max="99"><button class="dp-btn" style="flex:1;padding:8px 2px" data-act="gotoWave">Go</button></div>
                 </div>
             </div>
-            <div class="dp-section">
+            <div class="dp-section" data-need="world">
                 <div class="dp-title"><span>Spawn</span></div>
                 <div class="dp-row"><select id="dp-enemy-type" class="dp-select">${devOptionList(DEV_ENEMY_TYPES, "NORMAL")}</select>
                     <input type="number" id="dp-enemy-count" class="dp-num" style="width:52px" value="3" min="1" max="30"><button class="dp-btn" data-act="spawnEnemy">🧟 Spawn</button></div>
@@ -904,7 +923,7 @@ SummonManager.buildUI = function() {
                     <button class="dp-btn good" data-act="giveAllPowers">🎁 Give all powers</button>
                 </div>
             </div>
-            <div class="dp-section">
+            <div class="dp-section" data-need="world">
                 <div class="dp-title"><span>Heroes &amp; revive testing</span></div>
                 <div class="dp-grid3">
                     <button class="dp-btn good" data-act="healAll">❤ Heal all</button>
@@ -919,7 +938,7 @@ SummonManager.buildUI = function() {
                     <button class="dp-btn" data-act="levelUp">⭐ Level up</button>
                 </div>
             </div>
-            <div class="dp-section">
+            <div class="dp-section" data-need="world">
                 <div class="dp-title"><span>Ragdoll toys</span></div>
                 <div class="dp-grid3">
                     <button class="dp-btn" data-act="ragdollCannon" title="Fires bodies from the hero toward the cursor">💥 Body cannon</button>
@@ -927,7 +946,7 @@ SummonManager.buildUI = function() {
                     <button class="dp-btn" data-act="ragdollRain" title="Drops a pile of dummies from the sky">🌧 Body rain</button>
                 </div>
             </div>
-            <div class="dp-section">
+            <div class="dp-section" data-need="world">
                 <div class="dp-title"><span>Physics lab</span></div>
                 <div class="dp-grid3">
                     <button class="dp-btn" data-act="rain">🌧 Rain crates</button>
@@ -1018,7 +1037,8 @@ SummonManager.togglePanel = function() {
 
     if (this.isOpen) {
         panel.classList.add("open");
-        dock.classList.add("open");
+        if (!this.activeTab) this.activeTab = "game";
+        DevUI.syncDock();
         godBtn.style.display = "flex";
         devBtn.classList.add("active");
         this.refreshLevelDropdown();
@@ -1045,6 +1065,7 @@ SummonManager.setToolMode = function(mode) {
         hint.textContent = (mode == "shoot") ? "Click: shoot · R-click: grab" :
             (mode == "place") ? "Click: place · R-click: delete" : "Drag: move · edges: resize · Alt: copy";
     }
+    if (typeof DevUI !== "undefined") DevUI.syncDock();
 };
 
 SummonManager.onPresetChange = function(type) {
