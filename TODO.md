@@ -81,7 +81,8 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       DOWN lets go); shield (hold DOWN on the solid stage: no damage or knockback, shrinks, breaks into a dizzy spell;
       CPUs raise it vs incoming shots); throwable bombs in the item drops (G grab, click throw, explode on impact;
       unused ones fizzle after 25 s); a 4th stage, Gearworks (slopes off both ends + a lift sweeping across): DONE.
-      STILL TO DO: character-specific moves, a bat.
+      A bat in the item drops (walk over it; E swings it instead of the shockwave, 6 swings, 1.8× launch): DONE.
+      STILL TO DO: character-specific moves.
 
 ## Your suggestions not built yet (backlog, all original games in the genre — no copied names/art)
 - [x] B3 — "Lower generated level": heading east, the Survival frontier now dips underground — an Old Mine entrance

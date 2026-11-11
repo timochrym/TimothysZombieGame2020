@@ -6,6 +6,18 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Brawl: the bat
+
+**Shipped:** item drops now rotate power-up → bomb → bat. The bat falls onto the stage; walk over it to take it. While
+you hold it, E swings it (in the direction you face, short range) instead of the shockwave — 6 swings, a 1.8× launch,
+"BONK!". CPUs already press E up close, so they use it too. It's drawn on the stage and in the holder's hand.
+
+**Measured (`tests/brawl_bat.js`):** the third drop was a bat; P1 picked it up (6 swings); one swing at the CPU: 12 %,
+launched 448 px, 5 swings left; the bomb test still passes; no errors. **Went wrong:** at first a bat hit launched
+the CPU only 14 px (just under the ragdoll-launch threshold) — hence the 1.8× multiplier.
+
+---
+
 ## Brawl: Gearworks stage
 
 **Shipped:** a fourth Brawl stage — a metal deck whose ends slope away into the blast zone (no ledge to catch, so

@@ -107,7 +107,7 @@ function createBrawlFighters() {
     brawl.ledges = null;
     brawl.timer = 190;
     brawl.winner = null;
-    brawl.itemTimer = 420;
+    brawl.itemTimer = 420; brawl.bats = [];
     brawl.active = true;
     jetpackEnabled = false;
 }
@@ -258,13 +258,17 @@ function updateBrawl() {
             var ix = st.centerX + (Math.random() - 0.5) * (st.maxX - st.minX) * 0.35;
             // every other drop is a throwable bomb: G / right-click picks it up, click throws, it blows on impact
             brawl.dropN = (brawl.dropN || 0) + 1;
-            if (brawl.dropN % 2 === 0) {
+            if (brawl.dropN % 3 === 0) {
+                (brawl.bats = brawl.bats || []).push({ x: ix, y: st.topY + 520, vy: 0, t: brawl.tick });
+                Components.addFloatingText("🏏 BAT!  walk over it · E swings", ix, st.topY + 620, "#fde68a", 18);
+            } else if (brawl.dropN % 3 === 2) {
                 var bomb = Object.addCrate(ix, st.topY + 520, 54, "#1f2937", { explosive: true, name: "Bomb" });
                 bomb.brawlBomb = brawl.tick;
                 if (typeof rebuildAllObjects === "function") rebuildAllObjects();
                 Components.addFloatingText("💣 BOMB!  G grab · click throw", ix, st.topY + 620, "#fca5a5", 18);
             } else spawnPowerUp(ix, st.topY + 260 + Math.random() * 300);
         }
+        brawlBats();
         // unused bombs fizzle out after 25 s so the stage never fills up
         for (let i = movingObjects.length - 1; i >= 0; i--) {
             var bo = movingObjects[i];
@@ -280,6 +284,53 @@ function updateBrawl() {
             gameOver = true;
             if (brawl.winner) Components.addFloatingText(brawl.winner.playerLabel + " WINS!", brawl.winner.x, brawl.winner.y + 120, "#ffd23f", 34);
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The bat: falls onto the stage, a fighter walking over it takes it; while held, E is a bat swing (6 of them)
+// instead of the shockwave: a short-range hit in front with big knockback.
+// ---------------------------------------------------------------------------
+function brawlBats() {
+    var bats = brawl.bats || [];
+    for (let b = bats.length - 1; b >= 0; b--) {
+        var B = bats[b];
+        if (!Brawl.groundBelow(B.x, B.y, Math.max(12, -B.vy + 2))) { B.vy -= 0.8; B.y += B.vy; } else B.vy = 0;
+        if (B.y < brawl.stage.minY || brawl.tick - B.t > 1500) { bats.splice(b, 1); continue; }
+        for (let i = 0; i < characters.length; i++) {
+            var c = characters[i];
+            if (c.dead || c.eliminated || c.brBat > 0) continue;
+            if (Math.abs(c.x - B.x) < 70 && Math.abs(c.y - c.s2 / 2 - B.y) < 90) {
+                c.brBat = 6; bats.splice(b, 1);
+                Components.addFloatingText((c.playerLabel || "") + " has the BAT!", c.x, c.y + 110, "#fde68a", 18);
+                if (typeof SFX !== "undefined") SFX.play("pickup", c.x, c.y);
+                break;
+            }
+        }
+    }
+    for (let i = 0; i < characters.length; i++) {
+        var ch = characters[i];
+        if (!(ch.brBat > 0) || ch.dead || ch.eliminated) continue;
+        if (ch.brSwingT > 0) ch.brSwingT--;
+        ch.abilityCooldown = Math.max(ch.abilityCooldown || 0, 2);       // the bat replaces the shockwave while held
+        if (ch.abilityPressed && !(ch.brSwingCd > 0)) {
+            var face = ch.lastFacing || 1;
+            ch.brSwingT = 12; ch.brSwingCd = 32; ch.brBat--;
+            if (typeof SFX !== "undefined") SFX.play("kick", ch.x, ch.y, 1, 0.8);
+            for (let j = 0; j < characters.length; j++) {
+                var v = characters[j];
+                if (v === ch || v.dead || v.eliminated) continue;
+                var dx = v.x - ch.x;
+                if (dx * face > -20 && Math.abs(dx) < 170 && Math.abs(v.y - ch.y) < 120) {
+                    v.hitCooldown = 0; v.brKnockMult = 1.8;
+                    v.takeDamage(-34, face * 24, 16, ch);
+                    Components.addFloatingText("BONK!", v.x, v.y + 90, "#fde68a", 26);
+                    screenShake = Math.max(screenShake, 9);
+                }
+            }
+            if (ch.brBat <= 0) Components.addFloatingText("bat broke", ch.x, ch.y + 90, "#94a3b8", 14);
+        }
+        if (ch.brSwingCd > 0) ch.brSwingCd--;
     }
 }
 
@@ -323,7 +374,8 @@ function brawlApplyHit(victim, amount, kx, ky, attacker) {
         ny = dy / len;
     }
     if (nx === 0) nx = Math.random() < 0.5 ? -1 : 1;
-    var launch = (dmg * 0.2 + 2.2) * (1 + victim.damagePct / 55);
+    var launch = (dmg * 0.2 + 2.2) * (1 + victim.damagePct / 55) * (victim.brKnockMult || 1);   // the bat hits harder
+    victim.brKnockMult = 0;
     launch = Math.min(34, launch);
     victim.xspeed = nx * launch;
     victim.yspeed = Math.max(2.5, Math.abs(ny) * launch * 0.5 + launch * 0.38);
@@ -478,8 +530,26 @@ function drawBrawlShields() {
         if (c.dizzyT > 0) uiText("★ ✦ ★", wsx(c.x), wsy(c.y + c.s2 / 2 + 20), 14, "#fde047", "center", "900");
     }
 }
+function drawBrawlBats() {
+    var k = cameraScaleX;
+    var bat = function(x, y, ang) {
+        ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+        ctx.fillStyle = "#b45309"; ctx.strokeStyle = "#451a03"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-6 * k, 0); ctx.lineTo(-10 * k, -70 * k); ctx.lineTo(10 * k, -70 * k); ctx.lineTo(6 * k, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#1f2937"; ctx.fillRect(-5 * k, -2 * k, 10 * k, 16 * k);
+        ctx.restore();
+    };
+    (brawl.bats || []).forEach(function(B) { bat(wsx(B.x), wsy(B.y), 0.5); });
+    for (let i = 0; i < characters.length; i++) {
+        var c = characters[i];
+        if (!(c.brBat > 0) || c.dead || c.eliminated || c.liveRagdoll) continue;
+        var f = c.lastFacing || 1, swing = c.brSwingT > 0 ? (12 - c.brSwingT) / 12 : 0;
+        bat(wsx(c.x + f * c.s1 * 0.5), wsy(c.y - 4), f * (-0.4 + swing * 2.2));
+    }
+}
 function drawBrawlKO() {
     drawBrawlShields();
+    drawBrawlBats();
     for (let i = 0; i < brawl.ko.length; i++) {
         var K = brawl.ko[i], a = 1 - K.t / 45;
         // KOs happen past the screen edge: start the beam at the edge you flew out of
