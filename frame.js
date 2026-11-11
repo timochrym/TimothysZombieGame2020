@@ -1200,7 +1200,7 @@ function togglePause() {
     else openPause(false);
 }
 
-var PAUSE_CYCLE_IDS = ["level", "skin0", "skin1", "bopp", "blvl", "bstk", "bstage", "svol", "sshake", "stheme", "sbright", "sweapon", "sragdoll", "sspeed", "sric"];
+var PAUSE_CYCLE_IDS = ["skin0", "skin1", "bopp", "blvl", "bstk", "bstage", "svol", "sshake", "stheme", "sbright", "sweapon", "sragdoll", "sspeed", "sric"];
 
 function pauseItems() {
     if (pauseSub === "settings") {
@@ -1253,7 +1253,8 @@ function pauseItems() {
     if (multiplayer && (!inBrawl || (brawlCfg.opponents.indexOf("p2") === 0))) items.push({ id: "skin1", label: "Player 2 character:  ◀  " + skinName(heroSkins[1]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
     if (!inBrawl && !GameModes.has("menuItems") && pauseLevelKeys.length > 1) {
         var lvlName = LevelManager.getAllLevels()[pauseLevelKeys[pauseLevelIdx]];
-        items.push({ id: "level", label: "Level:  ◀  " + (lvlName ? lvlName.name : "?") + "  ▶", hint: "◀ ▶ choose, Enter loads it (restarts the run)" });
+        var curLvl = LevelManager.getCurrentLevel();
+        items.push({ id: "level", label: "🗺 Level select…   " + (curLvl ? curLvl.name : ""), hint: pauseLevelKeys.length + " levels - click one to play it" });
         if (!pauseFromGameOver) items.push({ id: "restart", label: "Restart run", hint: "Asks for confirmation" });
     }
     items.push({ id: "settings", label: "Settings  ▸", hint: "Theme, brightness, sound, screen shake, graphics, help" });
@@ -1309,8 +1310,12 @@ function pauseActivate(id, dir) {
     else if (id === "bstage") cycleBrawlStage(dir || 1);
     else if (id === "mode") { closePause(); toggleMultiplayer(); }
     else if (id === "level") {
-        if (dir) pauseLevelIdx = (pauseLevelIdx + dir + pauseLevelKeys.length) % pauseLevelKeys.length;
-        else { var key = pauseLevelKeys[pauseLevelIdx]; closePause(); LevelManager.selectLevel(key); }
+        // one grid of every level: click (or arrows + Enter) plays it. The old row only cycled a name until you pressed
+        // Enter, so with a mouse nothing ever loaded.
+        var all = LevelManager.getAllLevels(), keys = pauseLevelKeys.slice();
+        CourseSelect.open({ title: "🗺 " + ((GameModes.current && GameModes.current.title) || "Levels") + " — levels", note: "Picking a level starts a fresh run there.",
+            items: keys.map(function(k) { return { name: all[k] ? all[k].name : k, sub: all[k] && all[k].custom ? "your level" : (k === LevelManager.currentLevelKey ? "playing now" : "click to play"), current: k === LevelManager.currentLevelKey }; }),
+            onPick: function(i) { if (paused) closePause(); LevelManager.selectLevel(keys[i]); } });
     }
     else if (id === "help") { devOpts.showHelp = !devOpts.showHelp; helpTimer = devOpts.showHelp ? 60 * 14 : 0; }
     else if (id === "dev") { closePause(); Studio.open(); }

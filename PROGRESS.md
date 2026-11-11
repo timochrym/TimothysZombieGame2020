@@ -18,6 +18,14 @@ short play-through list from you per game. Your notes on what feels off are the 
 
 ## Log
 
+### 2026-11-11 — shipped: Survival level select works with the mouse
+"Zombie game I can't select the other levels": both ways worked from the keyboard, but in the pause menu a mouse click
+on the Level row only cycled the name — nothing loaded until Enter. The row is now "🗺 Level select…" and opens the
+same click-a-card grid the other games use; clicking a card starts that level. The ☰ menu dropdown still works.
+Two Survival levels were named after other games; they are now "1. Overworld Arena" and "3. Sci-Fi Jetpack Lab".
+Check: `tests/level_select.js`.
+**Next:** Brawl combo balance, then block damage / weight and "every field in the inspector".
+
 ### 2026-11-11 — shipped: cheat menu cleanup + Blob Arena settings
 - **Cheat menu:** the "drag to place" row no longer sits on screen whenever the panel is open. It appears only on the
   Build tab in Place mode. The panel opens on the Game tab (the cheats). Full-screen games (arenas, boards, tables) show

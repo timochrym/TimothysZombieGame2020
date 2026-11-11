@@ -41,6 +41,7 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node game_cheats.js         # Parkour freeze clock (no best saved), portals anywhere, Siege unlimited shots, infinite lives, Brawl damage taken
     node fighting.js            # fists combo/uppercut/ground pound damage, no bullets, ammo + ragdoll settings, Brawl CPU punches
     node themes.js              # 5 themes x 5 games: sky/background brightness, brightness filter, saved, pause + panel rows
+    node level_select.js        # Survival: pause -> Level select grid -> click a card loads it (mouse only); ☰ dropdown
     node panel_dock.js          # cheats panel: opens on Game, piece row only on Build + Place, arenas show only working tabs
     node blob_settings.js       # Blob Arena: live bot count, decay rates, spawn shield, pickups, size cheat
     node lan_joiner.js          # LAN joiner: sees Blob Arena food (dropped food in colour), blobs glide; Flail style team + drawing; local P2 drop-in

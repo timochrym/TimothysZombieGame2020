@@ -9,7 +9,7 @@ Last updated: after the UI pass (top bar, pause menu, Level Studio, one-click LA
 - [x] Blob Arena: game settings (decay rate, decay that grows with size), size cheat, more players (0–40 slider, live),
       spawn shield, power-up pickups borrowed from the other games. Check: `tests/blob_settings.js`.
 - [x] Cheat menu: the always-on drag-out toolbar — now only on Build + Place; arenas hide what doesn't apply. `tests/panel_dock.js`.
-- [ ] Zombie game: can't select the other levels.
+- [x] Zombie game: can't select the other levels. → the pause row only cycled a name with the mouse; now a click-a-card grid. `tests/level_select.js`.
 - [ ] Brawl: combo hits are way too strong.
 - [ ] Enemy tracking and pathfinding is still bad.
 - [ ] Blocks sometimes do too much damage; weight field; every field reachable in the inspector.

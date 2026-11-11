@@ -72,7 +72,7 @@ var CourseSelect = {
             h += "<button class='c" + (i === self.sel ? " sel" : "") + (it.current ? " cur" : "") + (it.locked ? " lock" : "") + "' data-i='" + i + "'>" +
                  "<span class='n'>" + (i + 1) + (it.current ? " · now" : "") + "<span class='m'>" + (it.locked ? "🔒" : self.MEDALS[it.medal || 0]) + "</span></span>" +
                  "<span class='t'>" + esc(it.name) + "</span>" +
-                 "<span class='b'>" + (it.locked ? "finish the one before to unlock" : (it.best ? "best " + esc(it.best) : "not finished yet")) + "</span></button>";
+                 "<span class='b'>" + (it.locked ? "finish the one before to unlock" : (it.sub !== undefined ? esc(it.sub) : (it.best ? "best " + esc(it.best) : "not finished yet"))) + "</span></button>";
         });
         h += "</div><div class='foot'><span>Click or ← → ↑ ↓ + Enter · Esc closes</span><button id='cs-close'>Close</button></div></div>";
         this.el.innerHTML = h;

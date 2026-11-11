@@ -6,7 +6,7 @@ class LevelManager {
         // All built-in levels are constructed 100% flush on the 40px World Grid!
         this.builtInLevels = {
             "classic_arena": {
-                name: "1. Overworld Arena (Mario/Dojo)",
+                name: "1. Overworld Arena",
                 spawnP1: [-80, 120],
                 spawnP2: [80, 120],
                 wavesEnabled: true,
@@ -96,7 +96,7 @@ class LevelManager {
             },
 
             "bunker_bridges": {
-                name: "3. Jetpack Joyride Sci-Fi Lab",
+                name: "3. Sci-Fi Jetpack Lab",
                 spawnP1: [-80, 120],
                 spawnP2: [80, 120],
                 wavesEnabled: true,
