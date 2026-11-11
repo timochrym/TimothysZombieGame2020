@@ -19,6 +19,7 @@ var BW_SHOP = [
     { id: "blaster", label: "Blaster +", icon: "🔫", cost: { gold: 6 } },
     { id: "armor", label: "Armor +", icon: "🛡", cost: { gold: 10 } },
     { id: "tnt", label: "TNT", icon: "🧨", cost: { gold: 4 } },
+    { id: "egg", label: "Bridge Egg", icon: "🥚", cost: { iron: 20 } },       // flies along your aim, laying a bridge behind it
     { id: "fireball", label: "Fireball", icon: "☄", cost: { iron: 24 } },     // flies straight where you aim and blasts blocks / players
     { id: "forge", label: "Team Forge", icon: "⚒", cost: { diamond: 2 } },       // team upgrades: diamonds from the middle island
     { id: "sharp", label: "Team Sharp", icon: "🗡", cost: { diamond: 3 } }
@@ -124,10 +125,42 @@ function bwBuy(ch, item) {
     else if (item.id === "forge") { up.forge++; bwFeed(BW_TEAMS[bwTeamOf(ch)].name + " bought Forge " + up.forge + " (faster generator)", BW_TEAMS[bwTeamOf(ch)].color); }
     else if (item.id === "sharp") { up.sharp = 1; bwFeed(BW_TEAMS[bwTeamOf(ch)].name + " bought Sharp (+25% team damage)", BW_TEAMS[bwTeamOf(ch)].color); }
     else if (item.id === "fireball") bwFireball(ch);
+    else if (item.id === "egg") bwBridgeEgg(ch);
     else if (item.id === "tnt") { var t = Object.addCrate(ch.x + (ch.lastFacing || 1) * 90, ch.y + 60, 70, "#e84545", { explosive: true, name: "TNT Barrel" }); t.xspeed = (ch.lastFacing || 1) * 6; t.yspeed = 6; if (typeof rebuildAllObjects === "function") rebuildAllObjects(); }
     Components.addFloatingText("+" + item.label, ch.x, ch.y + 110, "#86efac", 15);
     if (typeof SFX !== "undefined") SFX.play("pickup", ch.x, ch.y);
     return true;
+}
+
+// a bridge egg: flies nearly level the way you face (a little up or down with your aim) and lays a block every 80 px
+// behind it - up to 16 - until it hits something. A fast way to the middle island or across to the enemy.
+function bwBridgeEgg(ch) {
+    var rad = Math.radians(ch.degree || 90), dir = Math.sin(rad) >= 0 ? 1 : -1;
+    if (Math.abs(Math.sin(rad)) < 0.2) dir = ch.lastFacing || 1;
+    var rise = Math.max(-0.35, Math.min(0.35, Math.cos(rad)));
+    BW.eggs.push({ x: ch.x + dir * 60, y: ch.y - ch.s2 / 2 + 30, vx: dir * 14, vy: rise * 14, n: 0, dist: 0, team: bwTeamOf(ch), owner: ch });
+    if (typeof SFX !== "undefined") SFX.play("sling", ch.x, ch.y, 0.6, 1.3);
+}
+
+function bwEggs() {
+    var mat = BUILD_MATS[0];
+    for (let e = BW.eggs.length - 1; e >= 0; e--) {
+        var E = BW.eggs[e], placed = null, stop = false;
+        E.x += E.vx; E.y += E.vy; E.dist += Math.abs(E.vx);
+        for (let i = 0; i < staticObjects.length; i++) { var o = staticObjects[i]; if (!o.dead && !/Bed/.test(o.name || "") && Math.abs(E.x - o.x) < o.w / 2 && Math.abs(E.y - o.y) < o.h / 2) { stop = true; break; } }   // flies over beds
+        if (!stop && E.dist >= 80) {
+            E.dist -= 80;
+            // the block's top sits where the thrower's feet were (the egg flies 30 above it); skip spots already solid
+            var bx = E.x - Math.sign(E.vx) * 40, by = E.y - 50, solid = false;
+            for (let i = 0; i < staticObjects.length; i++) { var q = staticObjects[i]; if (!q.dead && Math.abs(bx - q.x) < q.w / 2 + 38 && Math.abs(by - q.y) < q.h / 2 + 18) { solid = true; break; } }
+            if (solid) continue;
+            var b = Object.addBox(bx, by, 80, 40, BW_TEAMS[E.team] ? BW_TEAMS[E.team].color : mat.color, { name: "Built Bridge", texture: mat.tex, kind: "block" });
+            b.buildHP = b.buildMaxHP = mat.hp; b.builtBy = E.owner && E.owner.playerIndex; b.buildMat = mat.id; b.buildCost = 0;
+            E.n++; placed = b;
+        }
+        if (placed) Build.changed(placed);
+        if (stop || E.n >= 16 || Math.abs(E.x) > 9000) { Components.spawnSparks(E.x, E.y, "#fef3c7", 8); BW.eggs.splice(e, 1); }
+    }
 }
 
 // a fireball: a small, nearly weightless bomb launched fast along your aim; it bursts on whatever it hits
@@ -258,6 +291,7 @@ GameModes.register({
 
     setupLevel: function(lvl) {
         BW.phase = "fight"; BW.winner = -1; BW.tick = 0; BW.drops = [];
+        BW.eggs = [];
         BW.beds = []; BW.gens = []; BW.shops = []; BW.feed = []; BW.up = [{ forge: 0, sharp: 0 }, { forge: 0, sharp: 0 }];
         for (let t = 0; t < 2; t++) {
             var side = BW_TEAMS[t].side;
@@ -353,6 +387,7 @@ GameModes.register({
     },
 
     update: function() {
+        if (BW.eggs && BW.eggs.length) bwEggs();
         // void
         for (let i = 0; i < characters.length; i++) {
             var c = characters[i];
@@ -404,6 +439,10 @@ GameModes.register({
     },
 
     drawWorld: function() {
+        (BW.eggs || []).forEach(function(E) {
+            var k = cameraScaleX; ctx.fillStyle = "#fef3c7"; ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.ellipse(wsx(E.x), wsy(E.y), 14 * k, 18 * k, BW.tick * 0.3, 0, 7); ctx.fill(); ctx.stroke();
+        });
         var k = cameraScaleX, t = BW.tick;
         // beds: frame, pillow and an HP bar
         for (let i = 0; i < BW.beds.length; i++) {

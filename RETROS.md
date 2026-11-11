@@ -6,6 +6,18 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Bed Brawl: Bridge Egg
+
+**Shipped:** a 🥚 Bridge Egg pedestal (20 iron): the egg flies the way you face (tilting a little with your aim) and
+lays a team-coloured wood block every 80 px behind it, top level with your feet — up to 16, until it hits something.
+It skips spots that are already solid and flies over beds. A fast way to the middle island or straight at the enemy.
+
+**Measured (`tests/bedbrawl_egg.js`):** bought for 20 iron; 12 blocks laid from x -2068 to -794, all with their top at
+the hero's feet height; holding D walked the hero 1400 px along it without falling. **Went wrong:** the first egg flew
+into its own team's bed (beds are solid) and stopped before laying anything; it now passes over beds.
+
+---
+
 ## Crash Lab: Cliff Fall scenario
 
 **Shipped:** one-push scenarios are now a list (each with its own start and saved best), and a second one joins Stair
