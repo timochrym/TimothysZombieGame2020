@@ -6,6 +6,19 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Table Games: Word Hunt
+
+**Shipped:** a seventh table game — 8 words from a list of 40 game words (ZOMBIE, PORTAL, RAGDOLL, TROLLEY…) hidden in a
+10×10 grid in any of 8 directions, the rest random letters. Both players race: drag from the first letter to the last
+(either way round), or move a box with WASD / arrows and press Space / Enter on both ends. The CPU finds a word every
+15 / 10 / 6 s by skill. Pass-and-play and LAN (grid, words, cursors sync). No dictionary needed: the game placed the
+words, so it knows them.
+
+**Measured (`tests/table_wordhunt.js`):** all 8 placed words spell correctly in the grid; a real mouse drag (backwards)
+found one, the keyboard cursor found another, the normal CPU found one within 11 s; no errors.
+
+---
+
 ## Table Games: Sway Darts
 
 **Shipped:** a sixth table game — the aim point drifts in a figure-eight (and the whole pattern wanders); hold Space or

@@ -9,7 +9,7 @@
 var tableCfg = { game: "flick", vs: "cpu", level: 2 };
 try { var _tb = JSON.parse(localStorage.getItem("timsTableGames") || "null"); if (_tb) for (var _k in _tb) tableCfg[_k] = _tb[_k]; } catch (e) {}
 function saveTable() { try { localStorage.setItem("timsTableGames", JSON.stringify(tableCfg)); } catch (e) {} }
-var TABLE_GAMES = [["flick", "Flick Soccer"], ["four", "Four in a Row"], ["hockey", "Air Hockey"], ["arty", "Hill Cannons"], ["pool", "Pocket Race"], ["darts", "Sway Darts"]];
+var TABLE_GAMES = [["flick", "Flick Soccer"], ["four", "Four in a Row"], ["hockey", "Air Hockey"], ["arty", "Hill Cannons"], ["pool", "Pocket Race"], ["darts", "Sway Darts"], ["hunt", "Word Hunt"]];
 var TABLE_COLORS = ["#ef4444", "#3b82f6"];
 
 // ---------------------------------------------------------------- FLICK SOCCER
@@ -780,6 +780,109 @@ var Darts = {
     }
 };
 
+// ---------------------------------------------------------------- WORD HUNT (word grid race)
+//   8 words hidden in a 10x10 grid (any of 8 directions). Both players race: drag across a word with the mouse, or
+//   move a cursor (P1 WASD + Space, P2 arrows + Enter) and mark its first and last letter. Most words wins.
+var WORD_HUNT_LIST = ["ZOMBIE", "ROCKET", "PORTAL", "CRATE", "RAGDOLL", "JETPACK", "BRIDGE", "CANNON", "TROLLEY", "POGO", "SCOOTER", "WOBBLE",
+    "BRAWL", "SHIELD", "BOMB", "DARTS", "ARCADE", "BALLOON", "DRAGON", "KNIGHT", "SLIME", "TOWER", "LEVER", "MAGNET", "PUZZLE", "SPRING",
+    "LASER", "GHOST", "TREASURE", "PARKOUR", "CASTLE", "WIZARD", "PIRATE", "ROBOT", "ISLAND", "PLANET", "SPIDER", "HAMMER", "PIXEL", "TURBO"];
+var WordHunt = {
+    N: 10,
+    reset: function() {
+        var N = this.N, dirs = [[1, 0], [0, 1], [1, 1], [1, -1], [-1, 0], [0, -1], [-1, -1], [-1, 1]];
+        var pool = WORD_HUNT_LIST.slice().sort(function() { return Math.random() - 0.5; });
+        this.g = []; for (let y = 0; y < N; y++) { this.g.push([]); for (let x = 0; x < N; x++) this.g[y].push(""); }
+        this.words = [];
+        for (let w = 0; w < pool.length && this.words.length < 8; w++) {
+            var word = pool[w];
+            if (word.length > N) continue;
+            for (let tries = 0; tries < 80; tries++) {
+                var d = dirs[Math.floor(Math.random() * 8)], x0 = Math.floor(Math.random() * N), y0 = Math.floor(Math.random() * N);
+                var x1 = x0 + d[0] * (word.length - 1), y1 = y0 + d[1] * (word.length - 1);
+                if (x1 < 0 || x1 >= N || y1 < 0 || y1 >= N) continue;
+                var ok = true;
+                for (let i = 0; i < word.length; i++) { var c = this.g[y0 + d[1] * i][x0 + d[0] * i]; if (c && c !== word[i]) { ok = false; break; } }
+                if (!ok) continue;
+                for (let i = 0; i < word.length; i++) this.g[y0 + d[1] * i][x0 + d[0] * i] = word[i];
+                this.words.push({ w: word, a: [x0, y0], b: [x1, y1], by: -1 });
+                break;
+            }
+        }
+        var AB = "ABCDEFGHIJKLMNOPRSTUW";
+        for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (!this.g[y][x]) this.g[y][x] = AB[Math.floor(Math.random() * AB.length)];
+        this.score = [0, 0]; this.cur = [[0, 0], [N - 1, N - 1]]; this.mark = [null, null]; this.drag = null; this.over = false; this.win = -1; this.cpuT = 0; this.msg = ""; this.msgT = 0; this.prev = [{}, {}];
+    },
+    geo: function() { var cs = Math.min((cssW - 340) / this.N, (cssH - 170) / this.N, 56); return { cs: cs, x0: cssW / 2 - 140 - cs * this.N / 2, y0: 130 }; },
+    cellAt: function(mx, my) { var G = this.geo(), x = Math.floor((mx - G.x0) / G.cs), y = Math.floor((my - G.y0) / G.cs); return x >= 0 && y >= 0 && x < this.N && y < this.N ? [x, y] : null; },
+    // a straight line from a to b: does it spell an unfound word (either way)?
+    claim: function(team, a, b) {
+        if (!a || !b) return false;
+        for (let i = 0; i < this.words.length; i++) {
+            var W = this.words[i];
+            if (W.by >= 0) continue;
+            if ((W.a[0] === a[0] && W.a[1] === a[1] && W.b[0] === b[0] && W.b[1] === b[1]) || (W.a[0] === b[0] && W.a[1] === b[1] && W.b[0] === a[0] && W.b[1] === a[1])) {
+                W.by = team; this.score[team]++;
+                this.msg = (team === 0 ? "RED" : "BLUE") + " found " + W.w + "!"; this.msgT = 90;
+                if (typeof SFX !== "undefined") SFX.play("coin");
+                if (this.words.every(function(q) { return q.by >= 0; })) {
+                    this.over = true; this.win = this.score[0] === this.score[1] ? -1 : (this.score[0] > this.score[1] ? 0 : 1);
+                    if (typeof showBanner === "function") showBanner(this.win < 0 ? "DRAW!" : (this.win ? "BLUE" : "RED") + " WINS!", this.score[0] + " - " + this.score[1], this.win < 0 ? "#e2e8f0" : TABLE_COLORS[this.win]);
+                }
+                return true;
+            }
+        }
+        return false;
+    },
+    update: function() {
+        if (this.msgT > 0) this.msgT--;
+        if (this.over) return;
+        if (typeof Net !== "undefined" && Net.role === "client") return;
+        // CPU (BLUE vs CPU): finds a word every few seconds
+        if (tableCfg.vs === "cpu" && !Table.lanPid() && ++this.cpuT > [0, 900, 600, 360][tableCfg.level]) {
+            this.cpuT = 0; var left = this.words.filter(function(q) { return q.by < 0; });
+            if (left.length) { var W = left[Math.floor(Math.random() * left.length)]; this.claim(1, W.a, W.b); }
+        }
+        // mouse (RED): drag from the first letter to the last
+        var c = this.cellAt(mouseX, mouseY);
+        if (mouseDown && !this.drag && c) this.drag = { a: c, b: c };
+        if (this.drag && c) this.drag.b = c;
+        if (!mouseDown && this.drag) { if (!this.claim(0, this.drag.a, this.drag.b) && (this.drag.a[0] !== this.drag.b[0] || this.drag.a[1] !== this.drag.b[1])) { this.msg = "Not a hidden word"; this.msgT = 40; } this.drag = null; }
+        // keyboard cursors: RED always, BLUE in pass-and-play or over LAN
+        for (let t = 0; t < 2; t++) {
+            if (t === 1 && tableCfg.vs === "cpu" && !Table.lanPid()) continue;
+            var k = Flick.keys(t), P = this.prev[t], cur = this.cur[t], N = this.N;
+            if (k.left && !P.left) cur[0] = Math.max(0, cur[0] - 1); if (k.right && !P.right) cur[0] = Math.min(N - 1, cur[0] + 1);
+            if (k.up && !P.up) cur[1] = Math.max(0, cur[1] - 1); if (k.down && !P.down) cur[1] = Math.min(N - 1, cur[1] + 1);
+            if (k.fire && !P.fire) { if (!this.mark[t]) this.mark[t] = cur.slice(); else { if (!this.claim(t, this.mark[t], cur)) { this.msg = "Not a hidden word"; this.msgT = 40; } this.mark[t] = null; } }
+            this.prev[t] = { left: k.left, right: k.right, up: k.up, down: k.down, fire: k.fire };
+        }
+    },
+    draw: function() {
+        var G = this.geo(), cs = G.cs, self = this;
+        ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = "#fef3c7"; ctx.fillRect(G.x0 - 8, G.y0 - 8, cs * this.N + 16, cs * this.N + 16);
+        var cen = function(p) { return [G.x0 + (p[0] + 0.5) * cs, G.y0 + (p[1] + 0.5) * cs]; };
+        var stroke = function(a, b, col, alpha) { var p = cen(a), q = cen(b); ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = col; ctx.lineCap = "round"; ctx.lineWidth = cs * 0.72; ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); ctx.restore(); };
+        this.words.forEach(function(W) { if (W.by >= 0) stroke(W.a, W.b, TABLE_COLORS[W.by], 0.45); });
+        if (this.drag) stroke(this.drag.a, this.drag.b, TABLE_COLORS[0], 0.3);
+        for (let t = 0; t < 2; t++) if (this.mark[t]) stroke(this.mark[t], this.cur[t], TABLE_COLORS[t], 0.25);
+        for (let y = 0; y < this.N; y++) for (let x = 0; x < this.N; x++) uiText(this.g[y][x], G.x0 + (x + 0.5) * cs, G.y0 + (y + 0.5) * cs + cs * 0.18, Math.round(cs * 0.5), "#1f2937", "center", "900");
+        for (let t = 0; t < 2; t++) {
+            if (t === 1 && tableCfg.vs === "cpu" && !Table.lanPid()) continue;
+            var p = cen(this.cur[t]); ctx.strokeStyle = TABLE_COLORS[t]; ctx.lineWidth = 3; ctx.strokeRect(p[0] - cs / 2 + 2, p[1] - cs / 2 + 2, cs - 4, cs - 4);
+        }
+        // word list
+        var lx = G.x0 + cs * this.N + 40;
+        uiText("FIND THESE", lx, G.y0 + 10, 14, "#94a3b8", "left", "900");
+        this.words.forEach(function(W, i) { uiText((W.by >= 0 ? "✓ " : "· ") + W.w, lx, G.y0 + 40 + i * 30, 18, W.by >= 0 ? TABLE_COLORS[W.by] : "#e2e8f0", "left", "900"); });
+        var who = function(t) { return (t === 0 ? "RED" : "BLUE") + (tableCfg.vs === "cpu" ? (t === 0 ? " (you)" : " (CPU)") : ""); };
+        uiPanel(cssW / 2 - 230, 64, 460, 54, this.over ? (this.win < 0 ? "#e2e8f0" : TABLE_COLORS[this.win]) : "#22c55e");
+        uiText(this.over ? (this.win < 0 ? "DRAW" : who(this.win) + " WINS") + "  ·  Space for a new grid" : (this.msgT > 0 ? this.msg : "Race to find the hidden words!"), cssW / 2, 88, 16, "#fff", "center", "900");
+        uiText("RED " + this.score[0] + "   ·   BLUE " + this.score[1] + "   ·   " + this.words.filter(function(q) { return q.by < 0; }).length + " left", cssW / 2, 108, 13, "#cbd5e1", "center", "800");
+        uiText("Drag from the first letter to the last · or move the box (WASD / arrows) and press Space / Enter on the first and last letter · Esc: opponent / game", cssW / 2, cssH - 14, 12, "rgba(220,230,240,0.7)", "center", "700");
+    }
+};
+
 // ---------------------------------------------------------------- the glue: which game is on, LAN state
 var Table = {
     lanPid: function() { if (typeof Net === "undefined" || Net.role !== "host") return null; for (var k in Net.peers) return Net.peers[k].pid; return null; },
@@ -790,6 +893,7 @@ var Table = {
             a: Arty.h ? { h: Arty.h.map(Math.round), k: Arty.tank.map(function(T) { return [T.x, T.hp, Math.round(T.ang), Math.round(T.pow), T.hit || 0, T.lastDmg || 0]; }), t: Arty.turn, s: Arty.shell ? [Math.round(Arty.shell.x), Math.round(Arty.shell.y)] : null, w: Arty.wind, o: Arty.over, win: Arty.win, b: Arty.boom ? [Arty.boom.x, Arty.boom.y, Arty.boom.t] : null } : null,
             p: Pool.balls ? { b: Pool.all().map(function(b) { return [Math.round(b.x), Math.round(b.y), b.gone ? 1 : 0]; }), s: Pool.score, t: Pool.turn, ph: Pool.phase, a: Pool.aimA, pw: Pool.aimP, m: Pool.msg, mt: Pool.msgT, w: Pool.win } : null,
             d: Darts.score ? { s: Darts.score, t: Darts.turn, r: Darts.round, n: Darts.dart, h: Darts.hits.map(function(q) { return [Math.round(q[0]), Math.round(q[1]), q[2]]; }), tt: Darts.t, st: Darts.steady, ti: Darts.tired, o: Darts.over, w: Darts.win, f: Darts.flash, wa: Darts.wait } : null,
+            wh: WordHunt.g && tableCfg.game === "hunt" ? { g: WordHunt.g.map(function(r) { return r.join(""); }), w: WordHunt.words, s: WordHunt.score, c: WordHunt.cur, mk: WordHunt.mark, o: WordHunt.over, wi: WordHunt.win, m: WordHunt.msg, mt: WordHunt.msgT } : null,
             h: { m: Hockey.m.map(function(M) { return [Math.round(M.x), Math.round(M.y)]; }), p: [Math.round(Hockey.puck.x), Math.round(Hockey.puck.y)], s: Hockey.score, ph: Hockey.phase, w: Hockey.winner, msg: Hockey.msg, mt: Hockey.msgT } };
     },
     apply: function(m) {
@@ -802,6 +906,7 @@ var Table = {
         if (m.a) { var A = m.a; if (!Arty.h) Arty.reset(0); Arty.h = A.h; A.k.forEach(function(k, i) { var T = Arty.tank[i]; T.x = k[0]; T.hp = k[1]; T.ang = k[2]; T.pow = k[3]; T.hit = k[4]; T.lastDmg = k[5]; }); Arty.turn = A.t; Arty.shell = A.s ? { x: A.s[0], y: A.s[1] } : null; Arty.wind = A.w; Arty.over = A.o; Arty.win = A.win; Arty.boom = A.b ? { x: A.b[0], y: A.b[1], t: A.b[2] } : null; if (Arty.shell) Arty.trail.push([Arty.shell.x, Arty.shell.y]); else Arty.trail = Arty.trail.slice(-200); }
         if (m.p) { if (!Pool.balls) Pool.reset(0); var PB = Pool.all(); m.p.b.forEach(function(q, i) { if (PB[i]) { PB[i].x = q[0]; PB[i].y = q[1]; PB[i].gone = !!q[2]; } }); Pool.score = m.p.s; Pool.turn = m.p.t; Pool.phase = m.p.ph; Pool.aimA = m.p.a; Pool.aimP = m.p.pw; Pool.msg = m.p.m; Pool.msgT = m.p.mt; Pool.win = m.p.w; }
         if (m.d) { if (!Darts.score) Darts.reset(0); var D = m.d; Darts.score = D.s; Darts.turn = D.t; Darts.round = D.r; Darts.dart = D.n; Darts.hits = D.h; Darts.t = D.tt; Darts.steady = D.st; Darts.tired = D.ti; Darts.over = D.o; Darts.win = D.w; Darts.flash = D.f; Darts.wait = D.wa; }
+        if (m.wh) { var H2 = m.wh; WordHunt.g = H2.g.map(function(r) { return r.split(""); }); WordHunt.words = H2.w; WordHunt.score = H2.s; WordHunt.cur = H2.c; WordHunt.mark = H2.mk; WordHunt.over = H2.o; WordHunt.win = H2.wi; WordHunt.msg = H2.m; WordHunt.msgT = H2.mt; WordHunt.drag = null; }
         var Q = m.q; Four.g = Q.g; Four.turn = Q.turn; Four.over = Q.over; Four.win = Q.win; Four.line = Q.line; Four.col = Q.col; Four.drop = null;
     }
 };
@@ -812,7 +917,7 @@ ModeKit.addLevel("table_games", { name: "🎲 Table Games", mode: "table", waves
 GameModes.register({
     id: "table",
     title: "TABLE GAMES",
-    tagline: "2-player minigames: tabletop flick soccer, four in a row, air hockey, hill cannons, a pocket-race cue game and darts. Vs CPU, pass-and-play or LAN.",
+    tagline: "2-player minigames: tabletop flick soccer, four in a row, air hockey, hill cannons, a pocket-race cue game, darts and a word hunt. Vs CPU, pass-and-play or LAN.",
     color: "#22c55e",
     firstLevel: "table_games",
     flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: false },
@@ -820,9 +925,9 @@ GameModes.register({
 
     seats: function() {
         return [{ label: "RED", options: ["human"], value: "human", set: function() {} },
-            { label: "BLUE", options: ["human", "cpu"], value: tableCfg.vs === "p2" ? "human" : "cpu", note: "human = pass-and-play (or a LAN player takes BLUE)", set: function(v) { tableCfg.vs = v === "human" ? "p2" : "cpu"; multiplayer = v === "human"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); Darts.reset(0); } }];
+            { label: "BLUE", options: ["human", "cpu"], value: tableCfg.vs === "p2" ? "human" : "cpu", note: "human = pass-and-play (or a LAN player takes BLUE)", set: function(v) { tableCfg.vs = v === "human" ? "p2" : "cpu"; multiplayer = v === "human"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); Darts.reset(0); WordHunt.reset(); } }];
     },
-    setupLevel: function() { multiplayer = tableCfg.vs === "p2"; Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); Darts.reset(0); this.lastMouse = [mouseX, mouseY]; },
+    setupLevel: function() { multiplayer = tableCfg.vs === "p2"; Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); Darts.reset(0); WordHunt.reset(); this.lastMouse = [mouseX, mouseY]; },
 
     screenFrame: function() {
         Four.mouseMoved = Math.hypot(mouseX - this.lastMouse[0], mouseY - this.lastMouse[1]) > 2;
@@ -831,6 +936,7 @@ GameModes.register({
         if (tableCfg.game === "four") { Four.update(); Four.draw(); }
         else if (tableCfg.game === "hockey") { Hockey.update(); Hockey.draw(); if (Hockey.phase === "over" && SpacePressed) Hockey.reset(); }
         else if (tableCfg.game === "arty") { Arty.update(); Arty.draw(); if (Arty.over && SpacePressed && !Arty.pF) Arty.reset(Arty.win === 0 ? 1 : 0); Arty.pF = SpacePressed; }
+        else if (tableCfg.game === "hunt") { WordHunt.update(); WordHunt.draw(); if (WordHunt.over && SpacePressed && !WordHunt.pF) WordHunt.reset(); WordHunt.pF = SpacePressed; }
         else if (tableCfg.game === "darts") { Darts.update(); Darts.draw(); if (Darts.over && SpacePressed && !Darts.pF) Darts.reset(Darts.win === 0 ? 1 : 0); Darts.pF = SpacePressed; }
         else if (tableCfg.game === "pool") { Pool.update(); Pool.draw(); if (Pool.phase === "over" && SpacePressed && !Pool.pF) Pool.reset(Pool.win === 0 ? 1 : 0); Pool.pF = SpacePressed; }
         else { Flick.update(); Flick.draw(); }
@@ -842,7 +948,7 @@ GameModes.register({
 
     screenDraw: function() {
         // LAN client view: blue is me; reuse the normal drawing (client-side "human" = it's my turn)
-        if (tableCfg.game === "four") Four.draw(); else if (tableCfg.game === "hockey") Hockey.draw(); else if (tableCfg.game === "arty") Arty.draw(); else if (tableCfg.game === "pool") Pool.draw(); else if (tableCfg.game === "darts") Darts.draw(); else Flick.draw();
+        if (tableCfg.game === "four") Four.draw(); else if (tableCfg.game === "hockey") Hockey.draw(); else if (tableCfg.game === "arty") Arty.draw(); else if (tableCfg.game === "pool") Pool.draw(); else if (tableCfg.game === "darts") Darts.draw(); else if (tableCfg.game === "hunt") WordHunt.draw(); else Flick.draw();
         uiPanel(14, 10, 300, 48, "#22c55e");
         uiText("TABLE GAMES  ·  you are BLUE", 28, 36, 16, "#86efac", "left", "900");
         uiText("Four in a Row: ←/→ + Space   ·   Flick: ←/→ aim, ↑/↓ power, E next disc, Space shoot", 28, 52, 10, "#cbd5e1", "left", "700");
@@ -874,11 +980,11 @@ GameModes.register({
     },
     onMenu: function(id, dir) {
         if (id === "tb_game") { var gi = TABLE_GAMES.findIndex(function(g) { return g[0] === tableCfg.game; }); tableCfg.game = TABLE_GAMES[(gi + (dir || 1) + TABLE_GAMES.length) % TABLE_GAMES.length][0]; saveTable(); return true; }
-        if (id === "tb_vs") { tableCfg.vs = tableCfg.vs === "cpu" ? "p2" : "cpu"; multiplayer = tableCfg.vs === "p2"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); Darts.reset(0); return true; }
+        if (id === "tb_vs") { tableCfg.vs = tableCfg.vs === "cpu" ? "p2" : "cpu"; multiplayer = tableCfg.vs === "p2"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); Darts.reset(0); WordHunt.reset(); return true; }
         if (id === "tb_lvl") { tableCfg.level = ((tableCfg.level - 1 + (dir || 1) + 3) % 3) + 1; saveTable(); return true; }
-        if (id === "tb_new") { closePause(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); Darts.reset(0); return true; }
+        if (id === "tb_new") { closePause(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); Darts.reset(0); WordHunt.reset(); return true; }
         return false;
     },
-    onRestart: function() { Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); Darts.reset(0); },
-    overSub: function() { return "Flick soccer · four in a row · air hockey · hill cannons · pocket race · darts"; }
+    onRestart: function() { Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); Darts.reset(0); WordHunt.reset(); },
+    overSub: function() { return "Flick soccer · four in a row · air hockey · hill cannons · pocket race · darts · word hunt"; }
 });

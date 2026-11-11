@@ -135,7 +135,8 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       (turn-based artillery: craters, wind, CPU that simulates its shots, pass-and-play or a LAN player): DONE.
       Pocket Race (a cue game: 7 balls, pot = +1 and shoot again, scratch = -1; drag-back aiming, ghost-ball CPU, LAN):
       DONE. Sway Darts (the aim drifts in a figure-eight; hold to steady, but not too long; rings 5-50 and an outer
-      ×2 ring; 3 darts × 5 rounds; CPU waits for a calm moment): DONE. STILL TO DO: a word grid.
+      ×2 ring; 3 darts × 5 rounds; CPU waits for a calm moment) and Word Hunt (a 10×10 grid hiding 8 game words in
+      8 directions; race by mouse drag or keyboard cursor; CPU finds a word every 6-15 s): DONE.
 
 ## UI pass (your request: top bars, pause menus, Studio, inspector, builders, LAN start)
 - [x] Top bar: 4 compact buttons + grouped ☰ menu, dims while playing, no HUD overlap, adapts to narrow windows.
