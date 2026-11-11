@@ -21,11 +21,14 @@ const init = () => { const O = Object; window.__O = { is: O.is, keys: O.keys, en
   const st2 = await H.p.evaluate(() => characters.filter(c => c.isRemote).map(c => [c.playerLabel, Math.round(c.x)]));
   const cs2 = await C.p.evaluate(() => Net.myChar() && Math.round(Net.myChar().x));
   // client shoots with the mouse
-  await C.p.mouse.move(900, 300); await C.p.mouse.down(); await C.p.waitForTimeout(600);
-  const lz = await H.p.evaluate(() => lazers.length); const lzc = await C.p.evaluate(() => lazers.length);
+  // (peak bullets alive over the burst, on both screens: a single instant can be 0 when they have already hit something)
+  for (const P of [H.p, C.p]) await P.evaluate(() => { window.__mx = 0; window.__mi = setInterval(() => { __mx = Math.max(__mx, lazers.length); }, 4); });
+  await C.p.mouse.move(250, 120); await C.p.mouse.down(); await C.p.waitForTimeout(600);     // up-left, away from the crate it just pushed
+  const lz = await H.p.evaluate(() => __mx); const lzc = await C.p.evaluate(() => __mx);
+  if (process.env.LAN_DBG) console.log('DBG host', JSON.stringify(await H.p.evaluate(() => { const c = characters.find(c => c.playerLabel === 'Bob'), p = Net.peers[c.netPid]; return { inp: p.inp, sp: c.shootPressed, cd: c.lazerCooldown, hs: c.hitstun, st: c.staggerTimer, rg: c.ragdollTimer, build: !!c.buildMode, held: !!c.heldObject, lastShot: Date.now() - (c.lastShotAt || 0), reload: c.reloadTimer, mag: c.ammoMag, unl: c.unlimitedAmmo(), mode: GameModes.current.id, canShoot: GameModes.flag('shooting', true) }; })), 'joiner', JSON.stringify(await C.p.evaluate(() => ({ mouseDown, li: Net.localIn, tool: typeof SummonManager !== 'undefined' && SummonManager.toolMode }))));
   await C.p.mouse.up();
   await C.p.screenshot({ path: 'lan_client.png' }); await H.p.screenshot({ path: 'lan_host.png' });
-  console.log('host', JSON.stringify(st1), '\nclient', JSON.stringify(cs1), '\nafter D host', JSON.stringify(st2), 'client sees', cs2, '\nlazers host/client', lz, lzc);
+  console.log('host', JSON.stringify(st1), '\nclient', JSON.stringify(cs1), '\nafter D host', JSON.stringify(st2), 'client sees', cs2, '\npeak bullets host/client', lz, lzc, ' joiner moves its own hero:', await C.p.evaluate(() => Net.predictOn + ' ' + JSON.stringify(Net.predStat)));
   const fps = await C.p.evaluate(() => measuredFPS); console.log('client fps', fps);
   console.log([...H.errs, ...C.errs, ...C2.errs].slice(0, 10));
   await b.close();

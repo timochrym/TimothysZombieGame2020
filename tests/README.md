@@ -41,6 +41,7 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node game_cheats.js         # Parkour freeze clock (no best saved), portals anywhere, Siege unlimited shots, infinite lives, Brawl damage taken
     node fighting.js            # fists combo/uppercut/ground pound damage, no bullets, ammo + ragdoll settings, Brawl CPU punches
     node themes.js              # 5 themes x 5 games: sky/background brightness, brightness filter, saved, pause + panel rows
+    node lan_perf.js            # LAN: packet size, KB/s, joiner input delay, host/joiner agreement, Brawl; PASS/FAIL thresholds
     node lan_play.js            # starts server.js on 8099: a host + 2 joiners, positions match, client FPS
 
 Each prints its numbers and then the page errors (`[]` = none). See ROADMAP.md, "Your named feedback items".

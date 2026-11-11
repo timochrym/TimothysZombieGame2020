@@ -222,6 +222,7 @@ class Character {
     }
 
     startRagdoll(kx, ky, dur, noImpulse) {
+        if (typeof Net !== "undefined" && Net.predicting) return;
         if (this.ragdollTimer > 0 || this.ragdollImmune > 0 || this.dead) return;
         this.ragdollTimer = dur || 55;
         this.ragdollExtend = 0;
@@ -439,6 +440,7 @@ class Character {
 
     takeDamage(amount, knockX = 0, knockY = 0, attacker = null) {
         if (this.dead) return;
+        if (typeof Net !== "undefined" && Net.predicting) return;      // a LAN joiner moving its own hero: damage is the host's call
         // God Mode protects living heroes from all damage!
         if (!this.isZombie && (godMode || this.dashTimer > 0 || this.invulnTimer > 0)) {
             return;

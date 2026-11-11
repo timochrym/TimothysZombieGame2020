@@ -7,8 +7,13 @@
 //          sends a snapshot: the level/mode, every character, enemy, crate, level piece, bullet, pickup,
 //          ragdoll and gadget (only the fields that changed), a few HUD globals, and the sounds /
 //          floating texts / sparks that happened, so remote screens feel the same.
-//   CLIENT does no simulation. It sends its keys/mouse/pad 60x a second and draws the host's world
-//          from the snapshots (smoothed), with its own camera following its own hero.
+//   CLIENT sends its keys/mouse/pad 60x a second and draws the host's world from the snapshots.
+//          Its OWN hero is moved right here, by this browser, the moment a key goes down (Net.predictStep):
+//          the same Character.move() the host runs, against the level pieces it already has. The host stays
+//          the referee: it still simulates that hero from the same keys, and the joiner blends toward the
+//          host's position only when the two disagree by more than lag explains (or snaps on a teleport).
+//          Everyone else's heroes, enemies and crates glide along their last known speed between snapshots.
+//   PACKETS only carry what changed; enemies leave out the route-planning and AI timers nobody else needs.
 //
 //   Modes can sync private HUD state with  netState() -> json  and  applyNetState(json)  hooks.
 // ============================================================================
@@ -19,6 +24,14 @@ var NET_GLOBALS = ["level", "score", "highScore", "combo", "comboTimer", "heroLe
 // fields that are bookkeeping, huge, or meaningless on another machine
 var NET_SKIP = { collidedWith: 1, collidedRamp: 1, target: 1, cpuIn: 1, netIn: 1, hitCd: 1, sticks: 1, navPath: 1, navBan: 1,
                  flyPath: 1, pts: 1, lastAttacker: 1, thrownBy: 1, navTarget: 1, homeX: 0 };
+
+// enemy fields only the host's AI uses (never drawn): not worth sending 30x a second
+var NET_SKIP_NPC = { aiLastX: 1, aiLastY: 1, aiTick: 1, lastNavX: 1, lastNavY: 1, stuckTimer: 1, jumpCoolDownTimer: 1, coyoteTimer: 1,
+                     xOver: 1, yOver: 1, hitNormal: 1, lastSafeX: 1, lastSafeY: 1, hintFrame: 1, lazerCooldown: 1, ragdollImmune: 1,
+                     specialCd: 1, leapCd: 1, chargeCd: 1, dodgeCd: 1, alertTimer: 1, batTimer: 1,
+                     leftPressed: 1, rightPressed: 1, upPressed: 1, downPressed: 1 };
+// what the joiner's own browser decides for its hero; everything else on that hero still comes from the host
+var NET_PREDICT_KEYS = { x: 1, y: 1, xspeed: 1, yspeed: 1 };
 
 var Net = {
     role: null,            // null | "host" | "client"
@@ -45,6 +58,12 @@ var Net = {
     localDash: 0, localGrab: 0, localReload: 0,
     lastInpStr: "",
     lastInpSent: 0,
+    // joiner-side movement of its own hero
+    predictEnabled: true,  // master switch (Net.predictEnabled = false -> the old "wait for the host" behaviour)
+    predictOn: false,      // true while this browser is moving its own hero
+    predicting: false,     // true only inside the local move() call (damage is the host's call, never ours)
+    predBad: 0, predPause: 0, predBroken: false, evOwner: 0,
+    predStat: { on: 0, off: 0, pulls: 0, snaps: 0, pauses: 0 },     // ticks moved locally / by the host, soft corrections, hard snaps, hand-backs
 
     available: function() { return /^https?:$/.test(location.protocol); },
     active: function() { return !!this.role; },
@@ -368,7 +387,7 @@ var Net = {
 
     pushEv: function(e) {
         if (this.role !== "host" || this.peerCount() === 0) return;
-        if (this.events.length < 120) this.events.push(e);
+        if (this.events.length < 120) this.events.push(this.evOwner ? ["o", this.evOwner, e] : e);
     },
 
     // ---- entity serialisation (delta against the last snapshot)
@@ -377,14 +396,15 @@ var Net = {
         return o._nid;
     },
 
-    ser: function(o, full) {
+    ser: function(o, full, npc) {
         var last = o._ns;
         if (!last || full) { last = {}; window.Object.defineProperty(o, "_ns", { value: last, enumerable: false, writable: true, configurable: true }); }
         var out = null;
         for (var k in o) {
-            if (k.charCodeAt(0) === 95 || NET_SKIP[k] === 1) continue;     // "_" private
+            if (k.charCodeAt(0) === 95 || NET_SKIP[k] === 1 || k === "animPhase") continue;     // "_" private; animPhase advances in each screen's own draw
+            if (npc && (NET_SKIP_NPC[k] === 1 || (k.charCodeAt(0) === 110 && k.charCodeAt(1) === 97 && k.charCodeAt(2) === 118))) continue;   // nav*
             var v = o[k], t = typeof v, enc;
-            if (t === "number") enc = isFinite(v) ? Math.round(v * 100) / 100 : null;
+            if (t === "number") enc = isFinite(v) ? ((k === "x" || k === "y") ? Math.round(v * 10) / 10 : Math.round(v * 100) / 100) : null;
             else if (t === "string" || t === "boolean") enc = v;
             else if (v === null) enc = null;
             else if (t === "object") {
@@ -401,7 +421,7 @@ var Net = {
                     continue;
                 }
             } else continue;
-            if (t !== "object" && last[k] === enc && k in last) continue;
+            if ((t !== "object" || v === null) && last[k] === enc && k in last) continue;      // unchanged (empty fields too)
             last[k] = enc;
             (out || (out = {}))[k] = enc;
         }
@@ -409,9 +429,14 @@ var Net = {
     },
 
     serRagdoll: function(rd, full) {
-        var d = this.ser(rd, full) || {};
+        var d = this.ser(rd, full);
         var pts = [];
-        for (let i = 0; i < rd.pts.length; i++) pts.push(Math.round(rd.pts[i].x * 10) / 10, Math.round(rd.pts[i].y * 10) / 10, rd.pts[i].r);
+        for (let i = 0; i < rd.pts.length; i++) pts.push(Math.round(rd.pts[i].x), Math.round(rd.pts[i].y), rd.pts[i].r);
+        var key = pts.join(",");
+        if (!full && rd._nsPts === key) return d;            // a body lying still: nothing to resend
+        if (rd._nsPts === undefined) window.Object.defineProperty(rd, "_nsPts", { value: key, enumerable: false, writable: true });
+        rd._nsPts = key;
+        d = d || {};
         d.pts = pts;
         return d;
     },
@@ -424,7 +449,7 @@ var Net = {
             var id = this.nid(e);
             o.push(id);
             if (!every && !full && e._ns) continue;
-            var x = ragdoll ? this.serRagdoll(e, full) : this.ser(e, full);
+            var x = ragdoll ? this.serRagdoll(e, full) : this.ser(e, full, e instanceof Character && !e.isPlayer);
             if (x) { d[id] = x; any = true; }
         }
         return any || full ? { o: o, d: d } : { o: o };
@@ -439,6 +464,8 @@ var Net = {
         this.fullNext = false;
         var staticsEvery = full || this.tickNo % 20 === 0 || staticObjects.length !== this._lastStaticCount;
         this._lastStaticCount = staticObjects.length;
+        // every 2 s each joiner's hero is sent whole, so a wrong local guess can never stick
+        for (var rk in this.peers) { var rp = this.peers[rk]; if (rp.ch && rp.ch._ns && (this.tickNo + rp.pid * 14) % 120 === 0) rp.ch._ns = null; }
         var C = {
             ch: this.collection(characters, full, true),
             zb: this.collection(zombies, full, true),
@@ -451,16 +478,21 @@ var Net = {
             rd: this.collection(typeof Ragdolls !== "undefined" ? Ragdolls.list : [], full, true, true)
         };
         if (staticsEvery) C.st = this.collection(staticObjects, full, true);
-        var g = {};
-        for (let i = 0; i < NET_GLOBALS.length; i++) g[NET_GLOBALS[i]] = window[NET_GLOBALS[i]];
-        g.multiplayer = multiplayer;
+        // HUD numbers: only the ones that changed since the last packet
+        var g = {}, lg = full ? (this._lastG = {}) : (this._lastG || (this._lastG = {}));
+        for (let i = 0; i < NET_GLOBALS.length; i++) { var gk = NET_GLOBALS[i], gv = window[gk]; if (lg[gk] !== gv) { lg[gk] = gv; g[gk] = gv; } }
+        if (lg.multiplayer !== multiplayer) { lg.multiplayer = multiplayer; g.multiplayer = multiplayer; }
+        var hsp = settings.heroSpeed; if (lg._hostHeroSpeed !== hsp) { lg._hostHeroSpeed = hsp; g._hostHeroSpeed = hsp; }
+        var brS = JSON.stringify(brawl), brSend = (full || brS !== this._lastBr) ? brawl : undefined; this._lastBr = brS;
+        var gsO = (typeof Gadgets !== "undefined") ? { starsGot: Gadgets.starsGot, starsTotal: Gadgets.starsTotal, deaths: Gadgets.deaths, keys: Gadgets.keys } : null;
+        var gsS = JSON.stringify(gsO), gsSend = (full || gsS !== this._lastGs) ? gsO : undefined; this._lastGs = gsS;
         var you = {};
         for (var k in this.peers) if (this.peers[k].ch) you[k] = this.nid(this.peers[k].ch);
         var snap = {
             t: "snap", f: this.tickNo, full: full ? 1 : 0, rs: this.resetNo,
             mode: GameModes.current ? GameModes.current.id : "survival",
             lvl: (typeof LevelManager !== "undefined") ? LevelManager.currentLevelKey : "",
-            g: g, br: brawl, gs: (typeof Gadgets !== "undefined") ? { starsGot: Gadgets.starsGot, starsTotal: Gadgets.starsTotal, deaths: Gadgets.deaths, keys: Gadgets.keys } : null,
+            g: g, br: brSend, gs: gsSend,
             r: { red: redGuy ? this.nid(redGuy) : 0, blue: blueGuy ? this.nid(blueGuy) : 0 },
             you: you, c: C, ev: this.events,
             ms: GameModes.has("netState") ? GameModes.call("netState") : undefined
@@ -544,8 +576,11 @@ var Net = {
             var e = fresh[i][0], d = fresh[i][1], key = fresh[i][2];
             var smooth = (key === "ch" || key === "zb" || key === "mv") && !e._new;
             var ox = e.x, oy = e.y;
+            var mineNow = this.predictOn && key === "ch" && e._nid === this.myNid && !e._new;
             for (var k in d) {
                 var v = d[k];
+                if (mineNow && NET_PREDICT_KEYS[k] === 1) { e["_h" + k] = v; e._hFresh = true; continue; }     // the host's opinion, kept for the correction step
+                if (key === "ch" && NET_PREDICT_KEYS[k] === 1) e["_h" + k] = v;
                 if (k === "pts" && key === "rd") {
                     var pts = e.pts || (e.pts = []);
                     pts.length = v.length / 3;
@@ -561,7 +596,8 @@ var Net = {
                 }
                 e[k] = v;
             }
-            if (smooth && ox !== undefined && Math.hypot(e.x - ox, e.y - oy) < 260) {
+            if (mineNow) { e._tx = undefined; }
+            else if (smooth && ox !== undefined && Math.hypot(e.x - ox, e.y - oy) < 260) {
                 e._tx = e.x; e._ty = e.y; e.x = ox; e.y = oy;
             } else { e._tx = undefined; }
             e._new = false;
@@ -586,6 +622,8 @@ var Net = {
         var ev = s.ev || [];
         for (let i = 0; i < ev.length; i++) {
             var x = ev[i];
+            // an effect made by my own hero's movement: this browser already played it when it moved the hero
+            if (x[0] === "o") { if (x[1] === this.pid && this.predictOn) continue; x = x[2]; }
             try {
                 if (x[0] === "s" && typeof SFX !== "undefined") SFX.play(x[1], x[2], x[3], x[4], x[5]);
                 else if (x[0] === "t") Components.addFloatingText(x[1], x[2], x[3], x[4], x[5]);
@@ -594,6 +632,13 @@ var Net = {
             } catch (e) {}
         }
         if (typeof StaticGrid !== "undefined" && C.st) StaticGrid.build();
+        // the movement code collides against these lists; keep them matching what the host just sent
+        allObjects = [];
+        for (let i = 0; i < staticObjects.length; i++) if (!staticObjects[i].dead) allObjects.push(staticObjects[i]);
+        for (let i = 0; i < movingObjects.length; i++) if (!movingObjects[i].dead) allObjects.push(movingObjects[i]);
+        for (let i = 0; i < characters.length; i++) allObjects.push(characters[i]);
+        for (let i = 0; i < zombies.length; i++) if (!zombies[i].dead) allObjects.push(zombies[i]);
+        if (typeof DynGrid !== "undefined") { try { DynGrid.build(); } catch (e) {} }
         if (missing && performance.now() - (this.lastFullAsk || 0) > 500) { this.lastFullAsk = performance.now(); this.requestFull(); }
     },
 
@@ -602,7 +647,7 @@ var Net = {
     myChar: function() { return this.objs.get(this.myNid) || null; },
 
     // read this device's keyboard / mouse / pad and send it to the host
-    sendInput: function() {
+    readInput: function() {
         var inp = PlayerInput[0];
         var pad = (typeof Pads !== "undefined") ? Pads.state[0] : null;
         var padOn = pad && pad.active;
@@ -624,6 +669,10 @@ var Net = {
         if (GameModes.has("netInput")) { try { m.x = GameModes.call("netInput"); } catch (e) {} }    // full-screen games send their own controls
         if (padOn && pad.aim) m.ag = Math.round((Math.degrees(Math.atan2(pad.aim[0], -pad.aim[1])) + 360) % 360);
         else if (useMouseAim && me) { var mp = Components.getMouseWorldPos(); m.ax = Math.round(mp[0]); m.ay = Math.round(mp[1]); }
+        return m;
+    },
+    sendInput: function() {
+        var m = this.localIn = this.readInput();
         var str = JSON.stringify(m);
         var now = performance.now();
         if (str !== this.lastInpStr || now - this.lastInpSent > 100) {
@@ -631,6 +680,76 @@ var Net = {
             this.lastInpStr = str;
             this.lastInpSent = now;
         }
+    },
+
+    // Can this browser move its own hero right now? Not while the host is throwing it around (ragdoll, stun,
+    // frozen, carried, dead), not before a brawl starts, and not in games where the mode itself drives the hero.
+    canPredict: function(me) {
+        if (!this.predictEnabled || this.predBroken || !me || me.dead || me.eliminated || !me.isPlayer) return false;
+        if (this.predPause > 0) { this.predPause--; return false; }
+        if (me.ragdollTimer > 0 || me.liveRagdoll || me.hitstun > 0 || me.frozenTimer > 0 || me.staggerTimer > 0 || me.heldBy || me.vehicle || me.riding) return false;
+        if (typeof brawl !== "undefined" && brawl.active && brawl.phase !== "fight") return false;
+        if (GameModes.flag("playerControl", true) === false || GameModes.flag("netPredict", true) === false) return false;
+        if (typeof me.move !== "function" || me._hx === undefined) return false;
+        return true;
+    },
+
+    predictStep: function(me) {
+        var was = this.predictOn;
+        this.predictOn = this.canPredict(me);
+        if (!this.predictOn) {
+            this.predStat.off++;
+            // handing the hero back to the host: ease onto where the host has it
+            if (was && me && me._hx !== undefined) { me._tx = me._hx; me._ty = me._hy; me.xspeed = me._hxspeed || 0; me.yspeed = me._hyspeed || 0; }
+            return;
+        }
+        if (!was) { me._tx = undefined; this.predBad = 0; this.seenDash = this.localDash; }
+        var i = this.localIn || this.readInput();
+        me.upPressed = !!i.u; me.downPressed = !!i.d; me.leftPressed = !!i.l; me.rightPressed = !!i.r;
+        me.netIn = { shoot: !!i.sh, jet: !!i.jt, interact: !!i.it, reloadQueued: false };
+        if (i.ax !== undefined && i.ay !== undefined) me.degree = me.degreeToGoCW = (Math.degrees(Math.atan2(i.ax - me.x, i.ay - me.y)) + 360) % 360;
+        else if (i.ag !== undefined) me.degree = me.degreeToGoCW = i.ag;
+        // the host decides health and death; this browser only decides where the hero stands
+        var hp = me.health, sh = me.shield, dead = me.dead;
+        var mySpeed = settings.heroSpeed;
+        if (window._hostHeroSpeed) settings.heroSpeed = window._hostHeroSpeed;       // run at the host's speed setting, not this device's
+        this.predicting = true;
+        try {
+            if (this.localDash !== this.seenDash) { this.seenDash = this.localDash; if (typeof me.triggerNinjaDash === "function") me.triggerNinjaDash(); }
+            me.move();
+            CollisionDetector.enforceNonPenetration(staticObjects, [me]);
+            // a crate I'm pushing is only a picture here until the host's next packet: slide it now so it doesn't block me
+            var hit = me.collidedWith;
+            if (hit && !hit.heldBy && hit.isStatic !== true && movingObjects.indexOf(hit) !== -1 && Math.abs(hit.xspeed || 0) > 0.2 && (hit.xspeed > 0) === (me.x < hit.x)) {
+                hit.x += hit.xspeed; if (hit._tx !== undefined) hit._tx += hit.xspeed;
+            }
+        } catch (e) {
+            this.predBroken = true;
+            if (!this._predWarned) { this._predWarned = true; console.warn("net: local movement switched off", e); }
+        }
+        this.predicting = false;
+        settings.heroSpeed = mySpeed;
+        me.health = hp; me.shield = sh; me.dead = dead;
+        if (!isFinite(me.x) || !isFinite(me.y)) { me.x = me._hx; me.y = me._hy; me.xspeed = 0; me.yspeed = 0; }
+        // correction: the host runs the same keys a few frames later, so while moving it trails by speed x lag. Only
+        // pull toward it when the gap is bigger than that; when both stand still, settle onto the host exactly.
+        var fresh = me._hFresh; me._hFresh = false;
+        var ex = me._hx - me.x, ey = me._hy - me.y, err = Math.hypot(ex, ey);
+        var sp = Math.hypot(me.xspeed, me.yspeed) + Math.hypot(me._hxspeed || 0, me._hyspeed || 0);
+        if (err > 420) { me.x = me._hx; me.y = me._hy; me.xspeed = me._hxspeed || 0; me.yspeed = me._hyspeed || 0; this.predBad = 0; this.predStat.snaps++; }
+        else if (sp < 1.2) { if (err > 1) { me.x += ex * 0.2; me.y += ey * 0.2; } }          // both at rest: settle onto the host exactly
+        else if (fresh) {
+            // lag only ever leaves the host BEHIND along my direction of travel. Host ahead = I lost time on something
+            // it didn't (a crate, another player): catch up quickly. Host behind by more than lag explains: ease back.
+            var along = ex * me.xspeed + ey * me.yspeed;
+            if (along > 0 && err > 8) { me.x += ex * 0.5; me.y += ey * 0.5; this.predStat.pulls++; }
+            else if (err > 26 + sp * 5) { me.x += ex * 0.2; me.y += ey * 0.2; this.predBad += 2; this.predStat.pulls++; }
+            else if (this.predBad > 0) this.predBad--;
+        }
+        // the host keeps putting the hero somewhere else (a vehicle, a lift, being carried): watch the host for 2 s
+        if (this.predBad > 60) { this.predBad = 0; this.predPause = 120; this.predStat.pauses++; }
+        this.predErr = err;
+        this.predStat.on++;
     },
 
     // replaces tick() on a client: draw the host's world
@@ -654,11 +773,16 @@ var Net = {
             this.drawWaiting("The host is playing " + (GameModes.current.title || "a game") + " — local-only for now (play it on the host's screen)");
             return;
         }
-        // smooth toward the latest snapshot positions; bullets keep flying between snapshots
+        // my own hero: moved by this browser right now (the host corrects it if we ever disagree)
+        var mine = this.myChar();
+        this.predictStep(mine);
+        // everyone else: keep gliding along their last known speed between snapshots, easing onto the host's position
         var lists = [characters, zombies, movingObjects];
         for (let l = 0; l < lists.length; l++) for (let i = 0; i < lists[l].length; i++) {
             var e = lists[l][i];
-            if (e._tx !== undefined) { e.x += (e._tx - e.x) * 0.45; e.y += (e._ty - e.y) * 0.45; }
+            if (e._tx === undefined || (e === mine && this.predictOn)) continue;
+            if (!e.dead && !e.heldBy && l < 2 && Math.abs(e.xspeed || 0) + Math.abs(e.yspeed || 0) < 40) { e._tx += (e.xspeed || 0) * 0.5; if (!e.onGround) e._ty += (e.yspeed || 0) * 0.5; }
+            e.x += (e._tx - e.x) * 0.45; e.y += (e._ty - e.y) * 0.45;
         }
         for (let i = 0; i < lazers.length; i++) { lazers[i].x += (lazers[i].xspeed || 0) * 0.5; lazers[i].y += (lazers[i].yspeed || 0) * 0.5; }
 

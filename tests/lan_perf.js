@@ -30,12 +30,22 @@ const init = () => { const O = Object; window.__O = { is: O.is, keys: O.keys, en
     await C.p.evaluate(() => { window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyD', key: 'd', bubbles: true })); document.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyD', key: 'd', bubbles: true })); });
     delays.push(d);
   }
-  const cl = await C.p.evaluate(() => ({ fps: measuredFPS, me: !!Net.myChar(), predicted: !!(Net.predicting) }));
+  const cl = await C.p.evaluate(() => ({ fps: measuredFPS, me: !!Net.myChar(), predicted: Net.predictOn, broken: Net.predBroken, err: Math.round(Net.predErr || 0), stat: Net.predStat }));
   // do host and joiner agree on where the joiner's hero is once it stops?
   await C.p.waitForTimeout(900);
   const hx = await H.p.evaluate(() => characters.filter(c => c.isRemote).map(c => Math.round(c.x))[0]);
   const cx = await C.p.evaluate(() => Math.round(Net.myChar().x));
-  console.log(JSON.stringify({ host, inputDelayMs: delays, client: cl, agree: { host: hx, joiner: cx, diff: Math.abs(hx - cx) } }, null, 1));
-  console.log([...H.errs, ...C.errs, ...C2.errs].slice(0, 8));
-  await b.close(); process.exit(0);
+  // Brawl over LAN: the joiner runs around while a CPU hits it (knockback / tumble = the host takes the hero back)
+  await H.p.evaluate(() => { godMode = false; GameModes.launch('brawl'); }); await C.p.waitForTimeout(5500);
+  await C.p.keyboard.down('KeyD'); await C.p.waitForTimeout(900); await C.p.keyboard.up('KeyD');
+  await C.p.keyboard.down('KeyA'); await C.p.waitForTimeout(900); await C.p.keyboard.up('KeyA'); await C.p.waitForTimeout(1200);
+  const brawlR = await C.p.evaluate(() => { const m = Net.myChar(); return { mode: GameModes.current.id, me: !!m, local: Net.predictOn, broken: Net.predBroken, gap: m ? Math.round(Math.hypot(m.x - m._hx, m.y - m._hy)) : -1, stat: Net.predStat }; });
+  const med = delays.slice().sort((a, b) => a - b)[2];
+  const out = { host, inputDelayMs: delays, medianDelay: med, client: cl, agree: { host: hx, joiner: cx, diff: Math.abs(hx - cx) }, brawl: brawlR };
+  console.log(JSON.stringify(out, null, 1));
+  const errs = [...H.errs, ...C.errs, ...C2.errs]; console.log(errs.slice(0, 8));
+  // baseline before local movement + packet diet: 5097 B/packet, 145 KB/s, 80 ms
+  const ok = host.avgBytes < 3000 && med <= 50 && out.agree.diff <= 6 && !cl.broken && !brawlR.broken && brawlR.me && !errs.length;
+  console.log(ok ? 'PASS' : 'FAIL');
+  await b.close(); process.exit(ok ? 0 : 1);
 })();

@@ -4,7 +4,7 @@ Kept up to date on every push. Finished items move to `RETROS.md` (with measurem
 Last updated: after the UI pass (top bar, pause menu, Level Studio, one-click LAN).
 
 ## Your list of 2026-11-11 (evening) — order: multiplayer, then menus/tools, then games. Live status: PROGRESS.md
-- [ ] LAN: joiners' browsers calculate their own hero locally so play is fluid; smaller packets.
+- [x] LAN: joiners' browsers calculate their own hero locally so play is fluid; smaller packets. → 80 → 37 ms input delay, 5.1 → 1.9 KB packets (`tests/lan_perf.js`). Needs your feel-test on two real devices.
 - [ ] LAN: player 2 can't see the food I drop in Blob Arena.   - [ ] Player 2 movement in the soccer game doesn't work.
 - [ ] Blob Arena: game settings (decay rate, increasing decay), size cheat, more players (slider / custom amount),
       interacts with other things already coded.

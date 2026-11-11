@@ -1045,11 +1045,14 @@ function frame() {
     if (typeof Vehicles !== "undefined") Vehicles.preUpdate();
     GameModes.call("preUpdate");
 
+    var netHosting = typeof Net !== "undefined" && Net.role === "host";
     for (let i = 0; i < characters.length; i++) {
         if (!characters[i].dead) {
             Components.moveTypeFinder(characters[i]);
             Components.shootLazer(characters[i]);
+            if (netHosting) Net.evOwner = characters[i].netPid || 0;     // joiners already played their own hero's movement effects
             characters[i].move();
+            if (netHosting) Net.evOwner = 0;
         }
     }
 

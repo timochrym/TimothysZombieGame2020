@@ -6,6 +6,32 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## LAN: each joiner's browser moves its own hero; packets 62% smaller
+
+**Asked:** "fix multiplayer LAN to rely on the browser's own calculated results to keep the game fluid… laggy probably
+because so much data is being sent every packet. We need a method of local calculations for connected players."
+**Measured first** (`tests/lan_perf.js`: host + 2 joiners, 17 enemies): 5.1 KB a packet, 145 KB/s, and 80 ms from a
+joiner's key press to its own hero moving, with no real network in between. So the lag was mostly the design
+(key → host → picture back); the packet size made it worse on Wi-Fi.
+**Shipped:** `Net.predictStep` — the joiner runs the same `Character.move()` the host runs, on its own hero, against
+the level pieces it already has. The host still simulates that hero from the same keys and is the referee; the joiner
+corrects toward it only past what lag explains, catches up fast when the host is ahead, snaps on teleports, and gives
+the hero back to the host during ragdoll / stun / freeze / carry / pre-fight, or if corrections keep piling up. Damage
+and death are never decided locally. Effects made by the hero's own movement are tagged so the joiner doesn't hear
+them twice. Others glide on their last known speed between packets. Packet diet: empty fields were being resent every
+packet (the dedupe check skipped `null`); enemies drop 25 AI-only fields and all route-planning ones; still bodies
+don't resend points; HUD numbers / brawl / gadget stats only when changed.
+**After:** 1.9 KB a packet, 52 KB/s, 37 ms median input delay, positions agree to 1 px; Brawl over LAN passes.
+**Went wrong:** (1) the local hero wouldn't accelerate: movement collides against `allObjects`, which only the host
+kept current, so the joiner's hero thought it was inside something. (2) it fell 40–50 px behind after bumping a crate,
+because a crate on the joiner is only a picture until the next packet; it now slides the crate it pushes and catches
+up whenever the host is ahead. (3) `lan_play.js` read the bullet count at one instant and saw 0 after the hero pushed
+a crate in front of its own gun; it now tracks the peak and shoots away from the crate.
+**Left:** crowds of enemies can still hold the joiner up briefly (about 90 px, then it slides). Bullets still appear
+one round trip later. Arena / board games draw from host packets as before.
+
+---
+
 ## Picked up from the other agent's handoff + game cheats where there were none
 
 **Asked:** "Continue where the other agent left off." Its branch (`codex/arcade-handoff-fixes`, commit 1e05e4a) builds on
