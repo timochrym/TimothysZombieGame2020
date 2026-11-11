@@ -6,6 +6,19 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Table Games: Pocket Race (cue game)
+
+**Shipped:** a fifth table game — 7 coloured balls racked against the white on a six-pocket table. Drag back from the
+white and let go (or ←/→ aim, ↑/↓ power, Space). Pot a ball: +1 and shoot again; pot the white: -1 and the turn
+passes; the higher score when the table is clear wins. The CPU uses the ghost-ball method (where the white must hit
+each ball to send it at each pocket), skips blocked lines, prefers straight short shots, aim noise by skill. Pass-and-
+play and LAN (balls, scores, turn and aim sync).
+
+**Measured (`tests/table_pool.js`):** a real mouse drag broke the rack; a full match vs the hard CPU ran to the end,
+3 - 4 to BLUE, all 7 balls potted, about 1.5 minutes; no errors.
+
+---
+
 ## Brawl: character moves
 
 **Shipped:** every hero look now has its own E move in Brawl instead of everyone sharing the shockwave: Original Hero

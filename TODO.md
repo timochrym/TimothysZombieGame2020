@@ -132,7 +132,8 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       to 3, CPU that picks the best disc/angle, keyboard/pad aiming) and Four in a Row (minimax CPU, 3 skills), vs CPU or
       pass-and-play; Air Hockey (real time: mouse / WASD vs CPU, arrows or a LAN player; first to 7); Hill Cannons
       (turn-based artillery: craters, wind, CPU that simulates its shots, pass-and-play or a LAN player): DONE.
-      STILL TO DO: more minigames (pool-style cue game, darts, word grid).
+      Pocket Race (a cue game: 7 balls, pot = +1 and shoot again, scratch = -1; drag-back aiming, ghost-ball CPU, LAN):
+      DONE. STILL TO DO: more minigames (darts, word grid).
 
 ## UI pass (your request: top bars, pause menus, Studio, inspector, builders, LAN start)
 - [x] Top bar: 4 compact buttons + grouped ☰ menu, dims while playing, no HUD overlap, adapts to narrow windows.

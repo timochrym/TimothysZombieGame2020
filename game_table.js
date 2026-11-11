@@ -9,7 +9,7 @@
 var tableCfg = { game: "flick", vs: "cpu", level: 2 };
 try { var _tb = JSON.parse(localStorage.getItem("timsTableGames") || "null"); if (_tb) for (var _k in _tb) tableCfg[_k] = _tb[_k]; } catch (e) {}
 function saveTable() { try { localStorage.setItem("timsTableGames", JSON.stringify(tableCfg)); } catch (e) {} }
-var TABLE_GAMES = [["flick", "Flick Soccer"], ["four", "Four in a Row"], ["hockey", "Air Hockey"], ["arty", "Hill Cannons"]];
+var TABLE_GAMES = [["flick", "Flick Soccer"], ["four", "Four in a Row"], ["hockey", "Air Hockey"], ["arty", "Hill Cannons"], ["pool", "Pocket Race"]];
 var TABLE_COLORS = ["#ef4444", "#3b82f6"];
 
 // ---------------------------------------------------------------- FLICK SOCCER
@@ -568,6 +568,147 @@ var Arty = {
     }
 };
 
+// ---------------------------------------------------------------- POCKET RACE (cue game)
+//   7 balls, 6 pockets. Take turns striking the white ball: drag back from it and release (or ←/→ aim, ↑/↓ power,
+//   Space). Potting a ball scores 1 and you go again; potting the white (a scratch) costs a point and passes the turn.
+//   When the table is clear, the higher score wins.
+var Pool = {
+    PW: 1000, PH: 500, R: 15, PR: 30,
+    reset: function(first) {
+        this.balls = [];
+        var cols = ["#facc15", "#3b82f6", "#ef4444", "#a855f7", "#f97316", "#22c55e", "#be123c"], k = 0;
+        for (let row = 0; row < 4 && k < 7; row++) for (let i = 0; i <= row && k < 7; i++) this.balls.push({ x: 200 + row * this.R * 1.75, y: (i - row / 2) * this.R * 2.05, vx: 0, vy: 0, col: cols[k++] });
+        this.cue = { x: -260, y: 0, vx: 0, vy: 0, col: "#f8fafc", cue: true };
+        this.score = [0, 0]; this.turn = first || 0; this.phase = "aim"; this.aimA = 0; this.aimP = 0.5; this.drag = false; this.cpuT = 0; this.msg = ""; this.msgT = 0; this.potted = 0; this.scratch = false;
+    },
+    human: function(t) { return Flick.human(t); },
+    scale: function() { return Math.min((cssW - 80) / (this.PW + 100), (cssH - 190) / (this.PH + 100)); },
+    toScreen: function(x, y) { var s = this.scale(); return [cssW / 2 + x * s, cssH / 2 + 40 + y * s]; },
+    toWorld: function(sx, sy) { var s = this.scale(); return [(sx - cssW / 2) / s, (sy - cssH / 2 - 40) / s]; },
+    pockets: function() { var W = this.PW / 2, H = this.PH / 2; return [[-W, -H], [0, -H - 6], [W, -H], [-W, H], [0, H + 6], [W, H]]; },
+    all: function() { return this.balls.concat([this.cue]); },
+    shoot: function(ang, pow) {
+        var sp = 3 + pow * 30;
+        this.cue.vx = Math.cos(ang) * sp; this.cue.vy = Math.sin(ang) * sp;
+        this.phase = "move"; this.potted = 0; this.scratch = false; this.drag = false;
+        if (typeof SFX !== "undefined") SFX.play("hit", 0, 0, 0.4 + pow * 0.6);
+    },
+    physics: function() {
+        var B = this.all(), W = this.PW / 2, H = this.PH / 2, R = this.R, P = this.pockets(), self = this;
+        for (let sub = 0; sub < 3; sub++) {
+            for (let i = 0; i < B.length; i++) {
+                var b = B[i]; if (b.gone) continue;
+                b.x += b.vx / 3; b.y += b.vy / 3;
+                // pockets swallow a ball whose centre gets inside the mouth
+                for (let p = 0; p < P.length; p++) if (Math.hypot(b.x - P[p][0], b.y - P[p][1]) < self.PR) {
+                    b.gone = true; b.vx = b.vy = 0;
+                    if (b.cue) self.scratch = true; else self.potted++;
+                    if (typeof SFX !== "undefined") SFX.play("coin");
+                    break;
+                }
+                if (b.gone) continue;
+                if (b.x < -W + R) { b.x = -W + R; b.vx = Math.abs(b.vx) * 0.78; } if (b.x > W - R) { b.x = W - R; b.vx = -Math.abs(b.vx) * 0.78; }
+                if (b.y < -H + R) { b.y = -H + R; b.vy = Math.abs(b.vy) * 0.78; } if (b.y > H - R) { b.y = H - R; b.vy = -Math.abs(b.vy) * 0.78; }
+            }
+            for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++) {
+                var a = B[i], c = B[j]; if (a.gone || c.gone) continue;
+                var dx = c.x - a.x, dy = c.y - a.y, d = Math.hypot(dx, dy);
+                if (d >= 2 * R || d === 0) continue;
+                var nx = dx / d, ny = dy / d, over = (2 * R - d) / 2;
+                a.x -= nx * over; a.y -= ny * over; c.x += nx * over; c.y += ny * over;
+                var rv = (c.vx - a.vx) * nx + (c.vy - a.vy) * ny;
+                if (rv < 0) { var jj = -rv * 0.96; a.vx -= jj * nx; a.vy -= jj * ny; c.vx += jj * nx; c.vy += jj * ny; }
+            }
+        }
+        var still = true;
+        B.forEach(function(q) { if (q.gone) return; q.vx *= 0.985; q.vy *= 0.985; if (Math.hypot(q.vx, q.vy) < 0.08) { q.vx = q.vy = 0; } else still = false; });
+        if (!still) return;
+        // the shot is over: score it
+        var t = this.turn, name = t === 0 ? "RED" : "BLUE";
+        if (this.potted) { this.score[t] += this.potted; this.msg = name + " pots " + this.potted + "!" + (this.scratch ? "" : "  Shoot again"); this.msgT = 100; }
+        if (this.scratch) { this.score[t] = Math.max(0, this.score[t] - 1); this.msg = name + " scratched: -1"; this.msgT = 110; this.cue.gone = false; this.cue.x = -260; this.cue.y = 0; this.cue.vx = this.cue.vy = 0; }
+        if (this.balls.every(function(b) { return b.gone; })) {
+            this.phase = "over"; this.win = this.score[0] === this.score[1] ? -1 : (this.score[0] > this.score[1] ? 0 : 1);
+            if (typeof showBanner === "function") showBanner(this.win < 0 ? "DRAW!" : (this.win === 0 ? "RED" : "BLUE") + " WINS!", this.score[0] + " - " + this.score[1], this.win < 0 ? "#e2e8f0" : TABLE_COLORS[this.win]);
+            return;
+        }
+        if (!this.potted || this.scratch) this.turn = 1 - t;
+        this.phase = "aim"; this.cpuT = 0;
+    },
+    // CPU: for every ball and pocket, find where the white must hit it ("ghost ball"), skip blocked lines, prefer
+    // straight shots that are short; aim noise by skill
+    cpu: function() {
+        var c = this.cue, R = this.R, best = null, self = this, lvl = tableCfg.level;
+        var clear = function(x0, y0, x1, y1, skip) {
+            var lx = x1 - x0, ly = y1 - y0, L = Math.hypot(lx, ly) || 1;
+            return self.balls.every(function(o) { if (o.gone || o === skip) return true; var t = ((o.x - x0) * lx + (o.y - y0) * ly) / (L * L); return t < 0 || t > 1 || Math.hypot(x0 + lx * t - o.x, y0 + ly * t - o.y) > 2 * R; });
+        };
+        this.balls.forEach(function(b) {
+            if (b.gone) return;
+            self.pockets().forEach(function(p) {
+                var px = p[0] - b.x, py = p[1] - b.y, pl = Math.hypot(px, py);
+                var gx = b.x - px / pl * 2 * R, gy = b.y - py / pl * 2 * R;            // ghost-ball position
+                var ax = gx - c.x, ay = gy - c.y, al = Math.hypot(ax, ay);
+                var cut = (ax / al) * (px / pl) + (ay / al) * (py / pl);
+                if (cut < 0.25 || !clear(c.x, c.y, gx, gy, b) || !clear(b.x, b.y, p[0], p[1], b)) return;
+                var sc = cut * 200 - al * 0.08 - pl * 0.1;
+                if (!best || sc > best.sc) best = { sc: sc, ang: Math.atan2(ay, ax), pow: Math.min(1, 0.25 + (al + pl) / 1500 + (1 - cut) * 0.3) };
+            });
+        });
+        if (!best) best = { ang: Math.random() * Math.PI * 2, pow: 0.6 };                // nothing on: a safety bash
+        var noise = [0, 0.09, 0.035, 0.008][lvl];
+        this.shoot(best.ang + (Math.random() - 0.5) * noise, best.pow);
+    },
+    update: function() {
+        if (this.msgT > 0) this.msgT--;
+        if (this.phase === "move") { this.physics(); return; }
+        if (this.phase !== "aim") return;
+        if (!this.human(this.turn)) { if (++this.cpuT > 50) this.cpu(); return; }
+        if (typeof Net !== "undefined" && Net.role === "client") return;
+        var lanTurn = this.turn === 1 && Table.lanPid(), m = this.toWorld(mouseX, mouseY);
+        if (!lanTurn) {
+            if (mouseDown && !this.drag && Math.hypot(this.cue.x - m[0], this.cue.y - m[1]) < this.R + 30) this.drag = true;
+            if (this.drag) { var qx = this.cue.x - m[0], qy = this.cue.y - m[1]; this.aimA = Math.atan2(qy, qx); this.aimP = Math.min(1, Math.hypot(qx, qy) / 260); }
+            if (!mouseDown && this.drag) { if (this.aimP > 0.05) { this.shoot(this.aimA, this.aimP); return; } this.drag = false; }
+        }
+        var ks = Flick.keys(this.turn);
+        if (ks.left) this.aimA -= 0.025; if (ks.right) this.aimA += 0.025;
+        if (ks.up) this.aimP = Math.min(1, this.aimP + 0.012); if (ks.down) this.aimP = Math.max(0.05, this.aimP - 0.012);
+        if (ks.fire && !this.prevFire && !this.drag) this.shoot(this.aimA, this.aimP);
+        this.prevFire = ks.fire;
+    },
+    draw: function() {
+        var s = this.scale(), W = this.PW / 2, H = this.PH / 2, self = this;
+        ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, cssW, cssH);
+        var a = this.toScreen(-W - 34, -H - 34), z = this.toScreen(W + 34, H + 34);
+        ctx.fillStyle = "#78350f"; ctx.fillRect(a[0], a[1], z[0] - a[0], z[1] - a[1]);
+        var a2 = this.toScreen(-W, -H), z2 = this.toScreen(W, H);
+        ctx.fillStyle = "#166534"; ctx.fillRect(a2[0], a2[1], z2[0] - a2[0], z2[1] - a2[1]);
+        this.pockets().forEach(function(p) { var q = self.toScreen(p[0], p[1]); ctx.fillStyle = "#020617"; ctx.beginPath(); ctx.arc(q[0], q[1], self.PR * s, 0, 7); ctx.fill(); });
+        // aim line + cue stick (human's turn)
+        if (this.phase === "aim" && !this.cue.gone && (this.human(this.turn) || this.drag)) {
+            var c = this.toScreen(this.cue.x, this.cue.y), L = 160 * s;
+            ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.setLineDash([6, 8]); ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(c[0] + Math.cos(this.aimA) * 420 * s, c[1] + Math.sin(this.aimA) * 420 * s); ctx.stroke(); ctx.setLineDash([]);
+            var back = (20 + this.aimP * 90) * s;
+            ctx.strokeStyle = "#d6a35c"; ctx.lineWidth = 7 * s + 2; ctx.lineCap = "round";
+            ctx.beginPath(); ctx.moveTo(c[0] - Math.cos(this.aimA) * back, c[1] - Math.sin(this.aimA) * back); ctx.lineTo(c[0] - Math.cos(this.aimA) * (back + L * 2), c[1] - Math.sin(this.aimA) * (back + L * 2)); ctx.stroke();
+        }
+        this.all().forEach(function(b) {
+            if (b.gone) return;
+            var q = self.toScreen(b.x, b.y);
+            ctx.fillStyle = b.col; ctx.beginPath(); ctx.arc(q[0], q[1], self.R * s, 0, 7); ctx.fill();
+            ctx.strokeStyle = "rgba(0,0,0,0.5)"; ctx.lineWidth = 1.5; ctx.stroke();
+            ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.beginPath(); ctx.arc(q[0] - self.R * s * 0.35, q[1] - self.R * s * 0.35, self.R * s * 0.3, 0, 7); ctx.fill();
+        });
+        var who = function(t) { return (t === 0 ? "RED" : "BLUE") + (tableCfg.vs === "cpu" ? (t === 0 ? " (you)" : " (CPU)") : ""); };
+        uiPanel(cssW / 2 - 230, 64, 460, 54, this.phase === "over" ? (this.win < 0 ? "#e2e8f0" : TABLE_COLORS[this.win]) : TABLE_COLORS[this.turn]);
+        uiText(this.phase === "over" ? (this.win < 0 ? "DRAW" : who(this.win) + " WINS") + "  ·  Space for a rematch" : (this.msgT > 0 ? this.msg : who(this.turn) + "'s shot"), cssW / 2, 88, 16, "#fff", "center", "900");
+        uiText("RED " + this.score[0] + "   ·   BLUE " + this.score[1] + "   ·   " + this.balls.filter(function(b) { return !b.gone; }).length + " balls left", cssW / 2, 108, 12, "#cbd5e1", "center", "800");
+        uiText("Drag back from the white ball and let go (or ←/→ aim, ↑/↓ power, Space) · pot = +1 and shoot again · scratch = -1 · Esc: opponent / game", cssW / 2, cssH - 14, 12, "rgba(220,230,240,0.7)", "center", "700");
+    }
+};
+
 // ---------------------------------------------------------------- the glue: which game is on, LAN state
 var Table = {
     lanPid: function() { if (typeof Net === "undefined" || Net.role !== "host") return null; for (var k in Net.peers) return Net.peers[k].pid; return null; },
@@ -576,6 +717,7 @@ var Table = {
             f: { d: Flick.discs.map(function(q) { return [Math.round(q.x), Math.round(q.y), q.t]; }), b: [Math.round(Flick.ball.x), Math.round(Flick.ball.y)], turn: Flick.turn, phase: Flick.phase, score: Flick.score, sel: Flick.sel, aimA: Flick.aimA, aimP: Flick.aimP, msg: Flick.msg, msgT: Flick.msgT, win: Flick.winner },
             q: { g: Four.g, turn: Four.turn, over: Four.over, win: Four.win, line: Four.line, col: Four.col },
             a: Arty.h ? { h: Arty.h.map(Math.round), k: Arty.tank.map(function(T) { return [T.x, T.hp, Math.round(T.ang), Math.round(T.pow), T.hit || 0, T.lastDmg || 0]; }), t: Arty.turn, s: Arty.shell ? [Math.round(Arty.shell.x), Math.round(Arty.shell.y)] : null, w: Arty.wind, o: Arty.over, win: Arty.win, b: Arty.boom ? [Arty.boom.x, Arty.boom.y, Arty.boom.t] : null } : null,
+            p: Pool.balls ? { b: Pool.all().map(function(b) { return [Math.round(b.x), Math.round(b.y), b.gone ? 1 : 0]; }), s: Pool.score, t: Pool.turn, ph: Pool.phase, a: Pool.aimA, pw: Pool.aimP, m: Pool.msg, mt: Pool.msgT, w: Pool.win } : null,
             h: { m: Hockey.m.map(function(M) { return [Math.round(M.x), Math.round(M.y)]; }), p: [Math.round(Hockey.puck.x), Math.round(Hockey.puck.y)], s: Hockey.score, ph: Hockey.phase, w: Hockey.winner, msg: Hockey.msg, mt: Hockey.msgT } };
     },
     apply: function(m) {
@@ -586,6 +728,7 @@ var Table = {
         Flick.ball.x = F.b[0]; Flick.ball.y = F.b[1]; Flick.turn = F.turn; Flick.phase = F.phase; Flick.score = F.score; Flick.sel = F.sel; Flick.aimA = F.aimA; Flick.aimP = F.aimP; Flick.msg = F.msg; Flick.msgT = F.msgT; Flick.winner = F.win;
         if (m.h) { if (!Hockey.puck) Hockey.reset(); m.h.m.forEach(function(a, i) { Hockey.m[i].x = a[0]; Hockey.m[i].y = a[1]; }); Hockey.puck.x = m.h.p[0]; Hockey.puck.y = m.h.p[1]; Hockey.score = m.h.s; Hockey.phase = m.h.ph; Hockey.winner = m.h.w; Hockey.msg = m.h.msg; Hockey.msgT = m.h.mt; }
         if (m.a) { var A = m.a; if (!Arty.h) Arty.reset(0); Arty.h = A.h; A.k.forEach(function(k, i) { var T = Arty.tank[i]; T.x = k[0]; T.hp = k[1]; T.ang = k[2]; T.pow = k[3]; T.hit = k[4]; T.lastDmg = k[5]; }); Arty.turn = A.t; Arty.shell = A.s ? { x: A.s[0], y: A.s[1] } : null; Arty.wind = A.w; Arty.over = A.o; Arty.win = A.win; Arty.boom = A.b ? { x: A.b[0], y: A.b[1], t: A.b[2] } : null; if (Arty.shell) Arty.trail.push([Arty.shell.x, Arty.shell.y]); else Arty.trail = Arty.trail.slice(-200); }
+        if (m.p) { if (!Pool.balls) Pool.reset(0); var PB = Pool.all(); m.p.b.forEach(function(q, i) { if (PB[i]) { PB[i].x = q[0]; PB[i].y = q[1]; PB[i].gone = !!q[2]; } }); Pool.score = m.p.s; Pool.turn = m.p.t; Pool.phase = m.p.ph; Pool.aimA = m.p.a; Pool.aimP = m.p.pw; Pool.msg = m.p.m; Pool.msgT = m.p.mt; Pool.win = m.p.w; }
         var Q = m.q; Four.g = Q.g; Four.turn = Q.turn; Four.over = Q.over; Four.win = Q.win; Four.line = Q.line; Four.col = Q.col; Four.drop = null;
     }
 };
@@ -596,7 +739,7 @@ ModeKit.addLevel("table_games", { name: "🎲 Table Games", mode: "table", waves
 GameModes.register({
     id: "table",
     title: "TABLE GAMES",
-    tagline: "2-player minigames: tabletop flick soccer, four in a row, air hockey and hill cannons. Vs CPU, pass-and-play or LAN.",
+    tagline: "2-player minigames: tabletop flick soccer, four in a row, air hockey, hill cannons and a pocket-race cue game. Vs CPU, pass-and-play or LAN.",
     color: "#22c55e",
     firstLevel: "table_games",
     flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: false },
@@ -604,9 +747,9 @@ GameModes.register({
 
     seats: function() {
         return [{ label: "RED", options: ["human"], value: "human", set: function() {} },
-            { label: "BLUE", options: ["human", "cpu"], value: tableCfg.vs === "p2" ? "human" : "cpu", note: "human = pass-and-play (or a LAN player takes BLUE)", set: function(v) { tableCfg.vs = v === "human" ? "p2" : "cpu"; multiplayer = v === "human"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); } }];
+            { label: "BLUE", options: ["human", "cpu"], value: tableCfg.vs === "p2" ? "human" : "cpu", note: "human = pass-and-play (or a LAN player takes BLUE)", set: function(v) { tableCfg.vs = v === "human" ? "p2" : "cpu"; multiplayer = v === "human"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); } }];
     },
-    setupLevel: function() { multiplayer = tableCfg.vs === "p2"; Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); this.lastMouse = [mouseX, mouseY]; },
+    setupLevel: function() { multiplayer = tableCfg.vs === "p2"; Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); this.lastMouse = [mouseX, mouseY]; },
 
     screenFrame: function() {
         Four.mouseMoved = Math.hypot(mouseX - this.lastMouse[0], mouseY - this.lastMouse[1]) > 2;
@@ -615,6 +758,7 @@ GameModes.register({
         if (tableCfg.game === "four") { Four.update(); Four.draw(); }
         else if (tableCfg.game === "hockey") { Hockey.update(); Hockey.draw(); if (Hockey.phase === "over" && SpacePressed) Hockey.reset(); }
         else if (tableCfg.game === "arty") { Arty.update(); Arty.draw(); if (Arty.over && SpacePressed && !Arty.pF) Arty.reset(Arty.win === 0 ? 1 : 0); Arty.pF = SpacePressed; }
+        else if (tableCfg.game === "pool") { Pool.update(); Pool.draw(); if (Pool.phase === "over" && SpacePressed && !Pool.pF) Pool.reset(Pool.win === 0 ? 1 : 0); Pool.pF = SpacePressed; }
         else { Flick.update(); Flick.draw(); }
         if (tableCfg.game === "flick" && Flick.phase === "over" && (SpacePressed || (mouseDown && !Flick.mouseLock))) { Flick.reset(); Flick.mouseLock = true; }
         uiPanel(14, 10, 280, 48, "#22c55e");
@@ -624,7 +768,7 @@ GameModes.register({
 
     screenDraw: function() {
         // LAN client view: blue is me; reuse the normal drawing (client-side "human" = it's my turn)
-        if (tableCfg.game === "four") Four.draw(); else if (tableCfg.game === "hockey") Hockey.draw(); else if (tableCfg.game === "arty") Arty.draw(); else Flick.draw();
+        if (tableCfg.game === "four") Four.draw(); else if (tableCfg.game === "hockey") Hockey.draw(); else if (tableCfg.game === "arty") Arty.draw(); else if (tableCfg.game === "pool") Pool.draw(); else Flick.draw();
         uiPanel(14, 10, 300, 48, "#22c55e");
         uiText("TABLE GAMES  ·  you are BLUE", 28, 36, 16, "#86efac", "left", "900");
         uiText("Four in a Row: ←/→ + Space   ·   Flick: ←/→ aim, ↑/↓ power, E next disc, Space shoot", 28, 52, 10, "#cbd5e1", "left", "700");
@@ -656,11 +800,11 @@ GameModes.register({
     },
     onMenu: function(id, dir) {
         if (id === "tb_game") { var gi = TABLE_GAMES.findIndex(function(g) { return g[0] === tableCfg.game; }); tableCfg.game = TABLE_GAMES[(gi + (dir || 1) + TABLE_GAMES.length) % TABLE_GAMES.length][0]; saveTable(); return true; }
-        if (id === "tb_vs") { tableCfg.vs = tableCfg.vs === "cpu" ? "p2" : "cpu"; multiplayer = tableCfg.vs === "p2"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); return true; }
+        if (id === "tb_vs") { tableCfg.vs = tableCfg.vs === "cpu" ? "p2" : "cpu"; multiplayer = tableCfg.vs === "p2"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); return true; }
         if (id === "tb_lvl") { tableCfg.level = ((tableCfg.level - 1 + (dir || 1) + 3) % 3) + 1; saveTable(); return true; }
-        if (id === "tb_new") { closePause(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); return true; }
+        if (id === "tb_new") { closePause(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); return true; }
         return false;
     },
-    onRestart: function() { Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); },
-    overSub: function() { return "Flick soccer · four in a row · air hockey · hill cannons"; }
+    onRestart: function() { Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); },
+    overSub: function() { return "Flick soccer · four in a row · air hockey · hill cannons · pocket race"; }
 });
