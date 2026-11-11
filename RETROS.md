@@ -6,6 +6,20 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Connecting the games and the Level Studio (step 3, first game: Wobble Wheels)
+
+**Shipped:** Wobble Wheels can be built in the Level Studio. Pick the rules "Wobble Wheels (course)" and a Wobble
+Wheels palette appears (mine, swinging log, spike strip, crumble slab, finish line — game-specific categories only show
+for their game); checkpoints are the usual gadget. The Studio converts the document to the game's course format
+(traps, finish line, checkpoints) for play-testing and saving, and back: the built-in courses open with all their
+traps as editable pieces. Saved courses appear in Wobble Wheels' course select.
+
+**Measured (`tests/studio_wheels.js`):** Trap Alley opened with 9 traps and its finish at 7300; a new course with 2
+mines, a checkpoint and a finish play-tested as a real Wobble Wheels run (1 rider, 2 mines, finish 3000, checkpoint
+1200); after saving, the course select listed "My Wheels Course" after the 4 built-ins; no errors.
+
+---
+
 ## Connecting the games and the inspector (step 2 of 3)
 
 **Shipped:** `inspect.js`. Before, Edit mode could only pick blocks, crates and enemies. Now a click asks the game

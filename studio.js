@@ -21,7 +21,7 @@ var STUDIO_TEXTURES = ["brick", "grass_dirt", "castle_stone", "dojo_wood", "lab_
 var STUDIO_ENEMIES = ["NORMAL", "SLIME", "BAT", "ARCHER", "KNIGHT", "MAGE", "LEAPER", "EXPLODER", "TANK", "SPITTER", "BOSS_KING"];
 var STUDIO_PLAT_ENEMIES = ["walker", "hopper", "flyer", "spiky", "tank"];
 var STUDIO_MODES = [["survival", "Zombie Survival (waves)"], ["creative", "Creative (fly & build)"], ["platform", "Stomp Squad (platformer)"],
-                    ["puzzle", "Crate Lab (puzzle)"], ["race", "Parkour Rush (race)"], ["portal", "Portal Lab"]];
+                    ["puzzle", "Crate Lab (puzzle)"], ["race", "Parkour Rush (race)"], ["portal", "Portal Lab"], ["wheels", "Wobble Wheels (course)"]];
 
 // palette: category -> [ [label, icon, template] ]
 var STUDIO_PALETTE = [
@@ -77,7 +77,15 @@ var STUDIO_PALETTE = [
     ["Spawns", [
         ["Player 1 start", "1️⃣", { cat: "spawn", player: 1 }],
         ["Player 2 start", "2️⃣", { cat: "spawn", player: 2 }]
-    ]]
+    ]],
+    // only offered when the level's rules are Wobble Wheels (the 3rd item names the modes it's for)
+    ["Wobble Wheels", [
+        ["Mine", "💥", { cat: "wtrap", kind: "mine" }],
+        ["Swinging log", "🪵", { cat: "wtrap", kind: "log", len: 900 }],
+        ["Spike strip", "🔺", { cat: "wtrap", kind: "spikes", w: 200 }],
+        ["Crumble slab", "🪨", { cat: "layout", type: "box", name: "Crumble slab", w: 400, h: 40, color: "#a8a29e", texture: "stone_raw", kind: "block" }],
+        ["Finish line", "🏁", { cat: "wfinish" }]
+    ], ["wheels"]]
 ];
 
 var Studio = {
@@ -117,6 +125,12 @@ var Studio = {
         (lvl.layout || []).forEach(function(it) { d.ents.push(copy(it, "layout")); });
         (lvl.gadgets || []).forEach(function(g) { var c = copy(g, "gadget"); if (c.type === "mover" && c.x2 !== undefined) { c.dx2 = c.x2 - c.x; c.dy2 = c.y2 - c.y; delete c.x2; delete c.y2; } d.ents.push(c); });
         (lvl.enemies || []).forEach(function(e) { d.ents.push({ cat: "enemy", power: e.t || e.power || "NORMAL", x: e.x, y: (e.y || 0) + 70 }); });
+        if (lvl.traps) {
+            (lvl.traps.mines || []).forEach(function(m) { d.ents.push({ cat: "wtrap", kind: "mine", x: m[0], y: m[1] }); });
+            (lvl.traps.logs || []).forEach(function(l) { d.ents.push({ cat: "wtrap", kind: "log", x: l[0], y: 800, len: l[1] }); });
+            (lvl.traps.spikes || []).forEach(function(sp) { d.ents.push({ cat: "wtrap", kind: "spikes", x: sp[0], y: sp[1], w: sp[2] }); });
+        }
+        if (lvl.finishX !== undefined) d.ents.push({ cat: "wfinish", x: lvl.finishX, y: 0 });
         if (lvl.spawnP1) d.ents.push({ cat: "spawn", player: 1, x: lvl.spawnP1[0], y: lvl.spawnP1[1] });
         if (lvl.spawnP2) d.ents.push({ cat: "spawn", player: 2, x: lvl.spawnP2[0], y: lvl.spawnP2[1] });
         return this.withIds(d);
@@ -150,6 +164,19 @@ var Studio = {
         }
         def.spawnP1 = p1 || [0, 120];
         def.spawnP2 = p2 || [def.spawnP1[0] + 100, def.spawnP1[1]];
+        if (doc.mode === "wheels") {
+            // Wobble Wheels reads traps / finish / checkpoints from the level itself
+            var tr = { mines: [], logs: [], spikes: [] }, fin = null, maxX = -Infinity;
+            doc.ents.forEach(function(e) {
+                if (e.cat === "wtrap") { if (e.kind === "mine") tr.mines.push([e.x, e.y]); else if (e.kind === "log") tr.logs.push([e.x, e.len || 900]); else tr.spikes.push([e.x, e.y, e.w || 200]); }
+                if (e.cat === "wfinish") fin = e.x;
+                if (e.cat === "layout") maxX = Math.max(maxX, e.x + (e.w || 0) / 2);
+            });
+            def.traps = tr;
+            def.finishX = fin !== null ? fin : (isFinite(maxX) ? maxX - 300 : 3000);
+            def.cps = def.gadgets.filter(function(g) { return g.type === "checkpoint"; }).map(function(g) { return g.x; }).sort(function(a, b) { return a - b; });
+            def.par = [30, 45, 60];
+        }
         return def;
     },
 
@@ -354,6 +381,8 @@ var Studio = {
         if (e.cat === "enemy") return { x: e.x, y: e.y, w: 80, h: 80 };
         if (e.cat === "item") return { x: e.x, y: e.y, w: 56, h: 56 };
         if (e.cat === "spawn") return { x: e.x, y: e.y, w: 70, h: 90 };
+        if (e.cat === "wfinish") return { x: e.x, y: e.y + 150, w: 60, h: 300 };
+        if (e.cat === "wtrap") return e.kind === "log" ? { x: e.x, y: e.y, w: 120, h: 120 } : e.kind === "spikes" ? { x: e.x, y: e.y + 15, w: e.w || 200, h: 30 } : { x: e.x, y: e.y + 12, w: 50, h: 24 };
         switch (t) {
             case "plate": return { x: e.x, y: e.y - 10, w: e.w || 160, h: 20 };
             case "switch": return { x: e.x, y: e.y + 40, w: 60, h: 80 };
@@ -887,6 +916,14 @@ var Studio = {
                 var def = (typeof PowerUpDefs !== "undefined" && PowerUpDefs[e.power]) || { icon: "?", color: "#fff" };
                 ctx.fillStyle = def.color; ctx.beginPath(); ctx.arc(sx, sy, 28 * z + 4, 0, 7); ctx.fill();
                 ctx.fillStyle = "#0a0f16"; ctx.font = "800 " + Math.round(22 * z + 8) + "px " + UI_FONT; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(def.icon || "?", sx, sy + 1);
+            } else if (e.cat === "wtrap" || e.cat === "wfinish") {
+                ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                if (e.cat === "wfinish") {
+                    ctx.fillStyle = "#f8fafc"; ctx.fillRect(sx - 4, sy - 300 * z, 8, 300 * z);
+                    for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) { ctx.fillStyle = (r + c) % 2 ? "#0a0f16" : "#f8fafc"; ctx.fillRect(sx + 4 + c * 14 * z, sy - 300 * z + r * 14 * z, 14 * z, 14 * z); }
+                } else if (e.kind === "mine") { ctx.fillStyle = "#ef4444"; ctx.beginPath(); ctx.arc(sx, sy - 12 * z, 22 * z + 3, 0, 7); ctx.fill(); ctx.fillStyle = "#fff"; ctx.font = "900 " + Math.round(18 * z + 6) + "px " + UI_FONT; ctx.fillText("!", sx, sy - 12 * z); }
+                else if (e.kind === "log") { ctx.strokeStyle = "#a8a29e"; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx, wsy(2400)); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = "#78350f"; ctx.beginPath(); ctx.arc(sx, sy, 60 * z, 0, 7); ctx.fill(); }
+                else { var n = Math.max(2, Math.round((e.w || 200) / 40)); ctx.fillStyle = "#e2e8f0"; for (let i = 0; i < n; i++) { var bx = sx - (e.w || 200) * z / 2 + i * (e.w || 200) * z / n; ctx.beginPath(); ctx.moveTo(bx, sy); ctx.lineTo(bx + (e.w || 200) * z / n / 2, sy - 30 * z); ctx.lineTo(bx + (e.w || 200) * z / n, sy); ctx.fill(); } }
             } else if (e.cat === "spawn") {
                 var col = e.player === 2 ? "#3da5ff" : "#ff4d52";
                 ctx.fillStyle = col; ctx.globalAlpha = 0.85;
@@ -1046,7 +1083,7 @@ var Studio = {
         this.ui.top.innerHTML = h;
         var $ = function(id) { return document.getElementById(id); };
         $("st-name").onchange = function() { self.pushUndo(); self.doc.name = this.value; self.autosave(); };
-        $("st-mode").onchange = function() { self.pushUndo(); self.doc.mode = this.value; self.changed(); this.blur(); };
+        $("st-mode").onchange = function() { self.pushUndo(); self.doc.mode = this.value; self.changed(); self.renderPalette(); this.blur(); };
         $("st-waves").onchange = function() { self.pushUndo(); self.doc.waves = this.checked; self.autosave(); };
         $("st-play").onclick = function() { self.playtest(); };
         $("st-undo").onclick = function() { self.undo(); };
@@ -1098,6 +1135,7 @@ var Studio = {
         this.paletteRefs = [];
         var q = (this.palFilter || "").toLowerCase().trim();
         STUDIO_PALETTE.forEach(function(cat) {
+            if (cat[2] && cat[2].indexOf(self.doc.mode) === -1) return;          // game-specific pieces only for that game
             var list = q ? cat[1].filter(function(p) { return (p[0] + " " + cat[0]).toLowerCase().indexOf(q) !== -1; }) : cat[1];
             if (q && !list.length) return;
             var closed = !q && self.ui.collapsed[cat[0]];

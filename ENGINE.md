@@ -213,6 +213,10 @@ the game carries on exactly where it was. A play-test replaces the world for rea
 level you came from. The start card (`showStart`) picks what to edit; side-panel widths (`Studio.lw/rw`, Tab hides
 them) drive the editing camera.
 `createMap()` now loads a level's `gadgets` for any game whose `setupLevel` didn't.
+Game-specific pieces: a palette category can carry a third element, the list of modes it's for (`["Wobble Wheels",
+[...], ["wheels"]]`), so it only shows when the document's rules are that game. Their entities use their own `cat`
+("wtrap", "wfinish") and `docToDef` / `docFromLevel` convert them to / from the game's level fields (`traps`,
+`finishX`, `cps`); add the same three things (palette, bbox + marker, conversion) to bring another game in.
 
 ## LAN multiplayer (`server.js` + `net.js`)
 

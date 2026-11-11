@@ -163,8 +163,10 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       fighters' % and stocks, Wobble Wheels riders (eject, restart), the Crash Lab dummy, Word Lab pets and water, any
       player or ragdoll) with their own sliders and buttons; full-screen games show a live match card (Table Games,
       Rent Rush, Party Board). Still open here: Terra tiles; the Level Studio inspector uses its own document fields.
-- [ ] Step 3 — `studio` hook: build Wobble Wheels courses, Brawl stages, Siege forts, Bed Brawl maps, Word Lab rooms in
-      the Level Studio; saved ones appear in that game's course select.
+- [~] Step 3 — more games in the Level Studio. Wobble Wheels: DONE (rules "Wobble Wheels (course)", its own palette
+      — mine, swinging log, spike strip, crumble slab, finish line; built-in courses open with their traps; saved
+      courses play as real runs and appear in its course select). Still to do: Brawl stages, Siege forts, Bed Brawl
+      maps, Word Lab rooms.
 
 ## Known issues / polish found while building (from RETROS.md)
 - LAN: all nine new games work over LAN now (turn-based ones seat LAN players in CPU seats; Worm / Blob / Tank Arena

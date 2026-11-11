@@ -565,11 +565,11 @@ GameModes.register({
         if (id === "wh_select") {
             var name = function(k) { var L = LevelManager.getAllLevels()[k] || {}; return (L.title || L.name || k).replace(/^[^A-Za-z0-9]+/, ""); };
             CourseSelect.open({ title: "🚲 Wobble Wheels — courses", note: "times for the " + WHEELS_VEHICLES[wheelsSave.vehicle].label + " (V switches vehicle)",
-                items: WHEELS_COURSES.map(function(k) {
+                items: WHEELS_COURSES.concat(window.Object.keys(LevelManager.customLevels || {}).filter(function(k) { return LevelManager.customLevels[k].mode === "wheels"; })).map(function(k) {
                     var b = wheelsSave.best[k + ":" + wheelsSave.vehicle], par = (LevelManager.getAllLevels()[k] || {}).par || [30, 45, 60], s = b / 60;
                     return { name: name(k), best: b ? s.toFixed(2) + "s" : "", medal: !b ? 0 : s <= par[0] ? 3 : s <= par[1] ? 2 : s <= par[2] ? 1 : 0, current: k === LevelManager.currentLevelKey };
                 }),
-                onPick: function(i) { Wheels.cpReached = -1; LevelManager.selectLevel(WHEELS_COURSES[i]); } });
+                onPick: function(i) { var all = WHEELS_COURSES.concat(window.Object.keys(LevelManager.customLevels || {}).filter(function(k) { return LevelManager.customLevels[k].mode === "wheels"; })); Wheels.cpReached = -1; LevelManager.selectLevel(all[i]); } });
             return true;
         }
         if (id === "wh_vehicle") { var ks = window.Object.keys(WHEELS_VEHICLES); wheelsSave.vehicle = ks[(ks.indexOf(wheelsSave.vehicle) + (dir || 1) + ks.length) % ks.length]; saveWheels(); Wheels.cpReached = -1; closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
