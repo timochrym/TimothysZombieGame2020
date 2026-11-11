@@ -21,6 +21,7 @@
 //   drawFront()                                   after characters (in front)
 //   drawHUD()                                     replaces the standard HUD
 //   cameraTargets()                               -> [{x, y}] points the camera should keep in frame
+//   cameraZoom()                                  -> zoom multiplier (>1 closer), or nothing for the normal zoom
 //   cpuThink(ch)                                  AI for CPU-controlled heroes (ch.isCPU)
 //   onSecondary(ch)                               right-click / alt-fire -> return true to consume
 //   onKey(code, e)                                keyboard hook -> return true to consume

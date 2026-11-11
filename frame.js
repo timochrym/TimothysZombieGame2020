@@ -583,6 +583,8 @@ function updateCamera() {
 
     // Dynamic zoom: zoom out to keep both heroes in frame
     var desired = baseZoom * userZoom * (typeof Feel !== "undefined" ? Feel.zoomMult() : 1);
+    var modeZoom = GameModes.call("cameraZoom");        // a game can ask for a closer (>1) or wider (<1) view
+    if (modeZoom) desired *= modeZoom;
     if (heroes.length > 1) {
         var minHX = Infinity, maxHX = -Infinity, minHY = Infinity, maxHY = -Infinity;
         for (let hi = 0; hi < heroes.length; hi++) {

@@ -60,7 +60,7 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - [~] Crash Lab: DONE — "Stair Drop" scenario (pause → Scenario): one push from the top of a 14-step staircase, the
       score runs until the dummy comes to rest, best saved; damage heat-map (head / torso / limbs drift from yellow to
       bruised red); slow-mo on huge hits. STILL TO DO: more scenarios (cliff + car, highway, half-pipe), vehicles to
-      launch the dummy in, pose picker before the push, replay of the run, a closer camera in Stair Drop.
+      launch the dummy in, pose picker before the push, replay of the run. (Closer camera in Stair Drop: DONE.)
 - [~] Parkour Rush: DONE — speedrun splits (time at each checkpoint vs your best run's split, green −/red +, saved
       with the best), speed lines when you're really moving, new engine hook onCheckpoint. STILL TO DO: slide-under
       gaps and vault/ledge-grab moves, a level select showing medals. (T = back to your last checkpoint: DONE.)

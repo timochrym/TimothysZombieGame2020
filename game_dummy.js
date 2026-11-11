@@ -129,11 +129,14 @@ GameModes.register({
 
     cameraTargets: function() {
         var t = [];
-        if (dummyChallenge() && Dummy.rd) return [{ x: Dummy.rd.centerX() - 250, y: Dummy.rd.centerY() - 150 }, { x: Dummy.rd.centerX() + 350, y: Dummy.rd.centerY() + 150 }];
+        // Stair Drop: follow the dummy itself, close up (cameraZoom), a little ahead and below so the next steps show
+        if (dummyChallenge() && Dummy.rd) return [{ x: Dummy.rd.centerX() + 120, y: Dummy.rd.centerY() - 60 }];
         if (redGuy && !redGuy.dead) t.push(redGuy);
         if (Dummy.rd) t.push({ x: Dummy.rd.centerX(), y: Dummy.rd.centerY(), isZombie: false });
         return t;
     },
+
+    cameraZoom: function() { return dummyChallenge() && Dummy.rd ? 1.5 : 0; },
 
     onKey: function(code) {
         var m = /^Digit([1-9])$/.exec(code);

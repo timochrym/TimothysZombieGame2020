@@ -6,6 +6,16 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Crash Lab: Stair Drop close-up
+
+**Shipped:** a new engine hook `cameraZoom()` (a game's zoom multiplier); Stair Drop uses it to follow the dummy
+itself at 1.5× (0.84 instead of 0.56), framed slightly ahead and below so the next steps are in view.
+
+**Measured:** Crash Lab stays at 0.56; Stair Drop runs at 0.84 and the dummy is readable mid-fall (a 712-point run
+in the test); no errors.
+
+---
+
 ## Parkour Rush + Crate Lab: T keys
 
 **Shipped:** Parkour Rush — T puts you straight back on your last checkpoint (clock keeps running, not counted as a

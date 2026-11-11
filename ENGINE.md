@@ -88,7 +88,7 @@ Every hook is optional. The engine calls `GameModes.call("hook", ...)` at these 
 | `update()` | Every frame, after physics and collisions |
 | `drawWorld()` / `drawFront()` | Draw behind characters / in front of them |
 | `drawHUD()` | Replaces the whole standard HUD |
-| `cameraTargets()` | Return `[{x, y}, ...]` points the camera keeps in frame |
+| `cameraTargets / cameraZoom()` | Return `[{x, y}, ...]` points the camera keeps in frame |
 | `cpuThink(ch)` | Set inputs for CPU heroes (`ch.isCPU`) |
 | `onSecondary(ch)` | Right-click / LB. Return `true` to consume it |
 | `onKey(code, e)` | Key pressed. Return `true` to consume it |
