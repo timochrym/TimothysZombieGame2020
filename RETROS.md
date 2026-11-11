@@ -6,6 +6,18 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Textures: vehicles, rails, Bed Brawl props
+
+**Shipped:** five more procedural 32 px textures in the same seeded style — `panel_overlay` (see-through seams, rivets
+and a highlight drawn over a car's paint, so every colour gets detail), `cart_iron` (riveted iron plates for
+minecarts; the engine car is shaded darker), `rail_tie` (grained wood for the rail sleepers), `pedestal_stone` (chiselled
+stone with a gold top edge for Bed Brawl shop pedestals) and `gen_grate` (metal grate for the generators).
+
+**Measured:** all five built into the texture table; screenshots of a car, a two-car minecart on rails and the Bed Brawl
+pedestals show them; no errors.
+
+---
+
 ## Word Lab: water
 
 **Shipped:** "water" (pool, lake, river, sea…) makes a block of water whose surface is just above the pointer and

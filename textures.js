@@ -7,7 +7,7 @@
 var ExtraTextures = {
     names: ["wood_plank", "stone_block", "metal_plate", "glass", "pipe_green", "used_block", "wool_red", "wool_blue",
             "tex_dirt", "grass_top", "stone_raw", "ore_coal", "ore_iron", "ore_gold", "log", "leaves", "sand", "bedrock",
-            "hazard", "ice", "mossy_brick"],
+            "hazard", "ice", "mossy_brick", "panel_overlay", "cart_iron", "rail_tie", "pedestal_stone", "gen_grate"],
 
     rnd: function(seed) { var s = seed >>> 0; return function() { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; },
 
@@ -99,6 +99,35 @@ var ExtraTextures = {
             g.strokeStyle = "rgba(255,255,255,0.8)"; g.lineWidth = 1;
             g.beginPath(); g.moveTo(3, 28); g.lineTo(12, 18); g.lineTo(10, 10); g.moveTo(12, 18); g.lineTo(22, 16); g.lineTo(28, 6); g.stroke();
             g.fillStyle = "rgba(255,255,255,0.5)"; g.fillRect(4, 3, 8, 2);
+        },
+        // see-through car-body detail: panel seams, rivets and a highlight, drawn over any paint colour
+        panel_overlay: function(g) {
+            g.clearRect(0, 0, 32, 32);
+            g.fillStyle = "rgba(0,0,0,0.28)"; g.fillRect(0, 15, 32, 1); g.fillRect(15, 0, 1, 15);
+            g.fillStyle = "rgba(255,255,255,0.22)"; g.fillRect(0, 16, 32, 1); g.fillRect(2, 2, 10, 2);
+            g.fillStyle = "rgba(0,0,0,0.35)"; [[4, 12], [27, 12], [4, 28], [27, 28]].forEach(function(p) { g.fillRect(p[0], p[1], 2, 2); });
+        },
+        cart_iron: function(g, r) {
+            g.fillStyle = "#57534e"; g.fillRect(0, 0, 32, 32);
+            this.speckle(g, r, 22, ["#44403c", "#6b6560", "#78350f"], 2);
+            g.fillStyle = "#292524"; g.fillRect(0, 0, 32, 3); g.fillRect(0, 29, 32, 3);
+            g.fillStyle = "#a8a29e"; for (let x = 3; x < 32; x += 8) { g.fillRect(x, 1, 2, 1); g.fillRect(x, 30, 2, 1); }
+        },
+        rail_tie: function(g, r) {
+            g.fillStyle = "#7c4a26"; g.fillRect(0, 0, 32, 32);
+            g.fillStyle = "#5c361b"; for (let y = 3; y < 32; y += 7) g.fillRect(0, y + Math.floor(r() * 2), 32, 1);
+            this.speckle(g, r, 10, ["#9a6a3c", "#4a2c16"], 2);
+        },
+        pedestal_stone: function(g, r) {
+            g.fillStyle = "#64748b"; g.fillRect(0, 0, 32, 32);
+            this.speckle(g, r, 24, ["#5b6b80", "#7b8aa0", "#4b5a6e"], 2);
+            g.fillStyle = "#ca8a04"; g.fillRect(0, 0, 32, 2);
+            g.fillStyle = "#334155"; g.fillRect(0, 14, 32, 1); g.fillRect(10, 2, 1, 12); g.fillRect(22, 15, 1, 17);
+        },
+        gen_grate: function(g) {
+            g.fillStyle = "#1e293b"; g.fillRect(0, 0, 32, 32);
+            g.fillStyle = "#475569"; for (let x = 0; x < 32; x += 6) g.fillRect(x, 0, 2, 32);
+            g.fillStyle = "#0f172a"; g.fillRect(0, 15, 32, 2);
         },
         mossy_brick: function(g, r) {
             g.fillStyle = "#7f3a26"; g.fillRect(0, 0, 32, 32);

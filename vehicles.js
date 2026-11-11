@@ -203,7 +203,9 @@ var Vehicles = {
         var a = S(P[2]), b = S(P[3]), c = S(P[5]), d = S(P[4]);
         ctx.fillStyle = rd.color; ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 3;
         // body + cabin
-        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(b[0], b[1] - 16 * k); ctx.lineTo(c[0] + 14 * k, c[1] + 18 * k); ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.lineTo(a[0], a[1] - 22 * k); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(b[0], b[1] - 16 * k); ctx.lineTo(c[0] + 14 * k, c[1] + 18 * k); ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.lineTo(a[0], a[1] - 22 * k); ctx.closePath(); ctx.fill();
+        var panel = TextureManager.getPattern("panel_overlay"); if (panel) { ctx.fillStyle = panel; ctx.fill(); }     // seams + rivets over the paint
+        ctx.stroke();
         ctx.fillStyle = "rgba(186,230,253,0.85)";
         ctx.beginPath(); ctx.moveTo(d[0] + 6 * k, d[1] + 8 * k); ctx.lineTo(c[0] - 2 * k, c[1] + 8 * k); ctx.lineTo(c[0] + 10 * k, c[1] + 20 * k); ctx.lineTo(d[0] + 2 * k, d[1] + 22 * k); ctx.closePath(); ctx.fill();
         if (rd.car && rd.car.driver) { var dc = rd.car.driver; ctx.fillStyle = "#f2c9a0"; ctx.beginPath(); ctx.arc((c[0] + d[0]) / 2, (c[1] + d[1]) / 2 + 16 * k, 9 * k + 2, 0, 7); ctx.fill(); ctx.fillStyle = dc.color || "#ef4444"; ctx.fillRect((c[0] + d[0]) / 2 - 9 * k, (c[1] + d[1]) / 2 + 6 * k, 18 * k, 5 * k); }
@@ -220,7 +222,7 @@ var Vehicles = {
         for (let i = 0; i < this.rails.length; i++) {
             var r = this.rails[i], ax = wsx(r.x1), ay = wsy(r.y1), bx = wsx(r.x2), by = wsy(r.y2);
             var n = Math.max(2, Math.round(r.len / 40));
-            ctx.strokeStyle = "#78350f"; ctx.lineWidth = 6 * k + 2;
+            ctx.strokeStyle = TextureManager.getPattern("rail_tie") || "#78350f"; ctx.lineWidth = 6 * k + 2;
             for (let s = 0; s <= n; s++) { var t = s / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t; ctx.beginPath(); ctx.moveTo(x, y - 2); ctx.lineTo(x, y + 6 * k + 2); ctx.stroke(); }
             ctx.strokeStyle = "#9ca3af"; ctx.lineWidth = 4 * k + 1;
             ctx.beginPath(); ctx.moveTo(ax, ay - 3 * k); ctx.lineTo(bx, by - 3 * k); ctx.stroke();
@@ -232,8 +234,10 @@ var Vehicles = {
                 ctx.save();
                 ctx.translate(wsx(cx), wsy(cy));
                 ctx.rotate(-(cart.ang || 0));
-                ctx.fillStyle = c === 0 && cart.cars > 1 ? "#1f2937" : "#6b7280"; ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 3;
-                ctx.beginPath(); ctx.moveTo(-55 * k, -70 * k); ctx.lineTo(55 * k, -70 * k); ctx.lineTo(45 * k, -14 * k); ctx.lineTo(-45 * k, -14 * k); ctx.closePath(); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = TextureManager.getPattern("cart_iron") || "#6b7280"; ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.moveTo(-55 * k, -70 * k); ctx.lineTo(55 * k, -70 * k); ctx.lineTo(45 * k, -14 * k); ctx.lineTo(-45 * k, -14 * k); ctx.closePath(); ctx.fill();
+                if (c === 0 && cart.cars > 1) { ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fill(); }          // the engine car is darker
+                ctx.stroke();
                 ctx.fillStyle = "#111827";
                 ctx.beginPath(); ctx.arc(-28 * k, -10 * k, 12 * k, 0, 7); ctx.arc(28 * k, -10 * k, 12 * k, 0, 7); ctx.fill();
                 ctx.restore();

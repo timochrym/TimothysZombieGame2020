@@ -16,8 +16,8 @@ Last updated: after the UI pass (top bar, pause menu, Level Studio, one-click LA
       highlight, reset to defaults, saved. (A remapped key's old default still works too — harmless, noted.)
 - [x] **Textures for the new blocks** — 21 new pixel textures (textures.js) used by building pieces, Terra tiles,
       platformer pipes / used blocks, Bed Brawl beds, Siege glass, Crash Lab spikes; all listed in Level Studio.
-- [ ] More textures still to do: vehicles (car body, cart), rails, Bed Brawl pedestals/generators, Wobble Wheels
-      course pieces, Crash Lab lab props, enemies' weapons.
+- [~] More textures: car panels (seams + rivets over any paint), riveted iron minecarts, wooden rail ties, Bed Brawl
+      stone pedestals and generator grates: DONE. Still to do: Crash Lab props, enemies' weapons.
 - [x] **More detailed characters when big** — skinned heroes and enemies get limb shading + highlights and shine on
       round parts; the original pixel hero gets soft lighting, a rim light and eye catch-lights (Settings toggle).
 - [ ] Character detail still to do: ragdoll bodies (they use their own drawing), hands/feet on the square look.

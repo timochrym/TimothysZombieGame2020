@@ -462,7 +462,7 @@ GameModes.register({
         for (let g = 0; g < BW.gens.length; g++) {
             var gen = BW.gens[g], gx = wsx(gen.x), gy = wsy(gen.y);
             var col = gen.kinds[0] === "diamond" ? BW_RES.diamond.color : "#94a3b8";
-            ctx.fillStyle = "#1e293b"; ctx.fillRect(gx - 50 * k, gy - 16 * k, 100 * k, 16 * k);
+            ctx.fillStyle = TextureManager.getPattern("gen_grate") || "#1e293b"; ctx.fillRect(gx - 50 * k, gy - 16 * k, 100 * k, 16 * k);
             ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.strokeRect(gx - 50 * k, gy - 16 * k, 100 * k, 16 * k);
             ctx.fillStyle = col; ctx.globalAlpha = 0.5 + Math.sin(t * 0.1) * 0.3; ctx.fillRect(gx - 40 * k, gy - 12 * k, 80 * k, 6 * k); ctx.globalAlpha = 1;
         }
@@ -476,7 +476,7 @@ GameModes.register({
         for (let tm = 0; tm < BW.shops.length; tm++) {
             for (let s = 0; s < BW.shops[tm].length; s++) {
                 var sp = BW.shops[tm][s], px = wsx(sp.x), py = wsy(sp.y);
-                ctx.fillStyle = "#334155"; ctx.fillRect(px - 28 * k, py - 26 * k, 56 * k, 26 * k);
+                ctx.fillStyle = TextureManager.getPattern("pedestal_stone") || "#334155"; ctx.fillRect(px - 28 * k, py - 26 * k, 56 * k, 26 * k);
                 ctx.strokeStyle = BW_TEAMS[tm].color; ctx.lineWidth = 2; ctx.strokeRect(px - 28 * k, py - 26 * k, 56 * k, 26 * k);
                 uiText(sp.item.icon, px, py - 40 * k, Math.max(12, 26 * k), "#fff", "center", "800");
                 var near = characters.some(function(c) { return c.isPlayer && !c.isCPU && !c.dead && bwTeamOf(c) === tm && Math.abs(c.x - sp.x) < 36 && Math.abs((c.y - c.s2 / 2) - sp.y) < 60; });
