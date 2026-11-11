@@ -629,7 +629,7 @@ var Ragdolls = {
         ctx.lineWidth = lw;
         ctx.stroke();
         // close up: a soft highlight down the limb so bodies read as round, not flat
-        if (lw > 6 && typeof col === "string" && col.charAt(0) === "#") {
+        if (lw > 3.5 && typeof col === "string" && (col.charAt(0) === "#" || col.indexOf("rgb") === 0)) {
             ctx.save(); ctx.globalAlpha = 0.45; ctx.strokeStyle = Components.shade(col, 45); ctx.lineWidth = lw * 0.3;
             ctx.translate(-lw * 0.18, -lw * 0.18); ctx.stroke(); ctx.restore();
         }

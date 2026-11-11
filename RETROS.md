@@ -12,9 +12,10 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 zoom), and the feet are boots pointing along the shin instead of dots. The classic square look got small hands at its
 sides and two feet under the body; both swing / step while walking.
 
-**Measured:** the square hero shows hands and stepping feet in a zoomed screenshot; no errors in Crash Lab or Survival.
-**Not seen:** the ragdoll highlight only draws at close zoom and my screenshot didn't get close enough — unverified
-by eye.
+**Measured:** the square hero shows hands and stepping feet in a zoomed screenshot; the Crash Lab dummy at 2.5× zoom
+shows the lighter stripe along arms and torso and the boots; no errors. **Went wrong:** the first highlight never drew
+— ragdoll colours are "rgb(...)" strings, not "#hex", and limbs are 4-5 px thick (under my 6 px threshold); a pixel
+sample across the arm (one flat colour) caught it.
 
 ---
 

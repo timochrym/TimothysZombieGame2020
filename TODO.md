@@ -23,8 +23,7 @@ Last updated: after the UI pass (top bar, pause menu, Level Studio, one-click LA
 - [x] **More detailed characters when big** — skinned heroes and enemies get limb shading + highlights and shine on
       round parts; the original pixel hero gets soft lighting, a rim light and eye catch-lights (Settings toggle).
 - [x] Character detail: ragdoll limbs get a soft highlight when zoomed in and boots that point along the shin; the
-      square look got hands at its sides and feet that step while walking. (Ragdoll highlight not yet seen in a
-      screenshot at a zoom where it shows — check in the play-through.)
+      square look got hands at its sides and feet that step while walking (both checked in zoomed screenshots).
 
 ## Genre-feel pass (your request: "make each game closer to the game it's trying to be")
 Play and feel like the genre's best, with ORIGINAL look (no copied characters, art style, music or levels):
