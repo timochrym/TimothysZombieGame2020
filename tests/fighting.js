@@ -13,9 +13,14 @@ const { open } = require('./lib');
   await place(); await p.waitForTimeout(500);
   const hp0 = await ev(() => zombies[0].health);
   const moves = [];
+  // frame-based, not wall-clock: hold F until the swing starts, release, then wait until the move can be used again
+  // (well inside the 32-frame combo window), so a slow or busy machine can't drop or split the combo
+  const until = (f, ms = 3000) => p.waitForFunction(f, null, { timeout: ms, polling: 16 });
   for (let i = 0; i < 3; i++) {
-    await p.keyboard.down('KeyF'); await p.waitForTimeout(60);
-    moves.push(await ev(() => redGuy.mlMove)); await p.keyboard.up('KeyF'); await p.waitForTimeout(400);
+    await ev(() => { redGuy.mlT = 0; });
+    await p.keyboard.down('KeyF'); await until(() => redGuy.mlT > 0);
+    moves.push(await ev(() => redGuy.mlMove)); await p.keyboard.up('KeyF');
+    await until(() => !(redGuy.mlCd > 0));
   }
   out.combo = moves.join(' > ');
   out.comboDamage = await ev(h => Math.round(h - zombies[0].health), hp0);
