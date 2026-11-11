@@ -1031,7 +1031,7 @@ function frame() {
     var gNow = gravity * (devOpts.gravityMult || 1);
     for (let i = 0; i < characters.length; i++) characters[i].gravity = gNow;
     for (let i = 0; i < zombies.length; i++) zombies[i].gravity = gNow;
-    for (let i = 0; i < movingObjects.length; i++) movingObjects[i].gravity = gNow;
+    for (let i = 0; i < movingObjects.length; i++) movingObjects[i].gravity = gNow * (movingObjects[i].gravityMult !== undefined ? movingObjects[i].gravityMult : 1);   // balloons float (negative)
 
     // Verlet ragdolls step first so knocked-down characters follow their bodies this frame
     if (typeof Ragdolls !== "undefined") Ragdolls.update();

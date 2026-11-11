@@ -154,6 +154,11 @@ var Gadgets = {
         Components.addFloatingText(reason || "OUCH!", ch.x, ch.y + 90, "#ff6b6b", 20);
         var rx = (ch.respawnX !== undefined) ? ch.respawnX : ch.spawnX;
         var ry = (ch.respawnY !== undefined) ? ch.respawnY : ch.spawnY;
+        // games that never set a spawn point (Word Lab): fall back to the level's start, never to NaN
+        if (!isFinite(rx) || !isFinite(ry)) {
+            var lv = LevelManager.getCurrentLevel() || {}, sp = (ch.playerIndex === 1 && lv.spawnP2) ? lv.spawnP2 : (lv.spawnP1 || [0, 120]);
+            rx = sp[0]; ry = sp[1] + 40;
+        }
         ch.x = rx; ch.y = ry; ch.xspeed = ch.yspeed = 0;
         ch.invulnTimer = 70;
         ch.ragdollImmune = 60;

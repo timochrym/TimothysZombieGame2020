@@ -6,6 +6,23 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Word Lab: verbs, rope, balloon + a respawn bug
+
+**Shipped:** verbs that change your hero (fly, grow, shrink, normal, heal); "rope" / "vine" (a column of footholds);
+"balloon" now floats up and lifts you while you hold it (G) — objects can opt out of the global gravity with
+`gravityMult`. A new `Character.scaleSize(k)` makes "big zombie" / "tiny knight" actually resize monsters (the old
+code called a method that didn't exist, so sizes were silently ignored). The unknown-word reply lists the new words.
+
+**Bug found on the way:** in Word Lab, being killed respawned the hero at an unset spawn point, so their position
+became NaN and the hero vanished (the canvas then threw on every frame). `Gadgets.killPlayer` now falls back to the
+level's start for any game without a spawn point.
+
+**Measured:** big zombie 80→128 px; grow 128 / shrink 44 / normal 80; balloon rose 230→387 in 1 s; holding it lifted
+the hero 71→296, letting go dropped him; rope = 7 footholds; big hero vs big zombie for 10 frames: no NaN, no errors;
+the old Word Lab test still passes.
+
+---
+
 ## Crash Lab: Stair Drop close-up
 
 **Shipped:** a new engine hook `cameraZoom()` (a game's zoom multiplier); Stair Drop uses it to follow the dummy

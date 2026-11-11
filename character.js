@@ -2054,3 +2054,14 @@ class Character {
         this.createCharacter();
     }
 }
+
+// Resize a character in place (feet stay on the ground). k is relative to its first size, so 1 = back to normal.
+Character.prototype.scaleSize = function(k) {
+    if (this.baseW === undefined) { this.baseW = this.s1; this.baseH = this.s2; }
+    var oldH = this.s2, nw = Math.round(this.baseW * k), nh = Math.round(this.baseH * k);
+    this.s1 = this.w = nw; this.s2 = this.h = nh;
+    this.hitbox = Math.makeHitbox(nw, nh); this.poly = Math.makeHitbox(nw, nh);
+    this.sizeScale = nw / s1;
+    this.y += (nh - oldH) / 2;
+    this.scaleX = k > 1 ? 0.75 : 1.25; this.scaleY = k > 1 ? 1.3 : 0.8;     // squash-and-stretch pop
+};

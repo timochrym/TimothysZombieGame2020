@@ -37,7 +37,18 @@ var WK2 = {
 wordDef("crate box cube chest", function(x, y, a) { WK2.crate(x, y, a); });
 wordDef("boulder rock stone anvil", function(x, y, a) { a.heavy = true; WK2.crate(x, y, a, { col: "#6b7280", name: "Boulder", tex: "stone_raw" }); });
 wordDef("barrel tnt dynamite bomb explosive", function(x, y, a) { a.explosive = true; WK2.crate(x, y, a, { col: "#e84545", name: "TNT Barrel" }); });
-wordDef("ball balloon pillow", function(x, y, a) { a.bouncy = true; a.light = true; WK2.crate(x, y, a, { col: "#f472b6", name: "Ball" }); });
+wordDef("ball pillow", function(x, y, a) { a.bouncy = true; a.light = true; WK2.crate(x, y, a, { col: "#f472b6", name: "Ball" }); });
+// a balloon floats up (negative gravity) until it hits something - grab it (G) and it lifts you
+wordDef("balloon blimp airship", function(x, y, a) {
+    a.light = true;
+    var c = WK2.crate(x, y, a, { col: a.col || "#f43f5e", name: "Balloon" });
+    c.gravityMult = -0.28 * (a.heavy ? 0.4 : 1); c.gravity = gravity * c.gravityMult; c.weight = 0.6; c.bounciness = 0;
+});
+// a rope / vine: a column of small one-way footholds you climb by jumping
+wordDef("rope vine chain pole", function(x, y, a) {
+    var n = Math.round(7 * a.s);
+    for (let i = 0; i < n; i++) WK2.box(x + (i % 2 ? 40 : -40), y + i * 110, 90, 16, { col: a.col || "#a16207" }, "Rope knot", "platform", "wood_plank");
+});
 wordDef("block brick wall pillar tower", function(x, y, a) { var h = 240 * a.s, w = 60 * Math.max(0.6, a.s); WK2.box(x, y + h / 2, w, h, a, "Wall", "block", "mossy_brick"); });
 wordDef("platform ledge shelf plank board", function(x, y, a) { WK2.box(x, y, 260 * a.s, 30, a, "Platform", "platform", "wood_plank"); });
 wordDef("bridge", function(x, y, a) { WK2.box(x, y, 700 * a.s, 30, a, "Bridge", "block", "wood_plank"); });
@@ -71,6 +82,14 @@ wordDef("lightning thunder", function(x, y) { WK2.power("CHAIN", x, y); }, "item
 wordDef("magnet", function(x, y) { WK2.power("MAGNET", x, y); }, "item");
 wordDef("nuke explosion blast", function(x, y) { Components.blowUp(x, y, "#ff6b00", 26, 300, -40, null); screenShake = 10; }, "item");
 wordDef("jetpack rocket wings", function(x, y) { jetpackEnabled = true; characters.forEach(function(c) { if (c.isPlayer) c.fuel = c.maxFuel || 100; }); Components.addFloatingText("JETPACK ON! (Space)", redGuy.x, redGuy.y + 100, "#fde047", 20); }, "item");
+// verbs change your hero instead of making a thing
+var WORD_VERBS = {};
+function wordVerb(names, fn) { names.split(" ").forEach(function(n) { WORD_VERBS[n] = fn; }); }
+wordVerb("fly float hover soar", function(h) { jetpackEnabled = true; h.fuel = h.maxFuel || 100; Components.addFloatingText("FLY! (hold Space)", h.x, h.y + 100, "#fde047", 20); });
+wordVerb("shrink smaller", function(h) { h.scaleSize(0.55); Components.addFloatingText("tiny!", h.x, h.y + 70, "#c4b5fd", 18); });
+wordVerb("grow bigger enlarge", function(h) { h.scaleSize(1.6); Components.addFloatingText("BIG!", h.x, h.y + 120, "#c4b5fd", 22); });
+wordVerb("normal reset unshrink", function(h) { h.scaleSize(1); });
+wordVerb("heal", function(h) { h.health = h.maxHealth; Components.addFloatingText("+HEALED", h.x, h.y + 100, "#4ade80", 18); });
 var WORD_BANNED = ["star", "stars", "goal", "win", "flag", "key", "teleport", "portal", "god"];
 
 var WordLab = {
@@ -102,7 +121,7 @@ var WordLab = {
 
     parse: function(text) {
         var words = text.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
-        var a = { s: 1 }, noun = null, unknown = [];
+        var a = { s: 1 }, noun = null, verb = null, unknown = [];
         for (let i = 0; i < words.length; i++) {
             var w = words[i];
             if (w === "a" || w === "an" || w === "the" || w === "very" || w === "some") continue;
@@ -115,20 +134,26 @@ var WordLab = {
             else if (w === "exploding" || w === "explosive") a.explosive = true;
             else if (w === "angry" || w === "evil" || w === "mean" || w === "strong") a.angry = true;
             else if (base) noun = base;
+            else if (WORD_VERBS[w]) verb = w;
             else if (WORD_BANNED.indexOf(w) !== -1) return { banned: w };
             else unknown.push(w);
         }
         a.s = Math.max(0.3, Math.min(3, a.s));
-        return { noun: noun, a: a, unknown: unknown };
+        return { noun: noun, verb: verb, a: a, unknown: unknown };
     },
 
     make: function(text) {
         if (!text || !text.trim()) return;
         var p = this.parse(text);
         if (p.banned) { this.say("Nice try! You can't summon a " + p.banned + ".", "#fca5a5"); return; }
+        if (!p.noun && p.verb) {
+            var hero = redGuy;
+            if (hero && !hero.dead) { WORD_VERBS[p.verb](hero, p.a); this.used++; this.log.unshift(text.trim()); if (this.log.length > 6) this.log.pop(); Components.spawnSparks(hero.x, hero.y, "#a78bfa", 14); this.say("✨ " + text.trim(), "#c4b5fd"); }
+            return;
+        }
         if (!p.noun) {
             var guess = p.unknown[0] || text;
-            this.say("I don't know \"" + guess + "\" yet — try a crate, stairs, trampoline, bridge, tnt, car, knight…", "#fca5a5");
+            this.say("I don't know \"" + guess + "\" yet — try a crate, stairs, trampoline, balloon, rope, tnt, car, knight… or a verb: fly, grow, shrink", "#fca5a5");
             return;
         }
         var m = Components.getMouseWorldPos(), x = m[0], y = m[1];
@@ -193,6 +218,10 @@ GameModes.register({
     },
 
     update: function() {
+        // balloons rise gently (a steady climb you can ride), not like a rocket
+        for (let i = 0; i < movingObjects.length; i++) { var bo = movingObjects[i]; if (bo.gravityMult < 0 && bo.yspeed > 3.2) bo.yspeed = 3.2; }
+        // holding a balloon (G) lifts you; let go to drop
+        for (let i = 0; i < characters.length; i++) { var hc = characters[i]; if (hc.heldObject && hc.heldObject.gravityMult < 0) { hc.yspeed = Math.max(hc.yspeed + 1.1, Math.min(hc.yspeed, 3)); if (hc.yspeed > 3) hc.yspeed = 3; } }
         for (let i = 0; i < characters.length; i++) if (characters[i].y < -1200) Gadgets.killPlayer(characters[i], "WHOOPS!");
         if (!WordLab.done && Gadgets.starsTotal > 0 && Gadgets.starsGot >= Gadgets.starsTotal) {
             WordLab.done = true; WordLab.doneT = 170;
