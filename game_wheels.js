@@ -1,6 +1,6 @@
 // ============================================================================
 // GAME: WOBBLE WHEELS  (wheels)  -  ragdoll rider on wobbly vehicles over trap courses
-//   Pick a bike, a wheelchair or a cart. W/S (P2: ↑/↓) drive and brake, A/D (P2: ←/→) lean.
+//   Pick a bike, a wheelchair, a scooter, a trolley or a cart. W/S (P2: ↑/↓) drive and brake, A/D (P2: ←/→) lean.
 //   The rider is a ragdoll held on by joints: land badly or hit a trap and they tear off (no gore -
 //   they just go flying). R restarts from the last checkpoint. Reach the finish flag fast.
 //   Traps: spike strips, mines, swinging logs; helpers: bounce pads, ramps; crates to smash through.
@@ -8,6 +8,8 @@
 var WHEELS_VEHICLES = {
     bike:       { label: "Bike", pts: [[-48, -46, 30, "w"], [54, -46, 30, "w"], [-6, 0, 8, "seat"], [36, 22, 8, "bar"]], accel: 0.55, cap: 19, special: "hop", hop: 9.5, cd: 45, sp: "Space: bunny-hop" },
     wheelchair: { label: "Wheelchair", pts: [[-30, -36, 36, "w"], [48, -62, 12, "w"], [0, 0, 8, "seat"], [22, 14, 7, "bar"], [-8, 26, 6, "back"]], accel: 0.62, cap: 16, special: "rocket", sp: "Space: rocket boost (fuel)" },
+    scooter:    { label: "Scooter", pts: [[-40, -40, 16, "w"], [46, -40, 16, "w"], [-4, -10, 7, "seat"], [42, 40, 7, "bar"]], accel: 0.7, cap: 18, special: "kick", kick: 3.2, cd: 60, color: "#22c55e", sp: "Space: kick-push (speed burst)" },
+    trolley:    { label: "Trolley", pts: [[-46, -42, 17, "w"], [42, -42, 17, "w"], [-6, 2, 8, "seat"], [-58, 30, 7, "bar"], [44, 6, 8, "basket"]], accel: 0.56, cap: 15, special: "hop", hop: 6, cd: 30, color: "#cbd5e1", sp: "Space: little hop" },
     cart:       { label: "Cart", pts: [[-52, -42, 24, "w"], [52, -42, 24, "w"], [-8, 0, 8, "seat"], [46, 18, 8, "bar"], [-56, 14, 8, "tail"]], accel: 0.5, cap: 17, special: "hop", hop: 13, cd: 90, sp: "Space: big jump" }
 };
 var WHEELS_COURSES = [];
@@ -148,7 +150,7 @@ function wheelsDraw(rd) {
     var wheels = [];
     for (let i = b; i < P.length; i++) if (P[i].wheel) wheels.push(P[i]);
     var seg = function(a, c, col, w) { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(wsx(a.x), wsy(a.y)); ctx.lineTo(wsx(c.x), wsy(c.y)); ctx.stroke(); };
-    var col = rd.def === WHEELS_VEHICLES.wheelchair ? "#94a3b8" : (rd.def === WHEELS_VEHICLES.cart ? "#f97316" : "#2563eb");
+    var col = rd.def.color || (rd.def === WHEELS_VEHICLES.wheelchair ? "#94a3b8" : (rd.def === WHEELS_VEHICLES.cart ? "#f97316" : "#2563eb"));
     for (let w = 0; w < wheels.length; w++) for (let f = 0; f < frame.length; f++) { seg(wheels[w], frame[f], "#0a0f16", 8 * k + 3); seg(wheels[w], frame[f], col, 5 * k + 1); }
     for (let f = 0; f + 1 < frame.length; f++) { seg(frame[f], frame[f + 1], "#0a0f16", 9 * k + 3); seg(frame[f], frame[f + 1], col, 6 * k + 1); }
     // wheels with spinning spokes
@@ -222,6 +224,12 @@ function wheelsDrive(rd) {
         for (let i = 0; i < P.length; i++) P[i].py -= def.hop;
         rd.spCd = def.cd;
         if (typeof SFX !== "undefined") SFX.play("jump", cx, cy, 0.6, 0.9);
+    }
+    if (def.special === "kick" && c.sp && !rd.spPrev && anyContact && !(rd.spCd > 0)) {
+        for (let i = 0; i < P.length; i++) { P[i].px -= fwx * def.kick; P[i].py -= fwy * def.kick; }
+        rd.spCd = def.cd;
+        Components.spawnSparks(w1.x, w1.y - 20, "#bbf7d0", 5);
+        if (typeof SFX !== "undefined") SFX.play("dash", cx, cy, 0.6, 1.2);
     }
     if (def.special === "rocket") {
         if (rd.fuel === undefined) rd.fuel = 100;
