@@ -18,6 +18,8 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node bedbrawl_egg.js        # Bed Brawl: a bridge egg lays a walkable bridge level with your feet
     node brawl_gearworks.js     # Brawl: the Gearworks stage loads, its lift moves, a fight runs
     node brawl_bat.js           # Brawl: the bat drops, is picked up, a swing launches the CPU
+    node word_rooms.js          # Word Lab rooms 6-8: unsolvable by walking, solved by their word
+    node word_tower_fly.js      # Word Lab: "fly", climb, steer over the tower, get the star
     node lan_play.js            # starts server.js on 8099: a host + 2 joiners, positions match, client FPS
 
 Each prints its numbers and then the page errors (`[]` = none). See ROADMAP.md, "Your named feedback items".

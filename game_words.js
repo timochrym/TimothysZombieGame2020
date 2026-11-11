@@ -193,6 +193,16 @@ wordRoom(3, "Vault", "The star is sealed in a vault with a cracked wall.", 1,
 wordRoom(4, "Sky Star", "The star floats high above a pit. Go up!", 2,
     [{ type: "box", name: "Floor", x: -900, y: -200, w: 1000, h: 400, color: "#334155", texture: "lab_metal", kind: "block" }],
     [{ type: "star", x: 600, y: 1300 }, { type: "spikes", x: 800, y: -800, w: 1200 }, { type: "sign", x: -1000, y: 0, text: "No floor over there. Fly? Clouds? A fan?" }]);
+wordRoom(5, "Low Door", "The star is behind a gap far too low to walk through.", 1,
+    [{ type: "box", name: "Low Wall", x: 300, y: 960, w: 120, h: 1800, color: "#475569", texture: "metal_plate", kind: "block" }],
+    [{ type: "star", x: 900, y: 70 }, { type: "sign", x: -1000, y: 0, text: "You'll never fit under there... as you are. Verbs work too!" }]);
+wordRoom(6, "The Tower", "The star sits on top of a tower far too tall for stairs.", 1,
+    [{ type: "box", name: "Tower", x: 700, y: 700, w: 320, h: 1400, color: "#475569", texture: "metal_plate", kind: "block" }],
+    [{ type: "star", x: 700, y: 1460 }, { type: "sign", x: -1000, y: 0, text: "Stairs won't reach. Something that goes UP? (verbs work too)" }]);
+wordRoom(7, "Pressure Point", "The door only stays open while its plate is weighed down.", 1,
+    [{ type: "box", name: "Divider", x: 400, y: 1080, w: 100, h: 1640, color: "#475569", texture: "metal_plate", kind: "block" }],
+    [{ type: "plate", x: -200, y: 0, w: 160, links: ["d7"] }, { type: "door", id: "d7", x: 400, y: 130, w: 100, h: 260 },
+     { type: "star", x: 900, y: 70 }, { type: "sign", x: -1000, y: 0, text: "You can't stand on the plate and walk through the door at once." }]);
 
 GameModes.register({
     id: "words",

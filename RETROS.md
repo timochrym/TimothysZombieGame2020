@@ -6,6 +6,19 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Word Lab: rooms 6-8
+
+**Shipped:** three rooms built around the new words — Low Door (the star is behind a 60 px gap: "shrink"), The Tower
+(the star is on top of a 1400-high tower, taller than giant stairs: "fly", a balloon or a giant rope), Pressure Point
+(a door that only stays open while its plate is weighed down: a crate or boulder on the plate).
+
+**Measured (`tests/word_rooms.js`, `tests/word_tower_fly.js`):** none can be solved by just walking right; shrink →
+star; fly + steer at the top → star; a boulder on the plate → star; giant stairs top out at 572 and fail on the
+tower as intended. **Went wrong:** the first Low Door gap (100 px) let the normal 80 px hero walk under; the first
+"shaft" room had no way in — replaced by the tower.
+
+---
+
 ## Brawl: the bat
 
 **Shipped:** item drops now rotate power-up → bomb → bat. The bat falls onto the stage; walk over it to take it. While

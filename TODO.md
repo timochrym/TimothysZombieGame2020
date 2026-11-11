@@ -106,7 +106,8 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       dummies, power-ups, jetpack, explosions) + adjectives (big/huge/tiny, heavy/light, bouncy, explosive, 13 colours,
       angry); unknown and "cheat" words get a reply; 3 stars for meeting the word par. DONE since: verbs (fly, grow,
       shrink, normal, heal), rope / vine, a balloon that floats up and lifts you while you hold it (G), "big"/"tiny"
-      now really resize monsters. STILL TO DO: water, animals that follow you, more rooms.
+      now really resize monsters; rooms 6-8 (Low Door needs "shrink", The Tower needs "fly" / a balloon / a giant rope,
+      Pressure Point needs something heavy on a plate). STILL TO DO: water, animals that follow you.
 - [x] B4 — Endless jetpack runner → **Jet Dash**: hold to fly, speeds up over distance, zappers (static, gates,
       spinning), missiles that lock on behind a blinking ! warning, laser beams that charge then fire, coin ribbons,
       shield bubble, best distance + banked coins, local P2 on the same run, pads. Next: a coin shop (outfits,
