@@ -269,6 +269,7 @@ function updateBrawl() {
             } else spawnPowerUp(ix, st.topY + 260 + Math.random() * 300);
         }
         brawlBats();
+        brawlSpecials();
         // unused bombs fizzle out after 25 s so the stage never fills up
         for (let i = movingObjects.length - 1; i >= 0; i--) {
             var bo = movingObjects[i];
@@ -331,6 +332,60 @@ function brawlBats() {
             if (ch.brBat <= 0) Components.addFloatingText("bat broke", ch.x, ch.y + 90, "#94a3b8", 14);
         }
         if (ch.brSwingCd > 0) ch.brSwingCd--;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Character moves: every hero look has its own E move (the Original Hero keeps the shockwave)
+//   Stick Fighter  - Rising Uppercut: leap up, launching anyone above / in front upward
+//   Street Brawler - Ground Slam: hop and dive; landing blasts everyone close by
+//   Cap Hero       - Rocket Punch: a lunge forward that strikes the first fighter in the way
+// ---------------------------------------------------------------------------
+var BRAWL_MOVES = { stick: "Rising Uppercut", brawler: "Ground Slam", cap: "Rocket Punch" };
+function brawlHit(att, v, dmg, kx, ky, mult, text) {
+    v.hitCooldown = 0; v.brKnockMult = mult;
+    v.takeDamage(-dmg, kx, ky, att);
+    Components.addFloatingText(text, v.x, v.y + 90, "#fde68a", 22);
+    screenShake = Math.max(screenShake, 7);
+}
+function brawlSpecials() {
+    for (let i = 0; i < characters.length; i++) {
+        var ch = characters[i];
+        if (ch.dead || ch.eliminated || ch.brBat > 0) continue;
+        var skin = typeof ch.skinId === "function" ? ch.skinId() : "original", move = BRAWL_MOVES[skin];
+        if (!move) continue;
+        ch.abilityCooldown = Math.max(ch.abilityCooldown || 0, 2);          // their move replaces the shockwave
+        if (ch.brSpCd > 0) ch.brSpCd--;
+        var face = ch.lastFacing || 1, foes = characters.filter(function(v) { return v !== ch && !v.dead && !v.eliminated; });
+        if (ch.abilityPressed && !(ch.brSpCd > 0) && !ch.liveRagdoll && !(ch.hitstun > 0)) {
+            ch.brSpCd = 75;
+            Components.addFloatingText(move.toUpperCase() + "!", ch.x, ch.y + 80, "#7ff0ff", 16);
+            if (typeof SFX !== "undefined") SFX.play("kick", ch.x, ch.y, 1, 1.1);
+            if (skin === "stick") {
+                ch.yspeed = 17; ch.onGround = false;
+                foes.forEach(function(v) { var dx = v.x - ch.x, dy = v.y - ch.y; if (dx * face > -40 && Math.abs(dx) < 150 && dy > -60 && dy < 230) brawlHit(ch, v, 24, face * 4, 20, 1.35, "UPPERCUT!"); });
+            } else if (skin === "brawler") {
+                if (ch.onGround) { ch.yspeed = 13; ch.onGround = false; ch.brSlam = 1; } else ch.brSlam = 2;
+            } else if (skin === "cap") {
+                ch.brDash = 12; ch.brDashHit = false;
+            }
+        }
+        // ground slam: after the hop, dive; the landing blasts everyone near
+        if (ch.brSlam === 1 && ch.yspeed < 4) ch.brSlam = 2;
+        if (ch.brSlam === 2) {
+            ch.yspeed = Math.min(ch.yspeed, -24);
+            if (ch.onGround) {
+                ch.brSlam = 0;
+                Components.addRing(ch.x, ch.y - ch.s2 / 2, 260, "#fb923c", 18);
+                foes.forEach(function(v) { var dx = v.x - ch.x; if (Math.abs(dx) < 260 && Math.abs(v.y - ch.y) < 160) brawlHit(ch, v, 26, (Math.sign(dx) || face) * 14, 12, 1.25, "SLAM!"); });
+            }
+        }
+        // rocket punch: a straight lunge
+        if (ch.brDash > 0) {
+            ch.brDash--; ch.xspeed = face * 24; ch.yspeed = Math.max(ch.yspeed, 0.5);
+            if (ch.brDash % 3 === 0) Components.spawnSparks(ch.x - face * 30, ch.y, "#fca5a5", 2);
+            if (!ch.brDashHit) foes.forEach(function(v) { if (ch.brDashHit) return; var dx = v.x - ch.x; if (dx * face > -10 && Math.abs(dx) < 100 && Math.abs(v.y - ch.y) < 90) { ch.brDashHit = true; brawlHit(ch, v, 26, face * 20, 9, 1.4, "POW!"); ch.brDash = 0; ch.xspeed *= 0.2; } });
+        }
     }
 }
 

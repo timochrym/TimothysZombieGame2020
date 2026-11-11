@@ -6,6 +6,20 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Brawl: character moves
+
+**Shipped:** every hero look now has its own E move in Brawl instead of everyone sharing the shockwave: Original Hero
+keeps the shockwave; Stick Fighter — Rising Uppercut (leaps up, launching anyone above or in front upward); Street
+Brawler — Ground Slam (hop, dive, the landing blasts everyone within 260 px); Cap Hero — Rocket Punch (a lunge forward
+that strikes the first fighter in the way). 1.25 s cooldown; the bat still takes over E while held; CPUs use them
+because they already press E up close.
+
+**Measured (`tests/brawl_moves.js`, a real E press with the CPU 120 px in front):** shockwave 13 %, uppercut 21 %,
+slam 13 %, rocket punch 22 %; no errors. **Went wrong (test only):** setting the "E pressed" flag from the test did
+nothing — the game re-reads it from the keyboard every frame — so the test presses the real key.
+
+---
+
 ## Touch controls (phones and tablets, also as LAN players)
 
 **Why:** the LAN instructions say "open the link on every computer, tablet or phone", but the game had no touch input

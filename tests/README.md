@@ -24,6 +24,7 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node lan_buttons.js         # LAN through the real buttons: Host, Join, host picks a game, joiner is in it
     node touch_phone.js         # touch controls on an emulated phone: Arcade tap, walk, shoot, pause
     node lan_phone.js           # a phone joins a LAN game by tapping and moves its hero with the touch buttons
+    node brawl_moves.js         # Brawl: each hero's E move (shockwave, uppercut, slam, rocket punch) hits a CPU
     node lan_play.js            # starts server.js on 8099: a host + 2 joiners, positions match, client FPS
 
 Each prints its numbers and then the page errors (`[]` = none). See ROADMAP.md, "Your named feedback items".
