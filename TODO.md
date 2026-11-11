@@ -3,6 +3,40 @@
 Kept up to date on every push. Finished items move to `RETROS.md` (with measurements) and get `[DONE]` in `ROADMAP.md`.
 Last updated: after the UI pass (top bar, pause menu, Level Studio, one-click LAN).
 
+## Your list of 2026-11-11 (evening) — order: multiplayer, then menus/tools, then games. Live status: PROGRESS.md
+- [ ] LAN: joiners' browsers calculate their own hero locally so play is fluid; smaller packets.
+- [ ] LAN: player 2 can't see the food I drop in Blob Arena.   - [ ] Player 2 movement in the soccer game doesn't work.
+- [ ] Blob Arena: game settings (decay rate, increasing decay), size cheat, more players (slider / custom amount),
+      interacts with other things already coded.
+- [ ] Cheat menu: the always-on drag-out toolbar is hideous — only show it when placing.
+- [ ] Zombie game: can't select the other levels.
+- [ ] Brawl: combo hits are way too strong.
+- [ ] Enemy tracking and pathfinding is still bad.
+- [ ] Blocks sometimes do too much damage; weight field; every field reachable in the inspector.
+- [ ] Editing hand, dragging and playing all enhanced.
+- [ ] Menus: pause menu, player 2 menu, inspector, editor, toolbars, game cheats, right-click options, dropdowns — all
+      intuitive. "Imagine Steve Jobs designed this universal game engine."
+- [ ] Zombie Ball: smaller map, closer to one-button physics soccer, bright look like the screenshot (original art).
+- [ ] Wobble Wheels: movement, rotation, functions, map — rethink everything.
+- [ ] Every game on the same engine and able to interact with most things; improve and test each game.
+Your words: "Please fix multiplayer LAN to rely on the browsers own calculated results to as a way to keep the game fluid.
+Currently its laggy probably because so much data is being sent every packet. We need a method of local calcuations for
+connected players / Also AGARIO should have game settings like, if there is a decay rate if if that rate increases. There
+should be cheats for changing the size, player 2 can't see the food I drop. Add more players if desired, a slider or custom
+amount or something. Add ability to interact with other things we have already coded. Player 2 movement for the soccer
+message game does not work / The cheat menu always having this drag out toolbar is hideous / If you could overall improve
+and test the games. Each game should be connected with the same game engines and be able to interact with most things /
+Zombie game I can't select the other levels, it does not work / COmbo hits for brawl are way too OP / Enemy tracking and
+pathfinding is still horrible. / Sometimes the blocks do too much damage and I thought they had a weight field now. all the
+fields should be accessible in the inspector menu / The editing hand and dragging and playing should all be enhanced. /
+Imagine like steve jobs designed this universal game engine for simple html games. yk let's make some major improvement.
+Push updates as you go and keep a log of your progress and where what changes you are planning on making next / Zombie ball
+still is not that fun, make the map smaller and match it closer to soccer physics. It should really look pretty close to
+the screenshot / Happy wheels app is also completely broken, the movement, rotation, functions, map, everything needs to be
+rethought. / Improve core multiplayer, local calculations for connected players, then move on to making the pause menu,
+player 2 menu, inspector, editor, tool bars, game cheats, menus, right click options, drop downs, make everything make
+sense and intuitive. THen move on to improving the Games. What's the est way we can perfect each one the fastest"
+
 ## Latest implementation handoff (2026-11-11)
 Implemented: soccer ball foreground rendering and LAN ball/score sync; Flick Soccer shared P2 keys and help;
 boost release; stable character landings; navigation graph invalidation, non-looping flow routes, moving-platform waypoints;
