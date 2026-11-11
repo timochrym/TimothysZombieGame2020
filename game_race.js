@@ -300,6 +300,16 @@ GameModes.register({
 
     onKey: function(code) {
         if (code === "KeyR") { LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
+        // T: straight back to your last checkpoint (the clock keeps running; not counted as a fall)
+        if (code === "KeyT" && redGuy && !redGuy.dead && Race.phase === "run") {
+            var c = redGuy;
+            c.x = c.respawnX !== undefined ? c.respawnX : c.spawnX; c.y = c.respawnY !== undefined ? c.respawnY : c.spawnY;
+            c.xspeed = c.yspeed = 0; c.invulnTimer = 30;
+            if (c.liveRagdoll && typeof Ragdolls !== "undefined") { Ragdolls.remove(c.liveRagdoll); c.liveRagdoll = null; c.ragdollTimer = 0; }
+            Components.spawnSparks(c.x, c.y, "#7ff0ff", 10);
+            Components.addFloatingText("↩ CHECKPOINT", c.x, c.y + 90, "#7ff0ff", 18);
+            return true;
+        }
         if (code === "KeyG") { Race.ghostOn = !Race.ghostOn; return true; }
         return false;
     },
@@ -372,7 +382,7 @@ GameModes.register({
             if (Race.ghost && Race.ghostOn) { var gi = Math.min(Math.floor(Race.time / 2), Race.ghost.length / 2 - 1) * 2; mark(Race.ghost[gi], "rgba(165,243,252,0.7)", 5); }
             for (let i = 0; i < characters.length; i++) mark(characters[i].x, characters[i].color || "#fff", 7);
         }
-        uiText("A/D run · W jump · Shift dash · wall-jump · hold W for stairs · R restart · G ghost " + (Race.ghostOn ? "on" : "off") + " · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
+        uiText("A/D run · W jump · Shift dash · wall-jump · hold W for stairs · T last checkpoint · R restart · G ghost " + (Race.ghostOn ? "on" : "off") + " · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
         for (let i = 0; i < characters.length; i++) if (!characters[i].dead) drawEdgeIndicator(characters[i].x, characters[i].y, characters[i].color, characters[i].playerLabel);
     },
 

@@ -223,8 +223,27 @@ GameModes.register({
         return true;
     },
 
+    // remember where every crate starts, so T can put them back without restarting the room
+    onReset: function() {
+        puzzleState.crateHome = movingObjects.filter(function(o) { return o.movable && /Crate|TNT/.test(o.name || ""); }).map(function(o) { return [o, o.x, o.y]; });
+    },
+
+    resetCrates: function() {
+        var n = 0;
+        (puzzleState.crateHome || []).forEach(function(h) {
+            var o = h[0];
+            if (movingObjects.indexOf(o) === -1) return;            // blown up: only R brings those back
+            if (o.heldBy) { o.heldBy.heldObject = null; o.heldBy = null; o.noCollide = false; }
+            o.x = h[1]; o.y = h[2]; o.xspeed = 0; o.yspeed = 0; n++;
+            Components.spawnSparks(o.x, o.y, "#d9a05b", 6);
+        });
+        if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+        if (redGuy) Components.addFloatingText(n ? "CRATES RESET" : "NO CRATES TO RESET", redGuy.x, redGuy.y + 100, "#d9a05b", 18);
+    },
+
     onKey: function(code) {
         if (code === "KeyR") { LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
+        if (code === "KeyT") { this.resetCrates(); return true; }
         if (code === "KeyH") { puzzleState.hint = !puzzleState.hint; return true; }
         return false;
     },
@@ -248,7 +267,7 @@ GameModes.register({
         uiText("CRATE LAB", 30, 46, 24, "#f4c27a", "left", "900");
         uiText("ROOM " + (puzzleState.room + 1) + "/" + PUZZLE_ROOMS.length + "  ·  " + (lvl.title || ""), 30, 70, 14, "#e2e8f0", "left", "800");
         uiText("⏱ " + (puzzleState.time / 60).toFixed(1) + "s   ★ " + Gadgets.starsGot + "/" + Gadgets.starsTotal + "   ☠ " + Gadgets.deaths + (Gadgets.keys["#facc15"] || Gadgets.keys["#38bdf8"] ? "   🔑" : ""), 30, 94, 13, "#94a3b8", "left", "700");
-        uiText("G / right-click grab · click throw · E lever · H hint · R restart room · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
+        uiText("G / right-click grab · click throw · E lever · H hint · T crates back · R restart room · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
     },
 
     menuItems: function(items) {

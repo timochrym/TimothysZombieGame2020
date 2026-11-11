@@ -6,6 +6,17 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Parkour Rush + Crate Lab: T keys
+
+**Shipped:** Parkour Rush — T puts you straight back on your last checkpoint (clock keeps running, not counted as a
+fall). Crate Lab — T returns every crate to where the room started it (a held crate is dropped first; blown-up TNT
+still needs R). Both are in the bottom key legend.
+
+**Measured:** checkpoint at x 3550 → moved 900 away → T → 3550, deaths unchanged; Crate Lab room 1 crate pushed from
+-650 to -50 → T → -650; no errors.
+
+---
+
 ## UI pass 4: every game at 820×600
 
 **Shipped:** screenshots of all 22 games and build mode at 820×600 found four problems, all fixed generally rather

@@ -63,10 +63,11 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       launch the dummy in, pose picker before the push, replay of the run, a closer camera in Stair Drop.
 - [~] Parkour Rush: DONE — speedrun splits (time at each checkpoint vs your best run's split, green −/red +, saved
       with the best), speed lines when you're really moving, new engine hook onCheckpoint. STILL TO DO: slide-under
-      gaps and vault/ledge-grab moves, a level select showing medals, a per-checkpoint quick restart key.
+      gaps and vault/ledge-grab moves, a level select showing medals. (T = back to your last checkpoint: DONE.)
 - [~] Crate Lab: DONE — visible wiring from every plate / lever to the door, lift or bridge it powers (grey when off,
       green with flowing current when on); a hint per room on H, offered after 45 s. STILL TO DO: more rooms (lasers &
-      mirrors, conveyor belts, buttons with timers), a room-select grid with best times, an undo-free "reset crate" key.
+      mirrors, conveyor belts, buttons with timers), a room-select grid with best times. (T = crates back to where they
+      started, without restarting the room: DONE.)
 - [~] Portal Lab: DONE — aim reticle shows where the beam lands and whether a portal will stick (blue/orange ghost
       outline on white panels, red ✕ elsewhere); X closes your portals. STILL TO DO: more chambers (laser relays,
       light bridges, turrets that ragdoll), pad-aim reticle, chamber-select grid.
