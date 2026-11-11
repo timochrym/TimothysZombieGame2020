@@ -6,6 +6,17 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Inspector: Terra tiles
+
+**Shipped:** in Terra an Edit-mode click picks the tile under the pointer: the card shows what it is (and the pickaxe
+tier it needs), lets you change it to any block, dig it out or turn it to stone, and set how many of that block you
+carry. Changes go through the normal tile setter, so collision and LAN clients follow.
+
+**Measured (`tests/inspector_terra.js`):** the grass under the hero was picked, changed to brick, then dug to air; no
+errors.
+
+---
+
 ## Level Studio: Siege forts and Word Lab rooms
 
 **Shipped:** rules "Ragdoll Siege (fort)" (palette: crate, plank, stone pillar, TNT; enemy pieces become the fort's

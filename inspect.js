@@ -94,6 +94,16 @@ var GAME_INSPECT = {
             fields: [{ label: "Damage so far", type: "text", get: function() { return Math.round(Dummy.total); } }],
             actions: [{ label: "New dummy", fn: function() { GameModes.current.onKey("KeyR"); } }, { label: "⬆ Launch", fn: function() { rd.addVelocity(8, 34); } }] };
     },
+    terra: function(wx, wy) {
+        // a tile: change what it is (or dig it), and the inventory of the hero
+        var c = terraCol(wx), r = terraRow(wy), t = terraGet(c, r);
+        if (t === undefined) return null;
+        var tx = (c - TERRA.W / 2 + 0.5) * TERRA.T, ty = TERRA.TOP - (r + 0.5) * TERRA.T;
+        return { title: "⛏ Tile: " + TILES[t][0], sub: "column " + c + ", row " + r + (TERRA_NEED[TILES[t][0]] ? " · needs pickaxe tier " + TERRA_NEED[TILES[t][0]] : ""), pos: function() { return [tx, ty]; },
+            fields: [{ label: "Block", type: "choice", options: TILES.map(function(T, i) { return [i, T[0]]; }), get: function() { return terraGet(c, r); }, set: function(v) { terraSet(c, r, v); } },
+                     { label: "Your " + (TILES[t][4] || "dirt"), type: "range", min: 0, max: 99, step: 1, get: function() { return TERRA.inv[TILES[t][4] || "dirt"] || 0; }, set: function(v) { TERRA.inv[TILES[t][4] || "dirt"] = v; } }],
+            actions: [{ label: "Dig it out", fn: function() { terraSet(c, r, TILE_ID.air); } }, { label: "Make it stone", fn: function() { terraSet(c, r, TILE_ID.stone); } }] };
+    },
     words: function(wx, wy) {
         for (let i = 0; i < movingObjects.length; i++) {
             var o = movingObjects[i];

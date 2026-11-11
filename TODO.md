@@ -169,8 +169,8 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       floating platform / fighter spawn pieces; stage top, blast zones and spawns worked out from the layout; saved
       stages join Brawl's stage rotation). Siege forts and Word Lab rooms: DONE (fort pieces + enemy pieces as the
       fort's zombies + an ammo list; rooms with a star, task text and word par — both set in the inspector when
-      nothing is selected). Still to do: Bed Brawl maps (its islands, beds, generators and shops are generated in
-      code), Terra tiles in the inspector.
+      nothing is selected). Terra tiles in the inspector (change the block, dig it out, your inventory of it): DONE.
+      Still to do: Bed Brawl maps (its islands, beds, generators and shops are generated in code).
 
 ## Known issues / polish found while building (from RETROS.md)
 - LAN: all nine new games work over LAN now (turn-based ones seat LAN players in CPU seats; Worm / Blob / Tank Arena
