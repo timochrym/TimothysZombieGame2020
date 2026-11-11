@@ -163,6 +163,7 @@ function brawlRespawn(ch) {
     ch.xspeed = ch.yspeed = 0;
     ch.invulnTimer = 190;
     ch.hitCooldown = 0;
+    ch.brChain = 0;
     ch.ragdollImmune = 0;
     ch.airJumps = ch.maxAirJumps;
     ch.dashCooldown = 0;
@@ -418,6 +419,17 @@ function brawlApplyHit(victim, amount, kx, ky, attacker) {
         return;
     }
     if (!victim.isCPU && gameCheats.brawlTaken !== 1) { dmg *= gameCheats.brawlTaken; if (dmg <= 0) { Components.spawnSparks(victim.x, victim.y, "#fde68a", 3); return; } }
+    // ---- combo limits: chained hits fade, and a long chain ends by itself ----
+    // A "chain" is hits on the same fighter less than 50 ticks apart. Each further hit does 80% of the one before
+    // (damage, knockback and stun), down to 35%. The 6th hit is a COMBO BREAK: the victim pops free and can't be
+    // hit for 3/4 of a second. Before this, any quick attack was an infinite stun-lock.
+    var chained = brawl.tick - (victim.brHitT === undefined ? -999 : victim.brHitT) < 50;
+    victim.brChain = chained ? (victim.brChain || 0) + 1 : 1;
+    victim.brHitT = brawl.tick;
+    var fade = Math.max(0.35, Math.pow(0.8, victim.brChain - 1));
+    dmg *= fade;
+    var comboBreak = victim.brChain >= 6;
+    if (victim.brChain >= 3 && attacker && attacker !== victim && !comboBreak) Components.addFloatingText(victim.brChain + " HIT", victim.x, victim.y + 110, "#fde047", 13);
     var pct = Math.max(1, dmg * 0.35);
     victim.damagePct += pct;
     if (attacker && attacker !== victim && attacker.isPlayer) { victim.brLastBy = attacker; victim.brLastT = brawl.tick; attacker.brDealt = (attacker.brDealt || 0) + pct; }
@@ -438,9 +450,15 @@ function brawlApplyHit(victim, amount, kx, ky, attacker) {
     victim.xspeed = nx * launch;
     victim.yspeed = Math.max(2.5, Math.abs(ny) * launch * 0.5 + launch * 0.38);
     victim.onGround = false;
-    victim.hitstun = Math.min(55, Math.round(launch * 2.2));
+    victim.hitstun = Math.min(55, Math.round(launch * 2.2 * (chained ? fade : 1)));
     victim.hitstunSet = true;
-    if (launch >= 11) {
+    if (comboBreak) {
+        victim.brChain = 0; victim.hitstun = 6; victim.invulnTimer = 45;
+        victim.xspeed = nx * Math.max(9, Math.min(14, launch)); victim.yspeed = 11;
+        Components.addFloatingText("COMBO BREAK!", victim.x, victim.y + 120, "#7dd3fc", 20);
+        Components.addRing(victim.x, victim.y, 110, "#7dd3fc", 12);
+    }
+    else if (launch >= 11) {
         victim.ragdollImmune = 0;
         victim.startRagdoll(nx, 0, Math.min(70, Math.round(launch * 3)), true);
     }
