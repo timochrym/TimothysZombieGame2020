@@ -216,9 +216,13 @@ them) drive the editing camera.
 
 ## LAN multiplayer (`server.js` + `net.js`)
 
-- **Run it:** `node server.js` (no npm packages; `node server.js 3000` for another port). It serves the game and prints
-  `http://<your-ip>:8080`. Everyone on the same Wi-Fi opens that link, presses **📡 LAN**, one player **Hosts**, the rest **Join**.
-  Opened as a plain file, the LAN panel explains this instead.
+- **Run it:** double-click **Start LAN Game** (.bat / .command), press **Start LAN game** in the Control Panel
+  (`updater_addons/lan.py`, a documented add-on command; it runs server.js in the background on a free port from 8080,
+  remembers it in `lan.pid`, **Stop LAN game** ends it), or `node server.js [port] [--open]`. `--open` opens
+  `/?lan=host`, which opens the LAN panel and hosts at once; a busy port moves to the next one, and a second launch finds
+  the running server through `/lan-info` and just reopens the page. Everyone else opens the printed
+  `http://<your-ip>:8080` and presses **Join**. The LAN panel probes `/lan-info` while open: as a file or from a plain
+  server (the Control Panel's own Start server) it shows the two one-click ways to start instead of Host / Join.
 - **Model:** host-authoritative. The host runs the normal game; each joiner gets a hero (`ch.isRemote`, `ch.netPid`,
   `playerIndex` 2+). `Components.moveTypeFinder` feeds remote heroes from `Net.applyRemoteInput` (keys, mouse-aim world point
   or pad angle, dash/grab/reload counters). Clients run no simulation: `tick()` calls `Net.clientTick()`, which draws the host's

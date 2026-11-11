@@ -3,6 +3,8 @@
 // LAN SERVER - serves the game to every device on your network and relays multiplayer traffic.
 //
 //   node server.js            (port 8080)        node server.js 3000      (custom port)
+//   node server.js --open     also opens the game in this computer's browser, ready to host
+//                             (what the "Start LAN Game" launchers and the Control Panel button run)
 //
 // Then open the printed http://192.168.x.x:8080 address on each computer / tablet on the same Wi-Fi.
 // The first browser that presses "Host" runs the game; everyone else who joins sends their controls
@@ -15,7 +17,11 @@ const path = require("path");
 const os = require("os");
 const crypto = require("crypto");
 
-const PORT = Number(process.argv[2] || process.env.PORT || 8080);
+const ARGS = process.argv.slice(2);
+const OPEN = ARGS.indexOf("--open") !== -1;
+const PORT_ASKED = ARGS.filter(a => /^\d+$/.test(a))[0];
+let PORT = Number(PORT_ASKED || process.env.PORT || 8080);
+const { spawn } = require("child_process");
 const ROOT = __dirname;
 const MIME = {
     ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -194,12 +200,53 @@ function attach(ws) {
     };
 }
 
-server.listen(PORT, "0.0.0.0", () => {
+// open a page in this computer's default browser (best effort)
+function openBrowser(url) {
+    try {
+        const cmd = process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];
+        const p = spawn(cmd[0], cmd[1], { detached: true, stdio: "ignore" });
+        p.on("error", () => console.log("  Open " + url + " in your browser."));
+        p.unref();
+    } catch (e) { console.log("  Open " + url + " in your browser."); }
+}
+
+// is the game's own server already on this port? (double-clicking the launcher twice should just reopen it)
+function probe(port, cb) {
+    const req = http.get({ host: "127.0.0.1", port: port, path: "/lan-info", timeout: 1500 }, res => {
+        let body = "";
+        res.on("data", d => body += d);
+        res.on("end", () => { try { cb(JSON.parse(body).port !== undefined); } catch (e) { cb(false); } });
+    });
+    req.on("error", () => cb(false));
+    req.on("timeout", () => { req.destroy(); cb(false); });
+}
+
+let tries = 0;
+server.on("error", err => {
+    if (err.code !== "EADDRINUSE") { console.error(err); process.exit(1); }
+    probe(PORT, isGame => {
+        if (isGame) {
+            console.log("\n  The game's LAN server is already running on port " + PORT + ".");
+            if (OPEN) openBrowser("http://localhost:" + PORT + "/?lan=host");
+            setTimeout(() => process.exit(0), 300);
+            return;
+        }
+        if (PORT_ASKED || ++tries > 10) { console.error("\n  Port " + PORT + " is in use by another program. Try: node server.js " + (PORT + 1)); process.exit(1); }
+        console.log("  Port " + PORT + " is busy, trying " + (PORT + 1) + "...");
+        PORT++;
+        server.listen(PORT, "0.0.0.0");
+    });
+});
+
+server.on("listening", () => {
     const addrs = lanAddresses();
     console.log("\n  Timothy's Zombie Game - LAN server running\n");
     console.log("  On this computer:   http://localhost:" + PORT);
     for (const a of addrs) console.log("  On your network:    http://" + a + ":" + PORT);
-    console.log("\n  1. Open one of those links on every device (same Wi-Fi).");
-    console.log("  2. One player: Arcade -> LAN PLAY -> Host.  Everyone else: LAN PLAY -> Join.");
-    console.log("  3. If other devices can't connect, allow Node.js through your firewall.\n");
+    console.log("\n  1. Open the network link on every other device (same Wi-Fi) and press Join.");
+    console.log("  2. This computer hosts: press Host in the LAN panel (it opens by itself with --open).");
+    console.log("  3. If other devices can't connect, allow Node.js through your firewall.");
+    console.log("  Keep this window open while you play; close it (or press Ctrl+C) to stop.\n");
+    if (OPEN) openBrowser("http://localhost:" + PORT + "/?lan=host");
 });
+server.listen(PORT, "0.0.0.0");

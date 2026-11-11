@@ -1,7 +1,7 @@
 # TODO — everything still to do (nothing from your suggestions is dropped)
 
 Kept up to date on every push. Finished items move to `RETROS.md` (with measurements) and get `[DONE]` in `ROADMAP.md`.
-Last updated: after Vehicles (backlog B2), during Terra (B3) and controller support.
+Last updated: after the UI pass (top bar, pause menu, Level Studio, one-click LAN).
 
 ## In progress right now
 - [x] **Terra (B3 world generation)** — `game_terra.js`: deep generated world (forest/desert/hill biomes, trees,
@@ -123,6 +123,17 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       minigames (pool-style cue game, darts, word grid, tanks artillery),
       online/LAN turns.
 
+## UI pass (your request: top bars, pause menus, Studio, inspector, builders, LAN start)
+- [x] Top bar: 4 compact buttons + grouped ☰ menu, dims while playing, no HUD overlap, adapts to narrow windows.
+- [x] Pause menu: fits any window (shrinks, then scrolls with keys / wheel), follows the mouse.
+- [x] Level Studio: game parked and handed back on close, start card, one-line toolbar with File menu, Tab hides
+      panels, palette search, inspector pairs (position / size) and readable names.
+- [x] LAN one click: Start LAN Game launchers, Control Panel "Start LAN game" / "Stop LAN game" buttons (add-on),
+      ?lan=host auto-hosts, LAN panel says which kind of page you're on and shows the join link with Copy.
+- [ ] Cheats & tuning panel, Players panel, build-mode HUD: same consistency pass (sizes, grouping, narrow windows).
+- [ ] Control Panel buttons only checked with a stand-in for the Control Panel (its source isn't reachable from here):
+      confirm they show on Home → Play together on your machine.
+
 ## Known issues / polish found while building (from RETROS.md)
 - LAN: all nine new games work over LAN now (turn-based ones seat LAN players in CPU seats; Worm / Blob / Tank Arena
   give each LAN player their own worm / blob / tank; Jet Dash adds them as runners; Sand Lab lets them paint into the
@@ -157,6 +168,9 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - "The blocks bounce randomly in the ragdoll seige game (Add an option to do angry birds)"
 - "Dev improvement" · "Better mulitplayer experience" · "Better multiplayer and cpu toggles, make it way more clear whats going on"
 - "local LAN multiplayer with mulitple players … add this first"
+- "Going back and fourth into and out of the level studio is a bit strange … fix these top menu bars … make all the pause
+  menus and top menus and level editor and inspector and builders and uis nice, useable, adaptable, intuitive, and useful"
+- "is it super easy to start a LAN from either the open index server or from the control dashboard?"
 - "Bouncing bullets" · "Grab and throw players" · "Zoomed in ragdoll punchy based attacks and physics" · "Faster speed"
 - "Driveable cars" · "Train / minecart" · "Lower generated level" · "Teraria like generation" · "BLock game capabiliteis"
 - "Agrio" · "deepio" · "Slitherio" · "Scribblenauts" · "Jetpack Joyride" · "Mario party mode, monopoly"

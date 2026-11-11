@@ -6,6 +6,29 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## One-click LAN
+
+**Shipped:** before this, LAN play needed a terminal whether the game was opened as a file or served by the Control
+Panel (whose server can't relay players), and the panel's advice was terminal commands. Now:
+**Start LAN Game.bat / .command** (checks for Node.js and opens its download page if missing, finds Homebrew / nvm
+installs on a Mac) runs `node server.js --open`, which opens the game already hosting. A **Control Panel add-on**
+(`updater_addons/lan.py`) adds **Start LAN game** / **Stop LAN game** to Home → Play together: background server on a
+free port, browser opens hosting, the join links are printed in the panel's log. server.js moves to the next port when
+one is taken and reuses itself when started twice. The LAN panel checks which server it's on: file / plain server →
+the two one-click ways; game server → Host or Join highlighted depending on whether someone already hosts (it
+re-checks every 2.5 s); hosting → the join link large, with Copy.
+
+**Measured:** file and plain-server pages show the start steps; `/?lan=host` hosted by itself and showed
+http://<ip>:8099; a second page saw "A game is being hosted" with Host disabled, joined, the host counted 1 peer;
+add-on start → start again (reused) → stop all worked against a stand-in Control Panel; busy port 8080 → 8081;
+second launch exited 0 after reopening; the earlier LAN test (2 joiners, movement, 60 FPS) still passes.
+
+**Went wrong / limits:** the Control Panel's own source can't be reached from this environment, so the add-on
+uses only the API in UPDATER.md and its buttons haven't been seen in the real window yet. The panel re-renders on
+every server change, so it keeps the typed name by hand.
+
+---
+
 ## UI pass 2: Level Studio in and out
 
 **Shipped:** opening the Studio no longer throws your game away. The world is parked and handed back untouched when

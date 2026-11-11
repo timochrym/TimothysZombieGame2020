@@ -797,7 +797,39 @@ var NetUI = {
     open: function() {
         if (!this.el) this.build();
         this.el.style.display = "flex";
+        this.probe();
         this.render();
+        var self = this;
+        clearInterval(this.poll);
+        this.poll = setInterval(function() { if (!self.isOpen()) return clearInterval(self.poll); if (!Net.role && self.info !== false) self.probe(); }, 2500);
+    },
+
+    // which kind of page is this? info = the game's server.js answered (LAN works), false = file or another server
+    info: null, probed: false,
+    probe: function() {
+        var self = this;
+        if (!Net.available()) { this.info = false; this.probed = true; return; }
+        var before = JSON.stringify(this.info);
+        fetch("/lan-info", { cache: "no-store" }).then(function(r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function(j) { self.info = (j && j.port !== undefined) ? j : false; })
+            .catch(function() { self.info = false; })
+            .then(function() {
+                self.probed = true;
+                if (JSON.stringify(self.info) === before) return;          // re-render only on a change (keeps the name box as typed)
+                var nm = document.getElementById("lan-name"), typed = nm && nm.value;
+                self.render();
+                nm = document.getElementById("lan-name"); if (nm && typed) nm.value = typed;
+            });
+    },
+
+    // the steps that work from anywhere: the launcher in the game folder, or the Control Panel button
+    startHelp: function(esc) {
+        var where = location.protocol === "file:" ? "This copy of the game was opened as a file" : "This page comes from <code>" + esc(location.host) + "</code>, a plain web server (like the Control Panel's Start server)";
+        return "<p>" + where + ", and a plain page can't connect players. Start the game's LAN server instead — one click either way:</p>" +
+            "<div class='big'><b>A.</b> In the game folder, double-click <b>Start LAN Game</b><br><small>(Start LAN Game.bat on Windows, Start LAN Game.command on a Mac)</small></div>" +
+            "<div class='big'><b>B.</b> Or in the <b>Control Panel</b>, press <b>Start LAN game</b> (Home → Play together)</div>" +
+            "<p>Either one opens the game in your browser, already hosting, and shows the link the others open. The first time, it may ask you to install <a href='https://nodejs.org' target='_blank' style='color:#7dd3fc'>Node.js</a> (free), and Windows may ask to allow it through the firewall — say yes for private networks.</p>" +
+            "<p style='font-size:12px'>Terminal fans: <code>node server.js --open</code> in the game folder.</p>";
     },
     close: function() { if (this.el) this.el.style.display = "none"; },
     isOpen: function() { return !!this.el && this.el.style.display === "flex"; },
@@ -816,6 +848,10 @@ var NetUI = {
             "#lan-panel .pl{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;background:#1e293b;margin:5px 0}" +
             "#lan-panel .dot{width:14px;height:14px;border-radius:4px;flex:none}#lan-panel .st{color:#fbbf24;font-weight:600}#lan-panel .err{color:#fca5a5;font-weight:700;background:rgba(127,29,29,.35);padding:8px 10px;border-radius:8px}" +
             "#lan-panel button:disabled{opacity:.45;cursor:default}" +
+            "#lan-panel .big{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:10px 12px;margin:8px 0;line-height:1.45}#lan-panel .big small{color:#94a3b8}" +
+            "#lan-panel .link{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#082f49;border:1px solid #0ea5e9;border-radius:10px;padding:10px 12px;margin:8px 0}" +
+            "#lan-panel .link code{font-size:22px;font-weight:800;background:none;color:#e0f2fe;padding:0}" +
+            "#lan-panel button.go{background:#16a34a}" +
             "body.lan-client .top-bar-btn:not(#lan-btn),body.lan-client #level-select-dropdown,body.lan-client #mario-maker-dock{display:none!important}";
         document.head.appendChild(css);
         var el = document.createElement("div");
@@ -831,28 +867,24 @@ var NetUI = {
         if (!this.el || !this.isOpen()) return;
         var esc = function(s) { return String(s).replace(/[&<>"]/g, function(c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
         var h = '<div class="card"><h2>📡 LAN Multiplayer</h2>';
-        if (!Net.available()) {
-            h += "<p>LAN play needs the little game server, because a web page opened from a file can't accept connections from other devices.</p>" +
-                 "<p><b>1.</b> On the computer with the game folder, run:</p><div class='row'><code>node server.js</code></div>" +
-                 "<p><b>2.</b> It prints a link like <code>http://192.168.1.20:8080</code>. Open that link on every computer, tablet or phone on the same Wi-Fi (including this one).</p>" +
-                 "<p><b>3.</b> One player presses <b>Host</b>, everyone else presses <b>Join</b>.</p>" +
-                 "<p>Needs <a href='https://nodejs.org' target='_blank' style='color:#7dd3fc'>Node.js</a> (free). If others can't connect, allow Node through the firewall.</p>";
+        if (!Net.available() || (this.info === false && !Net.role)) {
+            h += this.startHelp(esc) + "<div class='row'><button class='sec' id='lan-close'>Close</button></div>";
         } else if (!Net.role) {
             var nm = "";
             try { nm = localStorage.getItem("timsLanName") || ""; } catch (e) {}
             var busy = !!Net.ws || Net.statusKind === "info" && /Checking/.test(Net.status);
+            var inf = this.info || {}, hosting = !!inf.hasHost;
             h += "<p>Play together on one Wi-Fi network. The <b>host</b> runs the game and picks what to play; every player who <b>joins</b> gets their own hero and camera on their own screen. Up to 16 players.</p>" +
+                 (this.info ? "<p class='st'>" + (hosting ? "🟢 A game is being hosted on this server (" + inf.players + " joined) — press Join." : "✅ LAN server ready — nobody is hosting yet.") + "</p>" : "<p class='st'>Checking the server…</p>") +
                  "<div class='row'>Your name: <input id='lan-name' maxlength='16' value='" + esc(Net.name || nm || "Player") + "'></div>" +
-                 "<div class='row'><button id='lan-host'" + (busy ? " disabled" : "") + ">🏠 Host a game</button><button id='lan-join'" + (busy ? " disabled" : "") + ">🎮 Join the game</button><button class='sec' id='lan-close'>Close</button></div>";
+                 "<div class='row'><button id='lan-host' class='" + (hosting ? "sec" : "go") + "'" + (busy || hosting ? " disabled" : "") + ">🏠 Host a game</button><button id='lan-join' class='" + (hosting ? "go" : "") + "'" + (busy || (this.info && !hosting) ? " disabled title='Nobody is hosting yet'" : "") + ">🎮 Join the game</button><button class='sec' id='lan-close'>Close</button></div>";
+            if (this.info && !hosting && inf.addresses && inf.addresses.length) h += "<p>Once you host, the others open <code>http://" + esc(inf.addresses[0]) + ":" + esc(inf.port) + "</code> and press Join.</p>";
             if (Net.status) h += "<p class='" + (Net.statusKind === "error" ? "err" : "st") + "'>" + esc(Net.status) + "</p>";
-            if (Net.serverMissing) {
-                h += "<p>This page is being served from <code>" + esc(location.host) + "</code> by a regular web server (for example <code>python -m http.server</code> or an editor preview). Multiplayer needs the game's own server:</p>" +
-                     "<p><b>1.</b> Stop the current server. <b>2.</b> Open a terminal in the game folder and run:</p><div class='row'><code>node server.js</code></div>" +
-                     "<p><b>3.</b> Open <code>http://localhost:8080</code> (other devices use the <code>http://192.168…:8080</code> link it prints). Want to keep port " + esc(location.port || "80") + "? Run <code>node server.js " + esc(location.port || "80") + "</code> instead.</p>";
-            }
+            if (Net.serverMissing) h += this.startHelp(esc);
         } else if (Net.role === "host") {
             var link = Net.addresses.length ? ("http://" + Net.addresses[0] + ":" + location.port) : location.origin;
-            h += "<p class='st'>" + esc(Net.status) + "</p><p>Tell other players to open this link and press <b>Join</b>:</p><div class='row'><code>" + esc(link) + "</code></div>";
+            h += "<p class='st'>" + esc(Net.status) + "</p><p>Everyone else opens this link on their device (same Wi-Fi) and presses <b>Join</b>:</p>" +
+                 "<div class='link'><code id='lan-link'>" + esc(link) + "</code><button class='sec' id='lan-copy'>📋 Copy</button></div>";
             if (Net.addresses.length > 1) h += "<p>Other addresses for this computer: " + Net.addresses.slice(1).map(function(a) { return "<code>http://" + esc(a) + ":" + location.port + "</code>"; }).join(" ") + "</p>";
             h += "<p><b>Players</b> (pick the game from the Arcade as usual; everyone follows you):</p>";
             h += "<div class='pl'><span class='dot' style='background:" + (redGuy ? redGuy.color : "#ff4d52") + "'></span><b>You (host)</b> — P1, keyboard/mouse" + (multiplayer ? " + P2 on this keyboard" : "") + "</div>";
@@ -876,9 +908,26 @@ var NetUI = {
         if ($("lan-join")) $("lan-join").onclick = function() { Net.connect("client", name()); };
         if ($("lan-close")) $("lan-close").onclick = function() { NetUI.close(); };
         if ($("lan-leave")) $("lan-leave").onclick = function() { Net.disconnect(); };
+        if ($("lan-copy")) $("lan-copy").onclick = function() {
+            var t = $("lan-link").textContent, btn = this;
+            var ok = function() { btn.textContent = "✓ Copied"; };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, function() {});
+            else { var r = document.createRange(); r.selectNodeContents($("lan-link")); var sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); try { document.execCommand("copy"); ok(); } catch (e) {} }
+        };
     }
 };
 
 // open the panel straight away for links like http://192.168.1.20:8080/?lan
-if (/[?&]lan\b/.test(location.search)) window.addEventListener("load", function() { setTimeout(function() { NetUI.open(); }, 300); });
+// ?lan=host (what Start LAN Game and the Control Panel open) also starts hosting straight away
+if (/[?&]lan\b/.test(location.search)) window.addEventListener("load", function() {
+    setTimeout(function() {
+        NetUI.open();
+        if (/[?&]lan=host\b/.test(location.search) && !Net.role) {
+            var nm = "Host";
+            try { nm = localStorage.getItem("timsLanName") || "Host"; } catch (e) {}
+            Net.connect("host", nm);
+            try { history.replaceState(null, "", location.pathname + "?lan"); } catch (e) {}   // a reload won't re-host
+        }
+    }, 300);
+});
 window.addEventListener("load", function() { if (!NetUI.el) NetUI.build(); });
