@@ -58,7 +58,8 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       FIXED the wheelchair (it tipped onto its back at spawn and crawled — now upright with a backrest, 10× faster).
       E eject (bail out, flung off), ghost of your best run per course + vehicle. Course 4 "Crumble Run" with
       crumbling slabs (shake, then drop) over a shallow pit, and a course select with medals per vehicle: DONE. STILL TO
-      DO: a pogo stick, destructible obstacles, fans. (Scooter with a kick-push and a sturdy shopping Trolley: DONE.)
+      DO: destructible obstacles, fans. (Scooter with a kick-push, a sturdy shopping Trolley, and a self-bouncing
+      Pogo the rider keeps balanced: DONE.)
 - [~] Crash Lab: DONE — "Stair Drop" scenario (pause → Scenario): one push from the top of a 14-step staircase, the
       score runs until the dummy comes to rest, best saved; damage heat-map (head / torso / limbs drift from yellow to
       bruised red); slow-mo on huge hits. "Cliff Fall" scenario (a 2000 drop with rock outcrops, pads, crates and TNT below; best saved per scenario):

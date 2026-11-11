@@ -6,6 +6,21 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Wobble Wheels: Pogo
+
+**Shipped:** a sixth vehicle — a pink pogo stick. It bounces by itself every time its spring foot lands; W makes the
+hops bigger, S smaller, A/D lean it the way you want to go. The rider keeps the stick balanced (a small push back
+toward upright, tilted a little forward), from the countdown on.
+
+**Measured (`tests/wheels_pogo.js`, W held on Hill Hop):** upright (handle 120+ above the foot), hopping, x 4164
+after ~5 s (the bike does 4185); the other vehicles' test unchanged. **Went wrong, three times:** the bounce read a
+ground-contact counter that the wheel code had already used up (it never fired); the push went down the stick
+instead of up; and the stick — a balanced-on-one-point pendulum — toppled during the 1 s countdown before any
+balancing ran, then skated along on its side. Fixed by bouncing on "any contact this frame", the right sign, and a
+balance step that runs every frame from spawn and is strong enough to lift a fallen stick.
+
+---
+
 ## Table Games: Pocket Race (cue game)
 
 **Shipped:** a fifth table game — 7 coloured balls racked against the white on a six-pocket table. Drag back from the

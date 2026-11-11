@@ -10,6 +10,7 @@ var WHEELS_VEHICLES = {
     wheelchair: { label: "Wheelchair", pts: [[-30, -36, 36, "w"], [48, -62, 12, "w"], [0, 0, 8, "seat"], [22, 14, 7, "bar"], [-8, 26, 6, "back"]], accel: 0.62, cap: 16, special: "rocket", sp: "Space: rocket boost (fuel)" },
     scooter:    { label: "Scooter", pts: [[-40, -40, 16, "w"], [46, -40, 16, "w"], [-4, -10, 7, "seat"], [42, 40, 7, "bar"]], accel: 0.7, cap: 18, special: "kick", kick: 3.2, cd: 60, color: "#22c55e", sp: "Space: kick-push (speed burst)" },
     trolley:    { label: "Trolley", pts: [[-46, -42, 17, "w"], [42, -42, 17, "w"], [-6, 2, 8, "seat"], [-58, 30, 7, "bar"], [44, 6, 8, "basket"]], accel: 0.56, cap: 15, special: "hop", hop: 6, cd: 30, color: "#cbd5e1", sp: "Space: little hop" },
+    pogo:       { label: "Pogo", pts: [[0, -84, 11, "w"], [6, 46, 5, "w"], [0, -6, 7, "seat"], [12, 30, 6, "bar"]], accel: 0.15, cap: 14, special: "pogo", color: "#ec4899", sp: "bounces by itself · W/S bigger/smaller hops · A/D lean the way to go" },
     cart:       { label: "Cart", pts: [[-52, -42, 24, "w"], [52, -42, 24, "w"], [-8, 0, 8, "seat"], [46, 18, 8, "bar"], [-56, 14, 8, "tail"]], accel: 0.5, cap: 17, special: "hop", hop: 13, cd: 90, sp: "Space: big jump" }
 };
 var WHEELS_COURSES = [];
@@ -177,6 +178,20 @@ function wheelsControls(rd) {
     return { go: up ? 1 : (dn ? -1 : 0), lean: rt ? 1 : (lf ? -1 : 0), sp: !!sp };
 }
 
+// pogo: the rider keeps the stick balanced, tilted a little forward (A / D lean it more or less) - runs every
+// frame from the start, or the stick just topples over during the countdown
+function wheelsPogoBalance(rd) {
+    if (rd.crashed || rd.def.special !== "pogo") return;
+    var P = rd.pts, w1 = P[rd.vbase], w2 = P[rd.vbase + 1], cx = rd.centerX(), cy = rd.centerY();
+    var c = Wheels.phase === "ride" ? wheelsControls(rd) : { lean: 0 };
+    var tilt = Math.atan2(w2.x - w1.x, w2.y - w1.y), target = (Wheels.phase === "ride" ? 0.18 : 0) + (c.lean || 0) * 0.22;
+    var dTilt = tilt - (rd.lastTilt === undefined ? tilt : rd.lastTilt);
+    rd.lastTilt = tilt;
+    var wb = -((target - tilt) * 0.09 - dTilt * 0.6);
+    wb = Math.max(-0.08, Math.min(0.08, wb));
+    for (let i = 0; i < P.length; i++) { var q = P[i], rx = q.x - cx, ry = q.y - cy; q.px += ry * wb; q.py -= rx * wb; }
+}
+
 function wheelsDrive(rd) {
     if (rd.crashed) return;
     var c = wheelsControls(rd), P = rd.pts, def = rd.def;
@@ -224,6 +239,19 @@ function wheelsDrive(rd) {
         for (let i = 0; i < P.length; i++) P[i].py -= def.hop;
         rd.spCd = def.cd;
         if (typeof SFX !== "undefined") SFX.play("jump", cx, cy, 0.6, 0.9);
+    }
+    // pogo: the spring foot springs off the ground by itself; W makes bigger hops, leaning sets the direction
+    if (def.special === "pogo") {
+        var foot = P[rd.vbase];
+
+        if (rd.pogoCd > 0) rd.pogoCd--;
+        if (anyContact && !(rd.pogoCd > 0)) {
+            var up = 9 + (c.go > 0 ? 4 : c.go < 0 ? -4 : 0), ux = fwx, uy = fwy;        // along the stick, foot -> handle
+            var ul = Math.hypot(ux, uy) || 1; ux /= ul; uy /= ul;
+            for (let i = 0; i < P.length; i++) { P[i].px -= ux * up * 0.55 + 1.6; P[i].py -= uy * up; }
+            rd.pogoCd = 14;
+            if (typeof SFX !== "undefined" && Wheels.t % 2 === 0) SFX.play("boing", cx, cy, 0.4, 1.4);
+        }
     }
     if (def.special === "kick" && c.sp && !rd.spPrev && anyContact && !(rd.spCd > 0)) {
         for (let i = 0; i < P.length; i++) { P[i].px -= fwx * def.kick; P[i].py -= fwy * def.kick; }
@@ -436,7 +464,7 @@ GameModes.register({
             } else if (!on && rider) { Ragdolls.remove(rider); Wheels.riders.splice(Wheels.riders.indexOf(rider), 1); }
         }
         if (Wheels.phase === "ready" && Wheels.t > 60) Wheels.phase = "ride";
-        for (let i = 0; i < Wheels.riders.length; i++) if (Wheels.phase === "ride") wheelsDrive(Wheels.riders[i]);
+        for (let i = 0; i < Wheels.riders.length; i++) { wheelsPogoBalance(Wheels.riders[i]); if (Wheels.phase === "ride") wheelsDrive(Wheels.riders[i]); }
     },
 
     update: function() {
