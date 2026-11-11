@@ -223,6 +223,10 @@ them) drive the editing camera.
   the running server through `/lan-info` and just reopens the page. Everyone else opens the printed
   `http://<your-ip>:8080` and presses **Join**. The LAN panel probes `/lan-info` while open: as a file or from a plain
   server (the Control Panel's own Start server) it shows the two one-click ways to start instead of Host / Join.
+- **Addresses:** `lanAddressInfo()` ranks this computer's IPv4 addresses (192.168 → 10 → 172.16-31, virtual adapters
+  like WSL / Hyper-V / VirtualBox / VPNs last, 169.254 dropped); `/lan-info` and the host's welcome send them in that
+  order and the panel's join link is the first. **Windows firewall:** `Allow LAN (Windows firewall).bat` (admin) removes
+  the block rules a cancelled "Allow Node.js?" prompt leaves and allows node.exe for the local subnet.
 - **Model:** host-authoritative. The host runs the normal game; each joiner gets a hero (`ch.isRemote`, `ch.netPid`,
   `playerIndex` 2+). `Components.moveTypeFinder` feeds remote heroes from `Net.applyRemoteInput` (keys, mouse-aim world point
   or pad angle, dash/grab/reload counters). Clients run no simulation: `tick()` calls `Net.clientTick()`, which draws the host's

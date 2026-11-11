@@ -6,6 +6,35 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## LAN fix: wrong join address, firewall, clearer failures
+
+**Reported:** "The LAN won't work at the moment."
+
+**Found:** the game's own LAN code works end to end through the real buttons (📡 → Host, a second browser → Join, the
+host picks a game, the joiner is in it) — so the failure is between two real devices. Two causes there were ours:
+1. **The join link could be an address nobody can reach.** The server listed every network adapter in whatever order
+   the system gave and the game showed the first one. On Windows with WSL / Hyper-V / VirtualBox / VPNs installed that
+   is often a virtual adapter (172.x / 192.168.56.x), not the Wi-Fi. Now real adapters are ranked first (192.168 → 10
+   → 172.16-31, virtual adapter names last, 169.254 "no network" addresses dropped), and the server window prints
+   each address with its adapter name. With a typical WSL + VirtualBox laptop the old link would have been
+   172.25.96.1 (WSL); now it's the Wi-Fi's 192.168.1.23.
+2. **Nothing helped with the firewall.** If the "Allow Node.js?" prompt was cancelled, Windows adds a *block* rule that
+   overrides everything; on a Wi-Fi marked Public it blocks by default. New: **Allow LAN (Windows firewall).bat** —
+   asks for admin, removes those block rules and allows Node.js for the local network only. The server window and
+   the host's LAN panel ("Nobody can join? Check these") now walk through: same Wi-Fi, exact link with the port,
+   the firewall, router client isolation.
+
+Also: a failed connection now names the likely causes (server window closed, VPN / proxy / filtering app) instead of
+"Is node server.js still running?", and a joiner's status says "Playing in the host's game" once the game arrives
+(it kept saying "waiting").
+
+**Measured:** `tests/lan_buttons.js` (new, real clicks) and `tests/lan_play.js` pass; adapter ranking checked on a
+simulated WSL + VirtualBox + Wi-Fi laptop. **Can't test here:** two physical devices and a real Windows firewall.
+This cloud box's browser goes through a proxy that refuses WebSocket upgrades to its own network address (403),
+so the cross-device path was tested via localhost; on a home network there's no such proxy.
+
+---
+
 ## Word Lab: pets
 
 **Shipped:** "dog", "cat" and "bird" (and puppy, kitten, parrot…) make a pet that follows you: dogs and cats trot after

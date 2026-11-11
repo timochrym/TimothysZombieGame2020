@@ -95,7 +95,8 @@ var Net = {
             if (self.ws !== ws) return;
             var was = self.role;
             self.cleanup();
-            self.status = was ? "Disconnected from the LAN game." : "Could not connect to the LAN server. Is `node server.js` still running?";
+            self.status = was ? "Disconnected from the LAN game (the host's server stopped, or the Wi-Fi dropped)." :
+                "Could not open the game connection. Is the LAN server window still open on the host computer? A VPN, a proxy or a security app that filters web traffic can also block it — try with those off.";
             self.statusKind = "error";
             NetUI.render();
         };
@@ -496,6 +497,7 @@ var Net = {
             try { staticObjects = []; movingObjects = []; createMap(); } catch (e) { console.warn("net: createMap", e); }
             if (!s.full) this.requestFull();
         }
+        if (!this.inGame) { this.status = "Playing in " + (this.hostName || "the host") + "'s game."; this.statusKind = "info"; NetUI.render(); }
         this.inGame = true;
         var self = this;
         var C = s.c;
@@ -885,7 +887,7 @@ var NetUI = {
             var link = Net.addresses.length ? ("http://" + Net.addresses[0] + ":" + location.port) : location.origin;
             h += "<p class='st'>" + esc(Net.status) + "</p><p>Everyone else opens this link on their device (same Wi-Fi) and presses <b>Join</b>:</p>" +
                  "<div class='link'><code id='lan-link'>" + esc(link) + "</code><button class='sec' id='lan-copy'>📋 Copy</button></div>";
-            if (Net.addresses.length > 1) h += "<p>Other addresses for this computer: " + Net.addresses.slice(1).map(function(a) { return "<code>http://" + esc(a) + ":" + location.port + "</code>"; }).join(" ") + "</p>";
+            if (Net.addresses.length > 1) h += "<p>If that link doesn't open on the other device, try: " + Net.addresses.slice(1).map(function(a) { return "<code>http://" + esc(a) + ":" + location.port + "</code>"; }).join(" ") + "</p>";
             h += "<p><b>Players</b> (pick the game from the Arcade as usual; everyone follows you):</p>";
             h += "<div class='pl'><span class='dot' style='background:" + (redGuy ? redGuy.color : "#ff4d52") + "'></span><b>You (host)</b> — P1, keyboard/mouse" + (multiplayer ? " + P2 on this keyboard" : "") + "</div>";
             var any = false;
@@ -893,7 +895,12 @@ var NetUI = {
                 var p = Net.peers[k]; any = true;
                 h += "<div class='pl'><span class='dot' style='background:" + p.color + "'></span><b>" + esc(p.name) + "</b> — P" + (p.slot + 1) + " · on their own device" + (p.ch ? "" : " · joins at the next round") + "</div>";
             }
-            if (!any) h += "<p>No one has joined yet.</p>";
+            if (!any) h += "<p>No one has joined yet.</p>" +
+                "<details style='margin:6px 0;color:#94a3b8'><summary style='cursor:pointer;color:#fbbf24;font-weight:700'>Nobody can join? Check these</summary>" +
+                "<p>1. Both devices are on the <b>same Wi-Fi</b> (not a guest network, and not one on mobile data).</p>" +
+                "<p>2. The link above is typed exactly, <b>with the :" + esc(location.port) + "</b> at the end, starting with <b>http://</b> (not https).</p>" +
+                "<p>3. <b>Windows:</b> double-click <b>Allow LAN (Windows firewall).bat</b> in the game folder once, and make sure your Wi-Fi is set to <b>Private</b> (Settings → Network). <b>Mac:</b> allow incoming connections for node when asked (System Settings → Network → Firewall).</p>" +
+                "<p>4. Some routers isolate devices from each other (\"AP / client isolation\", common on guest and school networks) — then LAN play can't work on that Wi-Fi.</p></details>";
             h += "<div class='row'><button class='sec' id='lan-close'>Back to the game</button><button class='warn' id='lan-leave'>Stop hosting</button></div>";
         } else {
             h += "<p class='st'>" + esc(Net.status) + "</p><p>You control your hero with WASD/arrows + mouse (or a controller). Your camera follows you; the host chooses the game.</p>";

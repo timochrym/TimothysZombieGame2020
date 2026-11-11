@@ -21,6 +21,7 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node word_rooms.js          # Word Lab rooms 6-8: unsolvable by walking, solved by their word
     node word_tower_fly.js      # Word Lab: "fly", climb, steer over the tower, get the star
     node word_pets.js           # Word Lab: dog / cat / bird follow the hero, the dog bites a zombie
+    node lan_buttons.js         # LAN through the real buttons: Host, Join, host picks a game, joiner is in it
     node lan_play.js            # starts server.js on 8099: a host + 2 joiners, positions match, client FPS
 
 Each prints its numbers and then the page errors (`[]` = none). See ROADMAP.md, "Your named feedback items".

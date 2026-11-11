@@ -30,16 +30,26 @@ const MIME = {
     ".md": "text/plain; charset=utf-8", ".woff2": "font/woff2"
 };
 
-function lanAddresses() {
+// This computer's addresses, best guess first. Windows and Macs often have virtual adapters (WSL, Hyper-V,
+// VirtualBox, VMware, Docker, VPNs) whose addresses other devices can't reach, so the real Wi-Fi / Ethernet
+// address (usually 192.168.x.x or 10.x.x.x) goes first; the join link in the game shows the first one.
+const VIRTUAL_IF = /vEthernet|WSL|Hyper-?V|VirtualBox|vbox|VMware|vmnet|Docker|br-|veth|virbr|utun|tun|tap|ZeroTier|Tailscale|Hamachi|NordLynx|WireGuard|Loopback|Bluetooth/i;
+function lanAddressInfo() {
     const out = [];
     const ifs = os.networkInterfaces();
     for (const name of Object.keys(ifs)) {
         for (const a of ifs[name] || []) {
-            if ((a.family === "IPv4" || a.family === 4) && !a.internal) out.push(a.address);
+            if (!((a.family === "IPv4" || a.family === 4) && !a.internal)) continue;
+            const ip = a.address;
+            if (/^169\.254\./.test(ip)) continue;                     // "no network" self-assigned addresses
+            let score = /^192\.168\./.test(ip) ? 0 : /^10\./.test(ip) ? 1 : /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ? 2 : 3;
+            if (VIRTUAL_IF.test(name)) score += 10;
+            out.push({ ip, name, score });
         }
     }
-    return out;
+    return out.sort((x, y) => x.score - y.score);
 }
+function lanAddresses() { return lanAddressInfo().map(a => a.ip); }
 
 // ---------------------------------------------------------------- static files
 const server = http.createServer((req, res) => {
@@ -239,13 +249,18 @@ server.on("error", err => {
 });
 
 server.on("listening", () => {
-    const addrs = lanAddresses();
+    const info = lanAddressInfo(), addrs = info.map(a => a.ip);
     console.log("\n  Timothy's Zombie Game - LAN server running\n");
     console.log("  On this computer:   http://localhost:" + PORT);
-    for (const a of addrs) console.log("  On your network:    http://" + a + ":" + PORT);
-    console.log("\n  1. Open the network link on every other device (same Wi-Fi) and press Join.");
+    if (info.length) {
+        console.log("  Other devices open: http://" + info[0].ip + ":" + PORT + "    (" + info[0].name + ")");
+        for (const a of info.slice(1)) console.log("     ...or maybe:     http://" + a.ip + ":" + PORT + "    (" + a.name + (a.score >= 10 ? ", looks virtual" : "") + ")");
+    } else console.log("  No network found - connect this computer to the Wi-Fi first.");
+    console.log("\n  1. Every other device (same Wi-Fi) opens that link and presses Join.");
     console.log("  2. This computer hosts: press Host in the LAN panel (it opens by itself with --open).");
-    console.log("  3. If other devices can't connect, allow Node.js through your firewall.");
+    if (process.platform === "win32") console.log("  3. Others can't load the page? Double-click \"Allow LAN (Windows firewall).bat\" once, or allow Node.js\n     when Windows asks - on PRIVATE networks - and make sure your Wi-Fi is set to Private, not Public.");
+    else if (process.platform === "darwin") console.log("  3. Others can't load the page? Click Allow when macOS asks about incoming connections for node\n     (System Settings > Network > Firewall > Options).");
+    else console.log("  3. Others can't load the page? Allow port " + PORT + " through your firewall.");
     console.log("  Keep this window open while you play; close it (or press Ctrl+C) to stop.\n");
     if (OPEN) openBrowser("http://localhost:" + PORT + "/?lan=host");
 });
