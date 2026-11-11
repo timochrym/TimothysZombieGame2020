@@ -6,12 +6,34 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## LAN joiner bugs: Blob Arena food, and the soccer game's second player
+
+**Asked:** "player 2 can't see the food I drop" (Blob Arena) and "Player 2 movement for the soccer game does not work."
+**Found:** Blob Arena only sent food near *living* LAN players inside a fixed box, so a dead or freshly eaten joiner
+saw an empty arena and a big blob lost food at the edges of its zoomed-out view; dropped food has its owner's colour,
+which isn't in the pellet palette, so it arrived as white on a near-white floor. In Zombie Ball the classic style
+worked for a joiner (measured: hero ran 500 → 1107 on the host). Flail style did not: blue was the CPU unless the
+format was changed by hand, the joiner got a useless hidden hero, and the flail players' drawing function isn't
+something a packet can carry, so the joiner's screen threw a warning and drew nothing.
+**Shipped:** food for each joiner's whole view (alive or not, sized to their zoom), real colours, sent 5x a second;
+the joiner's browser removes food a blob touches immediately and glides blobs between packets; click respawns a
+joiner. Flail: first joiner takes blue, later ones alternate teams; local P2 drops in on blue with ↑ / Enter; labels
+show who drives each team; joiners get the flail look back when the state arrives.
+**Went well:** the other agent's `lan_soccer.js` only checked a joiner could shoot in Flick Soccer, so I tested
+movement in both Zombie Ball styles directly and the failing one was obvious within one run.
+**Went wrong:** I first "fixed" only the food colour from reading the code; the test then showed the joiner had zero
+pellets of any colour, which was the real bug.
+**Left:** an idle size-20 blob is hunted down by a bot in about 3 seconds after joining; a short spawn shield is on
+the Blob Arena settings list. Snake and Tank Arena joiners still step at packet rate (same glide fix would apply).
+
+---
+
 ## LAN: each joiner's browser moves its own hero; packets 62% smaller
 
 **Asked:** "fix multiplayer LAN to rely on the browser's own calculated results to keep the game fluid… laggy probably
 because so much data is being sent every packet. We need a method of local calculations for connected players."
-**Measured first** (`tests/lan_perf.js`: host + 2 joiners, 17 enemies): 5.1 KB a packet, 145 KB/s, and 80 ms from a
-joiner's key press to its own hero moving, with no real network in between. So the lag was mostly the design
+**Measured first** (`tests/lan_perf.js`: host + 2 joiners, 14 enemies): 4–5 KB a packet, 120–145 KB/s, and 70–80 ms
+from a joiner's key press to its own hero moving, with no real network in between. So the lag was mostly the design
 (key → host → picture back); the packet size made it worse on Wi-Fi.
 **Shipped:** `Net.predictStep` — the joiner runs the same `Character.move()` the host runs, on its own hero, against
 the level pieces it already has. The host still simulates that hero from the same keys and is the referee; the joiner
@@ -21,7 +43,10 @@ and death are never decided locally. Effects made by the hero's own movement are
 them twice. Others glide on their last known speed between packets. Packet diet: empty fields were being resent every
 packet (the dedupe check skipped `null`); enemies drop 25 AI-only fields and all route-planning ones; still bodies
 don't resend points; HUD numbers / brawl / gadget stats only when changed.
-**After:** 1.9 KB a packet, 52 KB/s, 37 ms median input delay, positions agree to 1 px; Brawl over LAN passes.
+**After** (the same test file run against the old and new code): key press to first movement 70 ms → 15 ms, packets
+4.3 → 2.0 KB, 120 → 55 KB/s, positions agree to 1–6 px in 7 of 8 runs (one early run was 677 px apart after a crowd
+shoved the hero; I then made the joiner follow firmly whenever the host's copy is moving away, and five runs in a row
+were clean, but I have not seen that exact case again to confirm it). Brawl over LAN passes.
 **Went wrong:** (1) the local hero wouldn't accelerate: movement collides against `allObjects`, which only the host
 kept current, so the joiner's hero thought it was inside something. (2) it fell 40–50 px behind after bumping a crate,
 because a crate on the joiner is only a picture until the next packet; it now slides the crate it pushes and catches

@@ -23,7 +23,7 @@ var NET_GLOBALS = ["level", "score", "highScore", "combo", "comboTimer", "heroLe
                    "lastStandTimer", "levelTransitionTimer", "zombiesRemainingToSpawn", "godMode", "jetpackEnabled", "rpgDamageMult", "baseZoom"];
 // fields that are bookkeeping, huge, or meaningless on another machine
 var NET_SKIP = { collidedWith: 1, collidedRamp: 1, target: 1, cpuIn: 1, netIn: 1, hitCd: 1, sticks: 1, navPath: 1, navBan: 1,
-                 flyPath: 1, pts: 1, lastAttacker: 1, thrownBy: 1, navTarget: 1, homeX: 0 };
+                 flyPath: 1, pts: 1, lastAttacker: 1, thrownBy: 1, navTarget: 1, homeX: 0, flailCtrl: 1 };
 
 // enemy fields only the host's AI uses (never drawn): not worth sending 30x a second
 var NET_SKIP_NPC = { aiLastX: 1, aiLastY: 1, aiTick: 1, lastNavX: 1, lastNavY: 1, stuckTimer: 1, jumpCoolDownTimer: 1, coyoteTimer: 1,
@@ -739,10 +739,10 @@ var Net = {
         if (err > 420) { me.x = me._hx; me.y = me._hy; me.xspeed = me._hxspeed || 0; me.yspeed = me._hyspeed || 0; this.predBad = 0; this.predStat.snaps++; }
         else if (sp < 1.2) { if (err > 1) { me.x += ex * 0.2; me.y += ey * 0.2; } }          // both at rest: settle onto the host exactly
         else if (fresh) {
-            // lag only ever leaves the host BEHIND along my direction of travel. Host ahead = I lost time on something
-            // it didn't (a crate, another player): catch up quickly. Host behind by more than lag explains: ease back.
-            var along = ex * me.xspeed + ey * me.yspeed;
-            if (along > 0 && err > 8) { me.x += ex * 0.5; me.y += ey * 0.5; this.predStat.pulls++; }
+            // Lag only ever leaves the host BEHIND me along my direction of travel. If the host's hero is ahead of me, or
+            // is moving away from me (enemies shoving it, a crate I got stuck on), that is not lag: follow it firmly.
+            var alongMe = ex * me.xspeed + ey * me.yspeed, alongHost = ex * (me._hxspeed || 0) + ey * (me._hyspeed || 0);
+            if (err > 8 && (alongMe > 0 || alongHost > 0)) { me.x += ex * 0.5; me.y += ey * 0.5; this.predStat.pulls++; }
             else if (err > 26 + sp * 5) { me.x += ex * 0.2; me.y += ey * 0.2; this.predBad += 2; this.predStat.pulls++; }
             else if (this.predBad > 0) this.predBad--;
         }

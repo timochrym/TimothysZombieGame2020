@@ -4,8 +4,8 @@ Kept up to date on every push. Finished items move to `RETROS.md` (with measurem
 Last updated: after the UI pass (top bar, pause menu, Level Studio, one-click LAN).
 
 ## Your list of 2026-11-11 (evening) — order: multiplayer, then menus/tools, then games. Live status: PROGRESS.md
-- [x] LAN: joiners' browsers calculate their own hero locally so play is fluid; smaller packets. → 80 → 37 ms input delay, 5.1 → 1.9 KB packets (`tests/lan_perf.js`). Needs your feel-test on two real devices.
-- [ ] LAN: player 2 can't see the food I drop in Blob Arena.   - [ ] Player 2 movement in the soccer game doesn't work.
+- [x] LAN: joiners' browsers calculate their own hero locally so play is fluid; smaller packets. → 70 → 15 ms to first movement, 120 → 55 KB/s (`tests/lan_perf.js`). Needs your feel-test on two real devices.
+- [x] LAN: player 2 can't see the food I drop in Blob Arena.   - [x] Player 2 movement in the soccer game (Flail style had no team for a second player and didn't draw on a joiner's screen). Check: `tests/lan_joiner.js`.
 - [ ] Blob Arena: game settings (decay rate, increasing decay), size cheat, more players (slider / custom amount),
       interacts with other things already coded.
 - [ ] Cheat menu: the always-on drag-out toolbar is hideous — only show it when placing.

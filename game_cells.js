@@ -28,7 +28,7 @@ var Cells = {
         this.players.forEach(function(q) {
             if (q.human !== "lan") return;
             if (!Net.peers[q.pid]) { q.gone = true; self.blobs = self.blobs.filter(function(bb) { return bb.pl !== q; }); return; }
-            if (!q.alive && ++q.deadT > 60 && Net.peerX(q.pid).s) { self.spawn(q); q.splitPrev = true; }
+            if (!q.alive && ++q.deadT > 60 && (Net.peerX(q.pid).s || Net.peerX(q.pid).c)) { self.spawn(q); q.splitPrev = true; }      // Space or a click
         });
         this.players = this.players.filter(function(q) { return !q.gone; });
     },
@@ -357,26 +357,59 @@ GameModes.register({
         Cells.render();
         Cells.hud();
     },
-    screenDraw: function() { Cells.t++; Cells.render(); Cells.hud(); },
+    // A LAN joiner's screen. The host sends blobs 30x a second and food 5x a second; in between this browser does its
+    // own small calculations so it looks fluid: blobs glide toward where the host has them (carrying their speed), and
+    // food any blob touches disappears right away instead of waiting for the next packet.
+    screenDraw: function() {
+        Cells.t++;
+        var B = Cells.blobs, P = Cells.pellets;
+        for (let i = 0; i < B.length; i++) {
+            var q = B[i];
+            if (q.tx === undefined) continue;
+            q.tx += q.vx * 0.5; q.ty += q.vy * 0.5;                       // keep moving at the last known speed
+            q.x += (q.tx - q.x) * 0.35; q.y += (q.ty - q.y) * 0.35;
+        }
+        for (let k = P.length - 1; k >= 0; k--) {
+            var f = P[k];
+            for (let i = 0; i < B.length; i++) { var r = Cells.rad(B[i].m); if (B[i].m > f.m * 1.25 && Math.abs(f.x - B[i].x) < r && Math.abs(f.y - B[i].y) < r && Math.hypot(f.x - B[i].x, f.y - B[i].y) < r) { P.splice(k, 1); break; } }
+        }
+        Cells.players.forEach(function(p) { var M = 0, x = 0, y = 0; B.forEach(function(bb) { if (bb.pl === p) { M += bb.m; x += bb.x * bb.m; y += bb.y * bb.m; } }); if (M) { p.cx = x / M; p.cy = y / M; } });
+        Cells.render(); Cells.hud();
+    },
     netInput: function() {
         var c = Cells.cam;
-        return { ax: Math.round((mouseX - cssW / 2) / c.z + c.x), ay: Math.round((mouseY - cssH / 2) / c.z + c.y), s: SpacePressed ? 1 : 0, e: WASDupPressed ? 1 : 0 };
+        return { ax: Math.round((mouseX - cssW / 2) / c.z + c.x), ay: Math.round((mouseY - cssH / 2) / c.z + c.y), s: SpacePressed ? 1 : 0, e: WASDupPressed ? 1 : 0, c: mouseDown ? 1 : 0 };
     },
     netState: function() {
-        var lan = Cells.players.filter(function(p) { return p.human === "lan" && p.alive; });
-        var near = Cells.pellets.filter(function(p) { return lan.some(function(q) { return Math.abs(p.x - q.cx) < 2600 && Math.abs(p.y - q.cy) < 1800; }); });
-        return {
+        var st = {
             pl: Cells.players.map(function(p) { return { n: p.name, c: p.color, h: p.human === undefined ? -1 : p.human, p: p.pid || null, a: p.alive ? 1 : 0, pk: Math.round(p.peak), dt: p.deadT, by: p.by ? p.by.name : "" }; }),
-            b: Cells.blobs.map(function(bb) { return [Cells.players.indexOf(bb.pl), Math.round(bb.x), Math.round(bb.y), Math.round(bb.m)]; }),
-            p: near.map(function(p) { return [Math.round(p.x), Math.round(p.y), p.m, CEL_COLORS.indexOf(p.col)]; }),
+            b: Cells.blobs.map(function(bb) { return [Cells.players.indexOf(bb.pl), Math.round(bb.x), Math.round(bb.y), Math.round(bb.m), bb.id || (bb.id = Cells.nextBlobId = (Cells.nextBlobId || 0) + 1)]; }),
             v: Cells.viruses.map(function(v) { return [Math.round(v.x), Math.round(v.y)]; })
         };
+        // Food changes slowly, so it only goes 5x a second: everything inside each LAN player's view (alive or watching,
+        // and wider when their blob is big and the view zooms out). Dropped food carries its owner's colour.
+        Cells.netTick = (Cells.netTick || 0) + 1;
+        if (Cells.netTick % 6 === 0) {
+            var lan = Cells.players.filter(function(p) { return p.human === "lan"; });
+            var boxes = lan.map(function(q) { var z = Math.max(0.22, Math.min(1.2, 1.3 / Math.pow(Math.max(20, Cells.mass(q) || 20) / 20, 0.32))); return [q.cx || 0, q.cy || 0, 1100 / z + 300, 650 / z + 300]; });
+            var near = Cells.pellets.filter(function(p) { for (let i = 0; i < boxes.length; i++) if (Math.abs(p.x - boxes[i][0]) < boxes[i][2] && Math.abs(p.y - boxes[i][1]) < boxes[i][3]) return true; return false; });
+            st.p = near.map(function(p) { var ci = CEL_COLORS.indexOf(p.col); return [Math.round(p.x), Math.round(p.y), p.m, ci >= 0 ? ci : p.col]; });
+        }
+        return st;
     },
     applyNetState: function(m) {
         Cells.players = m.pl.map(function(o) { return { name: o.n, color: o.c, human: o.h === -1 ? undefined : o.h, pid: o.p, alive: !!o.a, peak: o.pk, deadT: o.dt, by: o.by ? { name: o.by } : null, cx: 0, cy: 0 }; });
-        Cells.blobs = m.b.map(function(a) { return { pl: Cells.players[a[0]], x: a[1], y: a[2], m: a[3], vx: 0, vy: 0 }; }).filter(function(bb) { return bb.pl; });
+        // match each blob to the one it was last packet (by id) so it can glide instead of jumping
+        var old = {};
+        Cells.blobs.forEach(function(bb) { if (bb.id) old[bb.id] = bb; });
+        Cells.blobs = m.b.map(function(a) {
+            var o = a[4] ? old[a[4]] : null;
+            var nb = { pl: Cells.players[a[0]], x: a[1], y: a[2], tx: a[1], ty: a[2], m: a[3], id: a[4], vx: 0, vy: 0 };
+            if (o && Math.hypot(a[1] - o.tx, a[2] - o.ty) < 400) { nb.vx = (a[1] - o.tx) / 2; nb.vy = (a[2] - o.ty) / 2; nb.x = o.x; nb.y = o.y; }     // packets are 2 ticks apart
+            return nb;
+        }).filter(function(bb) { return bb.pl; });
         Cells.players.forEach(function(p) { var M = 0, x = 0, y = 0; Cells.blobs.forEach(function(bb) { if (bb.pl === p) { M += bb.m; x += bb.x * bb.m; y += bb.y * bb.m; } }); if (M) { p.cx = x / M; p.cy = y / M; } });
-        Cells.pellets = m.p.map(function(a) { return { x: a[0], y: a[1], m: a[2], col: a[3] >= 0 ? CEL_COLORS[a[3]] : "#ffffff", vx: 0, vy: 0 }; });
+        if (m.p) Cells.pellets = m.p.map(function(a) { return { x: a[0], y: a[1], m: a[2], col: typeof a[3] === "string" ? a[3] : (a[3] >= 0 ? CEL_COLORS[a[3]] : "#94a3b8"), vx: 0, vy: 0 }; });
         Cells.viruses = m.v.map(function(a) { return { x: a[0], y: a[1], m: 100 }; });
     },
 

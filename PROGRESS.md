@@ -18,9 +18,22 @@ short play-through list from you per game. Your notes on what feels off are the 
 
 ## Log
 
+### 2026-11-11 — shipped: the two LAN joiner bugs (Blob Arena food, soccer)
+- **Blob Arena, "player 2 can't see the food I drop":** worse than reported: a joiner whose blob was dead saw no food
+  at all (the host only sent food near living LAN players), big zoomed-out blobs lost food at the edges, and dropped
+  food arrived white on a near-white floor. Now food is sent for every joiner's whole view, alive or watching, in its
+  real colour. Food goes 5 times a second instead of 30; the joiner's browser hides food a blob touches right away and
+  makes blobs glide between packets (they used to step). A click now respawns a joiner, as the on-screen hint says.
+- **Soccer, "player 2 movement does not work":** classic Zombie Ball was fine for a joiner; **Flail style** was broken
+  twice over: the joiner had no team (blue was always the CPU unless you changed the format in the pause menu) and the
+  flail players were not drawn on the joiner's screen at all. Now the first LAN joiner takes blue automatically (the
+  next helps red, and so on), a local P2 takes blue by pressing ↑ / Enter, and joiners see the players properly.
+Check: `tests/lan_joiner.js`.
+**Next:** menus and tools — the cheat menu's always-on drag-out toolbar first, then Survival level select.
+
 ### 2026-11-11 — shipped: LAN joiners move their own hero; packets 62% smaller
-Same test, before → after: packet 5.1 KB → 1.9 KB; 145 → 52 KB/s; a joiner's key-to-movement delay 80 → 37 ms
-(median; most of what's left is the hero's own acceleration); host and joiner agree on the hero's spot to 1 px.
+Same test run on the old and the new code: time from a joiner's key press to its hero starting to move **70 ms → 15 ms**
+(one frame); packets 4.3 KB → 2.0 KB; data 120 → 55 KB/s; host and joiner agree on the hero's spot to 1–6 px.
 - The joiner's browser now runs the hero's real movement code itself the moment a key goes down. The host still runs
   the same keys and stays the referee: the joiner eases toward the host only when they disagree by more than lag
   explains, catches up fast if it got held up (crates, crowds), snaps on teleports, and hands the hero back to the

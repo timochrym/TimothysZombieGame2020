@@ -455,7 +455,7 @@ GameModes.register({
     },
 
     netState: function() {
-        return { ball: [Ball.x, Ball.y, Ball.vx, Ball.vy, Ball.angle], ballStyle: sportCfg.ball,
+        return { ball: [Ball.x, Ball.y, Ball.vx, Ball.vy, Ball.angle], ballStyle: sportCfg.ball, style: sportCfg.style,
             phase: Sport.phase, timer: Sport.timer, score: Sport.score, clock: Sport.clock,
             sudden: Sport.sudden, goalTeam: Sport.goalTeam };
     },
@@ -463,6 +463,12 @@ GameModes.register({
         if (!m || !m.ball) return;
         Ball.x = m.ball[0]; Ball.y = m.ball[1]; Ball.vx = m.ball[2]; Ball.vy = m.ball[3]; Ball.angle = m.ball[4];
         sportCfg.ball = m.ballStyle;
+        if (m.style) sportCfg.style = m.style;
+        // Flail style on a joiner's screen: the one-button players arrive as plain bodies; give them their look back
+        if (typeof Flail !== "undefined") {
+            Flail.men = sportCfg.style === "flail" ? Ragdolls.list.filter(function(r) { return r.flailTeam !== undefined; }) : [];
+            for (let i = 0; i < Flail.men.length; i++) if (Flail.men[i].drawFn !== Flail.drawMan) Flail.men[i].drawFn = Flail.drawMan;
+        }
         Ball.body = sportCfg.ball === "zombie" ? Ragdolls.list.find(function(r) { return r.isBallBody; }) || null : null;
         Sport.phase = m.phase; Sport.timer = m.timer; Sport.score = m.score; Sport.clock = m.clock;
         Sport.sudden = m.sudden; Sport.goalTeam = m.goalTeam;
@@ -488,7 +494,8 @@ GameModes.register({
         // controls strip
         uiPanel(14, cssH - 64, 560, 50, "rgba(120,170,200,0.4)", 0.8);
         if (typeof Flail !== "undefined") Flail.hud();
-        if (typeof Flail !== "undefined" && Flail.on()) uiText("ONE BUTTON — P1: W / F / click / pad A" + (sportCfg.format === "pvp" ? "   ·   P2: ↑ / Enter" : "") + "   (tap = jump & kick, hold = tip forward)", 28, cssH - 34, 12, "#dbe7f0", "left", "800");
+        if (typeof Flail !== "undefined" && Flail.on()) uiText((typeof Net !== "undefined" && Net.role === "client") ? "ONE BUTTON — W / Space / click   (tap = jump & kick, hold = tip forward)" :
+            "ONE BUTTON — P1: W / F / click / pad A   ·   P2: ↑ / Enter" + ((sportCfg.format === "pvp" || Flail.p2In) ? "" : " (press to take BLUE)") + "   ·   LAN players join a team automatically", 28, cssH - 34, 12, "#dbe7f0", "left", "800");
         else uiText("P1: A/D move · W jump · F / click KICK · Shift DASH-TACKLE · E shockwave", 28, cssH - 34, 12, "#dbe7f0", "left", "700");
         if (multiplayer) uiText("P2: arrows · Enter KICK · R-Shift DASH · / shockwave", 28, cssH - 18, 11, "#94a3b8", "left", "700");
         uiText("Esc: menu (format, CPU skill, match length)", cssW - 20, cssH - 22, 12, "rgba(200,220,235,0.6)", "right", "700");

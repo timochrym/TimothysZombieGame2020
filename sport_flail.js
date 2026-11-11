@@ -18,17 +18,47 @@ var Flail = {
     },
     on: function() { return typeof sportCfg !== "undefined" && sportCfg.style === "flail"; },
 
-    // who presses for each team: { kind: "p1" | "p2" | "cpu" }
+    // Who presses for each team: { kind: "p1" | "p2" | "lan" | "cpu", label, pids, also }.
+    // A second player never has to dig through a menu: the first LAN joiner takes blue (the next one helps red, and so
+    // on), and a local P2 takes blue from the CPU by pressing their button (↑ / Enter / pad 2).
     controllers: function() {
         var f = sportCfg.format;
-        if (f === "pvp") return [{ kind: "p1" }, { kind: "p2" }];
-        if (f === "coop") return [{ kind: "p1" }, { kind: "cpu" }];   // both humans share red: P1 or P2 button
-        return [{ kind: "p1" }, { kind: "cpu" }];
+        var red = { kind: "p1", label: "P1", pids: [] }, blue = { kind: "cpu", label: "CPU", pids: [] };
+        if (f === "pvp" || this.p2In) blue = { kind: "p2", label: "P2", pids: [] };
+        var lan = (typeof Net !== "undefined" && Net.role === "host") ? Net.peerList() : [];
+        for (let i = 0; i < lan.length; i++) {
+            if (i % 2 === 0) { if (blue.kind === "cpu") blue = { kind: "lan", label: (lan[i].name || "P2").slice(0, 6), pids: [] }; blue.pids.push(lan[i].pid); }
+            else red.pids.push(lan[i].pid);
+        }
+        return [red, blue];
+    },
+    lanPressed: function(pids) {
+        for (let i = 0; i < pids.length; i++) { var b = Net.peerButtons(pids[i]); if (b.go) return true; }
+        return false;
+    },
+    // local P2 drops in on blue by pressing their button
+    p2DropIn: function() {
+        if (this.p2In || sportCfg.format === "pvp" || sportCfg.format === "coop") return;
+        var pad2 = (typeof Pads !== "undefined") ? Pads.state[1] : null;
+        if (ULDRupPressed || (PlayerInput[1] && PlayerInput[1].kbShoot) || !!(pad2 && pad2.active && (pad2.up || pad2.shoot))) {
+            this.p2In = true;
+            Components.addFloatingText("P2 plays BLUE!  (↑ / Enter)", 0, 420, TEAM_COLORS[1], 26);
+            if (typeof SFX !== "undefined") SFX.play("select");
+        }
+    },
+    // who controls which team changed (someone joined, left or dropped in): relabel the players, keep the match going
+    syncControllers: function() {
+        var C = this.controllers(), key = C.map(function(c) { return c.kind + c.label + c.pids.join("."); }).join("|");
+        if (key === this.ctrlKey) return C;
+        this.ctrlKey = key;
+        for (let i = 0; i < this.men.length; i++) { var m = this.men[i]; m.flailCtrl = C[m.flailTeam]; m.flailLabel = C[m.flailTeam].label; }
+        return C;
     },
 
     spawnTeams: function() {
         this.clearMen();
         var C = this.controllers();
+        this.ctrlKey = null;
         var n = sportCfg.keepers === false ? 2 : 3;
         for (let t = 0; t < 2; t++) for (let k = 0; k < n; k++) {
             var x = (t === 0 ? -1 : 1) * [450, 1150, 1880][k];
@@ -54,7 +84,7 @@ var Flail = {
         rd.addStick(2, 3, 0.35, true);         // feet don't cross
         rd.addStick(0, 2, 0.08, true); rd.addStick(0, 3, 0.08, true);
         rd.life = -1;
-        rd.flailTeam = team; rd.flailCtrl = ctrl; rd.flailK = k; rd.keeper = k === 2;
+        rd.flailTeam = team; rd.flailCtrl = ctrl; rd.flailLabel = ctrl.label; rd.flailK = k; rd.keeper = k === 2;
         rd.home = x;
         rd.drawFn = Flail.drawMan;
         Ragdolls.list.push(rd);
@@ -62,6 +92,8 @@ var Flail = {
     },
 
     pressed: function(ctrl, t) {
+        if (ctrl.pids && ctrl.pids.length && this.lanPressed(ctrl.pids)) return true;       // LAN players on this team
+        if (ctrl.kind === "lan") return false;
         if (ctrl.kind === "p1") {
             var pad = (typeof Pads !== "undefined") ? Pads.state[0] : null;
             return WASDupPressed || (PlayerInput[0] && PlayerInput[0].shoot) || mouseDown || (sportCfg.format === "coop" && (ULDRupPressed || PlayerInput[1].shoot)) || !!(pad && pad.active && pad.up);
@@ -87,7 +119,10 @@ var Flail = {
         if (!this.on()) return;
         if (!this.men.length || Ragdolls.list.indexOf(this.men[0]) === -1) this.spawnTeams();
         var play = Sport.phase === "play";
-        var C = this.controllers();
+        this.p2DropIn();
+        var C = this.syncControllers();
+        // the heroes are only hidden seats in this style (a LAN joiner's too)
+        for (let ci = 0; ci < characters.length; ci++) if (!characters[ci].dead) { characters[ci].dead = true; characters[ci].noCollide = true; }
         var press = [play && this.pressed(C[0], 0), play && this.pressed(C[1], 1)];
         this.fresh = this.fresh || [false, false];
         for (let i = 0; i < this.men.length; i++) {
@@ -186,7 +221,6 @@ var Flail = {
         ctx.beginPath(); ctx.arc(h[0] + dir * 27 * k, h[1] + 3 * k, 4.5 * k + 1, 0, 7); ctx.fill();
         ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(h[0] + dir * 20 * k, h[1] + 16 * k, 7 * k, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
         ctx.fillStyle = "#fff"; ctx.font = "900 " + Math.round(13 * k + 6) + "px " + UI_FONT; ctx.textAlign = "center";
-        var ctrl = rd.flailCtrl.kind;
-        ctx.fillText(ctrl === "cpu" ? "CPU" : ctrl.toUpperCase(), (hip[0] + h[0]) / 2, (hip[1] + h[1]) / 2 + 5);
+        ctx.fillText(rd.flailLabel || "", (hip[0] + h[0]) / 2, (hip[1] + h[1]) / 2 + 5);
     }
 };
