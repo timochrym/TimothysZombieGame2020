@@ -38,6 +38,7 @@ var Hub = {
     games: function() { return GameModes.list.filter(function(m) { return !m.hidden; }); },
 
     openHub: function(boot) {
+        if (typeof ArcadeStats !== "undefined") ArcadeStats.save();
         this.isOpen = true;
         this.boot = !!boot;
         var games = this.games();
@@ -174,6 +175,10 @@ var Hub = {
             }
             if (line) lines.push(line);
             for (let li = 0; li < Math.min(2, lines.length); li++) uiText(lines[li], cx + cw / 2, cy + ch - 38 + li * 15 + bob, 12, "#94a3b8", "center", "600");
+            var statsText = ArcadeStats.summary(m.id);
+            ctx.font = "700 10px " + UI_FONT;
+            var statsSize = Math.min(10, 10 * (cw - 20) / Math.max(1, ctx.measureText(statsText).width));
+            uiText(statsText, cx + cw / 2, cy + ch - 6 + bob, statsSize, "#a5b4fc", "center", "700");
             if (sel) uiText("▶ PRESS ENTER", cx + cw / 2, cy - 8 + bob, 12, m.color || "#22d3ee", "center", "900");
             ctx.restore();
         }

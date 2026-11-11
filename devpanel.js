@@ -686,7 +686,7 @@ SummonManager.buildUI = function() {
     lvlSelect.title = "Levels / courses of this game";
     lvlSelect.addEventListener("change", function() { closeTopMenu(); LevelManager.selectLevel(this.value); this.blur(); });
     menu.appendChild(lvlSelect);
-    row("", "🌲", "Infinite Frontier", "Survival on the endless generated trail", "", function() { closeTopMenu(); LevelManager.selectLevel("infinite_frontier"); });
+    row("", "🌲", "Wildwood Frontier", "Survival on the endless generated trail", "", function() { closeTopMenu(); LevelManager.selectLevel("infinite_frontier"); });
     row("", "⏸", "Pause menu", "Restart, game options, levels", "Esc", function() { closeTopMenu(); if (typeof openPause === "function" && !paused) openPause(false); });
     sec("People");
     row("", "👥", "Players & CPUs", "Humans, CPU seats, teams, gamepads", "", function() { closeTopMenu(); PlayersUI.open(); });

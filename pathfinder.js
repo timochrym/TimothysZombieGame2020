@@ -691,7 +691,7 @@ class Pathfinder {
                 var e = node.edges[i];
                 if (!this.edgeAllowed(e, prof, builder)) continue;
                 var dTo = f.dist[e.to];
-                if (dTo === Infinity) continue;
+                if (dTo === Infinity || dTo >= f.dist[node.id]) continue; // every hop must make progress; crowd costs must not create loops
                 if (agent && agent.navBan && agent.navBan[node.id + ">" + e.to] > this.frameNo) continue;
                 var c = e.cost + dTo + (hop === 0 ? this.crowdCount(e.to) * 45 : 0);
                 if (c < bestCost) { bestCost = c; best = e; }
@@ -711,7 +711,8 @@ class Pathfinder {
 
     static waypoint(e, from, to) {
         return { x: to.x, y: to.y, action: e.action, nodeId: to.id, fromId: from.id, fromX: e.fromX !== undefined ? e.fromX : from.x, fromY: from.y,
-                 edge: e, mover: e.mover, enterX: e.enterX, blocks: e.blocks };
+                 edge: e, mover: e.mover, enterX: e.enterX, blocks: e.blocks,
+                 boardX: e.boardX, boardY: e.boardY, exitX: e.exitX, exitY: e.exitY };
     }
 
     // ------------------------------------------------------------------ A* (one-off goals + fallback)
@@ -794,6 +795,13 @@ class Pathfinder {
 
     static steer(z, target) {
         this.ensureFresh();
+        // Node IDs are rebuilt after streaming or editing geometry. Discard routes and bans
+        // from the old graph before interpreting those IDs in the new one.
+        if (z.navVersion !== this.graphVersion) {
+            z.navVersion = this.graphVersion;
+            z.navNodeId = undefined; z.navPath = []; z.navBan = {};
+            z.navReplan = 0; z.navAstarCd = 0;
+        }
         var footY = z.y - z.s2 / 2;
         var tFoot = target.y - (target.s2 || 80) / 2;
         var prof = this.profileOf(z), builder = !!z.navBuilder;

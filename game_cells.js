@@ -161,7 +161,7 @@ var Cells = {
         // move
         for (let i = 0; i < B.length; i++) {
             var b = B[i], pl = b.pl, dx = pl.aimX - b.x, dy = pl.aimY - b.y, L = Math.hypot(dx, dy) || 1;
-            var sp = this.speed(b.m) * Math.min(1, L / 60);
+            var sp = this.speed(b.m) * Math.min(1, L / 60) * arenaSpeed(pl);
             b.x += dx / L * sp + b.vx; b.y += dy / L * sp + b.vy;
             b.vx *= 0.9; b.vy *= 0.9;
             if (b.mergeT > 0) b.mergeT--;
@@ -182,7 +182,7 @@ var Cells = {
         // eat other blobs
         for (let i = 0; i < B.length; i++) for (let j = 0; j < B.length; j++) {
             var e = B[i], f = B[j];
-            if (i === j || e.dead || f.dead || e.pl === f.pl || e.m < f.m * 1.25) continue;
+            if (i === j || e.dead || f.dead || e.pl === f.pl || arenaProtected(f.pl) || e.m < f.m * 1.25) continue;
             var rd = Math.hypot(f.x - e.x, f.y - e.y);
             if (rd < this.rad(e.m) - this.rad(f.m) * 0.4) {
                 e.m += f.m; f.dead = true;

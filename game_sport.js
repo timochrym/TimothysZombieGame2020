@@ -3,7 +3,7 @@
 //   Kick (F / Enter / click / RT), dash-tackle opponents (Shift / B), shockwave the ball (E / Y),
 //   jump for headers. 1v1 to 3v3 with CPU teammates/opponents, or P1 vs P2.
 // ============================================================================
-var sportCfg = { format: "1v1", level: 2, minutes: 2, goals: 5, ball: "zombie", style: "classic" };
+var sportCfg = { format: "1v1", level: 2, minutes: 2, goals: 5, ball: "classic", style: "classic" };
 try { var _sc = JSON.parse(localStorage.getItem("timsZombieBallCfg") || "null"); if (_sc) { for (var _k in _sc) sportCfg[_k] = _sc[_k]; } } catch (e) {}
 var SPORT_FORMATS = [
     ["1v1", "P1 vs CPU"], ["pvp", "P1 vs P2"], ["2v2", "P1 + CPU vs 2 CPU"], ["coop", "P1 + P2 vs 2 CPU"], ["3v3", "P1 + 2 CPU vs 3 CPU"]
@@ -129,7 +129,8 @@ var Ball = {
         var hgt = Math.max(0, this.y - this.r);
         ctx.fillStyle = "rgba(0,0,0," + Math.max(0.08, 0.35 - hgt / 2500) + ")";
         ctx.beginPath(); ctx.ellipse(sx, floorY, r * Math.max(0.4, 1 - hgt / 1600), r * 0.25, 0, 0, Math.PI * 2); ctx.fill();
-        if (this.body) {
+        if (this.body && Ragdolls.list.indexOf(this.body) !== -1) {
+            Ragdolls.draw(this.body); // always visible above the players, including on LAN clients
             // zombie mode: just a faint ring so you can still read the ball's size
             ctx.strokeStyle = "rgba(248,250,252,0.25)"; ctx.lineWidth = 2;
             ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
@@ -453,6 +454,19 @@ GameModes.register({
         ctx.restore();
     },
 
+    netState: function() {
+        return { ball: [Ball.x, Ball.y, Ball.vx, Ball.vy, Ball.angle], ballStyle: sportCfg.ball,
+            phase: Sport.phase, timer: Sport.timer, score: Sport.score, clock: Sport.clock,
+            sudden: Sport.sudden, goalTeam: Sport.goalTeam };
+    },
+    applyNetState: function(m) {
+        if (!m || !m.ball) return;
+        Ball.x = m.ball[0]; Ball.y = m.ball[1]; Ball.vx = m.ball[2]; Ball.vy = m.ball[3]; Ball.angle = m.ball[4];
+        sportCfg.ball = m.ballStyle;
+        Ball.body = sportCfg.ball === "zombie" ? Ragdolls.list.find(function(r) { return r.isBallBody; }) || null : null;
+        Sport.phase = m.phase; Sport.timer = m.timer; Sport.score = m.score; Sport.clock = m.clock;
+        Sport.sudden = m.sudden; Sport.goalTeam = m.goalTeam;
+    },
     drawFront: function() { Ball.draw(); },
 
     drawHUD: function() {

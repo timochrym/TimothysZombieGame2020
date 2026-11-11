@@ -74,6 +74,12 @@ function wheelsCourse(n, title, layout, traps, finishX, cps, par) {
     A(L, WK.ground(5200, 5400, 360)); A(L, WK.ramp(5400, 360, 5900, 0)); A(L, WK.ground(5900, 7600, 0));
     [[6200, 6600], [6800, 7200]].forEach(function(sl) { L.push({ type: "box", name: "Crumble slab", x: (sl[0] + sl[1]) / 2, y: 20, w: sl[1] - sl[0], h: 40, color: "#a8a29e", texture: "stone_raw", kind: "block" }); });
     wheelsCourse(3, "Crumble Run", L, { mines: [[4300, 0]], logs: [[5000, 900]], spikes: [[6400, 0, 160]] }, 7300, [3950], [30, 42, 58]);
+    // A short stunt course: ride through smash gates, then balance in the updraft.
+    wheelsCourse(4, "Wind Works", [WK.ground(-800, 5200, 0)], {}, 4800, [2500], [22, 35, 50]);
+    var wind = EXTRA_LEVELS["wheels_4"];
+    wind.gadgets.push({ type: "fan", x: 1900, y: 0, w: 500, h: 650, power: 1.6 });
+    [1000, 3300, 4100].forEach(function(x) { wind.gadgets.push({ type: "cracked", x: x, y: 80, w: 30, h: 160, wheelBreak: true }); });
+    wind.gadgets.push({ type: "sign", x: 500, y: 0, text: "Build speed to smash gates · lean to balance in the fan" });
 })();
 
 // ---------------------------------------------------------------- vehicle + rider body (one Verlet body)
@@ -447,6 +453,17 @@ GameModes.register({
     },
     preUpdate: function() {
         Wheels.t++;
+        // Break stunt gates before collision removes the wheel's incoming velocity.
+        Gadgets.list.forEach(function(g) {
+            if (!g.wheelBreak || g.broken) return;
+            Wheels.riders.forEach(function(rd) {
+                if (rd.crashed) return;
+                rd.pts.slice(rd.vbase).forEach(function(p) {
+                    var vx = p.x - p.px;
+                    if (Math.abs(vx) >= 3 && Math.abs(p.x + vx - g.x) < g.w / 2 + p.r + 8 && Math.abs(p.y - g.y) < g.h / 2 + p.r) Gadgets.onExplosion(g.x, g.y, 20);
+                });
+            });
+        });
         // LAN riders whose player left go away; seats follow their riders (camera / LAN "you" marker)
         for (let i = Wheels.riders.length - 1; i >= 0; i--) {
             var lr = Wheels.riders[i];

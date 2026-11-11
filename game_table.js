@@ -24,6 +24,7 @@ var Flick = {
         for (let t = 0; t < 2; t++) for (let i = 0; i < F.length; i++) this.discs.push({ t: t, x: F[i][0] * (t ? -1 : 1), y: F[i][1], vx: 0, vy: 0, r: this.DR, m: 2 });
         this.ball = { x: 0, y: 0, vx: 0, vy: 0, r: this.BR, m: 1, ball: true };
         this.turn = team; this.phase = "aim"; this.sel = -1; this.drag = null; this.cpuT = 0;
+        this.aimA = team === 0 ? 0 : Math.PI; this.prevFire = this.prevNext = false;
     },
     bodies: function() { return this.discs.concat([this.ball]); },
     scale: function() { return Math.min((cssW - 80) / (this.PW + 120), (cssH - 170) / (this.PH + 40)); },
@@ -157,7 +158,7 @@ var Flick = {
         if (team === 1 && Table.lanPid()) { var nb = Net.peerButtons(Table.lanPid()); return { left: nb.left, right: nb.right, up: nb.up, down: nb.down, fire: !!(Net.peers[Table.lanPid()].inp || {}).jt || !!(Net.peers[Table.lanPid()].inp || {}).sh, next: nb.build }; }
         var p = team === 0 || tableCfg.vs !== "p2" ? 0 : 1, pad = (typeof Pads !== "undefined") ? Pads.state[p] : null, pa = pad && pad.active;
         if (p === 0 || !multiplayer) return { left: WASDleftPressed || (pa && pad.left), right: WASDrightPressed || (pa && pad.right), up: WASDupPressed || (pa && pad.up), down: WASDdownPressed || (pa && pad.down), fire: SpacePressed || (pa && pad.shoot), next: !!Flick.tabDown || (pa && pad.jet) };
-        return { left: ULDRleftPressed || (pa && pad.left), right: ULDRrightPressed || (pa && pad.right), up: ULDRupPressed || (pa && pad.up), down: ULDRdownPressed || (pa && pad.down), fire: !!PlayerInput[1].kbShoot || (pa && pad.shoot), next: !!PlayerInput[1].kbInteract || (pa && pad.jet) };
+        return { left: ULDRleftPressed || WASDleftPressed || (pa && pad.left), right: ULDRrightPressed || WASDrightPressed || (pa && pad.right), up: ULDRupPressed || WASDupPressed || (pa && pad.up), down: ULDRdownPressed || WASDdownPressed || (pa && pad.down), fire: !!PlayerInput[1].kbShoot || SpacePressed || (pa && pad.shoot), next: !!PlayerInput[1].kbInteract || !!Flick.tabDown || (pa && pad.jet) };
     },
 
     draw: function() {
@@ -205,7 +206,7 @@ var Flick = {
         uiText(String(this.score[1]), cssW / 2 + 90, 100, 32, TABLE_COLORS[1], "center", "900");
         uiText(this.phase === "over" ? (this.winner === 0 ? "RED" : "BLUE") + " WINS" : (this.phase === "aim" ? (this.turn === 0 ? "RED" : "BLUE") + (this.human(this.turn) ? " — your flick" : " — thinking…") : "…"), cssW / 2, 96, 15, "#e2e8f0", "center", "900");
         if (this.msgT > 0) uiText(this.msg, cssW / 2, cssH / 2, 56, "#fde047", "center", "900");
-        uiText("Drag a disc back and let go to flick · or Tab next disc, A/D aim, W/S power, Space shoot · first to " + this.win + " · Esc: opponent / game", cssW / 2, cssH - 14, 12, "rgba(220,230,240,0.7)", "center", "700");
+        uiText("Drag your disc · Tab next · A/D aim · W/S power · Space shoot (P2 also arrows / Enter) · first to " + this.win + " · Esc: opponent / game", cssW / 2, cssH - 14, 12, "rgba(220,230,240,0.7)", "center", "700");
     }
 };
 

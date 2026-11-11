@@ -18,13 +18,17 @@ var PM = [   // id order matters: index = cell value
     { id: "lava", name: "Lava", col: [235, 80, 20], key: "Digit7" },
     { id: "stone", name: "Stone", col: [128, 128, 134], key: "Digit8" },
     { id: "steam", name: "Steam", col: [200, 210, 225], key: "Digit9" },
-    { id: "wood", name: "Wood", col: [140, 92, 50], key: "Digit0" }
+    { id: "wood", name: "Wood", col: [140, 92, 50], key: "Digit0" },
+    { id: "ice", name: "Ice", col: [170, 225, 255] },
+    { id: "acid", name: "Acid", col: [190, 245, 70] },
+    { id: "powder", name: "Gunpowder", col: [85, 75, 88] },
+    { id: "seed", name: "Seeds", col: [125, 160, 65] }
 ];
-var P_EMPTY = 0, P_SAND = 1, P_WATER = 2, P_WALL = 3, P_FIRE = 4, P_OIL = 5, P_PLANT = 6, P_LAVA = 7, P_STONE = 8, P_STEAM = 9, P_WOOD = 10;
+var P_EMPTY = 0, P_SAND = 1, P_WATER = 2, P_WALL = 3, P_FIRE = 4, P_OIL = 5, P_PLANT = 6, P_LAVA = 7, P_STONE = 8, P_STEAM = 9, P_WOOD = 10, P_ICE = 11, P_ACID = 12, P_GUNPOWDER = 13, P_SEED = 14;
 // density: heavier things sink through lighter liquids/gases
-var P_DENS = [0, 5, 3, 99, 0, 2, 99, 4, 6, 0, 99];
-var P_LIQUID = { 2: 1, 5: 1, 7: 1 };
-var P_BURNS = { 5: 0.08, 6: 0.04, 10: 0.012 };   // chance per touching-fire frame
+var P_DENS = [0, 5, 3, 99, 0, 2, 99, 4, 6, 0, 99, 99, 3, 5, 4];
+var P_LIQUID = { 2: 1, 5: 1, 7: 1, 12: 1 };
+var P_BURNS = { 5: 0.08, 6: 0.04, 10: 0.012, 13: 1, 14: 0.08 };   // chance per touching-fire frame
 
 var Powder = {
     grid: null, life: null, moved: null, sel: 1, brush: 4, paused: false, img: null, cvs: null, t: 0,
@@ -69,9 +73,23 @@ var Powder = {
                 var x = flip ? k : W - 1 - k, i = y * W + x, c = g[i];
                 if (c === P_EMPTY || c === P_WALL || this.moved[i]) continue;
                 var r = Math.random(), dir = r < 0.5 ? -1 : 1;
-                if (c === P_SAND || c === P_STONE) {
+                if (c === P_ICE || c === P_ACID || c === P_SEED || c === P_GUNPOWDER) {
+                    var reacted = false;
+                    for (let ni = 0; ni < this.neigh.length; ni++) {
+                        var nx = x + this.neigh[ni][0], ny = y + this.neigh[ni][1], nc = this.get(nx, ny);
+                        if (c === P_ICE && (nc === P_FIRE || nc === P_LAVA)) { this.set(x, y, P_WATER); reacted = true; break; }
+                        if (c === P_SEED && nc === P_WATER) { this.set(x, y, P_PLANT); reacted = true; break; }
+                        if (c === P_ACID && nc !== P_EMPTY && nc !== P_WALL && nc !== P_ACID && r < 0.12) { this.set(nx, ny, P_EMPTY); this.set(x, y, P_WATER); reacted = true; break; }
+                        if (c === P_GUNPOWDER && (nc === P_FIRE || nc === P_LAVA)) {
+                            this.ignitePowder(x, y);
+                            reacted = true; break;
+                        }
+                    }
+                    if (reacted || c === P_ICE) continue;
+                }
+                if (c === P_SAND || c === P_STONE || c === P_GUNPOWDER || c === P_SEED) {
                     if (!this.tryMove(i, x, y, x, y + 1) && !this.tryMove(i, x, y, x + dir, y + 1)) this.tryMove(i, x, y, x - dir, y + 1);
-                } else if (c === P_WATER || c === P_OIL || c === P_LAVA) {
+                } else if (c === P_WATER || c === P_OIL || c === P_LAVA || c === P_ACID) {
                     if (c === P_LAVA && r < 0.5) continue;          // lava is sluggish
                     if (!this.tryMove(i, x, y, x, y + 1) && !this.tryMove(i, x, y, x + dir, y + 1) && !this.tryMove(i, x, y, x + dir, y)) this.tryMove(i, x, y, x - dir, y);
                     if (c === P_LAVA) this.react(x, y, i);
@@ -99,16 +117,23 @@ var Powder = {
         for (let k = 0; k < 4; k++) {
             var nx = x + this.neigh[k][0], ny = y + this.neigh[k][1], n = this.get(nx, ny);
             if (n === P_WATER) { this.set(nx, ny, P_STEAM); this.grid[i] = P_STONE; return; }
-            if (P_BURNS[n] && Math.random() < 0.2) this.set(nx, ny, P_FIRE);
+            if (n === P_GUNPOWDER) this.ignitePowder(nx, ny);
+            else if (P_BURNS[n] && Math.random() < 0.2) this.set(nx, ny, P_FIRE);
         }
     },
     wet: function(x, y, i) {         // water puts fire out
         for (let k = 0; k < 4; k++) { var nx = x + this.neigh[k][0], ny = y + this.neigh[k][1]; if (this.get(nx, ny) === P_FIRE) { this.set(nx, ny, P_STEAM); return; } }
     },
+    ignitePowder: function(x, y) {
+        for (let ey = -5; ey <= 5; ey++) for (let ex = -5; ex <= 5; ex++) {
+            if (ex * ex + ey * ey <= 25 && this.get(x + ex, y + ey) !== P_WALL) this.set(x + ex, y + ey, P_FIRE);
+        }
+    },
     burn: function(x, y, i) {
         for (let k = 0; k < 4; k++) {
             var nx = x + this.neigh[k][0], ny = y + this.neigh[k][1], n = this.get(nx, ny);
-            if (P_BURNS[n] && Math.random() < P_BURNS[n] * 6) this.set(nx, ny, P_FIRE);
+            if (n === P_GUNPOWDER) { this.ignitePowder(nx, ny); }
+            else if (P_BURNS[n] && Math.random() < P_BURNS[n] * 6) this.set(nx, ny, P_FIRE);
             else if (n === P_WATER && Math.random() < 0.3) { this.grid[i] = P_STEAM; this.life[i] = 40; return; }
         }
     },
@@ -116,19 +141,19 @@ var Powder = {
     paint: function(cx, cy, v) {
         var r = this.brush;
         for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-            if (dx * dx + dy * dy > r * r) continue;
+            if (this.shape !== "square" && dx * dx + dy * dy > r * r) continue;
             var x = cx + dx, y = cy + dy;
             if (x < 0 || y < 0 || x >= PW.W || y >= PW.H) continue;
             var cur = this.grid[y * PW.W + x];
             // powders and liquids go in as a sprinkle so piles look natural; solids and the eraser fill solid
-            if (v !== P_EMPTY && v !== P_WALL && v !== P_WOOD && v !== P_PLANT && Math.random() < 0.55) continue;
+            if (v !== P_EMPTY && v !== P_WALL && v !== P_WOOD && v !== P_PLANT && Math.random() > (this.density === undefined ? 0.45 : this.density)) continue;
             if (v === P_EMPTY || cur === P_EMPTY || v === P_WALL) this.set(x, y, v);
         }
     },
 
     // screen <-> grid
     layout: function() {
-        var top = 70, bottom = 96, s = Math.max(1, Math.min((cssW - 40) / PW.W, (cssH - top - bottom) / PW.H));
+        var top = 70, bottom = 145, s = Math.max(1, Math.min((cssW - 40) / PW.W, (cssH - top - bottom) / PW.H));
         this.view = { s: s, x: Math.round((cssW - PW.W * s) / 2), y: top };
         return this.view;
     },
@@ -162,14 +187,14 @@ var Powder = {
     },
 
     palette: function() {
-        var n = PM.length, bw = Math.min(92, (cssW - 40) / n - 6), x0 = cssW / 2 - (n * (bw + 6)) / 2, y0 = cssH - 84;
+        var n = PM.length, cols = Math.ceil(n / 2), bw = Math.min(92, (cssW - 40) / cols - 6), x0 = cssW / 2 - (cols * (bw + 6)) / 2, y0 = cssH - 134;
         this.palRects = [];
         for (let k = 0; k < n; k++) {
-            var i = (k + 1) % n, m = PM[i], bx = x0 + k * (bw + 6), on = i === this.sel;      // eraser last
-            ctx.fillStyle = "rgb(" + m.col.join(",") + ")"; ctx.fillRect(bx, y0, bw, 30);
-            ctx.strokeStyle = on ? "#fde047" : "#1e293b"; ctx.lineWidth = on ? 3 : 2; ctx.strokeRect(bx, y0, bw, 30);
-            uiText((i === P_EMPTY ? "E" : String((k + 1) % 10)) + " " + m.name, bx + bw / 2, y0 + 46, 11, on ? "#fde047" : "#94a3b8", "center", "800");
-            this.palRects.push([bx, y0, bw, 52, i]);
+            var i = (k + 1) % n, m = PM[i], bx = x0 + (k % cols) * (bw + 6), by = y0 + Math.floor(k / cols) * 52, on = i === this.sel;      // eraser last
+            ctx.fillStyle = "rgb(" + m.col.join(",") + ")"; ctx.fillRect(bx, by, bw, 30);
+            ctx.strokeStyle = on ? "#fde047" : "#1e293b"; ctx.lineWidth = on ? 3 : 2; ctx.strokeRect(bx, by, bw, 30);
+            uiText((i === P_EMPTY ? "E" : (m.key ? m.key.slice(-1) : "")) + " " + m.name, bx + bw / 2, by + 46, 11, on ? "#fde047" : "#94a3b8", "center", "800");
+            this.palRects.push([bx, by, bw, 52, i]);
         }
     }
 };
@@ -185,6 +210,11 @@ GameModes.register({
     flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: false },
     overTitle: "SAND LAB",
 
+    tunables: function() { return [
+        { label: "Brush shape", type: "choice", options: [["circle", "Circle"], ["square", "Square"]], get: function() { return Powder.shape || "circle"; }, set: function(v) { Powder.shape = v; } },
+        { label: "Paint density", type: "range", min: 0.1, max: 1, step: 0.1, get: function() { return Powder.density === undefined ? 0.45 : Powder.density; }, set: function(v) { Powder.density = v; } },
+        { label: "Simulation speed", type: "range", min: 1, max: 4, step: 1, get: function() { return Powder.steps || 1; }, set: function(v) { Powder.steps = v; } }
+    ]; },
     setupLevel: function() { if (!Powder.grid) Powder.init(); },
 
     screenDraw: function() { Powder.t++; Powder.render(); this.hudBits(true); },
@@ -226,7 +256,7 @@ GameModes.register({
         if (Powder.palDown) Powder.palDown = mouseDown;
         else if (mouseDown) Powder.paint(gp[0], gp[1], Powder.sel);
         if (rightMouseDown) Powder.paint(gp[0], gp[1], P_EMPTY);
-        if (!Powder.paused) { Powder.step(); if (Powder.fast) Powder.step(); }
+        if (!Powder.paused) { for (let step = 0; step < (Powder.steps || (Powder.fast ? 2 : 1)); step++) Powder.step(); }
         Powder.render();
         uiPanel(14, 10, 430, 50, "#d6ba70");
         uiText("SAND LAB", 30, 42, 22, "#fde68a", "left", "900");
@@ -248,7 +278,7 @@ GameModes.register({
     onKey: function(code) {
         for (let i = 1; i < PM.length; i++) if (PM[i].key === code) { Powder.sel = i; return true; }
         if (code === "Space") { Powder.paused = !Powder.paused; return true; }
-        if (code === "KeyF") { Powder.fast = !Powder.fast; return true; }
+        if (code === "KeyF") { Powder.fast = !Powder.fast; Powder.steps = Powder.fast ? 2 : 1; return true; }
         if (code === "BracketLeft") { Powder.brush = Math.max(1, Powder.brush - 1); return true; }
         if (code === "BracketRight") { Powder.brush = Math.min(20, Powder.brush + 1); return true; }
         if (code === "KeyE") { Powder.sel = P_EMPTY; return true; }

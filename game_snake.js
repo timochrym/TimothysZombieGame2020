@@ -56,7 +56,7 @@ var Snake = {
                 w.boost = !!pad.shoot;
             } else if (WASDleftPressed || WASDrightPressed) { w.want = w.ang + (WASDrightPressed ? 0.09 : -0.09); w.keyMode = true; }
             else if (!w.keyMode || Snake.mouseMoved) { var hs = this.toScreen(w.segs[0].x, w.segs[0].y); w.want = Math.atan2(mouseY - hs[1], mouseX - hs[0]); w.keyMode = false; }
-            w.boost = w.boost || mouseDown || SpacePressed || WASDupPressed;
+            w.boost = !!(pad && pad.active && pad.shoot) || mouseDown || SpacePressed || WASDupPressed;
         } else if (w.human === 1) {
             var pad2 = (typeof Pads !== "undefined") ? Pads.state[1] : null;
             if (pad2 && pad2.active && (pad2.left || pad2.right || pad2.aim)) { var bx = pad2.aim ? pad2.aim[0] : (pad2.right ? 1 : -1), by = pad2.aim ? pad2.aim[1] : 0; w.want = Math.atan2(by, bx); }
@@ -142,7 +142,7 @@ var Snake = {
     },
 
     kill: function(w, by) {
-        if (!w.alive) return;
+        if (!w.alive || arenaProtected(w)) return;
         w.alive = false; w.deadT = 0;
         var col = w.color;
         for (let i = 0; i < w.segs.length; i += 2) this.addPellet(w.segs[i].x + (Math.random() - 0.5) * 20, w.segs[i].y + (Math.random() - 0.5) * 20, 2 + ((w.len / 60) | 0), col);
@@ -173,7 +173,7 @@ var Snake = {
             var d = ((w.want - w.ang + Math.PI * 3) % (Math.PI * 2)) - Math.PI, turn = 0.11 - Math.min(0.05, w.len / 4000);
             w.ang += Math.max(-turn, Math.min(turn, d));
             var boosting = w.boost && w.len > 14;
-            var sp = boosting ? 7.2 : 3.6;
+            var sp = (boosting ? 7.2 : 3.6) * arenaSpeed(w);
             if (boosting && this.t % 6 === 0) { w.len -= 1; var tl = w.segs[w.segs.length - 1]; this.addPellet(tl.x, tl.y, 1, w.color); }
             var h = w.segs[0];
             var nh = { x: h.x + Math.cos(w.ang) * sp, y: h.y + Math.sin(w.ang) * sp };

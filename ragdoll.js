@@ -146,6 +146,7 @@ var Ragdolls = {
                 s.sprite = zombieImg; s.tint = "#7a5cff"; s.body = "#5b4aa8"; s.limb = "#7a5cff"; s.head = "#a78bfa";
             } else {
                 var skin = ch.skinId();
+                if (skin.indexOf("npc:") === 0) return this.styleFor({ zombiePower: skin.slice(4), originalColor: accent });
                 s.face = "hero";
                 if (skin === "stick") { s.body = accent; s.limb = accent; s.head = "#f8fafc"; s.thick = 0.55; s.acc = "headband"; s.accColor = accent; }
                 else if (skin === "brawler") { s.body = "#f8fafc"; s.limb = "#f2c9a0"; s.head = "#f2c9a0"; s.acc = "headband"; s.accColor = accent; s.hair = true; s.belt = accent; }
@@ -561,7 +562,7 @@ var Ragdolls = {
     // ============================== RENDERING ==============================
     drawCorpses: function() {
         for (let i = 0; i < this.list.length; i++) {
-            if (!this.list[i].owner) this.draw(this.list[i]);
+            if (!this.list[i].owner && !this.list[i].isBallBody) this.draw(this.list[i]);
         }
     },
 

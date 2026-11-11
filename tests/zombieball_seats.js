@@ -3,6 +3,7 @@ const { open } = require('./lib');
   // 1. Zombie Ball: the ball is a real zombie ragdoll and the players are full characters with ragdoll physics
   let { b, p, errs } = await open('sport', { w: 1100, h: 650 });
   let ev = (f, a) => p.evaluate(f, a);
+  await ev(() => { sportCfg.ball = "zombie"; Ball.ensureBody(true); });
   await p.waitForTimeout(3500);
   console.log('Zombie Ball:', JSON.stringify(await ev(() => ({ ballStyle: sportCfg.ball, ragdollBall: !!(Ball.body && Ragdolls.list.indexOf(Ball.body) !== -1), ballPoints: Ball.body ? Ball.body.pts.length : 0,
       players: characters.map(c => c.playerLabel + (c.isCPU ? '(CPU)' : '')), playersRagdollCapable: characters.every(c => typeof c.startRagdoll === 'function') }))));

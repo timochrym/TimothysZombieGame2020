@@ -14,6 +14,11 @@ var SKINS = [
     { id: "cap", name: "Cap Hero" }
 ];
 
+["NORMAL", "SPITTER", "LEAPER", "EXPLODER", "TANK", "SLIME", "MINI_SLIME", "BAT", "ARCHER", "KNIGHT", "MAGE", "BOSS_KING"].forEach(function(id) {
+    SKINS.push({ id: "npc:" + id, name: id.toLowerCase().replace(/_/g, " ") });
+});
+["crate", "ball", "barrel"].forEach(function(id) { SKINS.push({ id: "object:" + id, name: "Living " + id }); });
+
 var heroSkins = ["original", "original", "stick", "brawler"];
 try {
     var savedSkins = JSON.parse(localStorage.getItem("timsZombieGameSkins") || "null");
@@ -113,6 +118,19 @@ function skinLimb(ax, ay, bx, by, bend, lw, col, flash) {
 
 // st: { facing:+1/-1, phase, moving(0..1), air, rising, aimX, aimY (unit, screen space), color, firing, flash, t }
 function drawHeroSkin(skin, cx, cy, S, st) {
+    if (skin.indexOf("npc:") === 0) { drawEnemySkin(skin.slice(4), cx, cy, S, st); return; }
+    if (skin.indexOf("object:") === 0) {
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate((st.phase || 0) * 0.08);
+        var r = S * 0.42;
+        ctx.fillStyle = st.flash ? "#fff" : (skin === "object:ball" ? "#f8fafc" : "#a86f3c");
+        ctx.strokeStyle = "#283443"; ctx.lineWidth = Math.max(2, S / 25);
+        if (skin === "object:ball") { ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+        else { ctx.fillRect(-r, -r, r * 2, r * 2); ctx.strokeRect(-r, -r, r * 2, r * 2);
+            ctx.beginPath(); ctx.moveTo(-r, skin === "object:barrel" ? -r/2 : -r); ctx.lineTo(r, skin === "object:barrel" ? -r/2 : r);
+            ctx.moveTo(-r, skin === "object:barrel" ? r/2 : r); ctx.lineTo(r, skin === "object:barrel" ? r/2 : -r); ctx.stroke(); }
+        ctx.fillStyle = "#111827"; ctx.fillRect(-r * 0.45, -r * 0.3, r * 0.18, r * 0.25); ctx.fillRect(r * 0.27, -r * 0.3, r * 0.18, r * 0.25);
+        ctx.restore(); return;
+    }
     SKIN_DETAIL = (typeof settings === "undefined" || settings.charDetail !== false) ? Math.max(0, Math.min(1, (S - 70) / 50)) : 0;
     ctx.save();
     ctx.translate(cx, cy);

@@ -189,3 +189,9 @@ kind of mechanics. Mark items `[DONE]` as they ship.
 - Powder toy → **Sand Lab** (`game_powder.js`). [DONE]
 - 2-player minigame pack → **Table Games** (`game_table.js`): Flick Soccer + Four in a Row. [DONE] (more minigames to come)
 - Engine: the `ownScreen` flag lets a game draw the whole screen itself (all of the above except Word Lab use it).
+
+## 2026-11-11 follow-up
+[DONE] Soccer rendering/LAN state and P2 controls; Worm boost release; stable landings; navigation invalidation/platform/flow fixes.
+[DONE] Terra creative mode; Siege Birds default; Wildwood Frontier naming; arena cheats/tank skill; Sand materials/customization;
+Jet coin purchases; Wheels Wind Works stunt course. Regression suites listed in tests/README.md.
+[PARTIAL] Character roster, Arcade statistics, cheats in every game and broader genre polish: exact remaining scope in TODO.md.

@@ -7,8 +7,8 @@
 //   Pads: hold A / RT.   Runs on its own screen (engine `ownScreen` flag).
 // ============================================================================
 var JD = { FLOOR: 60, CEIL: 60 };    // corridor margins (screen px, scaled)
-var jetSave = { best: 0, coins: 0 };
-try { var _jd = JSON.parse(localStorage.getItem("timsJetDash") || "null"); if (_jd) { jetSave.best = _jd.best || 0; jetSave.coins = _jd.coins || 0; } } catch (e) {}
+var jetSave = { best: 0, coins: 0, magnet: false, shieldStart: false };
+try { var _jd = JSON.parse(localStorage.getItem("timsJetDash") || "null"); if (_jd) { jetSave.best = _jd.best || 0; jetSave.coins = _jd.coins || 0; jetSave.magnet = !!_jd.magnet; jetSave.shieldStart = !!_jd.shieldStart; } } catch (e) {}
 function saveJet() { try { localStorage.setItem("timsJetDash", JSON.stringify(jetSave)); } catch (e) {} }
 
 var Jet = {
@@ -32,7 +32,7 @@ var Jet = {
         });
         this.runners = this.runners.filter(function(r) { return !r.lan || Net.peers[r.pid]; });
     },
-    makeRunner: function(i, col) { return { i: i, col: col, x: 260 - i * 70, y: this.H - JD.FLOOR - 40, vy: 0, alive: true, shield: false, flame: 0, dist: 0, dieX: 0, spin: 0 }; },
+    makeRunner: function(i, col) { return { i: i, col: col, x: 260 - i * 70, y: this.H - JD.FLOOR - 40, vy: 0, alive: true, shield: !!jetSave.shieldStart, flame: 0, dist: 0, dieX: 0, spin: 0 }; },
 
     held: function(r) {
         if (r.lan) return !!Net.peerX(r.pid).h;
@@ -78,7 +78,7 @@ var Jet = {
     },
 
     kill: function(r, why) {
-        if (!r.alive) return;
+        if (!r.alive || godMode || Jet.invincible) return;
         if (r.shield) { r.shield = false; r.inv = 60; this.fx.push({ x: r.x, y: r.y, t: 0, col: "#67e8f9", big: true }); if (typeof SFX !== "undefined") SFX.play("fizzle"); return; }
         r.alive = false; r.why = why; r.dieX = this.x; r.vy = -6; r.vx = 4; r.spin = 0.3;
         screenShake = 8;
@@ -147,6 +147,9 @@ var Jet = {
             if (c.x < this.x - 100) { this.coins.splice(k, 1); continue; }
             for (let i = 0; i < this.runners.length; i++) {
                 var cr = this.runners[i];
+                if (cr.alive && jetSave.magnet && !c.shield && Math.hypot(c.x - this.x - cr.x, c.y - cr.y) < 140) {
+                    c.x += (this.x + cr.x - c.x) * 0.16; c.y += (cr.y - c.y) * 0.16;
+                }
                 if (cr.alive && Math.abs(c.x - this.x - cr.x) < 28 && Math.abs(c.y - cr.y) < 34) {
                     if (c.shield) { cr.shield = true; showBanner("SHIELD!", "saves you once", "#67e8f9"); }
                     else { this.coinsRun++; if (typeof SFX !== "undefined" && this.t % 2 === 0) SFX.play("coin", 0, 0, 0.3, 1.4); }
@@ -306,8 +309,19 @@ GameModes.register({
     },
 
     onClick: function() { return true; },
-    menuItems: function(items) { items.push({ id: "jd_new", label: "New run", hint: "" }); },
-    onMenu: function(id) { if (id === "jd_new") { closePause(); Jet.reset(); return true; } return false; },
+    menuItems: function(items) {
+        items.push({ id: "jd_magnet", label: "Coin magnet: " + (jetSave.magnet ? "OWNED" : "Buy · 100 coins"), hint: "Pull nearby coins toward you · bank " + jetSave.coins });
+        items.push({ id: "jd_shield", label: "Starting shield: " + (jetSave.shieldStart ? "OWNED" : "Buy · 150 coins"), hint: "Every runner starts shielded next run" });
+        items.push({ id: "jd_new", label: "New run", hint: "" });
+    },
+    onMenu: function(id) {
+        if (id === "jd_magnet" || id === "jd_shield") {
+            var key = id === "jd_magnet" ? "magnet" : "shieldStart", cost = key === "magnet" ? 100 : 150;
+            if (!jetSave[key] && jetSave.coins >= cost) { jetSave.coins -= cost; jetSave[key] = true; saveJet(); }
+            else if (!jetSave[key]) showBanner("Need " + cost + " coins", "Finish a run to bank your coins", "#fde047");
+            return true;
+        }
+        if (id === "jd_new") { closePause(); Jet.reset(); return true; } return false; },
     onRestart: function() { Jet.reset(); },
     overSub: function() { return "Best " + jetSave.best + " m  ·  " + jetSave.coins + " coins banked"; }
 });

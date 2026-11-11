@@ -3,6 +3,18 @@
 Kept up to date on every push. Finished items move to `RETROS.md` (with measurements) and get `[DONE]` in `ROADMAP.md`.
 Last updated: after the UI pass (top bar, pause menu, Level Studio, one-click LAN).
 
+## Latest implementation handoff (2026-11-11)
+Implemented: soccer ball foreground rendering and LAN ball/score sync; Flick Soccer shared P2 keys and help;
+boost release; stable character landings; navigation graph invalidation, non-looping flow routes, moving-platform waypoints;
+12 enemy appearances and three object appearances; Arcade play/time and score records; arena cheats and tank difficulty;
+Terra creative mode; Birds default; Wildwood Frontier name; four Sand Lab materials and brush controls;
+Jet Dash coin magnet/starting-shield purchases; Wobble Wheels Wind Works course with fans and smash gates.
+
+Still open: arbitrary object possession and using the roster in bespoke full-screen renderers; comprehensive per-player
+win/loss histories and all table-game results; exhaustive cheats for every mode; further genre/art polish based on your
+play-through. The older genre backlog below is not all complete. Physical two-device LAN and Control Panel integration
+still need testing on your devices. See RETROS.md for validation and scope.
+
 ## In progress right now
 - [x] **Terra (B3 world generation)** — `game_terra.js`: deep generated world (forest/desert/hill biomes, trees,
       dirt over stone, caves, coal/iron/gold, bedrock), chunk-streamed collision, mining and placing with a 9-slot
@@ -176,15 +188,15 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 ## Your latest list (word for word below) — shared library first, then each game
 Shared (first, as you asked: "Focus on shared game library assets though first"):
 - [x] S1 Themes: a light mode and other themes for textures / graphics / panels ("the current ones feel dark"). → Pause → Settings → Theme / Brightness, or the panel's 🎨 Shared box. Check: `tests/themes.js`.
-- [ ] S2 Character roster: more character options; play as any NPC (every enemy type) or object, in any game.
+- [~] S2 Character roster (enemy appearances + three objects done; arbitrary possession/full-screen games remain): more character options; play as any NPC (every enemy type) or object, in any game.
 - [x] S3 Fighting: weapon setting (blaster / fists) so heroes don't always carry a gun; ammo unlimited by default; melee
       moves (punch, punch, kick, uppercut, ground pound, flying kick). Check: `tests/fighting.js`.
 - [x] S4 Ragdoll on hits: a setting (Off / Short / Full; Short is the default). Check: `tests/fighting.js`.
-- [ ] S5 Scores and stats saved for every game, shown in the Arcade.
-- [ ] BUG: Zombie Ball — the ball sometimes goes invisible.
-- [ ] BUG: Table Games / Flick Soccer — player 2 can't move their discs on their turn.
-- [ ] S7 Enemy AI pathfinding still needs to improve (your words: "And enemey AI path finding still needs to improve").
-- [ ] S6 Cheats for every game, incl. Worm / Blob / Tank Arena (god mode, size, speed, stat points).
+- [~] S5 Arcade play/time and score records added; full per-player win/loss history remains. Scores and stats saved for every game, shown in the Arcade.
+- [x] BUG: Zombie Ball — the ball sometimes goes invisible. → Rendering / LAN sync and shared-key fixes; regression tests added. Please report any remaining local case.
+- [x] BUG: Table Games / Flick Soccer — player 2 can't move their discs on their turn. → Rendering / LAN sync and shared-key fixes; regression tests added. Please report any remaining local case.
+- [x] S7 Enemy AI pathfinding: graph invalidation, moving-platform coordinates, and flow-loop prevention improved. Further terrain-specific tuning may remain; original request: (your words: "And enemey AI path finding still needs to improve").
+- [~] S6 Arena, Jet Dash and board-game cheats added; exhaustive coverage remains. Cheats for every game, incl. Worm / Blob / Tank Arena (god mode, size, speed, stat points).
 Each game:
 - [ ] Worm Arena: boost doesn't work properly; cheats.   - [ ] Tank Arena: too hard; cheats.   - [ ] Blob Arena: cheats.
 - [ ] Jet Dash: look and behave closer to the genre.     - [ ] Stomp Squad: look / behave more like the genre; the

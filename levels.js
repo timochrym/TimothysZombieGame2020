@@ -203,7 +203,7 @@ class LevelManager {
             },
 
             "infinite_frontier": {
-                name: "6. 🌲 Oregon Trail: Infinite Frontier [Procedural]",
+                name: "6. 🌲 Wildwood Frontier [Procedural]",
                 spawnP1: [80, 120],
                 spawnP2: [200, 120],
                 wavesEnabled: true,
@@ -558,7 +558,7 @@ class LevelManager {
 }
 
 // ============================================================================
-// RECURSIVE PROCEDURAL SIDE-SCROLLER GENERATOR ("Oregon Trail: Infinite Frontier")
+// RECURSIVE PROCEDURAL SIDE-SCROLLER GENERATOR ("Wildwood Frontier")
 // Generates 40px-grid-snapped Fields, Trees, Rivers, Houses, Mountains, Castles & Dungeons!
 // ============================================================================
 class WorldGenerator {
@@ -865,7 +865,7 @@ class WorldGenerator {
             }
         }
 
-        // Update current biome HUD title & Oregon Trail miles milestone
+        // Update current biome HUD title & Wildwood miles milestone
         if (this.generatedChunks[centerChunk]) {
             this.currentBiomeTitle = this.generatedChunks[centerChunk].title;
         }
@@ -973,7 +973,7 @@ class WorldGenerator {
         this.buildOriginX = leftX;
         this.buildOriginY = startY;
 
-        // Starting Chunk 0: Safe Oregon Trail Outpost & Frontier Lodge
+        // Starting Chunk 0: Safe Wildwood Outpost & Frontier Lodge
         if (chunkIdx === 0) {
             this.generatedChunks[chunkIdx] = { type: "OUTPOST", title: "🏕️ Independence Frontier Outpost" };
             this.setRightEdgeY(chunkIdx, 40);

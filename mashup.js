@@ -110,6 +110,7 @@ var SHARED_TUNABLES = [
       set: function(v) {
           v = Number(v);
           if (typeof brawlCfg !== "undefined") { brawlCfg.cpuLevel = v; if (typeof saveBrawlCfg === "function") saveBrawlCfg(); }
+          if (typeof setTankSkill === "function") setTankSkill(v);
           if (typeof sportCfg !== "undefined") sportCfg.level = v;
           if (typeof tableCfg !== "undefined") { tableCfg.level = v; if (typeof saveTable === "function") saveTable(); }
       } }

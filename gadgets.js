@@ -482,7 +482,7 @@ var Gadgets = {
                 var cw = g.w * k, chh = g.h * k, cty = wsy(g.y + g.h / 2);
                 ctx.strokeStyle = "rgba(10,15,22,0.8)"; ctx.lineWidth = 3;
                 ctx.beginPath(); ctx.moveTo(sx - cw * 0.3, cty); ctx.lineTo(sx, cty + chh * 0.3); ctx.lineTo(sx - cw * 0.15, cty + chh * 0.55); ctx.lineTo(sx + cw * 0.2, cty + chh); ctx.stroke();
-                if (this.nearHero(g.x, g.y, 300)) uiText("💥 cracked - blow it up", sx, cty - 14, 12, "#fbbf24", "center", "800");
+                if (this.nearHero(g.x, g.y, 300)) uiText((g.wheelBreak ? "Build speed to smash" : "💥 cracked - blow it up"), sx, cty - 14, 12, "#fbbf24", "center", "800");
             } else if (g.type === "coin" && !g.taken) {
                 var cw2 = Math.max(0.15, Math.abs(Math.cos(t * 0.06 + g.x * 0.01)));
                 ctx.fillStyle = "#f59e0b"; ctx.beginPath(); ctx.ellipse(sx, sy, 22 * k * cw2, 28 * k, 0, 0, 7); ctx.fill();

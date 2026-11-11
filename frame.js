@@ -473,6 +473,7 @@ function toggleMultiplayer() {
 
 
 function resetGame() {
+    ArcadeStats.start();
     lazers = [];
     particles = [];
     powerUps = [];
@@ -975,6 +976,7 @@ function drawHUD() {
 }
 
 function frame() {
+    ArcadeStats.tick();
     ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
     // modes with their own full screen (grid sims, board games) skip the platformer world entirely

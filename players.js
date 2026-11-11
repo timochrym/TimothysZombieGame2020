@@ -16,6 +16,7 @@ var PlayersUI = {
             list: [["1cpu", "Duel vs CPU", T(["p1"], ["cpu"])], ["p2", "Player vs Player", T(["p1"], ["p2"])], ["2cpu", "You vs 2 CPUs", T(["p1"], ["cpu", "cpu"])],
                    ["3cpu", "You vs 3 CPUs", T(["p1"], ["cpu", "cpu", "cpu"])], ["p2+1cpu", "P1 vs P2 vs CPU", T(["p1"], ["p2", "cpu"])], ["p2+2cpu", "P1 vs P2 vs 2 CPUs", T(["p1"], ["p2", "cpu", "cpu"])]]
         };
+        if (m === "tanks") return { get: arenaCheats.tankSkill, set: setTankSkill };
         if (m === "sport") return { kind: "sport", current: sportCfg.format,
             list: [["1v1", "1 v 1", T(["p1"], ["cpu"])], ["pvp", "P1 vs P2", T(["p1"], ["p2"])], ["2v2", "2 v 2", T(["p1", "cpu"], ["cpu", "cpu"])],
                    ["coop", "Co-op 2 v 2", T(["p1", "p2"], ["cpu", "cpu"])], ["3v3", "3 v 3", T(["p1", "cpu", "cpu"], ["cpu", "cpu", "cpu"])]] };
@@ -39,6 +40,7 @@ var PlayersUI = {
     cpuSkill: function() {
         var m = GameModes.current ? GameModes.current.id : "";
         if (typeof brawl !== "undefined" && brawl.active) return { get: brawlCfg.cpuLevel, set: function(v) { brawlCfg.cpuLevel = v; saveBrawlCfg(); } };
+        if (m === "tanks") return { get: arenaCheats.tankSkill, set: setTankSkill };
         if (m === "sport") return { get: sportCfg.level, set: function(v) { sportCfg.level = v; try { localStorage.setItem("timsZombieBallCfg", JSON.stringify(sportCfg)); } catch (e) {} } };
         return null;
     },

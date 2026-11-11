@@ -5,7 +5,7 @@
 //   into crate forts. Topple towers, crush zombies, earn up to 3 stars per fort.
 // ============================================================================
 var SIEGE_LEVELS = [];
-var siegeSave = { stars: {}, best: {}, level: 0 };
+var siegeSave = { stars: {}, best: {}, level: 0, birds: true };
 try { var _ss = JSON.parse(localStorage.getItem("timsRagdollSiege") || "null"); if (_ss) { for (var _k2 in _ss) siegeSave[_k2] = _ss[_k2]; } } catch (e) {}
 function saveSiege() { try { localStorage.setItem("timsRagdollSiege", JSON.stringify(siegeSave)); } catch (e) {} }
 

@@ -1591,3 +1591,23 @@ enemies get angry brows and red pupils; ragdolls and corpses draw as a tilted sq
 245 px with jump held), and blocks contact damage for ~10 frames. `onStomp` / `onContact` mode hooks.
 
 **Left / known:** stomps make Zombie Survival easier; the difficulty impact hasn't been measured.
+
+## 2026-11-11 — handoff fixes and shared/game improvements
+
+- Fixed latched Worm boost, unintended upright-character landing bounce, P2 shared keyboard control in Flick Soccer,
+  soccer ball foreground rendering and missing ball/score LAN state. New saves use a soccer ball and Siege Birds.
+- Navigation now invalidates stale node IDs after geometry rebuilds, preserves moving-platform entry/exit coordinates,
+  and prevents crowd penalties from choosing backward flow-field hops.
+- Added 12 enemy appearances and crate/ball/barrel appearances to the existing hero selector (cosmetic; ordinary hero physics).
+- Arcade stores play counts/time and applicable scores/course records. Cards rotate multiple records. Not a complete per-seat win/loss history.
+- Arena invincibility/speed/length/mass/stat points; persistent tank skill wired to Players/shared settings; Jet/board cheats.
+- Terra creative mode saves/syncs with the world: free placement, instant mining, damage immunity and double-jump flight.
+- Sand: ice, acid, gunpowder, seeds; two-row palette, density/shape/simulation controls.
+- Jet: banked-coin magnet and starting shield purchases. Wheels: Wind Works, updraft and speed-breakable gates.
+- New assertion suites: roadmap_regressions.js, roadmap_features.js, lan_soccer.js, arcade_smoke.js.
+  LAN test uses a real relay and two browser clients; it does not establish physical-device/firewall behavior.
+- Remaining scope is explicitly retained at the top of TODO.md; no claim of completing the entire historical roadmap.
+
+Validation: all four new assertion suites pass, including all 22 mode launches and actual two-browser LAN soccer.
+Existing fighting.js emitted no browser errors and verified ground-pound damage (24), but logged punch/punch/punch
+and 36 combo damage rather than the old 44 expectation; its wall-clock combo timing needs a dedicated follow-up.

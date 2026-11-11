@@ -48,7 +48,7 @@ var Tanks = {
     xpFor: function(l) { return Math.round(3 * Math.pow(l, 1.55)) + 4; },
     maxHp: function(k) { return 50 + 20 * k.st[1] + 2 * k.lvl; },
     reload: function(k) { return 22 * Math.pow(0.9, k.st[6]) * (TNK_CLASSES[k.cls].rl || 1); },
-    speed: function(k) { return (3.4 + 0.28 * k.st[7] - k.lvl * 0.02) * (TNK_CLASSES[k.cls].speed || 1); },
+    speed: function(k) { return (3.4 + 0.28 * k.st[7] - k.lvl * 0.02) * (TNK_CLASSES[k.cls].speed || 1) * arenaSpeed(k); },
     size: function(k) { return 30 + k.lvl * 0.45; },
 
     reset: function() {
@@ -138,7 +138,7 @@ var Tanks = {
         return best;
     },
     cpu: function(k) {
-        var hpFrac = k.hp / this.maxHp(k), foe = null, fd = 900;
+        var hpFrac = k.hp / this.maxHp(k), foe = null, fd = [0, 500, 700, 900][arenaCheats.tankSkill];
         for (let i = 0; i < this.tanks.length; i++) { var o = this.tanks[i]; if (o !== k && o.alive && o.inv <= 0) { var d = Math.hypot(o.x - k.x, o.y - k.y); if (d < fd) { fd = d; foe = o; } } }
         var mx = 0, my = 0, fire = false, aim = null;
         if (foe && (hpFrac > 0.4 || foe.lvl < k.lvl - 5)) {
@@ -157,7 +157,7 @@ var Tanks = {
         }
         // stay inside the walls
         if (k.x < -TNK.W / 2 + 300) mx = 1; if (k.x > TNK.W / 2 - 300) mx = -1; if (k.y < -TNK.H / 2 + 300) my = 1; if (k.y > TNK.H / 2 - 300) my = -1;
-        if (aim) { var ta = Math.atan2(aim.y - k.y, aim.x - k.x), da = ((ta - k.ang + Math.PI * 3) % (Math.PI * 2)) - Math.PI; k.ang += Math.max(-0.15, Math.min(0.15, da)); }
+        if (aim) { var ta = Math.atan2(aim.y - k.y, aim.x - k.x), da = ((ta - k.ang + Math.PI * 3) % (Math.PI * 2)) - Math.PI; k.ang += Math.max(-0.05 * arenaCheats.tankSkill, Math.min(0.05 * arenaCheats.tankSkill, da)); }
         return [mx, my, fire];
     },
 
@@ -185,7 +185,8 @@ var Tanks = {
     },
 
     hurt: function(k, dmg, by) {
-        if (!k.alive || k.inv > 0) return;
+        if (!k.alive || k.inv > 0 || arenaProtected(k)) return;
+        if (by && by.human === undefined && arenaHuman(k)) dmg *= [0, 0.55, 0.8, 1][arenaCheats.tankSkill];
         k.hp -= dmg; k.hurtT = 240; k.flash = 5;
         if (k.hp <= 0) {
             k.alive = false; k.deadT = 0; k.by = by;
@@ -482,8 +483,9 @@ GameModes.register({
         }
         return true;
     },
-    menuItems: function(items) { items.push({ id: "tk_new", label: "New arena", hint: "" }); },
-    onMenu: function(id) { if (id === "tk_new") { closePause(); Tanks.reset(); return true; } return false; },
+    menuItems: function(items) { items.push({ id: "tk_skill", label: "CPU difficulty: " + ["", "Easy", "Normal", "Hard"][arenaCheats.tankSkill], cycle: true, hint: "Aggression, aim speed and damage" }); items.push({ id: "tk_new", label: "New arena", hint: "" }); },
+    onMenu: function(id, dir) { if (id === "tk_skill") { setTankSkill((arenaCheats.tankSkill - 1 + (dir || 1) + 3) % 3 + 1); return true; }
+        if (id === "tk_new") { closePause(); Tanks.reset(); return true; } return false; },
     onRestart: function() { Tanks.reset(); },
     overSub: function() { return "Best score " + tanksSave.best; }
 });

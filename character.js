@@ -949,7 +949,7 @@ class Character {
 
         // Creative flight: double-tap jump to take off / land (Creative game, or the dev-panel cheat)
         if (this.isPlayer) {
-            var canFly = !this.isZombie && !this.dead && (GameModes.flag("flight", false) || devOpts.flight);
+            var canFly = !this.isZombie && !this.dead && (GameModes.flag("flight", false) || devOpts.flight || (GameModes.current.id === "terra" && TERRA.creative));
             if (!canFly) this.creativeFlying = false;
             else if (freshJumpPress) {
                 if (this.flyTapTimer > 0) {
@@ -1339,10 +1339,10 @@ class Character {
                         if (this.yspeed > 0) {
                             this.jump = false;
                         }
-                        this.yspeed = this.yspeed * this.bounciness;
-                        if (Math.abs(this.yspeed) < this.gravity * 2.2) {
-                            this.yspeed = 0;
-                        }
+                        // Upright characters land and stop at ceilings. Bumpers and stomps above
+                        // have their own explicit bounce; prop restitution must not make heroes pogo.
+                        this.yspeed = 0;
+                        this.jump = false;
                     }
                     stepY = 0;
                 } else {

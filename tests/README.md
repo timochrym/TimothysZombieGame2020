@@ -45,3 +45,10 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
 Each prints its numbers and then the page errors (`[]` = none). See ROADMAP.md, "Your named feedback items".
 
 `lib.js` opens the game headless and restores the native `Object` helpers the engine's `class Object` shadows.
+
+Follow-up assertions (exit nonzero on failure):
+
+    node roadmap_regressions.js
+    node roadmap_features.js
+    node lan_soccer.js
+    node arcade_smoke.js
