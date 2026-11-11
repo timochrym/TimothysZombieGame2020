@@ -173,6 +173,37 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       Bed Brawl maps: DONE (islands, red / blue beds, generators, shop rows, the diamond generator and team spawns
       are pieces; Bed Brawl now reads them from the level, with the old positions as the default).
 
+## Your latest list (word for word below) — shared library first, then each game
+Shared (first, as you asked: "Focus on shared game library assets though first"):
+- [ ] S1 Themes: a light mode and other themes for textures / graphics / panels ("the current ones feel dark").
+- [ ] S2 Character roster: more character options; play as any NPC (every enemy type) or object, in any game.
+- [ ] S3 Fighting: weapon setting (blaster / fists / none) so heroes don't always carry a gun or ammo; melee moves
+      (punch, kick, uppercut, ground pound) instead of only dash.
+- [ ] S4 Ragdoll on hits: a setting (off / small / big) so getting hit hard isn't annoying.
+- [ ] S5 Scores and stats saved for every game, shown in the Arcade.
+- [ ] S6 Cheats for every game, incl. Worm / Blob / Tank Arena (god mode, size, speed, stat points).
+Each game:
+- [ ] Worm Arena: boost doesn't work properly; cheats.   - [ ] Tank Arena: too hard; cheats.   - [ ] Blob Arena: cheats.
+- [ ] Jet Dash: look and behave closer to the genre.     - [ ] Stomp Squad: look / behave more like the genre; the
+      bouncing after jumps is weird.                     - [ ] Infinite Frontier: rebrand (its name borrows another game's).
+- [ ] Wobble Wheels: closer to the genre.                - [ ] Zombie Ball: a real soccer ball; a mode where players only
+      jump and kick a leg out (at least as a character option) — under an original name.
+- [ ] Sand Lab: many more options and customization.     - [ ] Terra: a creative mode for quick testing.
+- [ ] Ragdoll Siege: Birds as the default.               - [ ] Make multiplayer fun; games closer to their genre.
+Your words: "Boost in slither io does not work properly. THeyre should also be cheat settings / Diepo is too hard and has
+not cheats / Agario should have cheats / Jet pack joride needs to look and behave a lot closer to the first game / The
+characters awlays have a gun / ammo is annoying / THeyre should be some fightning methods instead of just dash / Add more
+chcaracter options, I should also be able to play as any npc or object if I desire / The ragdoll when I get hit hard it
+sometimes annoying and brawl stars or smash / Mario mode needs to look more like mario mode and behave like it more, the
+boucing after jumps is weird / Infinite zombie mode needs a rebrand / Happy wheels is nothing like happy wheels / THe soccer
+game should be a soccer ball and called soccer physics and the characters should only be able to jump and kick out there
+leg like the og game. At least make the a chartacter option / Overall connnect the games better to eachother, and also make
+multiplayer fun, save scores and stats when applicable and make all these games work closer to their OG / Sand lab needs a
+lot more options and cuztomization / Terraria has no creative mode and it's hard to test quickly / Ragdoll seige should be
+birds / Overall, add ability to change the textures and graphics a bit. THe current ones feel dark all the time, maybe we
+need a light mode or a nother theme yk." + "Focus on shared game library assests though first"
+(Games stay original: closer in feel and rules, never their names, characters or art.)
+
 ## Mash-ups and shared settings (your request: "each game should share more settings… I want to be able to mash up games")
 - [x] `mashup.js`: per mix-in "game default / on / off" for any game with a world — zombie waves, building, jetpack,
       blaster, dash, extra air jump, word magic (Y), item drops, a pet dog — saved between sessions; ☰ → 🧩 Mash-up.
