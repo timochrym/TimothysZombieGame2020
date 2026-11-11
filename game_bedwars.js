@@ -55,8 +55,9 @@ function bwTeamOf(ch) { return ch.fighterTeam === 1 ? 1 : 0; }
 function bwRes(ch) { return { iron: ch.bwIron || 0, gold: ch.bwGold || 0, diamond: ch.bwDiamond || 0 }; }
 
 function bwSpawnPoint(team, k) {
-    var side = BW_TEAMS[team].side;
-    return [side * (2900 - (k || 0) * 70), 90];
+    // the level's P1 / P2 spawns are the red / blue team's (a Level Studio map can move them); teammates line up inward
+    var lvl = LevelManager.getCurrentLevel() || {}, sp = (team === 0 ? lvl.spawnP1 : lvl.spawnP2) || [BW_TEAMS[team].side * 2900, 90];
+    return [sp[0] - BW_TEAMS[team].side * (k || 0) * 70, Math.max(sp[1], 90)];
 }
 
 function bwRespawn(ch) {
@@ -293,17 +294,22 @@ GameModes.register({
         BW.phase = "fight"; BW.winner = -1; BW.tick = 0; BW.drops = [];
         BW.eggs = [];
         BW.beds = []; BW.gens = []; BW.shops = []; BW.feed = []; BW.up = [{ forge: 0, sharp: 0 }, { forge: 0, sharp: 0 }];
+        // a map made in the Level Studio says where the beds, generators and shop rows go (lvl.bw); else the default
+        var M = lvl && lvl.bw;
         for (let t = 0; t < 2; t++) {
             var side = BW_TEAMS[t].side;
-            var bed = Object.addBox(side * 2380, 25, 160, 50, BW_TEAMS[t].color, { name: BW_TEAMS[t].name + " Bed", texture: t === 0 ? "wool_red" : "wool_blue", kind: "block" });
+            var bp = M && M.beds && M.beds[t] ? M.beds[t] : [side * 2380, 0];
+            var bed = Object.addBox(bp[0], bp[1] + 25, 160, 50, BW_TEAMS[t].color, { name: BW_TEAMS[t].name + " Bed", texture: t === 0 ? "wool_red" : "wool_blue", kind: "block" });
             bed.buildHP = bed.buildMaxHP = 160; bed.isBed = true; bed.bedTeam = t;
             BW.beds[t] = bed;
-            BW.gens[t] = { x: side * 3110, y: 0, team: t, t: 0, kinds: ["iron", "gold"] };
-            BW.shops[t] = BW_SHOP.map(function(it, i) { return { x: side * (2600 + i * 70) - side * 0, y: 0, item: it, team: t }; });
-            // lay the pedestals out between the bed and the spawn
-            for (let i = 0; i < BW.shops[t].length; i++) BW.shops[t][i].x = side * (2500 + i * 75);
+            var gp = M && M.gens && M.gens[t] ? M.gens[t] : [side * 3110, 0];
+            BW.gens[t] = { x: gp[0], y: gp[1], team: t, t: 0, kinds: ["iron", "gold"] };
+            // the pedestals are laid out in a row from the shop-row start, heading toward the island's middle
+            var sp = M && M.shops && M.shops[t] ? M.shops[t] : [side * 2500, 0];
+            BW.shops[t] = BW_SHOP.map(function(it, i) { return { x: sp[0] + side * i * 75, y: sp[1], item: it, team: t }; });
         }
-        BW.gens[2] = { x: 0, y: 0, team: -1, t: 0, kinds: ["diamond"] };
+        var dp = M && M.diamond ? M.diamond : [0, 0];
+        BW.gens[2] = { x: dp[0], y: dp[1], team: -1, t: 0, kinds: ["diamond"] };
         if (typeof rebuildAllObjects === "function") rebuildAllObjects();
     },
 

@@ -21,7 +21,7 @@ var STUDIO_TEXTURES = ["brick", "grass_dirt", "castle_stone", "dojo_wood", "lab_
 var STUDIO_ENEMIES = ["NORMAL", "SLIME", "BAT", "ARCHER", "KNIGHT", "MAGE", "LEAPER", "EXPLODER", "TANK", "SPITTER", "BOSS_KING"];
 var STUDIO_PLAT_ENEMIES = ["walker", "hopper", "flyer", "spiky", "tank"];
 var STUDIO_MODES = [["survival", "Zombie Survival (waves)"], ["creative", "Creative (fly & build)"], ["platform", "Stomp Squad (platformer)"],
-                    ["puzzle", "Crate Lab (puzzle)"], ["race", "Parkour Rush (race)"], ["portal", "Portal Lab"], ["wheels", "Wobble Wheels (course)"], ["brawl", "Brawl (stage)"], ["siege", "Ragdoll Siege (fort)"], ["words", "Word Lab (room)"]];
+                    ["puzzle", "Crate Lab (puzzle)"], ["race", "Parkour Rush (race)"], ["portal", "Portal Lab"], ["wheels", "Wobble Wheels (course)"], ["brawl", "Brawl (stage)"], ["siege", "Ragdoll Siege (fort)"], ["words", "Word Lab (room)"], ["bedwars", "Bed Brawl (map)"]];
 
 // palette: category -> [ [label, icon, template] ]
 var STUDIO_PALETTE = [
@@ -96,7 +96,14 @@ var STUDIO_PALETTE = [
         ["Plank", "🪵", { cat: "layout", type: "crate", name: "Plank", w: 400, h: 28, color: "#b07a3e", texture: "dojo_wood" }],
         ["Stone pillar", "🗿", { cat: "layout", type: "box", name: "Stone", w: 120, h: 400, color: "#6b7280", texture: "castle_stone", kind: "block" }],
         ["TNT barrel", "🧨", { cat: "layout", type: "crate", name: "TNT Barrel", size: 70, explosive: true }]
-    ], ["siege"]]
+    ], ["siege"]],
+    ["Bed Brawl", [
+        ["Island", "🏝", { cat: "layout", type: "box", name: "Island", w: 1400, h: 240, color: "#5d8a3a", texture: "grass_dirt", kind: "block" }],
+        ["Red bed", "🛏", { cat: "bw", kind: "bed", team: 0 }], ["Blue bed", "🛏", { cat: "bw", kind: "bed", team: 1 }],
+        ["Red generator", "⚙", { cat: "bw", kind: "gen", team: 0 }], ["Blue generator", "⚙", { cat: "bw", kind: "gen", team: 1 }],
+        ["Diamond generator", "💎", { cat: "bw", kind: "diamond" }],
+        ["Red shop row", "🛒", { cat: "bw", kind: "shops", team: 0 }], ["Blue shop row", "🛒", { cat: "bw", kind: "shops", team: 1 }]
+    ], ["bedwars"]]
 ];
 
 var Studio = {
@@ -145,6 +152,12 @@ var Studio = {
         if (lvl.brawlSpawns) lvl.brawlSpawns.forEach(function(p) { d.ents.push({ cat: "bspawn", x: p[0], y: p[1] }); });
         if (lvl.siege) { lvl.siege.enemies.forEach(function(z) { d.ents.push({ cat: "enemy", power: z[2] || "NORMAL", x: z[0], y: z[1] + 40 }); }); d.ammo = lvl.siege.ammo.join(", "); }
         if (lvl.task) { d.task = lvl.task; d.par = lvl.par; }
+        if (d.mode === "bedwars") {
+            // beds / generators / shop rows: the level's own, else where Bed Brawl puts them by default
+            var M = lvl.bw || { beds: [[-2380, 0], [2380, 0]], gens: [[-3110, 0], [3110, 0]], shops: [[-2500, 0], [2500, 0]], diamond: [0, 0] };
+            for (let t = 0; t < 2; t++) { d.ents.push({ cat: "bw", kind: "bed", team: t, x: M.beds[t][0], y: M.beds[t][1] }, { cat: "bw", kind: "gen", team: t, x: M.gens[t][0], y: M.gens[t][1] }, { cat: "bw", kind: "shops", team: t, x: M.shops[t][0], y: M.shops[t][1] }); }
+            d.ents.push({ cat: "bw", kind: "diamond", x: M.diamond[0], y: M.diamond[1] });
+        }
         if (lvl.spawnP1) d.ents.push({ cat: "spawn", player: 1, x: lvl.spawnP1[0], y: lvl.spawnP1[1] });
         if (lvl.spawnP2) d.ents.push({ cat: "spawn", player: 2, x: lvl.spawnP2[0], y: lvl.spawnP2[1] });
         return this.withIds(d);
@@ -201,6 +214,11 @@ var Studio = {
             // the slingshot needs its stone base
             if (typeof SIEGE_ANCHOR !== "undefined" && !def.layout.some(function(o) { return Math.abs(o.x - SIEGE_ANCHOR.x) < 120 && o.type === "box" && o.name === "Stone"; }))
                 def.layout.push({ type: "box", name: "Stone", x: SIEGE_ANCHOR.x, y: 100, w: 170, h: 200, color: "#6b7280", texture: "castle_stone", kind: "block" });
+        }
+        if (doc.mode === "bedwars") {
+            var bwm = { beds: [], gens: [], shops: [] };
+            doc.ents.forEach(function(e) { if (e.cat !== "bw") return; if (e.kind === "diamond") bwm.diamond = [e.x, e.y]; else bwm[e.kind === "bed" ? "beds" : e.kind === "gen" ? "gens" : "shops"][e.team || 0] = [e.x, e.y]; });
+            def.bw = bwm;
         }
         if (doc.mode === "words") { def.task = doc.task || "Reach the star!"; def.par = Number(doc.par) || 2; }
         if (doc.mode === "wheels") {
@@ -422,6 +440,7 @@ var Studio = {
         if (e.cat === "spawn") return { x: e.x, y: e.y, w: 70, h: 90 };
         if (e.cat === "wfinish") return { x: e.x, y: e.y + 150, w: 60, h: 300 };
         if (e.cat === "bspawn") return { x: e.x, y: e.y, w: 70, h: 90 };
+        if (e.cat === "bw") return e.kind === "bed" ? { x: e.x, y: e.y + 25, w: 160, h: 50 } : e.kind === "shops" ? { x: e.x + (e.team ? -1 : 1) * 300, y: e.y + 13, w: 680, h: 26 } : { x: e.x, y: e.y + 8, w: 100, h: 16 };
         if (e.cat === "wtrap") return e.kind === "log" ? { x: e.x, y: e.y, w: 120, h: 120 } : e.kind === "spikes" ? { x: e.x, y: e.y + 15, w: e.w || 200, h: 30 } : { x: e.x, y: e.y + 12, w: 50, h: 24 };
         switch (t) {
             case "plate": return { x: e.x, y: e.y - 10, w: e.w || 160, h: 20 };
@@ -956,6 +975,11 @@ var Studio = {
                 var def = (typeof PowerUpDefs !== "undefined" && PowerUpDefs[e.power]) || { icon: "?", color: "#fff" };
                 ctx.fillStyle = def.color; ctx.beginPath(); ctx.arc(sx, sy, 28 * z + 4, 0, 7); ctx.fill();
                 ctx.fillStyle = "#0a0f16"; ctx.font = "800 " + Math.round(22 * z + 8) + "px " + UI_FONT; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(def.icon || "?", sx, sy + 1);
+            } else if (e.cat === "bw") {
+                var tc = e.team === 1 ? "#3b82f6" : e.team === 0 ? "#ef4444" : "#22d3ee", bb = self.bbox(e);
+                ctx.fillStyle = tc; ctx.globalAlpha = 0.75; ctx.fillRect(wsx(bb.x - bb.w / 2), wsy(bb.y + bb.h / 2), bb.w * z, bb.h * z); ctx.globalAlpha = 1;
+                ctx.fillStyle = "#fff"; ctx.font = "900 " + Math.round(14 * z + 8) + "px " + UI_FONT; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                ctx.fillText(e.kind === "bed" ? "🛏 BED" : e.kind === "shops" ? "🛒 SHOPS →" : e.kind === "diamond" ? "💎 GEN" : "⚙ GEN", wsx(bb.x), wsy(bb.y));
             } else if (e.cat === "bspawn") {
                 ctx.fillStyle = "#facc15"; ctx.globalAlpha = 0.8; ctx.fillRect(sx - 35 * z, sy - 45 * z, 70 * z, 90 * z); ctx.globalAlpha = 1;
                 ctx.fillStyle = "#0a0f16"; ctx.font = "900 " + Math.round(24 * z + 8) + "px " + UI_FONT; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("🥊", sx, sy);

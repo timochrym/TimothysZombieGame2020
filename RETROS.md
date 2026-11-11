@@ -6,6 +6,22 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Level Studio: Bed Brawl maps (step 3 done)
+
+**Shipped:** Bed Brawl's beds, generators, shop rows and spawns were fixed numbers in its code; it now reads them from
+the level (`bw` + the P1 / P2 spawns as the red / blue team's), falling back to the old positions. Rules "Bed Brawl
+(map)" add pieces for islands, red / blue beds, generators and shop rows, and the diamond generator. Sky Islands opens
+with all of them placed where the game puts them. With that, all of the "connect the games and the tools" plan is in:
+per-game settings, a game-aware inspector, and the Studio building Wobble Wheels courses, Brawl stages, Siege forts,
+Word Lab rooms and Bed Brawl maps.
+
+**Measured (`tests/studio_bedbrawl.js`):** Sky Islands opened with 2 beds, 2 generators, 2 shop rows and the diamond
+generator; moving the red bed to -2000 and the red spawn to -2700 play-tested with exactly those (blue bed 2380, all
+10 shops); the built-in map is unchanged (P1 at -2900, beds ±2380, generators ±3110 / 0) and the fireball and bridge
+egg tests still pass; no errors.
+
+---
+
 ## Inspector: Terra tiles
 
 **Shipped:** in Terra an Edit-mode click picks the tile under the pointer: the card shows what it is (and the pickaxe
