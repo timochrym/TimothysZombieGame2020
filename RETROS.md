@@ -6,6 +6,19 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Word Lab: pets
+
+**Shipped:** "dog", "cat" and "bird" (and puppy, kitten, parrot…) make a pet that follows you: dogs and cats trot after
+you and hop when blocked or when you climb; the dog chases and bites monsters that come within reach; the bird hovers
+beside your head. They're light invisible crates underneath (so they walk on the ground and can be grabbed or stood
+on), drawn on top as a rounded animal with ears, eyes, trotting legs and a wagging tail; size and colour words work.
+
+**Measured (`tests/word_pets.js`):** after a 2.5 s sprint the dog was 75 px behind, the cat 105, the bird 72 px beside
+the hero's head; a zombie spawned 200 px from the dog went 78 → 0 HP; no errors. **Went wrong:** the first drawing
+sat behind the crate body (only the tail showed), so the pets are now drawn in front and the crate is invisible.
+
+---
+
 ## Word Lab: rooms 6-8
 
 **Shipped:** three rooms built around the new words — Low Door (the star is behind a 60 px gap: "shrink"), The Tower

@@ -82,6 +82,90 @@ wordDef("lightning thunder", function(x, y) { WK2.power("CHAIN", x, y); }, "item
 wordDef("magnet", function(x, y) { WK2.power("MAGNET", x, y); }, "item");
 wordDef("nuke explosion blast", function(x, y) { Components.blowUp(x, y, "#ff6b00", 26, 300, -40, null); screenShake = 10; }, "item");
 wordDef("jetpack rocket wings", function(x, y) { jetpackEnabled = true; characters.forEach(function(c) { if (c.isPlayer) c.fuel = c.maxFuel || 100; }); Components.addFloatingText("JETPACK ON! (Space)", redGuy.x, redGuy.y + 100, "#fde047", 20); }, "item");
+// pets follow you around: a dog (lunges at monsters), a cat (quick), a bird (flies beside you). They're light crates
+// underneath, so they walk on the ground, can be grabbed, and you can even stand on one.
+function wordPet(kind) {
+    return function(x, y, a) {
+        var col = a.col || ({ dog: "#b45309", cat: "#71717a", bird: "#38bdf8" })[kind];
+        var size = Math.round((kind === "bird" ? 44 : 60) * a.s);
+        var c = Object.addCrate(x, y + size / 2, size, "rgba(0,0,0,0)", { name: kind === "dog" ? "Dog" : kind === "cat" ? "Cat" : "Bird", texture: null });
+        c.weight = 0.8; c.pet = { kind: kind, owner: redGuy, t: 0, bite: 0, col: col };      // the crate is invisible: the pet is drawn on top
+        if (kind === "bird") { c.gravityMult = 0; c.gravity = 0; }
+    };
+}
+wordDef("dog puppy hound wolf", wordPet("dog"), "pet");
+wordDef("cat kitten kitty", wordPet("cat"), "pet");
+wordDef("bird parrot pigeon duck owl", wordPet("bird"), "pet");
+
+function wordPetsUpdate() {
+    for (let i = 0; i < movingObjects.length; i++) {
+        var o = movingObjects[i], P = o.pet;
+        if (!P || o.dead || o.heldBy) continue;
+        var h = P.owner && !P.owner.dead ? P.owner : redGuy;
+        if (!h) continue;
+        P.t++;
+        var dx = h.x - o.x - (P.kind === "bird" ? 70 : 0), dy = h.y - o.y, sp = P.kind === "cat" ? 9 : 7;
+        if (P.kind === "bird") {
+            // hover beside the hero's head, bobbing
+            var tx = dx, ty = dy + 90 + Math.sin(P.t * 0.08) * 14;
+            o.xspeed += Math.max(-1, Math.min(1, tx * 0.02)) - o.xspeed * 0.08;
+            o.yspeed += Math.max(-1, Math.min(1, ty * 0.02)) - o.yspeed * 0.08;
+            continue;
+        }
+        // dog: chase a monster that comes close
+        var target = null;
+        if (P.kind === "dog") for (let z = 0; z < zombies.length; z++) { var zz = zombies[z]; if (!zz.dead && Math.abs(zz.x - o.x) < 320 && Math.abs(zz.y - o.y) < 200) { target = zz; break; } }
+        if (target) { dx = target.x - o.x; dy = target.y - o.y; }
+        if (Math.abs(dx) > (target ? 20 : 110)) o.xspeed = Math.sign(dx) * sp;
+        else if (o.onGround) o.xspeed *= 0.7;
+        // hop when blocked or when the hero is above
+        var stuck = Math.abs(dx) > 120 && Math.abs(o.x - (P.lastX || o.x)) < 0.5;
+        if (o.onGround && (stuck || dy > 140)) o.yspeed = 15;
+        P.lastX = o.x;
+        if (target && P.bite <= 0 && Math.abs(target.x - o.x) < 70 && Math.abs(target.y - o.y) < 90) {
+            target.takeDamage(-18, Math.sign(target.x - o.x) * 9, 6, h);
+            Components.addFloatingText("WOOF!", o.x, o.y + 60, "#fde68a", 16);
+            P.bite = 40;
+        }
+        if (P.bite > 0) P.bite--;
+    }
+}
+
+function wordPetsDraw() {
+    var k = cameraScaleX;
+    for (let i = 0; i < movingObjects.length; i++) {
+        var o = movingObjects[i], P = o.pet;
+        if (!P || o.dead) continue;
+        var sx = wsx(o.x), sy = wsy(o.y), r = o.w / 2 * k, face = o.xspeed < -0.5 ? -1 : 1;
+        ctx.save();
+        ctx.fillStyle = P.col; ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 2;
+        // body: a rounded loaf (dog / cat) or a round bird, with little legs that trot
+        if (P.kind === "bird") { ctx.beginPath(); ctx.ellipse(sx, sy, r, r * 0.8, 0, 0, 7); ctx.fill(); ctx.stroke(); }
+        else {
+            var step = Math.abs(o.xspeed) > 1 ? Math.sin(P.t * 0.6) * r * 0.25 : 0;
+            ctx.fillRect(sx - r * 0.7 + step, sy + r * 0.5, r * 0.25, r * 0.5); ctx.fillRect(sx + r * 0.45 - step, sy + r * 0.5, r * 0.25, r * 0.5);
+            ctx.beginPath(); ctx.ellipse(sx, sy + r * 0.1, r, r * 0.65, 0, 0, 7); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.arc(sx + face * r * 0.65, sy - r * 0.35, r * 0.5, 0, 7); ctx.fill(); ctx.stroke();       // head
+        }
+        if (P.kind === "bird") {
+            var flap = Math.sin(P.t * 0.5) * r * 0.6;
+            ctx.beginPath(); ctx.moveTo(sx - face * r * 0.2, sy); ctx.lineTo(sx - face * r * 1.2, sy - flap); ctx.lineTo(sx - face * r * 0.2, sy + r * 0.3); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = "#f59e0b"; ctx.beginPath(); ctx.moveTo(sx + face * r, sy - r * 0.2); ctx.lineTo(sx + face * r * 1.5, sy); ctx.lineTo(sx + face * r, sy + r * 0.2); ctx.fill();
+        } else {
+            // ears
+            var ear = P.kind === "cat" ? [[0.5, -1.25], [0.85, -0.75], [0.3, -0.75]] : [[0.95, -0.35], [1.1, -0.95], [0.6, -0.8]];
+            ctx.beginPath(); ctx.moveTo(sx + face * r * ear[2][0], sy + r * ear[2][1]); ctx.lineTo(sx + face * r * ear[0][0], sy + r * ear[0][1]); ctx.lineTo(sx + face * r * ear[1][0], sy + r * ear[1][1]); ctx.closePath(); ctx.fill(); ctx.stroke();
+            // wagging tail
+            var wag = Math.sin(P.t * (P.kind === "dog" ? 0.5 : 0.15)) * r * 0.4;
+            ctx.lineWidth = Math.max(3, r * 0.22); ctx.strokeStyle = P.col; ctx.beginPath(); ctx.moveTo(sx - face * r, sy - r * 0.3); ctx.quadraticCurveTo(sx - face * r * 1.5, sy - r * 0.8 + wag, sx - face * r * 1.4, sy - r * 1.2 + wag); ctx.stroke();
+        }
+        // eye
+        ctx.fillStyle = "#0a0f16"; ctx.beginPath(); ctx.arc(sx + face * r * (P.kind === "bird" ? 0.45 : 0.8), sy - r * (P.kind === "bird" ? 0.2 : 0.45), Math.max(2, r * 0.1), 0, 7); ctx.fill();
+        if (P.kind !== "bird") { ctx.beginPath(); ctx.arc(sx + face * r * 1.12, sy - r * 0.3, Math.max(2, r * 0.1), 0, 7); ctx.fill(); }   // nose
+        ctx.restore();
+    }
+}
+
 // verbs change your hero instead of making a thing
 var WORD_VERBS = {};
 function wordVerb(names, fn) { names.split(" ").forEach(function(n) { WORD_VERBS[n] = fn; }); }
@@ -153,7 +237,7 @@ var WordLab = {
         }
         if (!p.noun) {
             var guess = p.unknown[0] || text;
-            this.say("I don't know \"" + guess + "\" yet — try a crate, stairs, trampoline, balloon, rope, tnt, car, knight… or a verb: fly, grow, shrink", "#fca5a5");
+            this.say("I don't know \"" + guess + "\" yet — try a crate, stairs, trampoline, balloon, rope, tnt, car, knight, dog… or a verb: fly, grow, shrink", "#fca5a5");
             return;
         }
         var m = Components.getMouseWorldPos(), x = m[0], y = m[1];
@@ -228,6 +312,7 @@ GameModes.register({
     },
 
     update: function() {
+        wordPetsUpdate();
         // balloons rise gently (a steady climb you can ride), not like a rocket
         for (let i = 0; i < movingObjects.length; i++) { var bo = movingObjects[i]; if (bo.gravityMult < 0 && bo.yspeed > 3.2) bo.yspeed = 3.2; }
         // holding a balloon (G) lifts you; let go to drop
@@ -262,6 +347,8 @@ GameModes.register({
         if (ch.health <= 0) Gadgets.killPlayer(ch, "OUCH!");
         return true;
     },
+
+    drawFront: function() { wordPetsDraw(); },
 
     drawHUD: function() {
         var lvl = LevelManager.getCurrentLevel(), n = WORD_ROOMS.indexOf(LevelManager.currentLevelKey), best = wordsSave.best[LevelManager.currentLevelKey] || 0;
