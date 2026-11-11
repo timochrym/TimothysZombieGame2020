@@ -175,7 +175,7 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 
 ## Your latest list (word for word below) — shared library first, then each game
 Shared (first, as you asked: "Focus on shared game library assets though first"):
-- [ ] S1 Themes: a light mode and other themes for textures / graphics / panels ("the current ones feel dark").
+- [x] S1 Themes: a light mode and other themes for textures / graphics / panels ("the current ones feel dark"). → Pause → Settings → Theme / Brightness, or the panel's 🎨 Shared box. Check: `tests/themes.js`.
 - [ ] S2 Character roster: more character options; play as any NPC (every enemy type) or object, in any game.
 - [ ] S3 Fighting: weapon setting (blaster / fists / none) so heroes don't always carry a gun or ammo; melee moves
       (punch, kick, uppercut, ground pound) instead of only dash.

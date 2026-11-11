@@ -666,7 +666,7 @@ function uiPanel(x, y, pw, ph, accent, alpha) {
     ctx.fillStyle = "rgba(0,0,0,0.35)";
     uiRoundRect(x + 3, y + 5, pw, ph, 14);
     ctx.fill();
-    ctx.fillStyle = "rgba(9, 14, 22, " + (alpha || 0.86) + ")";
+    ctx.fillStyle = Theme.panel(alpha || 0.86);
     uiRoundRect(x, y, pw, ph, 14);
     ctx.fill();
     ctx.lineWidth = 2;
@@ -1194,11 +1194,13 @@ function togglePause() {
     else openPause(false);
 }
 
-var PAUSE_CYCLE_IDS = ["level", "skin0", "skin1", "bopp", "blvl", "bstk", "bstage", "svol", "sshake"];
+var PAUSE_CYCLE_IDS = ["level", "skin0", "skin1", "bopp", "blvl", "bstk", "bstage", "svol", "sshake", "stheme", "sbright", "sspeed", "sric"];
 
 function pauseItems() {
     if (pauseSub === "settings") {
         return [
+            { id: "stheme", label: "Theme:  ◀  " + Theme.c.label + "  ▶", hint: "Sky, hills, panels and backgrounds in every game" },
+            { id: "sbright", label: "Brightness:  ◀  " + Math.round(settings.bright * 100) + "%  ▶", hint: "Lighter or darker screen, every game" },
             { id: "svol", label: "Sound volume:  ◀  " + (settings.volume <= 0 ? "OFF" : Math.round(settings.volume * 100) + "%") + "  ▶", hint: "◀ ▶ adjust" },
             { id: "sshake", label: "Screen shake:  ◀  " + Math.round(settings.shake * 100) + "%  ▶", hint: "◀ ▶ adjust (0% = off)" },
             { id: "shit", label: "Hit-stop on big hits:  " + (settings.hitStop ? "ON" : "OFF"), hint: "Freezes a few frames on heavy impacts" },
@@ -1245,7 +1247,7 @@ function pauseItems() {
         items.push({ id: "level", label: "Level:  ◀  " + (lvlName ? lvlName.name : "?") + "  ▶", hint: "◀ ▶ choose, Enter loads it (restarts the run)" });
         if (!pauseFromGameOver) items.push({ id: "restart", label: "Restart run", hint: "Asks for confirmation" });
     }
-    items.push({ id: "settings", label: "Settings  ▸", hint: "Sound, screen shake, hit-stop, graphics, help" });
+    items.push({ id: "settings", label: "Settings  ▸", hint: "Theme, brightness, sound, screen shake, graphics, help" });
     if (typeof Studio !== "undefined" && Studio.playtesting) items.unshift({ id: "studio_back", label: "◀ Back to Level Studio", hint: "Your level is unchanged ( ` )" });
     items.push({ id: "dev", label: "🛠 Level Studio (editor)", hint: "Same as pressing B" });
     items.push({ id: "cheats", label: "Cheats & tuning panel", hint: "God mode, sliders, spawning" });
@@ -1258,6 +1260,8 @@ function pauseActivate(id, dir) {
     if (id === "settings") { pauseSub = "settings"; pauseIndex = 0; return; }
     if (id === "back") { pauseSub = null; pauseIndex = 0; return; }
     if (id === "svol") { SFX.setVolume(Math.round((settings.volume + (dir || 1) * 0.1) * 10) / 10); if (settings.volume > 1) SFX.setVolume(1); return; }
+    if (id === "stheme") { Theme.cycle(dir || 1); return; }
+    if (id === "sbright") { Theme.stepBright(dir || 1); return; }
     if (id === "sshake") { settings.shake = Math.max(0, Math.min(1, Math.round((settings.shake + (dir || 1) * 0.25) * 4) / 4)); saveSettings(); return; }
     if (id === "sglow") { settings.glow = !settings.glow; glowAutoDisabled = false; saveSettings(); return; }
     if (id === "sspeed") { var sl = ["normal", "fast", "turbo"]; settings.heroSpeed = sl[(sl.indexOf(settings.heroSpeed) + (dir || 1) + 3) % 3]; saveSettings(); return; }

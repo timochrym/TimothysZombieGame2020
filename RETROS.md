@@ -6,6 +6,26 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Themes: Day (light), Sunset, Meadow, Retro + a brightness setting for every game
+
+**Asked:** "add ability to change the textures and graphics a bit. The current ones feel dark all the time, maybe we need a
+light mode or another theme." (shared-library item S1, done first as asked)
+**Shipped:** `theme.js`, one palette shared by every game. Five themes: 🌙 Night (the old look, unchanged),
+☀️ Day (blue sky, green hills, lighter panels), 🌅 Sunset, 🌿 Meadow (brightest) and 📼 Retro (warm film tint). A theme
+changes the sky, far mountains, hills, cavern and interior walls behind every world game; the backing of card/table/
+full-screen games; the Worm and Tank arena floors (light grid in Day/Meadow); the in-game panels; and the Cheats panel
+colours. **Brightness** (85%–150%) lifts the whole screen in every game, including Sand Lab and Terra, which paint their
+own pictures. Both live in Pause → Settings (◀ ▶) and in a new "🎨 Shared by every game" box on the panel's Game tab,
+which now shows in full-screen games too (it used to be inside the mash-up box, hidden there). Saved with your settings.
+**Went well:** the dark look came from about a dozen hard-coded colours; routing them through one `Theme.c` object was
+small. Sky-strip brightness in the test: Survival 48 (Night) → 133 (Day) → 154 (Meadow); Worm arena 24 → 209.
+**Went wrong:** the first test read pixels from the game canvas, which file:// textures "taint", so it now measures a
+screenshot instead. The mash-up test assumed the CPU row was the first shared row; it now finds it by name.
+**Left:** characters, blocks and HUD text keep their colours in every theme (they read fine on light skies in the
+screenshots, but nobody has played a full run in Day yet). Sand Lab's black canvas only follows Brightness, not the theme.
+
+---
+
 ## Mash-ups: mix any game's parts into another
 
 **Asked:** "each game should share more settings and options among each other — I want to be able to mash up games."

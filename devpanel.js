@@ -328,14 +328,14 @@ var DevUI = {
             rowsEl.querySelectorAll("[data-mash]").forEach(function(el) { el.addEventListener("change", function() { Mashup.set(el.dataset.mash, el.value); DevUI.toast(el.options[el.selectedIndex].text.replace(/\s*\(.*/, "") + ": " + MASHUP_MIX.find(function(m) { return m[0] === el.dataset.mash; })[1]); DevUI.syncMashup(); }); });
             var sh = document.getElementById("dp-shared-rows");
             sh.innerHTML = SHARED_TUNABLES.map(function(r, i) { return '<div class="dp-row"><label style="width:150px">' + r.label + '</label><select class="dp-select" data-shared="' + i + '">' + r.options.map(function(o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join("") + '</select></div>'; }).join("");
-            sh.querySelectorAll("[data-shared]").forEach(function(el) { el.addEventListener("change", function() { SHARED_TUNABLES[Number(el.dataset.shared)].set(Number(el.value)); DevUI.toast("CPU skill set for every game"); }); });
+            sh.querySelectorAll("[data-shared]").forEach(function(el) { el.addEventListener("change", function() { var row = SHARED_TUNABLES[Number(el.dataset.shared)]; row.set(el.value); DevUI.toast(row.label.replace(" (every game)", "") + " set for every game"); }); });
         }
         rowsEl.querySelectorAll("[data-mash]").forEach(function(el) {
             var id = el.dataset.mash, def = Mashup.gameDefault(id);
             el.options[0].text = "Game default (" + (def ? "on" : "off") + ")";
             if (document.activeElement !== el) el.value = Mashup.mix[id] === undefined ? "default" : (Mashup.mix[id] ? "on" : "off");
         });
-        document.querySelectorAll("#dp-shared-rows [data-shared]").forEach(function(el) { if (document.activeElement !== el) el.value = SHARED_TUNABLES[Number(el.dataset.shared)].get(); });
+        document.querySelectorAll("#dp-shared-rows [data-shared]").forEach(function(el) { if (document.activeElement !== el) el.value = String(SHARED_TUNABLES[Number(el.dataset.shared)].get()); });
     },
 
     // the Game tab follows the game that's on: its own settings first, shared rows only where they do something
@@ -851,7 +851,9 @@ SummonManager.buildUI = function() {
             <div class="dp-section" id="dp-mash">
                 <div class="dp-title"><span>🧩 Mash-up — mix in from other games</span></div>
                 <div id="dp-mash-rows"></div>
-                <div class="dp-title" style="margin-top:10px"><span>Shared by every game</span></div>
+            </div>
+            <div class="dp-section" id="dp-shared">
+                <div class="dp-title"><span>🎨 Shared by every game</span></div>
                 <div id="dp-shared-rows"></div>
             </div>
             <div class="dp-section">

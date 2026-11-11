@@ -254,7 +254,7 @@ var Cells = {
         if (span) z = Math.min(z, Math.min(cssW, cssH) * 0.8 / (span + 400));
         this.cam.x += (tx - this.cam.x) * 0.12; this.cam.y += (ty - this.cam.y) * 0.12; this.cam.z += (z - this.cam.z) * 0.05;
         var c = this.cam, Z = c.z;
-        ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
         // arena + grid
         var tl = this.toScreen(-CEL.W / 2, -CEL.H / 2), br = this.toScreen(CEL.W / 2, CEL.H / 2);
         ctx.fillStyle = "#f1f5f9"; ctx.fillRect(tl[0], tl[1], br[0] - tl[0], br[1] - tl[1]);

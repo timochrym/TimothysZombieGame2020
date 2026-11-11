@@ -162,7 +162,7 @@ var Flick = {
 
     draw: function() {
         var s = this.scale(), W = this.PW / 2, H = this.PH / 2, G = this.GOAL / 2;
-        ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
         // table edge + felt pitch with mowing stripes
         var tl = this.toScreen(-W - 50, -H - 30), br = this.toScreen(W + 50, H + 30);
         ctx.fillStyle = "#5b3a1e"; ctx.fillRect(tl[0] - 14, tl[1] - 14, br[0] - tl[0] + 28, br[1] - tl[1] + 28);
@@ -292,7 +292,7 @@ var Four = {
     },
     draw: function() {
         var G = this.geo(), cs = G.cs;
-        ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
         // hover counter
         if (!this.over && !this.drop && this.human(this.turn)) { ctx.fillStyle = TABLE_COLORS[this.turn]; ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.arc(G.x0 + (this.col + 0.5) * cs, G.y0 - cs * 0.5, cs * 0.38, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
         // counters behind the frame
@@ -391,7 +391,7 @@ var Hockey = {
     },
     draw: function() {
         var s = this.scale(), W = this.RW / 2, H = this.RH / 2, G = this.GOAL / 2;
-        ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
         var a = this.toScreen(-W, -H), b = this.toScreen(W, H);
         ctx.fillStyle = "#475569"; ctx.fillRect(a[0] - 16, a[1] - 16, b[0] - a[0] + 32, b[1] - a[1] + 32);
         ctx.fillStyle = "#e0f2fe"; ctx.fillRect(a[0], a[1], b[0] - a[0], b[1] - a[1]);
@@ -679,7 +679,7 @@ var Pool = {
     },
     draw: function() {
         var s = this.scale(), W = this.PW / 2, H = this.PH / 2, self = this;
-        ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
         var a = this.toScreen(-W - 34, -H - 34), z = this.toScreen(W + 34, H + 34);
         ctx.fillStyle = "#78350f"; ctx.fillRect(a[0], a[1], z[0] - a[0], z[1] - a[1]);
         var a2 = this.toScreen(-W, -H), z2 = this.toScreen(W, H);
@@ -760,7 +760,7 @@ var Darts = {
     },
     draw: function() {
         var G = this.geo(), s = G.s, R = this.R, self = this;
-        ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
         var rings = [[1.04, "#111827"], [1, "#ca8a04"], [0.9, "#b91c1c"], [0.75, "#f5f5f4"], [0.5, "#15803d"], [0.3, "#f5f5f4"], [0.12, "#15803d"], [0.05, "#b91c1c"]];
         rings.forEach(function(r) { ctx.fillStyle = r[1]; ctx.beginPath(); ctx.arc(G.cx, G.cy, R * r[0] * s, 0, 7); ctx.fill(); });
         ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = 1;
@@ -859,7 +859,7 @@ var WordHunt = {
     },
     draw: function() {
         var G = this.geo(), cs = G.cs, self = this;
-        ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
         ctx.fillStyle = "#fef3c7"; ctx.fillRect(G.x0 - 8, G.y0 - 8, cs * this.N + 16, cs * this.N + 16);
         var cen = function(p) { return [G.x0 + (p[0] + 0.5) * cs, G.y0 + (p[1] + 0.5) * cs]; };
         var stroke = function(a, b, col, alpha) { var p = cen(a), q = cen(b); ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = col; ctx.lineCap = "round"; ctx.lineWidth = cs * 0.72; ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); ctx.restore(); };

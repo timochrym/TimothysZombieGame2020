@@ -25,7 +25,7 @@ const { open } = require('./lib');
   out.buildMode = await ev(() => !!(redGuy && redGuy.buildMode));
 
   // shared CPU skill reaches every game's config
-  await ev(() => SHARED_TUNABLES[0].set(3));
+  await ev(() => SHARED_TUNABLES.find(r => /CPU/.test(r.label)).set(3));
   out.cpu = await ev(() => [brawlCfg.cpuLevel, sportCfg.level, tableCfg.level]);
   // full-screen games are left alone, and "default" puts things back
   await ev(() => GameModes.launch('table')); await p.waitForTimeout(500);

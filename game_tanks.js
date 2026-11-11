@@ -313,12 +313,12 @@ var Tanks = {
         if (span) z = Math.min(z, Math.min(cssW, cssH) * 0.8 / (span + 500));
         this.cam.x += (tx - this.cam.x) * 0.15; this.cam.y += (ty - this.cam.y) * 0.15; this.cam.z += (Math.max(0.3, z) - this.cam.z) * 0.05;
         var c = this.cam, Z = c.z;
-        ctx.fillStyle = "#0b1020"; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
         var tl = this.toScreen(-TNK.W / 2, -TNK.H / 2), br = this.toScreen(TNK.W / 2, TNK.H / 2);
-        ctx.fillStyle = "#121a30"; ctx.fillRect(tl[0], tl[1], br[0] - tl[0], br[1] - tl[1]);
+        ctx.fillStyle = Theme.floor("#121a30"); ctx.fillRect(tl[0], tl[1], br[0] - tl[0], br[1] - tl[1]);
         var mid = this.toScreen(0, 0);
         ctx.fillStyle = "rgba(129,140,248,0.06)"; ctx.beginPath(); ctx.arc(mid[0], mid[1], 750 * Z, 0, 7); ctx.fill();
-        ctx.strokeStyle = "#1c2744"; ctx.lineWidth = 1; ctx.beginPath();
+        ctx.strokeStyle = Theme.grid("#1c2744"); ctx.lineWidth = 1; ctx.beginPath();
         var g = 40, x0 = Math.max(-TNK.W / 2, Math.floor((c.x - cssW / 2 / Z) / g) * g), x1 = Math.min(TNK.W / 2, c.x + cssW / 2 / Z), y0 = Math.max(-TNK.H / 2, Math.floor((c.y - cssH / 2 / Z) / g) * g), y1 = Math.min(TNK.H / 2, c.y + cssH / 2 / Z);
         for (let x = x0; x <= x1; x += g) { var a = this.toScreen(x, y0), b = this.toScreen(x, y1); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
         for (let y = y0; y <= y1; y += g) { var a2 = this.toScreen(x0, y), b2 = this.toScreen(x1, y); ctx.moveTo(a2[0], a2[1]); ctx.lineTo(b2[0], b2[1]); }

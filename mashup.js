@@ -94,9 +94,15 @@ Mashup.load();
 
 // settings every game shares (shown on every game's Game tab)
 var SHARED_TUNABLES = [
+    { label: "Theme (every game)", type: "choice", options: THEME_ORDER.map(function(k) { return [k, THEMES[k].label]; }),
+      get: function() { return Theme.id; }, set: function(v) { Theme.set(v); } },
+    { label: "Brightness (every game)", type: "choice", options: BRIGHT_STEPS.map(function(b) { return [b, Math.round(b * 100) + "%"]; }),
+      get: function() { var b = settings.bright, best = BRIGHT_STEPS[1]; BRIGHT_STEPS.forEach(function(x) { if (Math.abs(x - b) < Math.abs(best - b)) best = x; }); return best; },
+      set: function(v) { Theme.setBright(Number(v)); } },
     { label: "CPU skill (every game)", type: "choice", options: [[1, "Easy"], [2, "Normal"], [3, "Hard"]],
       get: function() { return typeof brawlCfg !== "undefined" ? brawlCfg.cpuLevel : 2; },
       set: function(v) {
+          v = Number(v);
           if (typeof brawlCfg !== "undefined") { brawlCfg.cpuLevel = v; if (typeof saveBrawlCfg === "function") saveBrawlCfg(); }
           if (typeof sportCfg !== "undefined") sportCfg.level = v;
           if (typeof tableCfg !== "undefined") { tableCfg.level = v; if (typeof saveTable === "function") saveTable(); }

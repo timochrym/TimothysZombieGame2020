@@ -288,7 +288,7 @@ var Rent = {
         return [G.x0 + x * c, G.y0 + y * c, c, c];
     },
     draw: function() {
-        ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
         var G = this.geo();
         ctx.fillStyle = "#14532d"; ctx.fillRect(G.x0, G.y0, G.size, G.size);
         ctx.fillStyle = "#dcfce7"; ctx.fillRect(G.x0 + G.cell, G.y0 + G.cell, G.size - 2 * G.cell, G.size - 2 * G.cell);

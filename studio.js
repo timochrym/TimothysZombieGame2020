@@ -915,7 +915,7 @@ var Studio = {
         this.applyCamera();
         ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
         ctx.clearRect(0, 0, cssW, cssH);
-        ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
         try { if (typeof BackgroundMosaic !== "undefined") BackgroundMosaic.draw(ctx); } catch (e) {}
         this.drawGrid();
         for (let i = 0; i < staticObjects.length; i++) { try { staticObjects[i].staticObject(); } catch (e) {} }

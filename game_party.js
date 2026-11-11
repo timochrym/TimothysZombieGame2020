@@ -183,7 +183,7 @@ var Party = {
 
     // ---------------- drawing
     draw: function() {
-        ctx.fillStyle = "#0f172a"; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
         if (this.phase === "mini") { this.drawMini(); return; }
         // fit between the message bar (top) and the score panels (bottom)
         var W = Math.min(cssW - 60, (cssH - 250) * 1.5), H = W / 1.5, cx = cssW / 2, cy = 105 + 30 + H / 2;

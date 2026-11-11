@@ -159,9 +159,9 @@ class BackgroundMosaic {
         // Layer 1: Soft Distant Mountain Range (800x360 repeating strip, muted twilight tones)
         this.layers.farMountains = TextureManager.createTileCanvas(800, 360, function(g, w, h) {
             var peaks = [
-                { cx: 160, w: 380, topY: 90,  color: "#142433" },
-                { cx: 460, w: 440, topY: 50,  color: "#17293b" },
-                { cx: 700, w: 320, topY: 120, color: "#12202e" }
+                { cx: 160, w: 380, topY: 90,  color: Theme.c.peaks[0] },
+                { cx: 460, w: 440, topY: 50,  color: Theme.c.peaks[1] },
+                { cx: 700, w: 320, topY: 120, color: Theme.c.peaks[2] }
             ];
             for (let p = 0; p < peaks.length; p++) {
                 var pk = peaks[p];
@@ -177,7 +177,7 @@ class BackgroundMosaic {
 
         // Layer 2: Soft Mid-Horizon Rolling Hills & Distant Watchtowers (800x260)
         this.layers.midHills = TextureManager.createTileCanvas(800, 260, function(g, w, h) {
-            g.fillStyle = "#19303d";
+            g.fillStyle = Theme.c.hills;
             g.fillRect(0, 140, w, 120);
             g.beginPath();
             g.arc(200, 150, 180, Math.PI, 0);
@@ -185,7 +185,7 @@ class BackgroundMosaic {
             g.fill();
 
             // Subtle distant castle silhouette
-            g.fillStyle = "#152833";
+            g.fillStyle = Theme.c.castle;
             g.fillRect(540, 45, 70, 95);
             g.fillRect(530, 30, 22, 110);
             g.fillRect(598, 30, 22, 110);
@@ -202,9 +202,10 @@ class BackgroundMosaic {
         if (!this._skyGrad || this._skyGradH !== cssH) {
             this._skyGradH = cssH;
             this._skyGrad = ctx.createLinearGradient(0, 0, 0, cssH);
-            this._skyGrad.addColorStop(0, "#0d1b2a");
-            this._skyGrad.addColorStop(0.65, "#1b2e3c");
-            this._skyGrad.addColorStop(1, "#0f1e26");
+            var skyC = Theme.c.sky;
+            this._skyGrad.addColorStop(0, skyC[0]);
+            this._skyGrad.addColorStop(0.65, skyC[1]);
+            this._skyGrad.addColorStop(1, skyC[2]);
         }
         ctx.fillStyle = this._skyGrad;
         ctx.fillRect(0, 0, cssW, cssH);
@@ -229,7 +230,7 @@ class BackgroundMosaic {
 
         // 3. Fill below horizon with dark subterranean cavern backdrop so going underground feels deep!
         if (horizonScreenY < cssH) {
-            ctx.fillStyle = "#0a121a";
+            ctx.fillStyle = Theme.c.cavern;
             ctx.fillRect(0, horizonScreenY, cssW, cssH - horizonScreenY);
         }
 
@@ -284,7 +285,7 @@ class BackgroundMosaic {
             if (visW <= 0 || visH <= 0) continue;
 
             if (bw.style === "castle") {
-                ctx.fillStyle = "#1c2433";
+                ctx.fillStyle = Theme.c.wall;
                 ctx.fillRect(visX, visY, visW, visH);
                 // faint stone-block lines (kept subtle so the foreground stays dominant)
                 ctx.strokeStyle = "rgba(255,255,255,0.045)";

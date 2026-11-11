@@ -754,7 +754,7 @@ var Net = {
     },
 
     drawWaiting: function(msg) {
-        ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
         ctx.fillStyle = "#e2e8f0"; ctx.textAlign = "center";
         ctx.font = "800 30px " + UI_FONT; ctx.fillText("📡 LAN GAME", cssW / 2, cssH / 2 - 40);
         ctx.font = "600 17px " + UI_FONT; ctx.fillStyle = "#94a3b8"; ctx.fillText(msg, cssW / 2, cssH / 2);
