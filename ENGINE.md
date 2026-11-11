@@ -255,3 +255,15 @@ chests. The dev panel's sliders (enemy damage, enemy health, power-up rate) mult
   adaptive-quality fallback (glow first, then resolution) keep slow machines at 60 FPS.
 - Settled ragdolls sleep. Siege forts use their own crate sleeping (`SiegeSleep`) so tall stacks
   cost nothing until something hits them.
+
+
+## Per-game tuning (`tunables.js`)
+
+The Cheats & tuning panel's Game tab follows the game that's on. A mode can define `tunables()` returning rows
+`{ label, type: "range" | "toggle" | "choice", get(), set(v), min, max, step, options, note }`; modes without one use
+`GAME_TUNABLES[id]` (Brawl, Zombie Ball, Table Games, Bed Brawl, Wobble Wheels, Party Board, Rent Rush, Creative).
+They show as "<GAME> — its own settings" at the top. The shared rows are tagged with what they need
+(`DevUI.NEED`: waves / enemies / world / coop, or `data-need` on a section) and `GameTuning.applies(need)` hides the
+ones that would do nothing in the current game; the panel says how many are hidden. Next steps in the same spirit:
+an `inspect(x, y)` hook so the Inspect tab can select game objects (riders, beds, pool balls…), and a `studio` hook
+so more games can be built in the Level Studio.

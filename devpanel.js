@@ -291,6 +291,50 @@ var DevUI = {
         if (isFinite(mn) && isFinite(mx) && mx > mn) el.style.setProperty("--pct", (((v - mn) / (mx - mn)) * 100) + "%");
     },
 
+    // the Game tab follows the game that's on: its own settings first, shared rows only where they do something
+    NEED: { waves: { t: ["waves"], o: ["spawnRate", "maxEnemies", "powerUpRate"] }, enemies: { t: ["paths"], o: ["enemyHealth", "enemyDamage"] },
+            world: { t: ["god", "jetpack"], o: ["flight", "infiniteAmmo", "friendlyFire", "showHitboxes", "bouncyRagdolls", "playerDamage", "gravityMult"], id: ["dp-zoom"] }, coop: { t: ["coop"] } },
+    syncGame: function(panel) {
+        if (typeof GameTuning === "undefined" || !GameModes.current) return;
+        var hidden = 0;
+        for (var need in this.NEED) {
+            var N = this.NEED[need], show = GameTuning.applies(need), els = [];
+            (N.t || []).forEach(function(k) { var e = panel.querySelector('[data-toggle="' + k + '"]'); if (e) els.push(e.closest(".dp-toggle")); });
+            (N.o || []).forEach(function(k) { var e = panel.querySelector('[data-opt="' + k + '"]'); if (e) els.push(e.closest(".dp-toggle") || e.closest(".dp-row")); });
+            (N.id || []).forEach(function(k) { var e = document.getElementById(k); if (e) els.push(e.closest(".dp-row")); });
+            els.forEach(function(e) { if (e) { e.style.display = show ? "" : "none"; if (!show) hidden++; } });
+        }
+        panel.querySelectorAll("[data-need]").forEach(function(e) { e.style.display = GameTuning.applies(e.dataset.need) ? "" : "none"; });
+        var note = document.getElementById("dp-hidden-note");
+        if (note) note.textContent = hidden ? "(" + hidden + " that don't apply to this game are hidden)" : "";
+        // "This game" section: rebuilt when the game changes, values refreshed every sync
+        var box = document.getElementById("dp-own"), rowsEl = document.getElementById("dp-own-rows"), id = GameModes.current.id;
+        var rows = GameTuning.rows();
+        if (!box) return;
+        box.style.display = rows.length ? "" : "none";
+        if (this.ownFor !== id) {
+            this.ownFor = id; this.ownRows = rows;
+            document.getElementById("dp-own-title").textContent = (GameModes.current.title || id) + " — its own settings";
+            rowsEl.innerHTML = rows.map(function(r, i) {
+                if (r.type === "toggle") return '<label class="dp-toggle"><input type="checkbox" data-own="' + i + '"><span class="dp-switch"></span><span>' + r.label + '</span></label>';
+                if (r.type === "choice") return '<div class="dp-row"><label>' + r.label + '</label><select class="dp-select" data-own="' + i + '">' + r.options.map(function(o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join("") + '</select></div>';
+                return '<div class="dp-row" title="' + (r.note || "") + '"><label>' + r.label + '</label><input type="range" class="dp-range" data-own="' + i + '" min="' + r.min + '" max="' + r.max + '" step="' + r.step + '"><span class="dp-val" data-own-val="' + i + '"></span></div>';
+            }).join("") + (rows.some(function(r) { return r.note; }) ? '<p class="dp-hint">Some take effect from the next match.</p>' : "");
+            rowsEl.querySelectorAll("[data-own]").forEach(function(el) {
+                var r = rows[Number(el.dataset.own)];
+                var apply = function() { var v = el.type === "checkbox" ? el.checked : Number(el.value); r.set(v); DevUI.toast(r.label + ": " + (el.type === "checkbox" ? (v ? "on" : "off") : (r.type === "choice" ? el.options[el.selectedIndex].text : v))); };
+                el.addEventListener(el.type === "range" ? "input" : "change", apply);
+            });
+        }
+        rowsEl.querySelectorAll("[data-own]").forEach(function(el) {
+            if (document.activeElement === el) return;
+            var r = DevUI.ownRows[Number(el.dataset.own)], v = r.get();
+            if (el.type === "checkbox") el.checked = !!v; else el.value = v;
+            var lab = rowsEl.querySelector('[data-own-val="' + el.dataset.own + '"]'); if (lab) lab.textContent = String(v);
+            if (el.type === "range") DevUI.paintRange(el);
+        });
+    },
+
     sync: function() {
         var panel = document.getElementById("summon-panel");
         if (!panel) return;
@@ -323,6 +367,7 @@ var DevUI = {
             var zl = panel.querySelector('[data-val="zoom"]');
             if (zl) zl.textContent = userZoom.toFixed(2) + "x";
         }
+        DevUI.syncGame(panel);
         topBarRefresh();
         var godBtn = document.getElementById("god-mode-btn");
         if (godBtn) {
@@ -330,7 +375,8 @@ var DevUI = {
         }
         var info = document.getElementById("dp-live");
         if (info) {
-            info.textContent = "Wave " + level + " · " + zombies.length + " enemies · " + measuredFPS + " fps";
+            var wv = typeof GameTuning !== "undefined" ? GameTuning.applies("waves") : true;
+            info.textContent = (wv ? "Wave " + level + " · " : (GameModes.current ? GameModes.current.title + " · " : "")) + (zombies.length ? zombies.length + " enemies · " : "") + measuredFPS + " fps";
         }
     },
 
@@ -743,8 +789,12 @@ SummonManager.buildUI = function() {
 
         <!-- ================= GAME ================= -->
         <div class="dp-page" data-page="game">
+            <div class="dp-section" id="dp-own" style="display:none">
+                <div class="dp-title"><span id="dp-own-title">This game</span></div>
+                <div id="dp-own-rows"></div>
+            </div>
             <div class="dp-section">
-                <div class="dp-title"><span>Toggles</span></div>
+                <div class="dp-title"><span>Toggles</span><span id="dp-hidden-note" style="text-transform:none;letter-spacing:0;font-weight:600"></span></div>
                 <div class="dp-toggles">
                     ${devToggle("God mode [V]", "", "Invincible, endless fuel", "god")}
                     ${devToggle("Co-op", "", "Two players (restarts the run)", "coop")}
@@ -772,7 +822,7 @@ SummonManager.buildUI = function() {
                 ${devSlider("Power-up drops", "powerUpRate", 0, 4, 0.25, "x")}
                 ${devSlider("Gravity", "gravityMult", 0.15, 2, 0.05, "x", "Low = moon jumps & floaty bodies")}
             </div>
-            <div class="dp-section">
+            <div class="dp-section" data-need="waves">
                 <div class="dp-title"><span>Waves</span></div>
                 <div class="dp-grid3">
                     <button class="dp-btn" data-act="nextWave">⏭ Next wave</button>
@@ -1123,6 +1173,9 @@ setInterval(function() {
 
 // keeps the compact top bar honest a few times a second: player count, LAN status, paused / arcade state
 function topBarRefresh() {
+        // keep the open Cheats & tuning panel in step with the game that's on
+        var sp = document.getElementById("summon-panel");
+        if (sp && sp.classList.contains("open") && typeof DevUI !== "undefined" && DevUI.syncGame && !topBarRefresh.inSync) { topBarRefresh.inSync = true; try { DevUI.syncGame(sp); } catch (e) {} topBarRefresh.inSync = false; }
         var coopBtn = document.getElementById("coop-btn");
         if (coopBtn) {
             coopBtn.classList.toggle("active", multiplayer || brawl.active);

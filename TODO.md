@@ -157,6 +157,13 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 - [ ] Control Panel buttons only checked with a stand-in for the Control Panel (its source isn't reachable from here):
       confirm they show on Home → Play together on your machine.
 
+## Connecting games and tools (your question: "connect all the games so the inspector menus and the games interact")
+- [x] Step 1 — per-game settings in the Game tab + shared rows hidden where they do nothing (`tunables.js`).
+- [ ] Step 2 — `inspect(x, y)` hook: select and edit game objects (riders, beds, generators, pool balls, Terra tiles,
+      pets) in the Inspect tab and the Studio inspector; a match-state card for the full-screen games.
+- [ ] Step 3 — `studio` hook: build Wobble Wheels courses, Brawl stages, Siege forts, Bed Brawl maps, Word Lab rooms in
+      the Level Studio; saved ones appear in that game's course select.
+
 ## Known issues / polish found while building (from RETROS.md)
 - LAN: all nine new games work over LAN now (turn-based ones seat LAN players in CPU seats; Worm / Blob / Tank Arena
   give each LAN player their own worm / blob / tank; Jet Dash adds them as runners; Sand Lab lets them paint into the

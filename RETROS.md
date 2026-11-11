@@ -6,6 +6,22 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Connecting the games and the tuning panel (step 1 of 3)
+
+**Asked:** "How can we connect all the games so that the inspector menus and the games interact well with each other."
+The answer: one small contract per game that every tool reads — `tunables()` (its settings), `inspect(x, y)` (what can
+be selected and edited) and `studio` (palette + level conversion). **Shipped, step 1:** `tunables.js` — the Game tab
+now shows "<GAME> — its own settings" (Brawl: stocks, CPU skill · Zombie Ball: goals, minutes, CPU · Table Games: CPU ·
+Bed Brawl: generator speed (new) · Wobble Wheels: engine power (new) · Party Board / Rent Rush: rounds · Creative:
+noclip, invincible), and hides shared rows that do nothing there (waves, spawn rate, enemy HP… outside wave games;
+world rows in the full-screen games), with a note saying how many. The header no longer says "Wave 1" in Brawl.
+
+**Measured (`tests/tuning_panel.js`):** Survival unchanged (nothing hidden); Brawl shows its 2 settings and hides 8
+rows; Table Games hides 18 (only FPS and controls help left); Wobble Wheels / Bed Brawl show theirs; moving the engine
+power slider set the game's value to 2; no errors. **Next:** `inspect()` and `studio` (steps 2 and 3).
+
+---
+
 ## Character detail: ragdolls and the square look
 
 **Shipped:** ragdoll limbs and torsos get a soft highlight stripe when they're drawn thick enough to see it (close

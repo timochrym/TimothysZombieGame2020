@@ -216,7 +216,7 @@ function wheelsDrive(rd) {
         var bvx = rd.velX(), bvy = rd.velY(), along = bvx * TX + bvy * TY;
         var share = grip / nWheels;
         var push = 0;
-        if (c.go > 0 && along < def.cap) push = def.accel * share;
+        if (c.go > 0 && along < def.cap) push = def.accel * share * (Wheels.powerMult || 1);     // Cheats & tuning: Engine power
         else if (c.go < 0) {
             if (along > 1) { for (let i = rd.vbase; i < P.length; i++) if (P[i].wheel && P[i].contact >= 0) { P[i].px = P[i].x - (P[i].x - P[i].px) * 0.88; P[i].py = P[i].y - (P[i].y - P[i].py) * 0.88; } }   // brake
             else if (along > -def.cap * 0.4) push = -def.accel * 0.6 * share;                                                       // reverse

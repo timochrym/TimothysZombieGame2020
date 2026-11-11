@@ -400,6 +400,7 @@ GameModes.register({
             for (let k = 0; k < gen.kinds.length; k++) {
                 var kind = gen.kinds[k], R = BW_RES[kind];
                 var every = gen.team >= 0 && BW.up[gen.team] ? Math.round(R.every / (1 + 0.5 * BW.up[gen.team].forge)) : R.every;
+                every = Math.max(5, Math.round(every / (bwCfg.genMult || 1)));               // Cheats & tuning: Generator speed
                 if (gen.t % every === 0) {
                     var count = BW.drops.filter(function(d) { return d.kind === kind && Math.abs(d.x - gen.x) < 200; }).length;
                     if (count < R.cap) BW.drops.push({ kind: kind, x: gen.x + (Math.random() - 0.5) * 80, y: 30, t: 0 });
