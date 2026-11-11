@@ -130,7 +130,9 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       panels, palette search, inspector pairs (position / size) and readable names.
 - [x] LAN one click: Start LAN Game launchers, Control Panel "Start LAN game" / "Stop LAN game" buttons (add-on),
       ?lan=host auto-hosts, LAN panel says which kind of page you're on and shows the join link with Copy.
-- [ ] Cheats & tuning panel, Players panel, build-mode HUD: same consistency pass (sizes, grouping, narrow windows).
+- [x] Cheats & tuning panel: same name everywhere, ✕ close, Esc closes it first, fits narrow windows, its dock no longer
+      covers the key help or HUD. Players panel checked at 820 px (fine as is).
+- [ ] Build-mode HUD (C) and the game-specific HUDs: not yet reviewed at small window sizes.
 - [ ] Control Panel buttons only checked with a stand-in for the Control Panel (its source isn't reachable from here):
       confirm they show on Home → Play together on your machine.
 

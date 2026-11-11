@@ -42,6 +42,8 @@ function keyDownHandler(e) {
     if (typeof Net !== "undefined" && Net.role === "client") { if (Hub.isOpen) Hub.close(); paused = false; }
     // Pause menu owns the keyboard while it is open (restart / co-op / levels live there)
     if (typeof Hub !== "undefined" && Hub.isOpen) { Hub.key(e); return; }
+    // Esc closes the cheats & tuning panel first (a second Esc pauses)
+    if (c == "Escape" && !paused && typeof SummonManager !== "undefined" && SummonManager.isOpen) { if (!e.repeat) SummonManager.togglePanel(); e.preventDefault(); return; }
     if (c == "Escape") {
         if (!e.repeat) { if (paused && pauseSub) { pauseSub = null; pauseIndex = 0; } else togglePause(); }
         e.preventDefault();

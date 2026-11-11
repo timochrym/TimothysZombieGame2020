@@ -6,6 +6,17 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## UI pass 3: cheats & tuning panel
+
+**Shipped:** the panel is called "🧪 Cheats & tuning" (as in every menu) instead of "DEV MODE", has a ✕ button,
+and Esc closes it before a second Esc pauses. Below 900 px it narrows to fit and its "Drag to place" dock moves under
+the wave panel instead of over the key help / hero card; under 640 px the dock hides. The key-help sheet stays hidden
+while the panel is open.
+
+**Measured:** 1280×720 and 820×600 screenshots with no overlaps; Esc → panel closed, not paused; second Esc → paused.
+
+---
+
 ## One-click LAN
 
 **Shipped:** before this, LAN play needed a terminal whether the game was opened as a file or served by the Control

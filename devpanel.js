@@ -478,9 +478,13 @@ SummonManager.buildUI = function() {
 
         #summon-panel { position: fixed; top: 62px; right: 16px; bottom: 16px; width: 410px; background: var(--dp-bg); border: 1px solid var(--dp-line); border-radius: 18px; color: var(--dp-text); font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; z-index: 1000; display: none; flex-direction: column; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,.65); user-select: none; backdrop-filter: blur(8px); }
         #summon-panel.open { display: flex; }
-        .dp-head { padding: 14px 16px 8px; display: flex; justify-content: space-between; align-items: baseline; }
+        .dp-head { padding: 12px 12px 8px 16px; display: flex; align-items: center; }
         .dp-head b { font-size: 16px; letter-spacing: .5px; color: var(--dp-accent2); }
-        .dp-head span { font-size: 11px; color: var(--dp-dim); }
+        .dp-head span { font-size: 11px; color: var(--dp-dim); margin-left: auto; margin-right: 10px; }
+        .dp-x { background: rgba(255,255,255,.06); border: 1px solid var(--dp-line); color: var(--dp-text); border-radius: 8px; width: 28px; height: 28px; cursor: pointer; font-size: 13px; flex: none; }
+        .dp-x:hover { background: rgba(255,77,94,.25); }
+        @media (max-width: 900px) { #summon-panel { width: min(410px, calc(100vw - 24px)); right: 12px; top: 56px; bottom: 12px; } #mario-maker-dock { left: 12px; transform: none; max-width: calc(100vw - 450px); bottom: auto; top: 150px; } }
+        @media (max-width: 640px) { #mario-maker-dock.open { display: none; } }
         .dp-tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 0 12px 10px; border-bottom: 1px solid var(--dp-line); }
         .dp-tab { background: transparent; border: 0; color: var(--dp-dim); padding: 8px 2px; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 12px; font-family: inherit; transition: all .12s; }
         .dp-tab:hover { background: rgba(255,255,255,.06); color: var(--dp-text); }
@@ -652,7 +656,7 @@ SummonManager.buildUI = function() {
     panel.addEventListener("keyup", stop);
 
     panel.innerHTML = `
-        <div class="dp-head"><b>🛠 DEV MODE</b><span id="dp-live"></span></div>
+        <div class="dp-head"><b>🧪 Cheats &amp; tuning</b><span id="dp-live"></span><button class="dp-x" title="Close (Esc)" onclick="SummonManager.togglePanel()">✕</button></div>
         <div class="dp-tabs">
             <button class="dp-tab active" data-tab="build">🧱 Build</button>
             <button class="dp-tab" data-tab="inspect">🔍 Inspect</button>
@@ -671,7 +675,7 @@ SummonManager.buildUI = function() {
                     <button id="mode-place" onclick="SummonManager.setToolMode('place')">➕ Place</button>
                     <button id="mode-select" onclick="SummonManager.setToolMode('select')">✋ Edit</button>
                 </div>
-                <p class="dp-hint">Pick an item from the dock below the map (drag it out, or click it then use <b>Place</b>). In <b>Edit</b> mode drag objects, pull edge handles to resize, hold <kbd>Alt</kbd> to copy.</p>
+                <p class="dp-hint">Pick an item from the "Drag to place" dock (drag it out, or click it then use <b>Place</b>). In <b>Edit</b> mode drag objects, pull edge handles to resize, hold <kbd>Alt</kbd> to copy.</p>
             </div>
             <div class="dp-section">
                 <div class="dp-title"><span>New object</span><span id="dp-size-label"></span></div>
