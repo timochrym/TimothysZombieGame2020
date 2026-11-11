@@ -60,7 +60,8 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       DO: a pogo stick, destructible obstacles, fans. (Scooter with a kick-push and a sturdy shopping Trolley: DONE.)
 - [~] Crash Lab: DONE — "Stair Drop" scenario (pause → Scenario): one push from the top of a 14-step staircase, the
       score runs until the dummy comes to rest, best saved; damage heat-map (head / torso / limbs drift from yellow to
-      bruised red); slow-mo on huge hits. STILL TO DO: more scenarios (cliff + car, highway, half-pipe), vehicles to
+      bruised red); slow-mo on huge hits. "Cliff Fall" scenario (a 2000 drop with rock outcrops, pads, crates and TNT below; best saved per scenario):
+      DONE. STILL TO DO: more scenarios (highway, half-pipe), vehicles to
       launch the dummy in, pose picker before the push, replay of the run. (Closer camera in Stair Drop: DONE.)
 - [~] Parkour Rush: DONE — speedrun splits (time at each checkpoint vs your best run's split, green −/red +, saved
       with the best), speed lines when you're really moving, new engine hook onCheckpoint. STILL TO DO: slide-under

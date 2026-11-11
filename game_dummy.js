@@ -16,12 +16,21 @@ var DUMMY_TOOLS = [
     { id: "weight", label: "Heavy weight", icon: "🏋", hint: "drop a weight from above" },
     { id: "ball", label: "Wrecking ball", icon: "⚫", hint: "swing a ball from the ceiling" }
 ];
-var dummySave = { best: 0, stairs: 0 };
-try { var _ds = JSON.parse(localStorage.getItem("timsCrashLab") || "null"); if (_ds) { dummySave.best = _ds.best || 0; dummySave.stairs = _ds.stairs || 0; } } catch (e) {}
+var dummySave = { best: 0, stairs: 0, scn: {} };
+try { var _ds = JSON.parse(localStorage.getItem("timsCrashLab") || "null"); if (_ds) { dummySave.best = _ds.best || 0; dummySave.stairs = _ds.stairs || 0; dummySave.scn = _ds.scn || {}; } } catch (e) {}
 function saveDummy() { try { localStorage.setItem("timsCrashLab", JSON.stringify(dummySave)); } catch (e) {} }
-var DUMMY_STAIRS_START = [-1700, 1520];
-// Stair Drop challenge: one push from the top, the score runs until the dummy comes to rest
-function dummyChallenge() { return LevelManager.currentLevelKey === "crash_stairs"; }
+// one-push scenarios: push once, the score runs until the dummy comes to rest; best saved per scenario
+var DUMMY_SCN = {
+    crash_stairs: { name: "Stair Drop", start: [-1700, 1520] },
+    crash_cliff: { name: "Cliff Fall", start: [-1620, 2120] }
+};
+var DUMMY_SCN_ORDER = [["crash_lab", "Sandbox (all tools)"], ["crash_stairs", "Stair Drop (one push, score)"], ["crash_cliff", "Cliff Fall (one push, score)"]];
+function dummyChallenge() { return !!DUMMY_SCN[LevelManager.currentLevelKey]; }
+function dummyScnBest(set) {
+    var k = LevelManager.currentLevelKey;
+    if (set !== undefined) { if (k === "crash_stairs") dummySave.stairs = set; else dummySave.scn[k] = set; saveDummy(); }
+    return k === "crash_stairs" ? dummySave.stairs : (dummySave.scn[k] || 0);
+}
 
 var Dummy = {
     rd: null, tool: 0, total: 0, combo: 0, comboT: 0, bones: 0, parts: [0, 0, 0], tick: 0,
@@ -53,6 +62,20 @@ var Dummy = {
     L.push({ type: "box", name: "Wall", x: 1500, y: 300, w: 100, h: 600, color: "#334155", texture: "metal_plate", kind: "wall" });
     L.push({ type: "crate", name: "Crate", x: 300, y: 40, size: 80 }, { type: "crate", name: "Crate", x: 300, y: 121, size: 80 });
     ModeKit.addLevel("crash_stairs", { name: "🧪 Crash Lab: Stair Drop", mode: "dummy", wavesEnabled: false, spawnP1: [-2100, 1480], spawnP2: [-2200, 1480], layout: L, title: "Stair Drop" });
+})();
+(function() {
+    // Cliff Fall: a sheer drop of 2000 with rock outcrops sticking out of the face, pads and crates at the bottom
+    var L = ModeKit.room(-2400, 2400, 2900, { tex: "lab_metal", color: "#334155", floorTex: "lab_metal", floorColor: "#475569" });
+    L.push({ type: "box", name: "Cliff", x: -1900, y: 1000, w: 800, h: 2000, color: "#57534e", texture: "stone_raw", kind: "block" });
+    [[-1420, 1600, 160], [-1440, 1150, 200], [-1400, 750, 140], [-1450, 380, 220]].forEach(function(o) {
+        L.push({ type: "box", name: "Outcrop", x: o[0], y: o[1], w: o[2], h: 50, color: "#78716c", texture: "stone_raw", kind: "block" });
+    });
+    L.push({ type: "bumper", name: "Bounce Pad", x: -900, y: 20, w: 260, h: 40, bounce: 34 });
+    L.push({ type: "bumper", name: "Bounce Pad", x: 200, y: 20, w: 260, h: 40, bounce: 30 });
+    L.push({ type: "crate", name: "Crate", x: -500, y: 40, size: 80 }, { type: "crate", name: "Crate", x: -500, y: 121, size: 80 }, { type: "crate", name: "Crate", x: 700, y: 40, size: 80 });
+    L.push({ type: "crate", name: "TNT Barrel", x: 1100, y: 40, size: 70, explosive: true });
+    L.push({ type: "box", name: "Wall", x: 1700, y: 300, w: 100, h: 600, color: "#334155", texture: "metal_plate", kind: "wall" });
+    ModeKit.addLevel("crash_cliff", { name: "🧪 Crash Lab: Cliff Fall", mode: "dummy", wavesEnabled: false, spawnP1: [-2100, 2080], spawnP2: [-2200, 2080], layout: L, title: "Cliff Fall" });
 })();
 
 function dummySpawn(x, y) {
@@ -113,7 +136,7 @@ GameModes.register({
     overTitle: "CRASH LAB",
 
     setupLevel: function() { Dummy.rd = null; Dummy.balls = []; Dummy.spikes = []; Dummy.drag = null; Dummy.tick = 0; },
-    onReset: function() { if (dummyChallenge()) dummySpawn(DUMMY_STAIRS_START[0], DUMMY_STAIRS_START[1]); else dummySpawn(-400, 300); },
+    onReset: function() { var sc = DUMMY_SCN[LevelManager.currentLevelKey]; if (sc) dummySpawn(sc.start[0], sc.start[1]); else dummySpawn(-400, 300); },
 
     onDamage: function() { return true; },
     onPad: function(i, b) {
@@ -280,9 +303,9 @@ GameModes.register({
             Dummy.calmT = sp < 0.8 ? Dummy.calmT + 1 : 0;
             if (Dummy.calmT > 90 || Dummy.runT > 60 * 20) {
                 Dummy.run = "done";
-                var sc = Math.round(Dummy.total), nb = sc > dummySave.stairs;
-                if (nb) { dummySave.stairs = sc; saveDummy(); }
-                showBanner("SCORE " + sc, nb ? "NEW BEST!  ·  R to go again" : "best " + dummySave.stairs + "  ·  R to go again", "#facc15");
+                var sc = Math.round(Dummy.total), nb = sc > dummyScnBest();
+                if (nb) dummyScnBest(sc);
+                showBanner("SCORE " + sc, nb ? "NEW BEST!  ·  R to go again" : "best " + dummyScnBest() + "  ·  R to go again", "#facc15");
                 if (typeof SFX !== "undefined") SFX.play(nb ? "clear" : "select");
             }
         }
@@ -321,7 +344,7 @@ GameModes.register({
                 ctx.beginPath(); ctx.moveTo(wsx(acx), wsy(acy)); ctx.lineTo(wsx(mw[0]), wsy(mw[1])); ctx.stroke(); ctx.setLineDash([]);
             }
         }
-        uiText((dummyChallenge() ? "stairs best " + dummySave.stairs : "best " + dummySave.best) + (Dummy.combo > 0 ? "   combo " + Math.round(Dummy.combo) : "") + "   bones " + Dummy.bones, cssW / 2, dy + 84, 12, "#cbd5e1", "center", "800");
+        uiText((dummyChallenge() ? DUMMY_SCN[LevelManager.currentLevelKey].name.toLowerCase() + " best " + dummyScnBest() : "best " + dummySave.best) + (Dummy.combo > 0 ? "   combo " + Math.round(Dummy.combo) : "") + "   bones " + Dummy.bones, cssW / 2, dy + 84, 12, "#cbd5e1", "center", "800");
         // body chart
         var tot = Math.max(1, Dummy.parts[0] + Dummy.parts[1] + Dummy.parts[2]);
         var names = ["Head", "Torso", "Limbs"], cols = ["#f87171", "#fbbf24", "#a3e635"];
@@ -345,9 +368,9 @@ GameModes.register({
         uiText(DUMMY_TOOLS[Dummy.tool].label + ": " + DUMMY_TOOLS[Dummy.tool].hint + "  ·  1-9 tools · R new dummy · WASD move · Space jetpack · Esc menu", cssW / 2, cssH - 18, 12, "rgba(220,230,240,0.75)", "center", "700");
     },
 
-    menuItems: function(items) { items.push({ id: "dm_scn", label: "Scenario:  ◀  " + (dummyChallenge() ? "Stair Drop (one push, score)" : "Sandbox (all tools)") + "  ▶", hint: "", cycle: true }); items.push({ id: "dm_new", label: "New dummy (R)", hint: "" }, { id: "dm_clear", label: "Clear props", hint: "pads, spikes, TNT, weights, balls" }); },
-    onMenu: function(id) {
-        if (id === "dm_scn") { closePause(); LevelManager.selectLevel(dummyChallenge() ? "crash_lab" : "crash_stairs"); return true; }
+    menuItems: function(items) { var si = Math.max(0, DUMMY_SCN_ORDER.findIndex(function(o) { return o[0] === LevelManager.currentLevelKey; })); items.push({ id: "dm_scn", label: "Scenario:  ◀  " + DUMMY_SCN_ORDER[si][1] + "  ▶", hint: "", cycle: true }); items.push({ id: "dm_new", label: "New dummy (R)", hint: "" }, { id: "dm_clear", label: "Clear props", hint: "pads, spikes, TNT, weights, balls" }); },
+    onMenu: function(id, dir) {
+        if (id === "dm_scn") { var si = Math.max(0, DUMMY_SCN_ORDER.findIndex(function(o) { return o[0] === LevelManager.currentLevelKey; })); closePause(); LevelManager.selectLevel(DUMMY_SCN_ORDER[(si + (dir || 1) + DUMMY_SCN_ORDER.length) % DUMMY_SCN_ORDER.length][0]); return true; }
         if (id === "dm_new") { closePause(); this.onKey("KeyR"); return true; }
         if (id === "dm_clear") { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
         return false;

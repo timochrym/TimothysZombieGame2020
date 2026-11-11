@@ -6,6 +6,17 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Crash Lab: Cliff Fall scenario
+
+**Shipped:** one-push scenarios are now a list (each with its own start and saved best), and a second one joins Stair
+Drop: Cliff Fall — a 2000-high cliff with rock outcrops sticking out of the face, two bounce pads, crates and a TNT
+barrel below. Pause → Scenario cycles Sandbox / Stair Drop / Cliff Fall (◀ ▶ both work now).
+
+**Measured (`tests/crash_cliff.js`):** the menu row cycled stairs → cliff → sandbox; the dummy started on the cliff
+top waiting for the push; one push scored 254 with 1 bone and saved it as the Cliff Fall best; no errors.
+
+---
+
 ## Wobble Wheels: Scooter and Trolley
 
 **Shipped:** two more vehicles (V / pause menu): a green Scooter — small wheels, tall bar, quick, Space kick-pushes
