@@ -257,6 +257,13 @@ var Build = {
             var ch = heroes[h];
             var bw = 64, n = BUILD_PIECES.length, total = n * (bw + 8) + 150;
             var x0 = cssW / 2 - total / 2 + (h - (heroes.length - 1) / 2) * (total + 30), y0 = cssH - 96;
+            // hero cards in the bottom corners and no room between them (narrow window, or two bars): stack above them
+            if (typeof heroCardsAt !== "undefined" && heroCardsAt && performance.now() - heroCardsAt.t < 200 &&
+                cssW - 2 * (14 + 340) < (heroes.length * (total + 30))) {
+                var rightOfCard = 359, twoCards = multiplayer && blueGuy;   // card ends at x≈345; the panel draws 8 px outside x0
+                if (!twoCards && heroes.length === 1 && rightOfCard + total + 8 <= cssW - 6) x0 = rightOfCard;   // solo: beside the card
+                else { x0 = Math.max(14, cssW / 2 - total / 2); y0 = heroCardsAt.y - (twoCards ? 70 : 12) - (bw + 34) * (h + 1); }
+            }
             if (!ch.buildMode) {
                 uiText((ch.playerLabel || "P1") + "  " + (ch.playerIndex === 1 ? ";" : "C") + ": build mode", x0 + total / 2, cssH - 48, 12, "rgba(250,204,21,0.75)", "center", "800");
                 continue;

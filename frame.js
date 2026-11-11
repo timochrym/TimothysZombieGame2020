@@ -691,6 +691,11 @@ function uiBar(x, y, bw, bh, pct, color, bg) {
 function uiText(txt, x, y, size, color, align, weight) {
     ctx.save();
     ctx.font = (weight || "700") + " " + size + "px " + UI_FONT;
+    // small hint lines (control legends) shrink to fit instead of running off the screen on narrow windows
+    if (size <= 14 && (align === "center") && typeof cssW === "number") {
+        var tw = ctx.measureText(txt).width, room = Math.min(2 * x, 2 * (cssW - x)) - 16;
+        if (tw > room && room > 40) { size = Math.max(8, Math.floor(size * room / tw)); ctx.font = (weight || "700") + " " + size + "px " + UI_FONT; }
+    }
     ctx.textAlign = align || "left";
     ctx.textBaseline = "alphabetic";
     ctx.lineJoin = "round";
@@ -875,6 +880,7 @@ function drawHUD() {
 
     // ---------- Hero cards ----------
     var cardY = h - 166;
+    heroCardsAt = { y: cardY, t: performance.now() };     // the build bar reads this to stay off the cards
     drawHeroCard(redGuy, 14, cardY);
     if (multiplayer && blueGuy) drawHeroCard(blueGuy, w - 344, cardY);
     if (multiplayer) {
@@ -1324,7 +1330,7 @@ function pauseClick(mx, my) {
     return false;
 }
 
-var pauseScroll = 0, pauseHoverXY = null;
+var pauseScroll = 0, pauseHoverXY = null, heroCardsAt = null;
 function drawPauseMenu() {
     if (!pauseSnap) return;
     ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);

@@ -199,7 +199,7 @@ var PlayersBadge = {
         ctx.save();
         ctx.globalAlpha = Math.min(1, this.t / 40);
         ctx.font = "800 13px " + UI_FONT;
-        var txt = "👥 " + s + "   (Players: 👥 button / pause menu)";
+        var txt = "👥 " + s + (cssW >= 1100 ? "   (Players: 👥 button / pause menu)" : "");   // short on narrow windows: it sat on game HUDs
         var w = ctx.measureText(txt).width + 24;
         ctx.fillStyle = "rgba(10,15,22,0.8)"; ctx.fillRect(cssW - w - 14, 58, w, 26);
         ctx.fillStyle = "#e2e8f0"; ctx.textAlign = "left"; ctx.fillText(txt, cssW - w - 2, 76);

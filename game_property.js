@@ -320,6 +320,8 @@ var Rent = {
         var cx = G.x0 + G.size / 2, cy = G.y0 + G.size / 2 + 10, P0 = this.pl[this.turn];
         for (let j = 0; j < 2; j++) { ctx.fillStyle = "#fff"; ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 3; ctx.fillRect(cx - 62 + j * 70, cy - 20, 54, 54); ctx.strokeRect(cx - 62 + j * 70, cy - 20, 54, 54); this.txt(String(this.d[j]), cx - 35 + j * 70, cy + 18, 30, "#0f172a", "900"); }
         this.btns = [];
+        // buttons are laid out for a big board; on a small one they shrink around the centre so they stay inside it
+        this.bcx = cx; this.bs = Math.min(1, (G.size - 2 * G.cell - 20) / 350);
         var bY = cy + 52;
         if (this.phase === "over") uiText("🏆 " + this.winner.name + " wins! (Space for a new game)", cx, bY + 20, 16, this.winner.col, "center", "900");
         else if (this.mine(P0)) {
@@ -363,11 +365,13 @@ var Rent = {
     // plain (un-outlined) text for the light board surface
     txt: function(t, x, y, size, col, weight) { ctx.font = (weight || "800") + " " + Math.round(size) + "px " + UI_FONT; ctx.textAlign = "center"; ctx.fillStyle = col; ctx.fillText(t, x, y); },
     button: function(label, act, x, y, col, disabled) {
+        var k = this.bs || 1, bw = 110 * k, bh = 36;
+        x = this.bcx !== undefined ? this.bcx + (x - this.bcx) * k : x;
         ctx.globalAlpha = disabled ? 0.35 : 1;
-        ctx.fillStyle = col; ctx.fillRect(x, y, 110, 36); ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 2; ctx.strokeRect(x, y, 110, 36);
-        uiText(label, x + 55, y + 24, 15, "#fff", "center", "900");
+        ctx.fillStyle = col; ctx.fillRect(x, y, bw, bh); ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 2; ctx.strokeRect(x, y, bw, bh);
+        uiText(label, x + bw / 2, y + 24, Math.max(10, Math.round(15 * Math.min(1, k * 1.1))), "#fff", "center", "900");
         ctx.globalAlpha = 1;
-        if (!disabled) this.btns.push([x, y, 110, 36, act]);
+        if (!disabled) this.btns.push([x, y, bw, bh, act]);
     }
 };
 

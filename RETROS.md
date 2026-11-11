@@ -6,6 +6,20 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## UI pass 4: every game at 820×600
+
+**Shipped:** screenshots of all 22 games and build mode at 820×600 found four problems, all fixed generally rather
+than per game: the "👥 P1 vs CPU1 (Players: …)" badge drops its suffix under 1100 px (it sat on the Zombie Ball
+scoreboard, Bed Brawl's bed timer and Crash Lab's damage panel); `uiText` shrinks small centred lines (≤14 px) that
+would run off the screen, which fixed Terra's control legend; Rent Rush's ROLL/BUILD/TRADE buttons scale to the
+board's inner square; the build bar moves beside the hero card in solo, or above the cards, when it doesn't fit
+between them.
+
+**Measured:** re-shot the affected games: no overlaps; Rent Rush tests (full game, mortgage, trade) and the build
+test still pass; no console errors.
+
+---
+
 ## UI pass 3: cheats & tuning panel
 
 **Shipped:** the panel is called "🧪 Cheats & tuning" (as in every menu) instead of "DEV MODE", has a ✕ button,

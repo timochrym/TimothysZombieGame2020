@@ -132,7 +132,9 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
       ?lan=host auto-hosts, LAN panel says which kind of page you're on and shows the join link with Copy.
 - [x] Cheats & tuning panel: same name everywhere, ✕ close, Esc closes it first, fits narrow windows, its dock no longer
       covers the key help or HUD. Players panel checked at 820 px (fine as is).
-- [ ] Build-mode HUD (C) and the game-specific HUDs: not yet reviewed at small window sizes.
+- [x] All 22 games + build mode reviewed at 820×600: the line-up badge is short on narrow windows (it covered the
+      Zombie Ball / Bed Brawl / Crash Lab HUDs), small centred hint lines shrink to fit (Terra's ran off both edges),
+      Rent Rush buttons scale with the board, the build bar sits beside the hero card (or above the cards) instead of on it.
 - [ ] Control Panel buttons only checked with a stand-in for the Control Panel (its source isn't reachable from here):
       confirm they show on Home → Play together on your machine.
 
