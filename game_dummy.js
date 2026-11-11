@@ -195,7 +195,7 @@ GameModes.register({
         }
         else if (t === "pad") { Object.addBumper(Math.round(wx / 40) * 40, Math.round(wy / 40) * 40, 200, 40, 32, "#ff2e63", { name: "Bounce Pad" }); rebuildAllObjects(); }
         else if (t === "spike") { var s = Object.addBox(Math.round(wx / 40) * 40, Math.round(wy / 40) * 40, 160, 40, "#94a3b8", { name: "Spike Block", texture: "hazard", kind: "block" }); s.isSpike = true; Dummy.spikes.push(s); rebuildAllObjects(); }
-        else if (t === "weight") { var w = Object.addCrate(wx, wy + 700, 120, "#1f2937", { name: "Heavy Weight", texture: "solid", bounciness: -0.05 }); w.yspeed = -6; rebuildAllObjects(); }
+        else if (t === "weight") { var w = Object.addCrate(wx, wy + 700, 120, "#1f2937", { name: "Heavy Weight", texture: "cart_iron", bounciness: -0.05 }); w.oneTon = true; w.yspeed = -6; rebuildAllObjects(); }
         else if (t === "ball") {
             var top = (levelBounds ? levelBounds.topY : 2000) - 40;
             var fakeB = { x: wx, y: wy, s1: 80, s2: 80, zombiePower: "BALL", lastFacing: 1 };
@@ -207,9 +207,16 @@ GameModes.register({
             bl.life = -1; bl.heavy = true;
             bl.drawFn = function(r) {
                 var a = r.pts[0], b = r.pts[1];
-                ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(wsx(a.x), wsy(a.y)); ctx.lineTo(wsx(b.x), wsy(b.y)); ctx.stroke();
-                ctx.fillStyle = "#111827"; ctx.beginPath(); ctx.arc(wsx(b.x), wsy(b.y), b.r * cameraScaleX, 0, 7); ctx.fill();
-                ctx.strokeStyle = "#475569"; ctx.lineWidth = 3; ctx.stroke();
+                // a chain of links, then an iron ball with a highlight
+                var ax = wsx(a.x), ay = wsy(a.y), bx2 = wsx(b.x), by2 = wsy(b.y), L = Math.hypot(bx2 - ax, by2 - ay), n = Math.max(4, Math.round(L / 14)), ang = Math.atan2(by2 - ay, bx2 - ax);
+                ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 2.5;
+                for (let i = 0; i < n; i++) { var t = (i + 0.5) / n; ctx.save(); ctx.translate(ax + (bx2 - ax) * t, ay + (by2 - ay) * t); ctx.rotate(ang + (i % 2 ? Math.PI / 2 : 0) * 0); ctx.beginPath(); ctx.ellipse(0, 0, L / n * 0.6, i % 2 ? 2 : 4, 0, 0, 7); ctx.stroke(); ctx.restore(); }
+                var br = b.r * cameraScaleX;
+                ctx.fillStyle = TextureManager.getPattern("cart_iron") || "#111827"; ctx.beginPath(); ctx.arc(bx2, by2, br, 0, 7); ctx.fill();
+                var sh = ctx.createRadialGradient(bx2 - br * 0.35, by2 - br * 0.35, br * 0.1, bx2, by2, br);
+                sh.addColorStop(0, "rgba(255,255,255,0.35)"); sh.addColorStop(0.5, "rgba(0,0,0,0)"); sh.addColorStop(1, "rgba(0,0,0,0.55)");
+                ctx.fillStyle = sh; ctx.fill();
+                ctx.strokeStyle = "#1f2937"; ctx.lineWidth = 3; ctx.stroke();
             };
             Ragdolls.list.push(bl);
             Dummy.balls.push(bl);
@@ -318,12 +325,15 @@ GameModes.register({
             var sp = Dummy.spikes[s];
             if (sp.dead) continue;
             var n = Math.round(sp.w / 32), l = wsx(sp.x - sp.w / 2), t = wsy(sp.y + sp.h / 2);
-            ctx.fillStyle = "#e2e8f0"; ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 1.5;
+            var steel = ctx.createLinearGradient(0, t - 26 * k, 0, t);
+            steel.addColorStop(0, "#f8fafc"); steel.addColorStop(1, "#64748b");
+            ctx.fillStyle = steel; ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 1.5;
             for (let i = 0; i < n; i++) { var bx = l + i * sp.w * k / n; ctx.beginPath(); ctx.moveTo(bx, t); ctx.lineTo(bx + sp.w * k / n / 2, t - 26 * k); ctx.lineTo(bx + sp.w * k / n, t); ctx.closePath(); ctx.fill(); ctx.stroke(); }
         }
     },
 
     drawFront: function() {
+        for (let i = 0; i < movingObjects.length; i++) { var o = movingObjects[i]; if (o.oneTon && !o.dead) uiText("1 TON", wsx(o.x), wsy(o.y) + 6, Math.max(10, 22 * cameraScaleX), "#fde047", "center", "900"); }
         if (Dummy.drag && Dummy.rd) {
             var p = Dummy.rd.pts[Dummy.drag.i];
             ctx.strokeStyle = "rgba(250,204,21,0.8)"; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);

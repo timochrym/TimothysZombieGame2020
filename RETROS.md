@@ -6,6 +6,17 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Crash Lab props
+
+**Shipped:** the heavy weight is riveted iron with a "1 TON" label; the wrecking ball hangs on a chain of links and is
+an iron ball with a highlight and shading; spike blocks have steel-shaded spikes. That closes the texture list (enemy
+weapons turned out to be drawn in detail already by the default look — an edit to an old, unused drawing path was
+reverted).
+
+**Measured:** weight, spikes and wrecking ball placed with their tools and drawn; no errors.
+
+---
+
 ## Textures: vehicles, rails, Bed Brawl props
 
 **Shipped:** five more procedural 32 px textures in the same seeded style — `panel_overlay` (see-through seams, rivets
