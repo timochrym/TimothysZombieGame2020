@@ -719,8 +719,8 @@ function drawKeyLegend(ch, x, y) {
         [["W A S D", "move"], ["F", "shoot"], ["X", "reload"], ["SPACE", "jetpack"], ["L-SHIFT", "dash"], ["E", "revive"]];
     if (brawl.active) {
         items = p2 ?
-            [["← ↑ ↓ →", "move/jump"], ["ENTER", "blaster"], ["R-SHIFT", "dash hit"], ["/", "smash"]] :
-            [["W A S D", "move/jump"], ["F", "blaster"], ["L-SHIFT", "dash hit"], ["E", "smash"]];
+            [["← ↑ ↓ →", "move/jump"], ["ENTER", settings.weapon === "fists" ? "punch" : "blaster"], ["R-SHIFT", "dash hit"], ["/", "smash"]] :
+            [["W A S D", "move/jump"], ["F", settings.weapon === "fists" ? "punch" : "blaster"], ["L-SHIFT", "dash hit"], ["E", "smash"]];
     }
     var widths = [];
     ctx.save();
@@ -1119,6 +1119,7 @@ function frame() {
     Components.updateParticles();
     Components.drawEffects();
     GameModes.call("drawFront");
+    if (typeof Fight !== "undefined") Fight.drawAll();
     if (typeof Mashup !== "undefined") Mashup.drawFront();
     if (typeof Build !== "undefined") Build.drawFront();
     if (typeof Feel !== "undefined") Feel.drawFront();
@@ -1194,13 +1195,16 @@ function togglePause() {
     else openPause(false);
 }
 
-var PAUSE_CYCLE_IDS = ["level", "skin0", "skin1", "bopp", "blvl", "bstk", "bstage", "svol", "sshake", "stheme", "sbright", "sspeed", "sric"];
+var PAUSE_CYCLE_IDS = ["level", "skin0", "skin1", "bopp", "blvl", "bstk", "bstage", "svol", "sshake", "stheme", "sbright", "sweapon", "sragdoll", "sspeed", "sric"];
 
 function pauseItems() {
     if (pauseSub === "settings") {
         return [
             { id: "stheme", label: "Theme:  ◀  " + Theme.c.label + "  ▶", hint: "Sky, hills, panels and backgrounds in every game" },
             { id: "sbright", label: "Brightness:  ◀  " + Math.round(settings.bright * 100) + "%  ▶", hint: "Lighter or darker screen, every game" },
+            { id: "sweapon", label: "Weapon:  ◀  " + FIGHT_WEAPONS.find(function(o) { return o[0] === settings.weapon; })[1].replace(/ \(.*/, "") + "  ▶", hint: settings.weapon === "fists" ? "Fire = punch, punch, kick · UP+fire uppercut · air DOWN+fire ground pound" : "Fire shoots · switch to Fists for melee" },
+            { id: "sammo", label: "Ammo:  " + (settings.ammo === "limited" ? "Limited (reload)" : "Unlimited"), hint: "Limited = magazine, reload and ammo packs" },
+            { id: "sragdoll", label: "Ragdoll when you get hit:  ◀  " + FIGHT_RAGDOLL.find(function(o) { return o[0] === settings.hitRagdoll; })[1] + "  ▶", hint: "How long a big hit knocks your hero over" },
             { id: "svol", label: "Sound volume:  ◀  " + (settings.volume <= 0 ? "OFF" : Math.round(settings.volume * 100) + "%") + "  ▶", hint: "◀ ▶ adjust" },
             { id: "sshake", label: "Screen shake:  ◀  " + Math.round(settings.shake * 100) + "%  ▶", hint: "◀ ▶ adjust (0% = off)" },
             { id: "shit", label: "Hit-stop on big hits:  " + (settings.hitStop ? "ON" : "OFF"), hint: "Freezes a few frames on heavy impacts" },
@@ -1260,6 +1264,9 @@ function pauseActivate(id, dir) {
     if (id === "settings") { pauseSub = "settings"; pauseIndex = 0; return; }
     if (id === "back") { pauseSub = null; pauseIndex = 0; return; }
     if (id === "svol") { SFX.setVolume(Math.round((settings.volume + (dir || 1) * 0.1) * 10) / 10); if (settings.volume > 1) SFX.setVolume(1); return; }
+    if (id === "sweapon") { Fight.set("weapon", settings.weapon === "fists" ? "blaster" : "fists"); return; }
+    if (id === "sammo") { Fight.set("ammo", settings.ammo === "limited" ? "unlimited" : "limited"); return; }
+    if (id === "sragdoll") { var rl = FIGHT_RAGDOLL.map(function(o) { return o[0]; }); Fight.set("hitRagdoll", rl[(rl.indexOf(settings.hitRagdoll) + (dir || 1) + rl.length) % rl.length]); return; }
     if (id === "stheme") { Theme.cycle(dir || 1); return; }
     if (id === "sbright") { Theme.stepBright(dir || 1); return; }
     if (id === "sshake") { settings.shake = Math.max(0, Math.min(1, Math.round((settings.shake + (dir || 1) * 0.25) * 4) / 4)); saveSettings(); return; }

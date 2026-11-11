@@ -166,7 +166,7 @@ class Character {
     }
 
     // ---- Ammo ------------------------------------------------------------
-    unlimitedAmmo() { return godMode || devOpts.infiniteAmmo || this.isZombie || (typeof brawl !== "undefined" && brawl.active) || !GameModes.flag("ammo", true); }
+    unlimitedAmmo() { return (typeof settings !== "undefined" && settings.ammo !== "limited") || godMode || devOpts.infiniteAmmo || this.isZombie || (typeof brawl !== "undefined" && brawl.active) || !GameModes.flag("ammo", true); }
 
     totalAmmo() { return this.ammoMag + this.ammoReserve; }
 
@@ -1780,6 +1780,7 @@ class Character {
             aimX: aimX, aimY: aimY,
             color: this.originalColor || this.color,
             firing: firing,
+            fists: typeof Fight !== "undefined" && Fight.fists(this),
             flash: this.hitFlashTimer > 0,
             t: Date.now(),
             ragdoll: this.ragdollTimer > 0 || this.corpse
@@ -1867,8 +1868,10 @@ class Character {
             ctx.moveTo(cx - facing * w * 0.46, y + h * 0.14);
             ctx.lineTo(cx - facing * (w * 0.46 + 26 * cameraScaleX), y + h * 0.14 + rib);
             ctx.stroke();
-            // aim barrel
+            // aim barrel (none when fighting with fists)
             var rad = Math.radians(this.degree);
+            if (typeof Fight !== "undefined" && Fight.fists(this)) rad = null;
+            if (rad !== null) {
             var ax = Math.sin(rad), ay = -Math.cos(rad);
             ctx.strokeStyle = "#0a0f16";
             ctx.lineWidth = Math.max(6, 11 * cameraScaleX);
@@ -1883,6 +1886,7 @@ class Character {
             ctx.moveTo(cx + ax * w * 0.2, cy + ay * h * 0.2);
             ctx.lineTo(cx + ax * w * 0.78, cy + ay * h * 0.78);
             ctx.stroke();
+            }
         } else {
             // Undead / enemy: glowing eyes + jagged teeth
             this.drawSprite(zombieImg, x, y, w, h, r, this.isPlayer ? "#7a5cff" : (pw == "NORMAL" ? null : drawColor));

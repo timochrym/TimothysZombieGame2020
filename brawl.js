@@ -533,13 +533,14 @@ var Brawl = {
         var targetBelow = tgt.y < ch.y - 150;
         // a hurt CPU at high percent plays safer: stays further from edges
         var edgeCaution = ch.damagePct > 90 && lvl >= 2;
-        if (Math.abs(dx) > 150) {
+        var closeIn = (typeof Fight !== "undefined" && Fight.fists(ch)) ? 85 : 150;
+        if (Math.abs(dx) > closeIn) {
             if (!edgeAhead || (targetBelow && lvl === 1 && Math.random() < 0.02)) {
                 if (dir > 0) ch.rightPressed = true; else ch.leftPressed = true;
             } else if (edgeCaution || lvl >= 2) {
                 // hold the ledge and shoot instead of walking off
             }
-        } else if (Math.abs(dx) < 70 && lvl >= 2) {
+        } else if (Math.abs(dx) < 70 && lvl >= 2 && closeIn > 100) {
             if (dir > 0) ch.leftPressed = true; else ch.rightPressed = true; // spacing
         }
         // jump up to platforms / over gaps

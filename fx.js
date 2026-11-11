@@ -3,7 +3,7 @@
 // ============================================================================
 
 // ---- Persisted player settings (Pause menu -> Settings) ----
-var settings = { volume: 0.6, shake: 1, hitStop: true, hiDPI: true, glow: true, squareChars: false, view3d: false, heroSpeed: "normal", fx: "calm", ricochet: 0, charDetail: true, theme: "night", bright: 1 };
+var settings = { volume: 0.6, shake: 1, hitStop: true, hiDPI: true, glow: true, squareChars: false, view3d: false, heroSpeed: "normal", fx: "calm", ricochet: 0, charDetail: true, theme: "night", bright: 1, weapon: "blaster", ammo: "unlimited", hitRagdoll: "short" };
 try {
     var savedSettings = JSON.parse(localStorage.getItem("timsZombieGameSettings") || "null");
     if (savedSettings) {
@@ -18,6 +18,7 @@ try {
         if (savedSettings.fx === "full" || savedSettings.fx === "calm") settings.fx = savedSettings.fx;
         if (typeof savedSettings.charDetail === "boolean") settings.charDetail = savedSettings.charDetail;
         if (typeof savedSettings.theme === "string") settings.theme = savedSettings.theme;
+        ["weapon", "ammo", "hitRagdoll"].forEach(function(k) { if (typeof savedSettings[k] === "string") settings[k] = savedSettings[k]; });
         if (typeof savedSettings.bright === "number") settings.bright = savedSettings.bright;
         if (typeof savedSettings.ricochet === "number") settings.ricochet = Math.max(0, Math.min(3, savedSettings.ricochet));
     }

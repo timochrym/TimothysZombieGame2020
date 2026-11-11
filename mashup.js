@@ -94,6 +94,12 @@ Mashup.load();
 
 // settings every game shares (shown on every game's Game tab)
 var SHARED_TUNABLES = [
+    { label: "Weapon (every game)", type: "choice", options: FIGHT_WEAPONS,
+      get: function() { return settings.weapon; }, set: function(v) { Fight.set("weapon", v); } },
+    { label: "Ammo (every game)", type: "choice", options: FIGHT_AMMO,
+      get: function() { return settings.ammo; }, set: function(v) { Fight.set("ammo", v); } },
+    { label: "Ragdoll when hit (every game)", type: "choice", options: FIGHT_RAGDOLL,
+      get: function() { return settings.hitRagdoll; }, set: function(v) { Fight.set("hitRagdoll", v); } },
     { label: "Theme (every game)", type: "choice", options: THEME_ORDER.map(function(k) { return [k, THEMES[k].label]; }),
       get: function() { return Theme.id; }, set: function(v) { Theme.set(v); } },
     { label: "Brightness (every game)", type: "choice", options: BRIGHT_STEPS.map(function(b) { return [b, Math.round(b * 100) + "%"]; }),

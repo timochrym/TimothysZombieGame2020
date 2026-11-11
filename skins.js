@@ -155,8 +155,8 @@ function drawHeroSkin(skin, cx, cy, S, st) {
         var hx = lean + ax * 26, hy = -9 + bob + ay * 26;
         skinLimb(lean, -9 + bob, hx, hy, ay * -4, lw - 1, col, fl);
         // blaster
-        skinSeg(hx, hy, hx + ax * 13, hy + ay * 13, 7, "#334155", fl);
-        if (st.firing) skinCirc(hx + ax * 17, hy + ay * 17, 6, "#fff3a0", false, false);
+        if (!st.fists) skinSeg(hx, hy, hx + ax * 13, hy + ay * 13, 7, "#334155", fl);
+        if (st.firing && !st.fists) skinCirc(hx + ax * 17, hy + ay * 17, 6, "#fff3a0", false, false);
         // head + headband ribbon
         skinCirc(lean, -24 + bob, 11, "#0a0f16", false, false);
         skinCirc(lean, -24 + bob, 8.5, fl ? "#ffffff" : "#f8fafc", false, false);
@@ -185,7 +185,7 @@ function drawHeroSkin(skin, cx, cy, S, st) {
         skinSeg(f * 10, 9 + bob, f * 15 + Math.sin(ph * 2) * 3, 20 + bob, 4, col, fl);
         // arms: muscular bare arms, red wristbands. Firing = two-handed energy thrust
         var sx0 = -15, sx1 = 15, sy = -9 + bob;
-        if (st.firing) {
+        if (st.firing && !st.fists) {
             skinLimb(sx0, sy, ax * 28 - 4, sy + ay * 28, ay * 4, 10, skin1, fl);
             skinLimb(sx1, sy, ax * 28 + 4, sy + ay * 28, ay * 4, 10, skin1, fl);
             skinCirc(ax * 38, sy + ay * 38, 9, "#a5f3fc", false);
@@ -227,9 +227,9 @@ function drawHeroSkin(skin, cx, cy, S, st) {
         skinCirc(-f * 12 - sw * 0.4, st.air ? -24 : 5 + bob, 6, fl ? "#fff" : "#ffffff", false);
         var gx = 13 + ax * 24, gy = -8 + bob + ay * 24;
         skinLimb(13, -8 + bob, gx, gy, ay * -3, 8, col, fl);
-        skinSeg(gx, gy, gx + ax * 12, gy + ay * 12, 7, "#334155", fl);
+        if (!st.fists) skinSeg(gx, gy, gx + ax * 12, gy + ay * 12, 7, "#334155", fl);
         skinCirc(gx, gy, 6, fl ? "#fff" : "#ffffff", false);
-        if (st.firing) skinCirc(gx + ax * 17, gy + ay * 17, 6, "#fff3a0", false, false);
+        if (st.firing && !st.fists) skinCirc(gx + ax * 17, gy + ay * 17, 6, "#fff3a0", false, false);
         // head: face, nose, cap with brim + emblem
         skinCirc(0, -27 + bob, 12.5, skin2, fl);
         skinCirc(f * 11, -25 + bob, 3.6, "#f2b88a", fl, false);

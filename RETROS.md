@@ -6,6 +6,27 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Fists, unlimited ammo by default, and a "ragdoll when hit" setting (every game)
+
+**Asked:** "The characters always have a gun / ammo is annoying / There should be some fighting methods instead of just
+dash / The ragdoll when I get hit hard is sometimes annoying." (shared items S3 + S4)
+**Shipped:** `fighting.js`, three settings shared by every game that has shooting (Pause → Settings, or the panel's
+🎨 Shared box): **Weapon** 🔫 Blaster / 👊 Fists. With fists the fire button is punch, punch, KICK (3-hit combo); UP + fire is
+an uppercut that launches; DOWN + fire in the air is a ground pound with a shockwave where you land; fire while dashing is a
+flying kick. No direction held = it swings at the nearest enemy in reach. The gun disappears from every hero skin and
+guard fists show instead. It works in Brawl too: CPUs walk in close and punch. **Ammo** is now Unlimited by default
+(Limited brings back the magazine and reload). **Ragdoll when you get hit**: Short (new default, about 0.4 s), Full (the
+old tumble) or Off (a small flinch). Enemies still tumble as before.
+**Went well:** one hook in the fire code (`Fight.update`) and one wrapper on `startRagdoll` cover every game; test numbers:
+combo 12+12+20 = 44 damage, ground pound 24, ragdoll frames off 0 / short 22 / full 55, a Brawl CPU landed 5–6 punches in 9 s.
+**Went wrong:** the first punches hit air. Facing came from a tiny backwards slide, which fixed itself once punches aim at
+the nearest enemy when no direction is held. The ground pound never fired either: the hero bounces upward on landing in the
+same frame, which read as "cancelled". It now treats any slow-down of the dive as the landing. That landing bounce is
+probably the "weird bounce after jumps" from your list; it's next on the Stomp Squad item.
+**Left:** no separate melee key while holding the blaster (keys are full; Fists is a setting). Fist hits don't move crates yet.
+
+---
+
 ## Themes: Day (light), Sunset, Meadow, Retro + a brightness setting for every game
 
 **Asked:** "add ability to change the textures and graphics a bit. The current ones feel dark all the time, maybe we need a

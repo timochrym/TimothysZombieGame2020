@@ -391,6 +391,7 @@ class Components {
 
         if (object.isPlayer && object.buildMode) { object.buildWant = !!object.shootPressed; return; }
         if (object.isPlayer && !GameModes.flag("shooting", true)) return;
+        if (typeof Fight !== "undefined" && Fight.fists(object)) { Fight.update(object); return; }
         if (object.isPlayer && GameModes.has("canShoot") && !GameModes.call("canShoot", object)) return;
         var canEnemyShoot = (object.isPlayer || object.zombiePower == "SPITTER" || object.zombiePower == "ARCHER" || object.zombiePower == "MAGE" || object.zombiePower == "BOSS_KING");
         if (object.isZombie && !canEnemyShoot && object.moveType == "ZOMBIE") {

@@ -177,10 +177,13 @@ Play and feel like the genre's best, with ORIGINAL look (no copied characters, a
 Shared (first, as you asked: "Focus on shared game library assets though first"):
 - [x] S1 Themes: a light mode and other themes for textures / graphics / panels ("the current ones feel dark"). → Pause → Settings → Theme / Brightness, or the panel's 🎨 Shared box. Check: `tests/themes.js`.
 - [ ] S2 Character roster: more character options; play as any NPC (every enemy type) or object, in any game.
-- [ ] S3 Fighting: weapon setting (blaster / fists / none) so heroes don't always carry a gun or ammo; melee moves
-      (punch, kick, uppercut, ground pound) instead of only dash.
-- [ ] S4 Ragdoll on hits: a setting (off / small / big) so getting hit hard isn't annoying.
+- [x] S3 Fighting: weapon setting (blaster / fists) so heroes don't always carry a gun; ammo unlimited by default; melee
+      moves (punch, punch, kick, uppercut, ground pound, flying kick). Check: `tests/fighting.js`.
+- [x] S4 Ragdoll on hits: a setting (Off / Short / Full; Short is the default). Check: `tests/fighting.js`.
 - [ ] S5 Scores and stats saved for every game, shown in the Arcade.
+- [ ] BUG: Zombie Ball — the ball sometimes goes invisible.
+- [ ] BUG: Table Games / Flick Soccer — player 2 can't move their discs on their turn.
+- [ ] S7 Enemy AI pathfinding still needs to improve (your words: "And enemey AI path finding still needs to improve").
 - [ ] S6 Cheats for every game, incl. Worm / Blob / Tank Arena (god mode, size, speed, stat points).
 Each game:
 - [ ] Worm Arena: boost doesn't work properly; cheats.   - [ ] Tank Arena: too hard; cheats.   - [ ] Blob Arena: cheats.
