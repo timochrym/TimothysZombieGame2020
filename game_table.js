@@ -9,7 +9,7 @@
 var tableCfg = { game: "flick", vs: "cpu", level: 2 };
 try { var _tb = JSON.parse(localStorage.getItem("timsTableGames") || "null"); if (_tb) for (var _k in _tb) tableCfg[_k] = _tb[_k]; } catch (e) {}
 function saveTable() { try { localStorage.setItem("timsTableGames", JSON.stringify(tableCfg)); } catch (e) {} }
-var TABLE_GAMES = [["flick", "Flick Soccer"], ["four", "Four in a Row"], ["hockey", "Air Hockey"], ["arty", "Hill Cannons"], ["pool", "Pocket Race"]];
+var TABLE_GAMES = [["flick", "Flick Soccer"], ["four", "Four in a Row"], ["hockey", "Air Hockey"], ["arty", "Hill Cannons"], ["pool", "Pocket Race"], ["darts", "Sway Darts"]];
 var TABLE_COLORS = ["#ef4444", "#3b82f6"];
 
 // ---------------------------------------------------------------- FLICK SOCCER
@@ -709,6 +709,77 @@ var Pool = {
     }
 };
 
+// ---------------------------------------------------------------- SWAY DARTS
+//   The aim point drifts in a figure-eight; Space / click throws. Hold Space / the mouse to steady your hand for a
+//   moment (then the sway comes back stronger). Rings: bull 50, inner 25, then 20 / 15 / 10 / 5 outward, the outer
+//   double ring scores twice its ring. 3 darts a turn, 5 rounds, higher total wins.
+var Darts = {
+    R: 220,
+    reset: function(first) { this.score = [0, 0]; this.turn = first || 0; this.round = 1; this.dart = 0; this.hits = []; this.t = Math.random() * 100; this.steady = 0; this.tired = 0; this.over = false; this.win = -1; this.cpuT = 0; this.flash = null; this.wait = 0; },
+    human: function(t) { return Flick.human(t); },
+    geo: function() { var s = Math.min(cssW, cssH - 140) / (this.R * 2 + 120); return { s: s, cx: cssW / 2, cy: cssH / 2 + 30 }; },
+    aim: function() {
+        var amp = (95 + this.round * 8) * (this.steady > 0 ? 0.5 : 1) * (1 + this.tired * 0.8), sp = 0.035 + this.round * 0.003;
+        var cx = Math.sin(this.t * 0.011) * 45, cy = Math.cos(this.t * 0.007) * 35;             // the whole sway drifts too
+        return [cx + Math.sin(this.t * sp) * amp, cy + Math.sin(this.t * sp * 2 + 1.3) * amp * 0.6];
+    },
+    value: function(x, y) {
+        var d = Math.hypot(x, y), R = this.R;
+        if (d < R * 0.05) return 50; if (d < R * 0.12) return 25;
+        if (d > R) return 0;
+        var ring = d < R * 0.3 ? 20 : d < R * 0.5 ? 15 : d < R * 0.75 ? 10 : 5;
+        return d > R * 0.9 ? ring * 2 : ring;
+    },
+    throwAt: function(x, y) {
+        var v = this.value(x, y);
+        this.score[this.turn] += v; this.hits.push([x, y, this.turn]);
+        this.flash = { v: v, t: 50 }; this.dart++; this.steady = 0; this.tired = 0; this.wait = 25;
+        if (typeof SFX !== "undefined") SFX.play(v >= 25 ? "coin" : "hit", 0, 0, 0.6);
+        if (this.dart >= 3) {
+            this.dart = 0; this.turn = 1 - this.turn; this.cpuT = 0; this.wait = 70;
+            if (this.turn === 0) { this.round++; this.hits = []; }
+            if (this.round > 5) { this.over = true; this.win = this.score[0] === this.score[1] ? -1 : (this.score[0] > this.score[1] ? 0 : 1); if (typeof showBanner === "function") showBanner(this.win < 0 ? "DRAW!" : (this.win ? "BLUE" : "RED") + " WINS!", this.score[0] + " - " + this.score[1], this.win < 0 ? "#e2e8f0" : TABLE_COLORS[this.win]); }
+        }
+    },
+    update: function() {
+        this.t++;
+        if (this.flash && --this.flash.t <= 0) this.flash = null;
+        if (this.over) return;
+        if (this.wait > 0) { this.wait--; return; }
+        if (!this.human(this.turn)) {
+            // the CPU waits for a calm moment in the sway, then throws with skill-based error
+            if (++this.cpuT > 40) { var a = this.aim(), err = [0, 70, 40, 18][tableCfg.level]; if (Math.hypot(a[0], a[1]) < 30 + err || this.cpuT > 160) this.throwAt(a[0] * 0.5 + (Math.random() - 0.5) * err * 2.4, a[1] * 0.5 + (Math.random() - 0.5) * err * 2.4); }
+            return;
+        }
+        if (typeof Net !== "undefined" && Net.role === "client") return;
+        var lan = this.turn === 1 && Table.lanPid(), inp = lan ? ((Net.peers[lan] && Net.peers[lan].inp) || {}) : null;
+        var hold = lan ? !!(inp.sh || inp.jt) : (this.turn === 0 || tableCfg.vs !== "p2" ? (SpacePressed || mouseDown) : !!PlayerInput[1].kbShoot);
+        // hold to steady (up to ~1 s), release to throw; holding too long makes your hand shake
+        if (hold) { this.held = (this.held || 0) + 1; if (this.held < 60) this.steady = 1; else { this.steady = 0; this.tired = Math.min(1, (this.held - 60) / 60); } }
+        else if (this.held) { this.held = 0; var a2 = this.aim(); this.throwAt(a2[0], a2[1]); }
+    },
+    draw: function() {
+        var G = this.geo(), s = G.s, R = this.R, self = this;
+        ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, cssW, cssH);
+        var rings = [[1.04, "#111827"], [1, "#ca8a04"], [0.9, "#b91c1c"], [0.75, "#f5f5f4"], [0.5, "#15803d"], [0.3, "#f5f5f4"], [0.12, "#15803d"], [0.05, "#b91c1c"]];
+        rings.forEach(function(r) { ctx.fillStyle = r[1]; ctx.beginPath(); ctx.arc(G.cx, G.cy, R * r[0] * s, 0, 7); ctx.fill(); });
+        ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = 1;
+        for (let k = 0; k < 20; k++) { var an = k / 20 * Math.PI * 2; ctx.beginPath(); ctx.moveTo(G.cx + Math.cos(an) * R * 0.12 * s, G.cy + Math.sin(an) * R * 0.12 * s); ctx.lineTo(G.cx + Math.cos(an) * R * s, G.cy + Math.sin(an) * R * s); ctx.stroke(); }
+        [[0.95, "×2"], [0.62, "10"], [0.4, "15"], [0.21, "20"]].forEach(function(l) { uiText(l[1], G.cx, G.cy - R * l[0] * s + 5, 11, "#94a3b8", "center", "800"); });
+        this.hits.forEach(function(h) { var x = G.cx + h[0] * s, y = G.cy + h[1] * s; ctx.fillStyle = TABLE_COLORS[h[2]]; ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke(); });
+        if (!this.over && this.wait <= 0) {
+            var a = this.aim(), ax = G.cx + a[0] * s, ay = G.cy + a[1] * s, col = TABLE_COLORS[this.turn];
+            ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(ax, ay, 14, 0, 7); ctx.moveTo(ax - 22, ay); ctx.lineTo(ax + 22, ay); ctx.moveTo(ax, ay - 22); ctx.lineTo(ax, ay + 22); ctx.stroke();
+        }
+        if (this.flash) uiText(this.flash.v ? "+" + this.flash.v : "MISS", G.cx, G.cy - R * s - 18, 26, this.flash.v >= 25 ? "#fde047" : "#fff", "center", "900");
+        var who = function(t) { return (t === 0 ? "RED" : "BLUE") + (tableCfg.vs === "cpu" ? (t === 0 ? " (you)" : " (CPU)") : ""); };
+        uiPanel(cssW / 2 - 230, 64, 460, 54, this.over ? (this.win < 0 ? "#e2e8f0" : TABLE_COLORS[this.win]) : TABLE_COLORS[this.turn]);
+        uiText(this.over ? (this.win < 0 ? "DRAW" : who(this.win) + " WINS") + "  ·  Space for a rematch" : who(this.turn) + "  ·  dart " + (this.dart + 1) + " of 3  ·  round " + Math.min(5, this.round) + " / 5", cssW / 2, 88, 16, "#fff", "center", "900");
+        uiText("RED " + this.score[0] + "   ·   BLUE " + this.score[1], cssW / 2, 108, 13, "#cbd5e1", "center", "800");
+        uiText("Hold Space (or the mouse) to steady your hand, let go to throw · hold too long and you shake · Esc: opponent / game", cssW / 2, cssH - 14, 12, "rgba(220,230,240,0.7)", "center", "700");
+    }
+};
+
 // ---------------------------------------------------------------- the glue: which game is on, LAN state
 var Table = {
     lanPid: function() { if (typeof Net === "undefined" || Net.role !== "host") return null; for (var k in Net.peers) return Net.peers[k].pid; return null; },
@@ -718,6 +789,7 @@ var Table = {
             q: { g: Four.g, turn: Four.turn, over: Four.over, win: Four.win, line: Four.line, col: Four.col },
             a: Arty.h ? { h: Arty.h.map(Math.round), k: Arty.tank.map(function(T) { return [T.x, T.hp, Math.round(T.ang), Math.round(T.pow), T.hit || 0, T.lastDmg || 0]; }), t: Arty.turn, s: Arty.shell ? [Math.round(Arty.shell.x), Math.round(Arty.shell.y)] : null, w: Arty.wind, o: Arty.over, win: Arty.win, b: Arty.boom ? [Arty.boom.x, Arty.boom.y, Arty.boom.t] : null } : null,
             p: Pool.balls ? { b: Pool.all().map(function(b) { return [Math.round(b.x), Math.round(b.y), b.gone ? 1 : 0]; }), s: Pool.score, t: Pool.turn, ph: Pool.phase, a: Pool.aimA, pw: Pool.aimP, m: Pool.msg, mt: Pool.msgT, w: Pool.win } : null,
+            d: Darts.score ? { s: Darts.score, t: Darts.turn, r: Darts.round, n: Darts.dart, h: Darts.hits.map(function(q) { return [Math.round(q[0]), Math.round(q[1]), q[2]]; }), tt: Darts.t, st: Darts.steady, ti: Darts.tired, o: Darts.over, w: Darts.win, f: Darts.flash, wa: Darts.wait } : null,
             h: { m: Hockey.m.map(function(M) { return [Math.round(M.x), Math.round(M.y)]; }), p: [Math.round(Hockey.puck.x), Math.round(Hockey.puck.y)], s: Hockey.score, ph: Hockey.phase, w: Hockey.winner, msg: Hockey.msg, mt: Hockey.msgT } };
     },
     apply: function(m) {
@@ -729,6 +801,7 @@ var Table = {
         if (m.h) { if (!Hockey.puck) Hockey.reset(); m.h.m.forEach(function(a, i) { Hockey.m[i].x = a[0]; Hockey.m[i].y = a[1]; }); Hockey.puck.x = m.h.p[0]; Hockey.puck.y = m.h.p[1]; Hockey.score = m.h.s; Hockey.phase = m.h.ph; Hockey.winner = m.h.w; Hockey.msg = m.h.msg; Hockey.msgT = m.h.mt; }
         if (m.a) { var A = m.a; if (!Arty.h) Arty.reset(0); Arty.h = A.h; A.k.forEach(function(k, i) { var T = Arty.tank[i]; T.x = k[0]; T.hp = k[1]; T.ang = k[2]; T.pow = k[3]; T.hit = k[4]; T.lastDmg = k[5]; }); Arty.turn = A.t; Arty.shell = A.s ? { x: A.s[0], y: A.s[1] } : null; Arty.wind = A.w; Arty.over = A.o; Arty.win = A.win; Arty.boom = A.b ? { x: A.b[0], y: A.b[1], t: A.b[2] } : null; if (Arty.shell) Arty.trail.push([Arty.shell.x, Arty.shell.y]); else Arty.trail = Arty.trail.slice(-200); }
         if (m.p) { if (!Pool.balls) Pool.reset(0); var PB = Pool.all(); m.p.b.forEach(function(q, i) { if (PB[i]) { PB[i].x = q[0]; PB[i].y = q[1]; PB[i].gone = !!q[2]; } }); Pool.score = m.p.s; Pool.turn = m.p.t; Pool.phase = m.p.ph; Pool.aimA = m.p.a; Pool.aimP = m.p.pw; Pool.msg = m.p.m; Pool.msgT = m.p.mt; Pool.win = m.p.w; }
+        if (m.d) { if (!Darts.score) Darts.reset(0); var D = m.d; Darts.score = D.s; Darts.turn = D.t; Darts.round = D.r; Darts.dart = D.n; Darts.hits = D.h; Darts.t = D.tt; Darts.steady = D.st; Darts.tired = D.ti; Darts.over = D.o; Darts.win = D.w; Darts.flash = D.f; Darts.wait = D.wa; }
         var Q = m.q; Four.g = Q.g; Four.turn = Q.turn; Four.over = Q.over; Four.win = Q.win; Four.line = Q.line; Four.col = Q.col; Four.drop = null;
     }
 };
@@ -739,7 +812,7 @@ ModeKit.addLevel("table_games", { name: "🎲 Table Games", mode: "table", waves
 GameModes.register({
     id: "table",
     title: "TABLE GAMES",
-    tagline: "2-player minigames: tabletop flick soccer, four in a row, air hockey, hill cannons and a pocket-race cue game. Vs CPU, pass-and-play or LAN.",
+    tagline: "2-player minigames: tabletop flick soccer, four in a row, air hockey, hill cannons, a pocket-race cue game and darts. Vs CPU, pass-and-play or LAN.",
     color: "#22c55e",
     firstLevel: "table_games",
     flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: false },
@@ -747,9 +820,9 @@ GameModes.register({
 
     seats: function() {
         return [{ label: "RED", options: ["human"], value: "human", set: function() {} },
-            { label: "BLUE", options: ["human", "cpu"], value: tableCfg.vs === "p2" ? "human" : "cpu", note: "human = pass-and-play (or a LAN player takes BLUE)", set: function(v) { tableCfg.vs = v === "human" ? "p2" : "cpu"; multiplayer = v === "human"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); } }];
+            { label: "BLUE", options: ["human", "cpu"], value: tableCfg.vs === "p2" ? "human" : "cpu", note: "human = pass-and-play (or a LAN player takes BLUE)", set: function(v) { tableCfg.vs = v === "human" ? "p2" : "cpu"; multiplayer = v === "human"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); Darts.reset(0); } }];
     },
-    setupLevel: function() { multiplayer = tableCfg.vs === "p2"; Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); this.lastMouse = [mouseX, mouseY]; },
+    setupLevel: function() { multiplayer = tableCfg.vs === "p2"; Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); Darts.reset(0); this.lastMouse = [mouseX, mouseY]; },
 
     screenFrame: function() {
         Four.mouseMoved = Math.hypot(mouseX - this.lastMouse[0], mouseY - this.lastMouse[1]) > 2;
@@ -758,6 +831,7 @@ GameModes.register({
         if (tableCfg.game === "four") { Four.update(); Four.draw(); }
         else if (tableCfg.game === "hockey") { Hockey.update(); Hockey.draw(); if (Hockey.phase === "over" && SpacePressed) Hockey.reset(); }
         else if (tableCfg.game === "arty") { Arty.update(); Arty.draw(); if (Arty.over && SpacePressed && !Arty.pF) Arty.reset(Arty.win === 0 ? 1 : 0); Arty.pF = SpacePressed; }
+        else if (tableCfg.game === "darts") { Darts.update(); Darts.draw(); if (Darts.over && SpacePressed && !Darts.pF) Darts.reset(Darts.win === 0 ? 1 : 0); Darts.pF = SpacePressed; }
         else if (tableCfg.game === "pool") { Pool.update(); Pool.draw(); if (Pool.phase === "over" && SpacePressed && !Pool.pF) Pool.reset(Pool.win === 0 ? 1 : 0); Pool.pF = SpacePressed; }
         else { Flick.update(); Flick.draw(); }
         if (tableCfg.game === "flick" && Flick.phase === "over" && (SpacePressed || (mouseDown && !Flick.mouseLock))) { Flick.reset(); Flick.mouseLock = true; }
@@ -768,7 +842,7 @@ GameModes.register({
 
     screenDraw: function() {
         // LAN client view: blue is me; reuse the normal drawing (client-side "human" = it's my turn)
-        if (tableCfg.game === "four") Four.draw(); else if (tableCfg.game === "hockey") Hockey.draw(); else if (tableCfg.game === "arty") Arty.draw(); else if (tableCfg.game === "pool") Pool.draw(); else Flick.draw();
+        if (tableCfg.game === "four") Four.draw(); else if (tableCfg.game === "hockey") Hockey.draw(); else if (tableCfg.game === "arty") Arty.draw(); else if (tableCfg.game === "pool") Pool.draw(); else if (tableCfg.game === "darts") Darts.draw(); else Flick.draw();
         uiPanel(14, 10, 300, 48, "#22c55e");
         uiText("TABLE GAMES  ·  you are BLUE", 28, 36, 16, "#86efac", "left", "900");
         uiText("Four in a Row: ←/→ + Space   ·   Flick: ←/→ aim, ↑/↓ power, E next disc, Space shoot", 28, 52, 10, "#cbd5e1", "left", "700");
@@ -800,11 +874,11 @@ GameModes.register({
     },
     onMenu: function(id, dir) {
         if (id === "tb_game") { var gi = TABLE_GAMES.findIndex(function(g) { return g[0] === tableCfg.game; }); tableCfg.game = TABLE_GAMES[(gi + (dir || 1) + TABLE_GAMES.length) % TABLE_GAMES.length][0]; saveTable(); return true; }
-        if (id === "tb_vs") { tableCfg.vs = tableCfg.vs === "cpu" ? "p2" : "cpu"; multiplayer = tableCfg.vs === "p2"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); return true; }
+        if (id === "tb_vs") { tableCfg.vs = tableCfg.vs === "cpu" ? "p2" : "cpu"; multiplayer = tableCfg.vs === "p2"; saveTable(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); Darts.reset(0); return true; }
         if (id === "tb_lvl") { tableCfg.level = ((tableCfg.level - 1 + (dir || 1) + 3) % 3) + 1; saveTable(); return true; }
-        if (id === "tb_new") { closePause(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); return true; }
+        if (id === "tb_new") { closePause(); Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); Darts.reset(0); return true; }
         return false;
     },
-    onRestart: function() { Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); },
-    overSub: function() { return "Flick soccer · four in a row · air hockey · hill cannons · pocket race"; }
+    onRestart: function() { Flick.reset(); Four.reset(0); Hockey.reset(); Arty.reset(0); Pool.reset(0); Darts.reset(0); },
+    overSub: function() { return "Flick soccer · four in a row · air hockey · hill cannons · pocket race · darts"; }
 });

@@ -27,6 +27,7 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node brawl_moves.js         # Brawl: each hero's E move (shockwave, uppercut, slam, rocket punch) hits a CPU
     node table_pool.js          # Table Games: Pocket Race break by mouse, a full match vs the hard CPU
     node wheels_pogo.js         # Wobble Wheels: the pogo stays upright, hops and travels
+    node table_darts.js         # Table Games: a full Sway Darts match vs the CPU
     node lan_play.js            # starts server.js on 8099: a host + 2 joiners, positions match, client FPS
 
 Each prints its numbers and then the page errors (`[]` = none). See ROADMAP.md, "Your named feedback items".

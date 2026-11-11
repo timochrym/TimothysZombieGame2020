@@ -6,6 +6,19 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Table Games: Sway Darts
+
+**Shipped:** a sixth table game — the aim point drifts in a figure-eight (and the whole pattern wanders); hold Space or
+the mouse to steady your hand (halves the sway for about a second, then you start to shake), let go to throw. Bull 50,
+inner 25, rings 20 / 15 / 10 / 5, the outer gold ring doubles. 3 darts a turn, 5 rounds. The CPU waits for a calm
+moment in its own sway and throws with skill-based error. Pass-and-play and LAN (board, darts, sway sync).
+
+**Measured (`tests/table_darts.js`):** a full match vs the normal CPU finished 315 - 290; P1's darts (blind timing,
+0.5 s holds) scored 15-50. **Went wrong:** the first tuning was far too easy — steadying cut the sway to a quarter
+and the figure-eight always crossed the bull: 13 of 15 darts were 25 or 50.
+
+---
+
 ## Wobble Wheels: Pogo
 
 **Shipped:** a sixth vehicle — a pink pogo stick. It bounces by itself every time its spring foot lands; W makes the
