@@ -90,6 +90,7 @@ GAME_TUNABLES.cells = [
     { label: "Decay grows with size", type: "toggle", get: function() { return cellsCfg.decayGrow; }, set: function(v) { cellsCfg.decayGrow = !!v; saveCellsCfg(); }, note: "the bigger, the faster it shrinks" },
     { label: "Spawn shield (seconds)", type: "range", min: 0, max: 8, step: 1, get: function() { return cellsCfg.shield; }, set: function(v) { cellsCfg.shield = v; saveCellsCfg(); } },
     { label: "Power-up pickups", type: "toggle", get: function() { return cellsCfg.powerups; }, set: function(v) { cellsCfg.powerups = !!v; saveCellsCfg(); }, note: "speed, shield, magnet, mass" },
+    { label: "Humans are bubble worms", type: "toggle", get: function() { return cellsCfg.chain; }, set: function(v) { cellsCfg.chain = !!v; saveCellsCfg(); Cells.players.filter(arenaHuman).forEach(function(p) { p.chain = !!v; if (!v) Cells.mine(p).forEach(function(b) { b.lead = null; b.mergeT = 300; }); }); }, note: "a chain of bubbles that follows its head" },
     { label: "Humans start at mass", type: "range", min: 20, max: 1000, step: 20, get: function() { return cellsCfg.startMass; }, set: function(v) { cellsCfg.startMass = v; saveCellsCfg(); }, note: "next spawn" }
 ].concat(arenaRows(), [
     // ---- cheats ----

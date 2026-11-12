@@ -12,10 +12,13 @@ var CEL_COLORS = ["#f472b6", "#a78bfa", "#34d399", "#fbbf24", "#60a5fa", "#f8717
 var cellsSave = { best: 0 };
 // Game settings (Cheats panel -> Game tab, saved). decay: share of its mass a blob loses per tick; decayGrow: the rate
 // climbs with size (a blob of 800 loses twice as fast as the base rate); shield: seconds a fresh spawn can't be eaten.
-var CELL_DECAY = [[0, "Off"], [0.00015, "Slow"], [0.0004, "Normal"], [0.001, "Fast"], [0.0025, "Brutal"]];
-var cellsCfg = { bots: 14, food: 2000, decay: 0.00015, decayGrow: false, shield: 3, startMass: 20, powerups: true };
-try { var _cc = JSON.parse(localStorage.getItem("timsBlobArenaCfg") || "null"); if (_cc) for (var _ck in cellsCfg) if (typeof _cc[_ck] === typeof cellsCfg[_ck]) cellsCfg[_ck] = _cc[_ck]; } catch (e) {}
-function saveCellsCfg() { try { localStorage.setItem("timsBlobArenaCfg", JSON.stringify(cellsCfg)); } catch (e) {} }
+// "Classic" is the usual rule of the genre: every blob loses about 0.2% of its mass each second (0.002 / 60 a tick),
+// so the loss in absolute terms grows with size by itself.
+var CELL_DECAY_CLASSIC = 0.0000333;
+var CELL_DECAY = [[0, "Off"], [CELL_DECAY_CLASSIC, "Classic (0.2% a second)"], [0.00015, "Quick (0.9% a second)"], [0.0004, "Fast"], [0.001, "Very fast"], [0.0025, "Brutal"]];
+var cellsCfg = { bots: 14, food: 2000, decay: CELL_DECAY_CLASSIC, decayGrow: false, shield: 3, startMass: 20, powerups: true, chain: false };
+try { var _cc = JSON.parse(localStorage.getItem("timsBlobArenaCfg") || "null"); if (_cc) for (var _ck in cellsCfg) if (typeof _cc[_ck] === typeof cellsCfg[_ck]) cellsCfg[_ck] = _cc[_ck]; if (_cc && !_cc.decayV2) cellsCfg.decay = CELL_DECAY_CLASSIC; } catch (e) {}      // the old default (0.9% a second) moves to Classic once
+function saveCellsCfg() { try { cellsCfg.decayV2 = true; localStorage.setItem("timsBlobArenaCfg", JSON.stringify(cellsCfg)); } catch (e) {} }
 // Pickups borrowed from the main games' power-ups: run fast, can't be eaten, pull food in, or a lump of mass.
 var CELL_POWERS = { speed: { icon: "⚡", col: "#facc15", t: 480, name: "SPEED" }, shield: { icon: "🛡", col: "#38bdf8", t: 420, name: "SHIELD" },
                     magnet: { icon: "🧲", col: "#f472b6", t: 540, name: "MAGNET" }, mass: { icon: "➕", col: "#4ade80", t: 0, name: "+60 MASS" } };
@@ -43,7 +46,7 @@ var Cells = {
     },
     // match the number of CPU blobs to the setting while the game runs (no restart needed)
     syncBots: function() {
-        var cpus = this.players.filter(function(p) { return p.human === undefined; });
+        var cpus = this.players.filter(function(p) { return p.human === undefined && !p.chain; });
         for (let i = cpus.length; i < cellsCfg.bots; i++) this.addPlayer({ name: CEL_NAMES[i % CEL_NAMES.length] + (i >= CEL_NAMES.length ? " " + (Math.floor(i / CEL_NAMES.length) + 1) : ""), color: CEL_COLORS[i % CEL_COLORS.length] });
         for (let i = cpus.length - 1; i >= cellsCfg.bots; i--) { var gone = cpus[i]; this.blobs = this.blobs.filter(function(b) { return b.pl !== gone; }); this.players.splice(this.players.indexOf(gone), 1); }
     },
@@ -81,6 +84,8 @@ var Cells = {
         var m0 = pl.human !== undefined ? Math.max(20, cellsCfg.startMass) : 20;
         pl.alive = true; pl.deadT = 0; pl.peak = m0;
         pl.fx = { speed: 0, shield: Math.round(cellsCfg.shield * 60), magnet: 0 };       // fresh spawns can't be eaten for a moment
+        if (pl.human !== undefined && cellsCfg.chain && !(typeof Mix !== "undefined" && Mix.on)) pl.chain = true;
+        pl.chainList = [];
         this.blobs.push({ pl: pl, x: p[0], y: p[1], m: m0, vx: 0, vy: 0, mergeT: 0 });
     },
 
@@ -113,7 +118,7 @@ var Cells = {
             var cmd = this.cpu(pl, me, cx, cy, M);
             split = cmd.split; eject = false;
         }
-        if (split && !pl.splitPrev) this.split(pl, me);
+        if (split && !pl.splitPrev) { if (pl.chain) this.chainDash(pl); else this.split(pl, me); }
         if (eject && this.t % 4 === 0) this.eject(pl, me);
         pl.splitPrev = split;
     },
@@ -150,6 +155,43 @@ var Cells = {
         return { split: false };
     },
 
+    // ---------------- BUBBLE WORM: a player whose blobs form a chain instead of a cluster.
+    // The head steers; every other bubble follows the one ahead. The bubbles never merge. As the worm gains mass it
+    // buds new bubbles at the tail (1 bubble at 20 mass, 5 at 200, 10 at 800, up to 20) and its mass settles into a
+    // taper: the head is the biggest, each bubble behind is 90% of the one ahead. Each bubble still eats and is eaten by the normal blob rule, so a worm can lose
+    // its head (the next bubble takes over) or be cut down from the tail. Space = a short lunge that costs 4% mass.
+    chainStep: function(pl) {
+        var list = (pl.chainList || []).filter(function(b) { return !b.dead && Cells.blobs.indexOf(b) !== -1; });
+        var mine = this.mine(pl);
+        for (let i = 0; i < mine.length; i++) if (list.indexOf(mine[i]) === -1) list.push(mine[i]);        // new pieces join at the tail
+        if (!list.length) { pl.chainList = []; return; }
+        var total = 0;
+        for (let i = 0; i < list.length; i++) { list[i].lead = i ? list[i - 1] : null; list[i].mergeT = 9999; total += list[i].m; }
+        var want = Math.max(1, Math.min(20, Math.floor(Math.sqrt(total / 8))));
+        var head = list[0], tail = list[list.length - 1];
+        if (list.length < want && tail.m > 12 && this.t % 6 === 0) {
+            var seed = Math.min(6, tail.m * 0.3);                  // a small bud at the tail; the taper below fills it
+            tail.m -= seed;
+            var nb = { pl: pl, x: tail.x - (tail.lead ? (tail.lead.x - tail.x) * 0.3 : 6), y: tail.y - (tail.lead ? (tail.lead.y - tail.y) * 0.3 : 6), m: seed, vx: 0, vy: 0, mergeT: 9999, lead: tail };
+            this.blobs.push(nb); list.push(nb);
+        }
+        // mass settles into a taper: the head is the biggest and each bubble behind is 90% of the one ahead
+        var wsum = 0, wgt = 1;
+        for (let i = 0; i < list.length; i++) { wsum += wgt; wgt *= 0.9; }
+        wgt = 1;
+        for (let i = 0; i < list.length; i++) { var target = total * wgt / wsum; list[i].m += (target - list[i].m) * 0.03; wgt *= 0.9; }
+        pl.chainList = list;
+        if (pl.dashCd > 0) pl.dashCd--;
+    },
+    chainDash: function(pl) {
+        var head = pl.chainList && pl.chainList[0];
+        if (!head || pl.dashCd > 0 || head.m < 22) return;
+        var dx = pl.aimX - head.x, dy = pl.aimY - head.y, L = Math.hypot(dx, dy) || 1;
+        head.vx += dx / L * 20; head.vy += dy / L * 20; pl.dashCd = 45;
+        var cost = head.m * 0.04; head.m -= cost;
+        this.pellets.push({ x: head.x - dx / L * this.rad(head.m), y: head.y - dy / L * this.rad(head.m), m: Math.max(1, cost), col: pl.color, vx: -dx / L * 8, vy: -dy / L * 8 });
+        if (pl.human !== undefined && typeof SFX !== "undefined") SFX.play("whoosh");
+    },
     split: function(pl, me) {
         var n = me.length;
         for (let i = 0; i < me.length && n < CEL.MAXCELLS; i++) {
@@ -176,16 +218,22 @@ var Cells = {
     step: function() {
         this.t++;
         for (let i = 0; i < this.players.length; i++) if (this.players[i].alive) this.input(this.players[i]);
+        for (let i = 0; i < this.players.length; i++) if (this.players[i].chain && this.players[i].alive) this.chainStep(this.players[i]);
         var B = this.blobs;
         // move
         for (let i = 0; i < B.length; i++) {
             var b = B[i], pl = b.pl, dx = pl.aimX - b.x, dy = pl.aimY - b.y, L = Math.hypot(dx, dy) || 1;
             var sp = this.speed(b.m) * Math.min(1, L / 60) * arenaSpeed(pl) * (pl.fx && pl.fx.speed > 0 ? 1.6 : 1);
+            if (pl.chain && b.lead && !b.lead.dead) {            // bubble worm: every bubble but the head follows the one ahead
+                dx = b.lead.x - b.x; dy = b.lead.y - b.y; L = Math.hypot(dx, dy) || 1;
+                var gap = (this.rad(b.m) + this.rad(b.lead.m)) * 0.92;
+                sp = Math.max(0, Math.min(L - gap, 14));
+            }
             b.x += dx / L * sp + b.vx; b.y += dy / L * sp + b.vy;
             b.vx *= 0.9; b.vy *= 0.9;
             if (b.mergeT > 0) b.mergeT--;
-            // decay: blobs above 100 lose a share of their mass every tick; with "grows with size" the share climbs too
-            if (cellsCfg.decay > 0 && b.m > 100) b.m -= b.m * cellsCfg.decay * (cellsCfg.decayGrow ? 1 + b.m / 800 : 1);
+            // decay: blobs above 35 lose a share of their mass every tick; with "grows with size" the share climbs too
+            if (cellsCfg.decay > 0 && b.m > 35) b.m -= b.m * cellsCfg.decay * (cellsCfg.decayGrow ? 1 + b.m / 800 : 1);
             var r = this.rad(b.m);
             b.x = Math.max(-CEL.W / 2 + r * 0.5, Math.min(CEL.W / 2 - r * 0.5, b.x));
             b.y = Math.max(-CEL.H / 2 + r * 0.5, Math.min(CEL.H / 2 - r * 0.5, b.y));

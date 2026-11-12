@@ -52,6 +52,21 @@ first), tick TODO.md, add the test to `tests/README.md`; original names and art 
 
 ## Log
 
+### 2026-11-12 — pushed (usage ran out mid-check): Arena Mix v3 + bubble worm
+- Tank bullets **damage blobs again** (shrink; below 12 mass the blob is gone).
+- Tanks also **collect worm food** (a third of its value) as well as blob food.
+- **Decay like the genre:** new default "Classic (0.2% of mass a second)" for blobs over 35 mass; tank mass decays
+  the same way. Old saves on the previous default move to Classic once. Other rates still selectable.
+- **4th body: Bubble worm** (a worm made of blob bubbles). The head steers, bubbles follow in a chain and never merge;
+  it buds bubbles as it grows (1 at 20 mass, 5 at 200, up to 20) and tapers from a big head (49/44/39/35/32 at 200).
+  Each bubble eats / is eaten by the blob rule; lose the head and the next bubble leads. Space = lunge. In Arena Mix:
+  Q cycles Tank / Blob / Worm / Bubble worm, plus 3 CPU bubble worms. In plain Blob Arena: Game tab → "Humans are
+  bubble worms".
+**PICK UP HERE:** `tests/arena_mix.js` passes about half its runs. The two checks that flip are
+`tankEatsSmallerBlob` and `equalSizesIgnoreEachOther`; not yet diagnosed (likely the staged arena: a CPU or decay
+nudging masses between steps, not confirmed). Everything else in that test is stable. Docs (RETROS / TODO /
+tests README) not yet updated for this entry.
+
 ### 2026-11-12 — shipped: Arena Mix rules v2 (your spec) + shared power-ups
 Supersedes the cross-game rules in the entry below.
 - **Blobs absorb bullets** (each adds a little mass); bullets no longer shrink blobs.
