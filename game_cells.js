@@ -86,6 +86,7 @@ var Cells = {
         pl.fx = { speed: 0, shield: Math.round(cellsCfg.shield * 60), magnet: 0 };       // fresh spawns can't be eaten for a moment
         if (pl.human !== undefined && cellsCfg.chain && !(typeof Mix !== "undefined" && Mix.on)) pl.chain = true;
         pl.chainList = [];
+        pl.compact = false; pl.chainMoving = false; pl.ejectPrev = false; pl.dashCd = 0;
         this.blobs.push({ pl: pl, x: p[0], y: p[1], m: m0, vx: 0, vy: 0, mergeT: 0 });
     },
 
@@ -118,8 +119,14 @@ var Cells = {
             var cmd = this.cpu(pl, me, cx, cy, M);
             split = cmd.split; eject = false;
         }
-        if (split && !pl.splitPrev) { if (pl.chain) this.chainDash(pl); else this.split(pl, me); }
-        if (eject && this.t % 4 === 0) this.eject(pl, me);
+        if (pl.chain && eject && !pl.ejectPrev) {
+            pl.compact = !pl.compact;
+            pl.chainMoving = false;
+        }
+        pl.ejectPrev = eject;
+        pl.chainMoving = !!(pl.chain && pl.compact && split);
+        if (split && !pl.splitPrev && !pl.compact) { if (pl.chain) this.chainDash(pl); else this.split(pl, me); }
+        if (eject && !pl.chain && this.t % 4 === 0) this.eject(pl, me);
         pl.splitPrev = split;
     },
 
@@ -159,7 +166,8 @@ var Cells = {
     // The head steers; every other bubble follows the one ahead. The bubbles never merge. As the worm gains mass it
     // buds new bubbles at the tail (1 bubble at 20 mass, 5 at 200, 10 at 800, up to 20) and its mass settles into a
     // taper: the head is the biggest, each bubble behind is 90% of the one ahead. Each bubble still eats and is eaten by the normal blob rule, so a worm can lose
-    // its head (the next bubble takes over) or be cut down from the tail. Space = a short lunge that costs 4% mass.
+    // its head (the next bubble takes over) or be cut down from the tail. W toggles a single stationary bubble;
+    // hold Space in that form to move slowly and shed mass. In chain form Space is a short lunge.
     chainStep: function(pl) {
         var list = (pl.chainList || []).filter(function(b) { return !b.dead && Cells.blobs.indexOf(b) !== -1; });
         var mine = this.mine(pl);
@@ -167,6 +175,21 @@ var Cells = {
         if (!list.length) { pl.chainList = []; return; }
         var total = 0;
         for (let i = 0; i < list.length; i++) { list[i].lead = i ? list[i - 1] : null; list[i].mergeT = 9999; total += list[i].m; }
+        if (pl.compact) {
+            var core = list[0];
+            core.m = total; core.lead = null; core.vx = core.vy = 0;
+            this.blobs = this.blobs.filter(function(b) { return b.pl !== pl || b === core; });
+            pl.chainList = [core];
+            // Drop beyond the rim so the bubble cannot immediately reclaim its own fuel.
+            var dx = pl.aimX - core.x, dy = pl.aimY - core.y, distance = Math.hypot(dx, dy);
+            if (pl.chainMoving && total > 20 && distance > 1 && this.t % 6 === 0) {
+                var cost = Math.min(total - 20, total * 0.004), r = this.rad(total) + 16;
+                core.m -= cost;
+                this.pellets.push({ x: core.x - dx / distance * r, y: core.y - dy / distance * r,
+                    m: cost, col: pl.color, vx: -dx / distance * 5, vy: -dy / distance * 5 });
+            }
+            return;
+        }
         var want = Math.max(1, Math.min(20, Math.floor(Math.sqrt(total / 8))));
         var head = list[0], tail = list[list.length - 1];
         if (list.length < want && tail.m > 12 && this.t % 6 === 0) {
@@ -229,6 +252,10 @@ var Cells = {
                 var gap = (this.rad(b.m) + this.rad(b.lead.m)) * 0.92;
                 sp = Math.max(0, Math.min(L - gap, 14));
             }
+            if (pl.chain && pl.compact) {
+                sp *= pl.chainMoving && b.m > 20 ? 0.7 : 0;
+                b.vx = b.vy = 0;
+            }
             b.x += dx / L * sp + b.vx; b.y += dy / L * sp + b.vy;
             b.vx *= 0.9; b.vy *= 0.9;
             if (b.mergeT > 0) b.mergeT--;
@@ -276,6 +303,7 @@ var Cells = {
                 var bb = B[i];
                 if (bb.dead || bb.m < 130) continue;
                 if (Math.hypot(bb.x - vi.x, bb.y - vi.y) < this.rad(bb.m) - 20) {
+                    bb.pl.compact = false; bb.pl.chainMoving = false;
                     var pieces = Math.min(CEL.MAXCELLS - this.mine(bb.pl).length, 7);
                     bb.m += vi.m * 0.5;
                     var each = bb.m / (pieces + 1);
@@ -432,7 +460,9 @@ var Cells = {
             uiText("peak mass " + Math.round(h.peak) + "  ·  " + (h.deadT > 60 ? (h.human === 1 ? "Enter" : "click / Space") + " to play again" : "…"), cssW / 2, y + 70, 15, "#cbd5e1", "center", "800");
         }
         ctx.fillStyle = "rgba(15,23,42,0.8)"; ctx.fillRect(0, cssH - 30, cssW, 30);
-        uiText("Mouse moves · Space split · W eject · eat anything 25% smaller · green spikes pop big blobs · Esc menu" + (multiplayer ? " · P2: arrows, Enter split, / eject" : ""), cssW / 2, cssH - 11, 12, "rgba(220,230,240,0.85)", "center", "700");
+        var chainHuman = hum.find(function(p) { return p.chain; });
+        var hint = chainHuman ? (chainHuman.compact ? "BUBBLE · hold Space: move + shed mass · W: snake form" : "SNAKE · mouse steers · W: stop + combine mass · Space: dash") + " · eat players 25% smaller · Esc menu" : "Mouse moves · Space split · W eject · eat anything 25% smaller · green spikes pop big blobs · Esc menu";
+        uiText(hint + (multiplayer ? " · P2: arrows, Enter action, / eject or combine" : ""), cssW / 2, cssH - 11, 12, "rgba(220,230,240,0.85)", "center", "700");
     }
 };
 
