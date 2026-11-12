@@ -3,6 +3,10 @@
 Kept up to date on every push. Finished items move to `RETROS.md` (with measurements) and get `[DONE]` in `ROADMAP.md`.
 Last updated: after the UI pass (top bar, pause menu, Level Studio, one-click LAN).
 
+## 2026-11-12: "code so I can have snakio in agario in diepio"
+- [x] **Arena Mix**: worms inside blobs inside tanks in one arena; play as tank, blob or worm (Q). `tests/arena_mix.js`.
+- [ ] Arena Mix follow-ups: P2 / LAN players, blob and worm CPUs that react to tanks, balance after your play-through.
+
 ## Your list of 2026-11-11 (evening) — order: multiplayer, then menus/tools, then games. Live status: PROGRESS.md
 - [x] LAN: joiners' browsers calculate their own hero locally so play is fluid; smaller packets. → 70 → 15 ms to first movement, 120 → 55 KB/s (`tests/lan_perf.js`). Needs your feel-test on two real devices.
 - [x] LAN: player 2 can't see the food I drop in Blob Arena.   - [x] Player 2 movement in the soccer game (Flail style had no team for a second player and didn't draw on a joiner's screen). Check: `tests/lan_joiner.js`.

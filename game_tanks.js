@@ -134,6 +134,11 @@ var Tanks = {
         var best = null, bd = range;
         for (let i = 0; i < this.tanks.length; i++) { var o = this.tanks[i]; if (o !== k && o.alive) { var d = Math.hypot(o.x - k.x, o.y - k.y); if (d < bd) { bd = d; best = o; } } }
         if (best) return { x: best.x + best.vx * 8, y: best.y + best.vy * 8 };
+        if (typeof Mix !== "undefined" && Mix.on) {
+            for (let i = 0; i < Cells.blobs.length; i++) { var cb = Cells.blobs[i], cd = Math.hypot(cb.x - k.x, cb.y - k.y) - Cells.rad(cb.m); if (!cb.dead && cd < bd) { bd = cd; best = cb; } }
+            for (let i = 0; i < Snake.worms.length; i++) { var sw = Snake.worms[i]; if (!sw.alive) continue; var sd = Math.hypot(sw.segs[0].x - k.x, sw.segs[0].y - k.y); if (sd < bd) { bd = sd; best = sw.segs[0]; } }
+            if (best) return { x: best.x, y: best.y };
+        }
         for (let i = 0; i < this.shapes.length; i++) { var s = this.shapes[i], d2 = Math.hypot(s.x - k.x, s.y - k.y); if (d2 < bd) { bd = d2; best = s; } }
         return best;
     },
@@ -314,7 +319,7 @@ var Tanks = {
         if (span) z = Math.min(z, Math.min(cssW, cssH) * 0.8 / (span + 500));
         this.cam.x += (tx - this.cam.x) * 0.15; this.cam.y += (ty - this.cam.y) * 0.15; this.cam.z += (Math.max(0.3, z) - this.cam.z) * 0.05;
         var c = this.cam, Z = c.z;
-        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
+        if (!this.mixLayer) { ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH); }      // Arena Mix draws one shared floor
         var tl = this.toScreen(-TNK.W / 2, -TNK.H / 2), br = this.toScreen(TNK.W / 2, TNK.H / 2);
         ctx.fillStyle = Theme.floor("#121a30"); ctx.fillRect(tl[0], tl[1], br[0] - tl[0], br[1] - tl[1]);
         var mid = this.toScreen(0, 0);

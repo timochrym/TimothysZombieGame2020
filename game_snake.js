@@ -226,14 +226,14 @@ var Snake = {
         var z = Math.max(0.35, Math.min(1.1, 1.15 - Math.sqrt(biggest) * 0.035)), fitZ = span ? Math.min(z, (Math.min(cssW, cssH) * 0.8) / (span + 300)) : z;
         this.cam.x += (tx - this.cam.x) * 0.15; this.cam.y += (ty - this.cam.y) * 0.15; this.cam.z += (Math.max(0.25, fitZ) - this.cam.z) * 0.05;
         var c = this.cam, Z = c.z;
-        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
+        if (!this.mixLayer) { ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH); }
         // hex-ish dot floor inside the arena
         var o = this.toScreen(0, 0);
         ctx.save();
-        ctx.beginPath(); ctx.arc(o[0], o[1], SNK.R * Z, 0, 7); ctx.fillStyle = Theme.floor("#0d1626"); ctx.fill(); ctx.clip();
+        ctx.beginPath(); ctx.arc(o[0], o[1], SNK.R * Z, 0, 7); ctx.fillStyle = this.mixLayer ? "rgba(244,114,182,0.07)" : Theme.floor("#0d1626"); ctx.fill(); ctx.clip();
         var step = 60, x0 = Math.floor((c.x - cssW / 2 / Z) / step) * step, y0 = Math.floor((c.y - cssH / 2 / Z) / step) * step;
-        ctx.fillStyle = Theme.grid("#16233a");
-        for (let x = x0; x < c.x + cssW / 2 / Z + step; x += step) for (let y = y0; y < c.y + cssH / 2 / Z + step; y += step) {
+        ctx.fillStyle = this.mixLayer ? "rgba(0,0,0,0)" : Theme.grid("#16233a");
+        if (!this.mixLayer) for (let x = x0; x < c.x + cssW / 2 / Z + step; x += step) for (let y = y0; y < c.y + cssH / 2 / Z + step; y += step) {
             var p = this.toScreen(x + ((y / step) & 1) * step / 2, y); ctx.fillRect(p[0] - 2 * Z, p[1] - 2 * Z, 4 * Z + 1, 4 * Z + 1);
         }
         // pellets

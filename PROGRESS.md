@@ -30,6 +30,8 @@ Everything below "Done" is on `main` with a passing test. Work top to bottom thr
 7. Block damage follows weight, heroes only bruised by stray crates; inspector has Weight / Impact / Gravity and an
    "All fields" list of every value on the selected object — `inspector_fields.js`
 
+8. **Arena Mix** (new game): worms inside blobs inside tanks in one world, play as any of them — `arena_mix.js`
+
 **Still to do, in the user's order** (their exact words are at the top of TODO.md):
 1. **Enemy tracking and pathfinding** ("still horrible"). Not started this session. Suggested start: write a test that
    spawns enemies on each Survival level with the hero on a different floor and measures seconds-until-reached and
@@ -49,6 +51,18 @@ so run it before touching Siege.
 first), tick TODO.md, add the test to `tests/README.md`; original names and art only.
 
 ## Log
+
+### 2026-11-12 — shipped: Arena Mix (worms inside blobs inside tanks)
+Asked: "code so I can have [worms] in [blobs] in [tanks]". New Arcade game **Arena Mix** (`game_mix.js`): the three
+arena games run in one world. Their arenas were already centred on the same point, so they nest: worm ring (pink
+border) inside the blob zone (purple border) inside the tank arena. Each game keeps its own rules; the new file adds
+one camera, "play as" (Tank / Blob / Worm: Q in play, pause menu, or the Game tab) and what happens when they meet:
+bullets shrink blobs and worms (head shots most; bodies soak bullets); a clearly bigger blob swallows a tank or a
+worm's head; a worm's body is a wall that hurts tanks and absorbs small blobs; a worm's head into a tank kills the
+worm; tanks and blobs chip each other on contact; worms eat blob food and blobs eat worm food. CPU tanks hunt blobs
+and worms too. Best score per body is saved. 61 fps in the test with 9 tanks, 14 blobs and 11 worms.
+**Limits:** one human for now (no P2, not over LAN — joiners see "local-only"); CPU blobs and worms don't know to
+fear tanks; balance between the three is a first guess and needs your play-through.
 
 ### 2026-11-12 — shipped: Brawl combo limits; block damage by weight; inspector shows every field
 - **Brawl:** hits chained within 50 ticks each do 80% of the one before (floor 35%), stun shrinks the same way, and

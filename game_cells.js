@@ -302,11 +302,12 @@ var Cells = {
         if (span) z = Math.min(z, Math.min(cssW, cssH) * 0.8 / (span + 400));
         this.cam.x += (tx - this.cam.x) * 0.12; this.cam.y += (ty - this.cam.y) * 0.12; this.cam.z += (z - this.cam.z) * 0.05;
         var c = this.cam, Z = c.z;
-        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
-        // arena + grid
+        if (!this.mixLayer) { ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH); }
+        // arena + grid (as a layer of Arena Mix: a pale zone with a border, no grid)
         var tl = this.toScreen(-CEL.W / 2, -CEL.H / 2), br = this.toScreen(CEL.W / 2, CEL.H / 2);
-        ctx.fillStyle = "#f1f5f9"; ctx.fillRect(tl[0], tl[1], br[0] - tl[0], br[1] - tl[1]);
-        ctx.strokeStyle = "#dbe3ec"; ctx.lineWidth = 1;
+        ctx.fillStyle = this.mixLayer ? "rgba(241,245,249,0.10)" : "#f1f5f9"; ctx.fillRect(tl[0], tl[1], br[0] - tl[0], br[1] - tl[1]);
+        if (this.mixLayer) { ctx.strokeStyle = "#a78bfa"; ctx.lineWidth = Math.max(2, 6 * Z); ctx.strokeRect(tl[0], tl[1], br[0] - tl[0], br[1] - tl[1]); }
+        ctx.strokeStyle = this.mixLayer ? "rgba(0,0,0,0)" : "#dbe3ec"; ctx.lineWidth = 1;
         var g = 50, sx0 = Math.max(-CEL.W / 2, Math.floor((c.x - cssW / 2 / Z) / g) * g), sx1 = Math.min(CEL.W / 2, c.x + cssW / 2 / Z);
         var sy0 = Math.max(-CEL.H / 2, Math.floor((c.y - cssH / 2 / Z) / g) * g), sy1 = Math.min(CEL.H / 2, c.y + cssH / 2 / Z);
         ctx.beginPath();

@@ -18,6 +18,7 @@ var HUB_ICONS = {
     powder: { s: ["..........", "....ss....", "...ssss...", "..s.ss.s..", "....ss....", "...ssss...", "..ssssss..", ".wwssssww.", "wwwwssswww", "wwwwwwwwww"], p: { s: "#d6ba70", w: "#3884e6" } },
     snake: { s: ["..........", ".pppp.....", "p....p....", "p.ee.p....", ".pppp.p...", "......p...", ".....p....", "....p...o.", "...p...ooo", "..pppp..o."], p: { p: "#f472b6", e: "#ffffff", o: "#fbbf24" } },
     cells: { s: ["..........", "...pppp...", "..pppppp..", ".pp.pp.pp.", ".pppppppp.", ".pppppppp.", "..pppppp..", "...pppp.gg", "........gg", "..........."], p: { p: "#a78bfa", g: "#4ade80" } },
+    mix: { s: ["..........", ".bbb..gggg", ".bbbbb....", ".bbb......", "......pppp", ".yyy.pppppp", "y...y.pppp", "y.....y...", ".yyyyy....", ".........."], p: { b: "#60a5fa", g: "#94a3b8", p: "#a78bfa", y: "#f472b6" } },
     tanks: { s: ["..........", "..........", "....gggggg", "..bbbggggg", ".bbbbbb...", ".bbbbbb...", ".bbbbbb...", "..bbbb....", "..........", ".........."], p: { b: "#60a5fa", g: "#94a3b8" } },
     jetpack: { s: ["..........", "...ff.....", "..gfff....", "..gfff....", "..gfff....", "..g.ff....", "..o.......", ".ooo......", "..o.......", ".........."], p: { f: "#ff5a5f", g: "#64748b", o: "#fb923c" } },
     table: { s: ["gggggggggg", "gw......wg", "gw..ww..wg", "g.r....b.g", "g...ow...g", "g.r....b.g", "gw..ww..wg", "gw......wg", "gggggggggg", ".........."], p: { g: "#22c55e", w: "#f8fafc", r: "#ef4444", b: "#3b82f6", o: "#0a0f16" } },

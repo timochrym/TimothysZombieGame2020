@@ -12,6 +12,7 @@ var ArcadeStats = {
         if (id === 'sport') return ['goals', Sport.score[0]];
         if (id === 'snake') return ['length', Math.max(snakeSave.best, ...Snake.humans().map(function(w) { return w.len; }), 0)];
         if (id === 'cells') return ['mass', Math.max(cellsSave.best, ...Cells.locals().map(function(p) { return Cells.mass(p); }), 0)];
+        if (id === 'mix') return ['best', Math.max(mixSave.best.tank, mixSave.best.blob, mixSave.best.worm)];
         if (id === 'tanks') return ['XP', Math.max(tanksSave.best, ...Tanks.locals().map(function(k) { return k.score; }), 0)];
         if (id === 'jetpack') return ['meters', Math.max(jetSave.best, ...Jet.runners.map(function(r) { return r.dist; }), 0)];
         if (id === 'platform') return ['score', Plat.score];

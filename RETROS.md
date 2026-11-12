@@ -6,6 +6,22 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Arena Mix: the three arena games in one world
+
+**Asked:** "code so I can have snakio in agario in diepio."
+**Shipped:** `game_mix.js`, a 23rd game. Worm Arena, Blob Arena and Tank Arena each keep running their own `step()`;
+the mode adds a shared read-only camera, a body picker (Tank / Blob / Worm) and `Mix.interact()` for every pairing.
+The three renderers got one flag (`mixLayer`) so they draw as layers over one floor instead of each clearing the
+screen. CPU tanks target blobs and worm heads when the mix is on.
+**Went well:** the arenas already shared a centre and nested by size (2400 ring, 5200 square, 6000 square), so no
+coordinates had to change. A camera object whose setters do nothing stopped the three games fighting over the view
+without touching their camera code. All nine staged rule checks passed on the first run (`tests/arena_mix.js`).
+**Went wrong:** nothing broke, but in 9 seconds of free play the test saw no blob swallow a tank and no head-on worm
+crash: those rules are proven only by the staged checks, not yet by real play.
+**Left:** one human only (P2 and LAN not wired); blob and worm CPUs ignore tanks; balance untested by a person.
+
+---
+
 ## Brawl combo limits; block damage by weight; an inspector that shows every field
 
 **Asked:** "Combo hits for brawl are way too OP" / "Sometimes the blocks do too much damage and I thought they had a
