@@ -17,31 +17,54 @@ const { open } = require('./lib'); const path = require('path');
   // ---- staged encounters (paused, stepped by hand)
   out.rules = await ev(() => {
     paused = true; const R = {};
-    const clear = () => { Tanks.tanks = []; Tanks.bullets = []; Tanks.shapes = []; Cells.players = []; Cells.blobs = []; Cells.pellets = []; Cells.viruses = []; Cells.pickups = []; Snake.worms = []; Snake.pellets = []; cellsCfg.bots = 0; };
+    const clear = () => { Tanks.tanks = []; Tanks.bullets = []; Tanks.shapes = []; Cells.players = []; Cells.blobs = []; Cells.pellets = []; Cells.viruses = []; Cells.pickups = []; Snake.worms = []; Snake.pellets = []; cellsCfg.bots = 0; Snake.buildGrid(); };
     const tank = (x, y) => { const k = Tanks.addTank({ name: 'T', color: '#60a5fa' }); k.x = x; k.y = y; k.inv = 0; k.vx = k.vy = 0; return k; };
     const blob = (x, y, m) => { const pl = Cells.addPlayer({ name: 'B', color: '#a78bfa' }); Cells.blobs = Cells.blobs.filter(q => q.pl !== pl); const bb = { pl, x, y, m, vx: 0, vy: 0, mergeT: 0 }; Cells.blobs.push(bb); pl.fx = { speed: 0, shield: 0, magnet: 0 }; pl.aimX = x; pl.aimY = y; return bb; };
     const worm = (x, y, len) => { const w = Snake.spawn({ name: 'W', color: '#f472b6' }); w.len = len; w.ang = 0; w.want = 0; w.safeT = 0; w.segs = []; for (let i = 0; i < len; i++) w.segs.push({ x: x - i * SNK.SEG, y }); return w; };
     const bots = cellsCfg.bots;
-    // 1. a bullet shrinks a blob
-    clear(); let k = tank(0, 0), bl = blob(300, 0, 200); Tanks.bullets.push({ x: 300, y: 0, vx: 0, vy: 0, r: 9, dmg: 10, pen: 1, owner: k, life: 50 }); Mix.interact();
-    R.bulletShrinksBlob = '200 -> ' + Math.round(bl.m) + ', bullet used ' + (Tanks.bullets.length === 0);
-    // 2. a head shot shrinks a worm; a body shot is soaked
-    clear(); k = tank(0, 0); let w = worm(600, 0, 60); Snake.buildGrid();
-    Tanks.bullets.push({ x: 600, y: 0, vx: 0, vy: 0, r: 9, dmg: 10, pen: 1, owner: k, life: 50 }); Mix.interact(); const afterHead = Math.round(w.len);
-    Tanks.bullets.push({ x: 600 - 30 * SNK.SEG, y: 0, vx: 0, vy: 0, r: 9, dmg: 10, pen: 1, owner: k, life: 50 }); Mix.interact();
-    R.bulletVsWorm = 'head 60 -> ' + afterHead + ', body -> ' + Math.round(w.len) + ', soaked ' + (Tanks.bullets.length === 0);
-    // 3. a big blob swallows a tank; a small one only chips
-    clear(); k = tank(0, 0); bl = blob(0, 0, 2500); Mix.interact(); R.bigBlobSwallowsTank = !k.alive && bl.m > 2500;
-    clear(); k = tank(0, 0); bl = blob(40, 0, 60); const hp0 = k.hp; Mix.interact(); R.smallBlobChips = k.alive && bl.m < 60 && k.hp < hp0;
-    // 4. a worm's body is a wall for tanks; a worm's head into a tank kills the worm
-    clear(); w = worm(0, 0, 80); k = tank(-30 * SNK.SEG, 0); Snake.buildGrid(); const hp1 = k.hp; Mix.interact(); R.wormBodyHurtsTank = k.hp < hp1 && w.alive;
-    clear(); w = worm(0, 0, 80); k = tank(20, 0); Snake.buildGrid(); Mix.interact(); R.headIntoTankKillsWorm = !w.alive && k.alive;
-    // 5. a big blob swallows a worm's head; a small blob on a worm's body is absorbed
-    clear(); w = worm(0, 0, 60); bl = blob(0, 0, 3000); Snake.buildGrid(); Mix.interact(); R.bigBlobSwallowsWorm = !w.alive && bl.m > 3000;
-    clear(); w = worm(0, 0, 80); bl = blob(-30 * SNK.SEG, 0, 20); Snake.buildGrid(); const len0 = w.len; Mix.interact(); R.wormAbsorbsSmallBlob = Cells.blobs.length === 0 && w.len > len0;
-    // 6. food crosses over
-    clear(); w = worm(0, 0, 30); Cells.pellets.push({ x: 5, y: 0, m: 1, col: '#fff', vx: 0, vy: 0 }); bl = blob(900, 0, 100); Snake.pellets = [{ x: 905, y: 0, v: 2, col: '#fff', ph: 0 }]; Snake.buildGrid(); Mix.t = 0; const l0 = w.len, m0 = bl.m; Mix.interact();
+    const bullet = (x, y, k) => Tanks.bullets.push({ x, y, vx: 0, vy: 0, r: 9, dmg: 10, pen: 1, owner: k, life: 50 });
+    const run = (n) => { for (let i = 0; i < (n || 1); i++) { Mix.t++; Mix.interact(); } };
+    // 1. blobs absorb bullets (and gain a little)
+    clear(); let k = tank(0, 0), bl = blob(300, 0, 200); bullet(300, 0, k); run();
+    R.blobAbsorbsBullet = '200 -> ' + bl.m.toFixed(1) + ', bullet gone ' + (Tanks.bullets.length === 0);
+    // 2. bullets hurt worms: head most, body soaked; Armor reduces it
+    clear(); k = tank(0, 0); let w = worm(600, 0, 60); Snake.buildGrid(); run();
+    bullet(600, 0, k); run(); const afterHead = Math.round(w.len);
+    w.mx.st[1] = 5; bullet(600, 0, k); run(); const afterArmored = Math.round(w.len);
+    R.bulletVsWorm = 'head 60 -> ' + afterHead + ', with 5 Armor -> ' + afterArmored;
+    // 3. tanks are blobs with a gun: mass, eat smaller, eaten by bigger, size follows mass
+    clear(); k = tank(0, 0); run(); const size0 = Math.round(Tanks.size(k)); k.mixMass = 400; R.tankSizeFollowsMass = size0 + ' -> ' + Math.round(Tanks.size(k));
+    clear(); k = tank(0, 0); run(); k.mixMass = 400; bl = blob(10, 0, 100); run(); R.tankEatsSmallerBlob = Cells.blobs.length === 0 && Math.round(k.mixMass) === 500;
+    clear(); k = tank(0, 0); run(); bl = blob(0, 0, 2500); run(); R.biggerBlobAbsorbsTank = !k.alive && Math.round(bl.m) === 2536;
+    clear(); k = tank(0, 0); run(); bl = blob(40, 0, 40); const hpA = k.hp; run(3); R.equalSizesIgnoreEachOther = k.alive && k.hp === hpA && Math.round(bl.m) === 40;
+    clear(); k = tank(0, 0); let k2 = tank(8, 0); run(); k.mixMass = 300; run(); R.tankEatsSmallerTank = !k2.alive && Math.round(k.mixMass) === 336;
+    clear(); k = tank(0, 0); run(); Cells.pellets.push({ x: 3, y: 0, m: 10, col: '#fff', vx: 0, vy: 0 }); Mix.t = 1; run(); R.tankEatsFood = k.mixMass > 36;
+    // 4. badly damaged, or a virus: pieces break off, the biggest keeps the gun, the rest are inert food
+    clear(); k = tank(0, 0); run(); k.mixMass = 200; k.hp = Tanks.maxHp(k) * 0.2; Mix.t = 1; run();
+    const lumps = Cells.pellets.filter(q => q.lump); R.badlyDamagedSplits = 'mass 200 -> ' + Math.round(k.mixMass) + ', ' + lumps.length + ' lumps of ' + Math.round(lumps[0] ? lumps[0].m : 0) + ', still shooting ' + k.alive + ', hp back to ' + Math.round(k.hp / Tanks.maxHp(k) * 100) + '%';
+    R.lumpsAreJustFood = lumps.every(q => q.vx !== undefined && !('pl' in q));
+    clear(); k = tank(0, 0); run(); k.mixMass = 200; Cells.viruses.push({ x: 0, y: 0, m: 100 }); Mix.t = 1; run(); R.virusSplitsTank = Math.round(k.mixMass) === 100 && Cells.pellets.some(q => q.lump);
+    clear(); k = tank(0, 0); run(); k.mixMass = 200; k.hp = 0; Tanks.hurt(k, 1, null); k.alive = false; run(); R.deadTankDropsLumps = Cells.pellets.filter(q => q.lump).length >= 3;
+    // 5. worms: break blocks, level up, bite tanks, body is a wall
+    clear(); w = worm(0, 0, 40); Snake.buildGrid(); run(); Tanks.shapes.push({ type: 'square', x: 5, y: 0, vx: 0, vy: 0, hp: 10, max: 10, ang: 0, spin: 0, drift: 0, hitT: 0 });
+    let ticks = 0; while (Tanks.shapes.some(q => q.x === 5 && q.y === 0) && ticks < 200) { run(); ticks++; }
+    R.wormBreaksBlock = 'square broken in ' + ticks + ' ticks, xp ' + w.mx.xp + ', length ' + Math.round(w.len);
+    w.mx.xp = 0; w.mx.st = [0, 0, 0]; w.mx.pts = 0; w.human = 0; Mix.wormXp(w, 20); const pts = w.mx.pts; Mix.wormStat(w, 0); w.human = undefined; R.wormLevels = 'level ' + w.mx.lvl + ', points ' + pts + ' -> Bite ' + w.mx.st[0];
+    clear(); w = worm(0, 0, 80); k = tank(20, 0); Snake.buildGrid(); const hpB = k.hp; run(); R.wormBitesTank = 'tank hp -' + Math.round(hpB - k.hp) + ', worm alive ' + w.alive + ', length ' + Math.round(w.len);
+    clear(); w = worm(0, 0, 80); k = tank(-30 * SNK.SEG, 0); Snake.buildGrid(); const hpC = k.hp; run(); R.wormBodyHurtsTank = k.hp < hpC && w.alive;
+    // 6. a blob that touches a worm pops: splits, a quarter of its mass goes to the worm; tiny ones are taken whole
+    clear(); w = worm(0, 0, 80); bl = blob(-30 * SNK.SEG, 0, 400); Snake.buildGrid(); const lenP = w.len; const massBefore = 400; run();
+    const pieces = Cells.blobs.length, total = Math.round(Cells.blobs.reduce((a, q) => a + q.m, 0));
+    R.blobPopsOnWorm = pieces + ' pieces, total mass ' + massBefore + ' -> ' + total + ', worm length +' + Math.round(w.len - lenP);
+    run(5); R.piecesDontRepop = Cells.blobs.length === pieces;
+    clear(); w = worm(0, 0, 80); bl = blob(-30 * SNK.SEG, 0, 20); Snake.buildGrid(); run(); R.tinyBlobTakenWhole = Cells.blobs.length === 0;
+    // 7. food crosses over
+    clear(); w = worm(0, 0, 30); Cells.pellets.push({ x: 5, y: 0, m: 1, col: '#fff', vx: 0, vy: 0 }); bl = blob(900, 0, 100); Snake.pellets = [{ x: 905, y: 0, v: 2, col: '#fff', ph: 0 }]; Snake.buildGrid(); Mix.t = 1; const l0 = w.len, m0 = bl.m; run();
     R.crossFood = 'worm +' + (w.len - l0).toFixed(1) + ', blob +' + (bl.m - m0).toFixed(0);
+    // 8. shared power-ups: a tank and a worm pick up what blobs pick up
+    clear(); k = tank(0, 0); w = worm(2000, 0, 40); Snake.buildGrid(); run(); const sp0 = Tanks.speed(k), mass0 = k.mixMass;
+    Cells.pickups = [{ x: 0, y: 0, kind: 'speed' }, { x: 0, y: 0, kind: 'shield' }, { x: 0, y: 0, kind: 'mass' }, { x: 2000, y: 0, kind: 'magnet' }, { x: 2000, y: 0, kind: 'mass' }, { x: 2000, y: 0, kind: 'shield' }]; const wl = w.len; run();
+    R.sharedPowerups = 'tank speed x' + (Tanks.speed(k) / sp0).toFixed(1) + ', shield ' + (k.inv > 300) + ', mass +' + Math.round(k.mixMass - mass0) + ' | worm magnet ' + (w.mixFx.magnet > 0) + ', length +' + Math.round(w.len - wl) + ', shield ' + (w.safeT > 300) + ' | left ' + Cells.pickups.length;
     cellsCfg.bots = bots; Mix.reset(); paused = false; return R;
   });
   // ---- let it run for real and count
@@ -55,7 +78,12 @@ const { open } = require('./lib'); const path = require('path');
   console.log(JSON.stringify(out, null, 1)); console.log(errs);
   const r = out.rules;
   const ok = out.world.on && out.world.sharedCam && out.world.humans === '1/0/0' && out.bodies.join(' ') === 'blob: humans 0/1/0, camera on me worm: humans 0/0/1, camera on me tank: humans 1/0/0, camera on me' && out.qSwitch === 'blob'
-    && /^200 -> 187, bullet used true/.test(r.bulletShrinksBlob) && /^head 60 -> 44, body -> 4[12], soaked true/.test(r.bulletVsWorm) && r.bigBlobSwallowsTank && r.smallBlobChips && r.wormBodyHurtsTank && r.headIntoTankKillsWorm && r.bigBlobSwallowsWorm && r.wormAbsorbsSmallBlob && /worm \+0\.6, blob \+2/.test(r.crossFood)
+    && r.blobAbsorbsBullet === '200 -> 201.2, bullet gone true' && r.bulletVsWorm === 'head 60 -> 44, with 5 Armor -> 36' && r.tankSizeFollowsMass === '30 -> 100'
+    && r.tankEatsSmallerBlob && r.biggerBlobAbsorbsTank && r.equalSizesIgnoreEachOther && r.tankEatsSmallerTank && r.tankEatsFood
+    && /^mass 200 -> 120, \d lumps of \d+, still shooting true, hp back to 50%/.test(r.badlyDamagedSplits) && r.lumpsAreJustFood && r.virusSplitsTank && r.deadTankDropsLumps
+    && /^square broken in 20 ticks, xp 10/.test(r.wormBreaksBlock) && /^level 2, points 1 -> Bite 1/.test(r.wormLevels) && /^tank hp -8, worm alive true/.test(r.wormBitesTank) && r.wormBodyHurtsTank
+    && /^6 pieces, total mass 400 -> 300, worm length \+30/.test(r.blobPopsOnWorm) && r.piecesDontRepop && r.tinyBlobTakenWhole && /worm \+0\.6, blob \+2/.test(r.crossFood)
+    && r.sharedPowerups === 'tank speed x1.5, shield true, mass +30 | worm magnet true, length +30, shield true | left 0'
     && out.live.fps >= 45 && !out.afterLeave.on && !out.afterLeave.layer && out.afterLeave.ownCams && out.afterLeave.cellsHuman === 1 && !errs.length;
   console.log(ok ? 'PASS' : 'FAIL'); await b.close(); process.exit(ok ? 0 : 1);
 })();

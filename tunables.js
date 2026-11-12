@@ -74,7 +74,7 @@ try { var savedTankSkill = Number(localStorage.getItem("timsTankDifficulty")); i
 function setTankSkill(v) { arenaCheats.tankSkill = Math.max(1, Math.min(3, Number(v) || 1)); try { localStorage.setItem("timsTankDifficulty", String(arenaCheats.tankSkill)); } catch (e) {} }
 function arenaHuman(p) { return p && p.human !== undefined; }
 function arenaProtected(p) { return arenaHuman(p) && (arenaCheats.god || godMode); }
-function arenaSpeed(p) { return arenaHuman(p) ? arenaCheats.speed : 1; }
+function arenaSpeed(p) { return (arenaHuman(p) ? arenaCheats.speed : 1) * (p && p.mixFx && p.mixFx.speed > 0 ? 1.5 : 1); }      // mixFx: a speed power-up picked up in Arena Mix
 function arenaRows() { return [
     { label: "Invincible humans", type: "toggle", get: function() { return arenaCheats.god; }, set: function(v) { arenaCheats.god = v; } },
     { label: "Human speed", type: "range", min: 0.5, max: 3, step: 0.25, get: function() { return arenaCheats.speed; }, set: function(v) { arenaCheats.speed = v; } }

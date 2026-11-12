@@ -49,7 +49,7 @@ var Tanks = {
     maxHp: function(k) { return 50 + 20 * k.st[1] + 2 * k.lvl; },
     reload: function(k) { return 22 * Math.pow(0.9, k.st[6]) * (TNK_CLASSES[k.cls].rl || 1); },
     speed: function(k) { return (3.4 + 0.28 * k.st[7] - k.lvl * 0.02) * (TNK_CLASSES[k.cls].speed || 1) * arenaSpeed(k); },
-    size: function(k) { return 30 + k.lvl * 0.45; },
+    size: function(k) { if (k.mixMass > 0 && this.mixLayer) return Math.sqrt(k.mixMass) * 5; return 30 + k.lvl * 0.45; },      // Arena Mix: a tank's size follows its mass, like a blob
 
     reset: function() {
         this.tanks = []; this.shapes = []; this.bullets = []; this.pending = []; this.t = 0;
@@ -135,7 +135,6 @@ var Tanks = {
         for (let i = 0; i < this.tanks.length; i++) { var o = this.tanks[i]; if (o !== k && o.alive) { var d = Math.hypot(o.x - k.x, o.y - k.y); if (d < bd) { bd = d; best = o; } } }
         if (best) return { x: best.x + best.vx * 8, y: best.y + best.vy * 8 };
         if (typeof Mix !== "undefined" && Mix.on) {
-            for (let i = 0; i < Cells.blobs.length; i++) { var cb = Cells.blobs[i], cd = Math.hypot(cb.x - k.x, cb.y - k.y) - Cells.rad(cb.m); if (!cb.dead && cd < bd) { bd = cd; best = cb; } }
             for (let i = 0; i < Snake.worms.length; i++) { var sw = Snake.worms[i]; if (!sw.alive) continue; var sd = Math.hypot(sw.segs[0].x - k.x, sw.segs[0].y - k.y); if (sd < bd) { bd = sd; best = sw.segs[0]; } }
             if (best) return { x: best.x, y: best.y };
         }

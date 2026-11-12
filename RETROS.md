@@ -6,6 +6,22 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Arena Mix rules v2: blobs absorb bullets, tanks are blobs with a gun, worms level up, shared power-ups
+
+**Asked:** bullets absorbed by blobs; worms can upgrade and break blocks; worms can kill tanks; blobs pop on worms
+(split like a virus, lose mass to the worm); blobs absorb tanks; tanks are blob characters that can't split unless
+hit by a virus or damaged badly, the largest piece keeps the shooter and the smaller pieces can only be eaten; then
+"shared powerups".
+**Shipped:** `Mix.interact()` rewritten to that spec (details in PROGRESS.md); `Tanks.size()` follows mass in the
+mix; worm XP / levels / three stats; inert lumps are ordinary blob food flagged so the tank that shed them can't eat
+them straight back; tanks and worms collect the blob pickups.
+**Went wrong:** a tank that broke apart re-ate its own lumps in the same tick (200 → 184 instead of 120); fixed with
+a 3 s "not yours" flag and a faster scatter. Three other test failures were my staging: a stale worm collision grid
+after clearing the arena made a blob "pop" on a worm that wasn't there.
+**Left:** balance is untested by a person; CPU blobs and worms ignore tanks; no P2 or LAN in this mode.
+
+---
+
 ## Arena Mix: the three arena games in one world
 
 **Asked:** "code so I can have snakio in agario in diepio."

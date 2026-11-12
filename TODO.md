@@ -5,6 +5,9 @@ Last updated: after the UI pass (top bar, pause menu, Level Studio, one-click LA
 
 ## 2026-11-12: "code so I can have snakio in agario in diepio"
 - [x] **Arena Mix**: worms inside blobs inside tanks in one arena; play as tank, blob or worm (Q). `tests/arena_mix.js`.
+- [x] Arena Mix rules v2 (your spec): blobs absorb bullets; tanks are blobs with a gun (mass, eat / get eaten, break
+      apart on a virus or heavy damage, biggest piece keeps the gun, lumps are food); worms level up, break blocks, bite
+      tanks; blobs pop on worms; shared power-ups for tanks and worms.
 - [ ] Arena Mix follow-ups: P2 / LAN players, blob and worm CPUs that react to tanks, balance after your play-through.
 
 ## Your list of 2026-11-11 (evening) — order: multiplayer, then menus/tools, then games. Live status: PROGRESS.md

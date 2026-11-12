@@ -52,6 +52,23 @@ first), tick TODO.md, add the test to `tests/README.md`; original names and art 
 
 ## Log
 
+### 2026-11-12 — shipped: Arena Mix rules v2 (your spec) + shared power-ups
+Supersedes the cross-game rules in the entry below.
+- **Blobs absorb bullets** (each adds a little mass); bullets no longer shrink blobs.
+- **Tanks are blobs with a gun:** a tank has mass and its size follows it. It eats food and any blob or tank 25%
+  smaller; any blob or tank 25% bigger eats it. It can't split on purpose. A virus (loses half) or dropping below 35%
+  health (loses 40%, once per 5 s, health back to half) breaks pieces off: the biggest piece keeps the gun, the rest
+  are inert lumps that are plain food. A dead tank drops its mass as lumps.
+- **Worms level up** from eating, breaking the tank blocks with their head (boosting breaks faster) and biting:
+  points go to Bite / Armor / Appetite with keys 1 / 2 / 3. A bite hurts a tank and costs the worm a little length;
+  worm bodies still hurt tanks. Worms no longer die from touching a tank.
+- **Blobs pop on worms** like on a virus: up to 6 pieces, a quarter of the mass goes to the worm (length + XP);
+  pieces can't re-pop for 2.5 s; a blob under 30 mass is taken whole. Blobs no longer swallow worms.
+- **Shared power-ups:** tanks and worms pick up speed / shield / magnet / mass too; a dashed ring shows who has one.
+- CPU tanks stopped shooting blobs (it only feeds them) and hunt worms instead.
+Check: `tests/arena_mix.js` (22 staged rules). **Not checked by play:** balance. CPU blobs and worms still don't
+react to tanks; one human only.
+
 ### 2026-11-12 — shipped: Arena Mix (worms inside blobs inside tanks)
 Asked: "code so I can have [worms] in [blobs] in [tanks]". New Arcade game **Arena Mix** (`game_mix.js`): the three
 arena games run in one world. Their arenas were already centred on the same point, so they nest: worm ring (pink
