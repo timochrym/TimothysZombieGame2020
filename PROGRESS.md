@@ -16,7 +16,48 @@ RETROS.md has the detail for each shipped update; TODO.md has the full checklist
 Fastest way to perfect each game: one shared engine fix at a time (so every game gets it), a test per fix, then one
 short play-through list from you per game. Your notes on what feels off are the part no test can replace.
 
+## PICK UP HERE (handoff note, 2026-11-12)
+
+Everything below "Done" is on `main` with a passing test. Work top to bottom through "Still to do".
+
+**Done this session** (each has a test in `tests/`, listed in `tests/README.md`):
+1. LAN: joiners move their own hero locally, packets about half the size — `lan_perf.js`
+2. LAN joiner bugs: Blob Arena food, Flail-style soccer teams/drawing — `lan_joiner.js`
+3. Cheat menu: piece row only on Build + Place; arenas show only what applies — `panel_dock.js`
+4. Blob Arena settings (bots, food, decay, spawn shield, start mass, size cheat) + pickups — `blob_settings.js`
+5. Survival level select with the mouse (click-a-card grid) — `level_select.js`
+6. Brawl combo limits (chained hits fade, 6th hit = combo break) — `brawl_combo.js`
+7. Block damage follows weight, heroes only bruised by stray crates; inspector has Weight / Impact / Gravity and an
+   "All fields" list of every value on the selected object — `inspector_fields.js`
+
+**Still to do, in the user's order** (their exact words are at the top of TODO.md):
+1. **Enemy tracking and pathfinding** ("still horrible"). Not started this session. Suggested start: write a test that
+   spawns enemies on each Survival level with the hero on a different floor and measures seconds-until-reached and
+   time spent stuck (speed near 0 while not attacking). Code: `pathfinder.js`, `Components.zombieAI` in `components.js`.
+2. **Editing hand / drag / play** in the cheats panel's Build tab (`summonManager.js` mouse handlers) — not started.
+3. **Menus**: pause menu, player 2 menu (`players.js`), right-click options, dropdowns. Only the cheats panel and
+   Survival level select were reworked so far.
+4. **Zombie Ball**: smaller pitch, bright one-button physics-soccer look (original art; don't copy the screenshot's
+   game). Flail style lives in `sport_flail.js`; pitch size / goals in `game_sport.js` and the `zb_stadium` level.
+5. **Wobble Wheels** rethink (movement, rotation, controls, map): `game_wheels.js`.
+6. A pass over every game; Worm / Tank Arena could get the same settings depth and joiner-side gliding as Blob Arena.
+
+**Not re-run after the block-damage change:** `siege_rest.js` (about 3 minutes). Siege crates use the same impact code,
+so run it before touching Siege.
+**Only the user can check:** LAN feel on two real devices; the Control Panel's LAN start/stop button.
+**Conventions:** push each finished piece to `claude/vibrant-curie-rxogs0` and `main`; add a RETROS.md entry (newest
+first), tick TODO.md, add the test to `tests/README.md`; original names and art only.
+
 ## Log
+
+### 2026-11-12 — shipped: Brawl combo limits; block damage by weight; inspector shows every field
+- **Brawl:** hits chained within 50 ticks each do 80% of the one before (floor 35%), stun shrinks the same way, and
+  the 6th hit is a COMBO BREAK (victim pops free, can't be hit for 3/4 s). Eight quick punches: 33.6% → 15.6%.
+- **Blocks:** impact damage = speed × √weight × the block's own "impact damage" setting. A weight ¼ / 1 / 4 crate at
+  the same speed does 25 / 50 / 100 to an enemy. A hero bumped by a stray crate takes at most 18 (was up to 65) and
+  nothing below a real impact speed; a crate thrown at a hero on purpose caps at 35.
+- **Inspector:** Weight, Impact damage × and Gravity × sliders on physics blocks, and an "All fields" list (with a
+  filter box) where every number, text and on/off value on the selected object or character can be edited live.
 
 ### 2026-11-11 — shipped: Survival level select works with the mouse
 "Zombie game I can't select the other levels": both ways worked from the keyboard, but in the pause menu a mouse click

@@ -10,9 +10,9 @@ Last updated: after the UI pass (top bar, pause menu, Level Studio, one-click LA
       spawn shield, power-up pickups borrowed from the other games. Check: `tests/blob_settings.js`.
 - [x] Cheat menu: the always-on drag-out toolbar — now only on Build + Place; arenas hide what doesn't apply. `tests/panel_dock.js`.
 - [x] Zombie game: can't select the other levels. → the pause row only cycled a name with the mouse; now a click-a-card grid. `tests/level_select.js`.
-- [ ] Brawl: combo hits are way too strong.
+- [x] Brawl: combo hits are way too strong. → chained hits fade, 6th is a combo break. `tests/brawl_combo.js`.
 - [ ] Enemy tracking and pathfinding is still bad.
-- [ ] Blocks sometimes do too much damage; weight field; every field reachable in the inspector.
+- [x] Blocks sometimes do too much damage; weight field; every field reachable in the inspector. `tests/inspector_fields.js`.
 - [ ] Editing hand, dragging and playing all enhanced.
 - [ ] Menus: pause menu, player 2 menu, inspector, editor, toolbars, game cheats, right-click options, dropdowns — all
       intuitive. "Imagine Steve Jobs designed this universal game engine."

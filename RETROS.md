@@ -6,6 +6,24 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Brawl combo limits; block damage by weight; an inspector that shows every field
+
+**Asked:** "Combo hits for brawl are way too OP" / "Sometimes the blocks do too much damage and I thought they had a
+weight field now. All the fields should be accessible in the inspector menu."
+**Found:** Brawl had no chain limit at all: a hit stuns for 10–55 frames and the victim can be hit again after 12, so
+any quick attack was an infinite stun-lock. Blocks: any block faster than 10 touching a character did up to 65 damage,
+weight ignored, and that included a hero who was only bumped by a falling or blasted crate. The inspector had eight
+fixed fields and no weight.
+**Shipped:** chain fade + combo break in `brawlApplyHit`; impact damage from speed × √weight × a per-block multiplier
+with separate, much lower numbers for heroes; inspector sliders for Weight / Impact damage / Gravity and an
+"All fields" list that edits any plain value on the selection (39 on a crate, 101 on an enemy), kept live while open.
+**Numbers:** `tests/brawl_combo.js` (8 punches 33.6% → 15.6%, break on the 6th), `tests/inspector_fields.js`
+(weight ¼/1/4 → 25/50/100 on an enemy; hero bump 0 slow, 18 max; thrown at a hero 35 max).
+**Left:** `siege_rest.js` not re-run after the impact change. Enemy pathfinding, the editor hand, the remaining
+menus, Zombie Ball and Wobble Wheels are untouched — see "PICK UP HERE" in PROGRESS.md.
+
+---
+
 ## Cheat menu without the always-on toolbar; Blob Arena game settings and pickups
 
 **Asked:** "The cheat menu always having this drag out toolbar is hideous" and "[Blob Arena] should have game settings

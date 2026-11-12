@@ -332,7 +332,18 @@ class Object {
                 return;
             }
             if (hitObj instanceof Character && hitObj != this.thrownBy) {
-                var dmg = -Math.round(Math.min(65, speedMag * 2.5));
+                // Impact damage = speed x weight (a weight-1 crate is the old formula), times this block's own
+                // "impact damage" setting. Heroes are not zombies: a crate that merely falls or gets blasted into a
+                // hero needs real speed and only bruises (it used to take up to 65 of 100 health); one thrown at a
+                // hero on purpose (Brawl, friendly fire) hurts, but can't one-shot.
+                var wk = Math.sqrt(Math.max(0.1, this.weight || 1)), mult = this.impactMult === undefined ? 1 : this.impactMult;
+                var raw = Math.min(65 * wk, speedMag * 2.5 * wk) * mult;
+                if (hitObj.isPlayer && !hitObj.isZombie) {
+                    if (this.thrownTimer > 0) raw = Math.min(35, raw * 0.6);
+                    else { if (speedMag < 15) return; raw = Math.min(18, raw * 0.3); }
+                }
+                if (raw < 1) return;
+                var dmg = -Math.round(raw);
                 hitObj.takeDamage(dmg, this.xspeed * 0.6, Math.abs(this.yspeed) * 0.4 + 4);
                 Components.addFloatingText("SMASH! " + dmg, hitObj.x, hitObj.y + 55, "#00f5d4", 20);
                 Components.spawnSparks(this.x, this.y, this.color, 10);

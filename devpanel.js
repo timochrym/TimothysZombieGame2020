@@ -344,7 +344,7 @@ var DevUI = {
             world: { t: ["god", "jetpack"], o: ["flight", "infiniteAmmo", "friendlyFire", "showHitboxes", "bouncyRagdolls", "playerDamage", "gravityMult"], id: ["dp-zoom"] }, coop: { t: ["coop"] } },
     syncGame: function(panel) {
         if (typeof GameTuning === "undefined" || !GameModes.current) return;
-        this.refreshGameCard(); this.syncMatchState(); this.syncDock();
+        this.refreshGameCard(); this.syncMatchState(); this.syncDock(); SummonManager.refreshAllFields();
         var hidden = 0;
         for (var need in this.NEED) {
             var N = this.NEED[need], show = GameTuning.applies(need), els = [];
@@ -847,6 +847,15 @@ SummonManager.buildUI = function() {
                     <div class="dp-row" id="sp-edit-bounce-row" style="display:none"><label>Bounce</label>
                         <input type="range" class="dp-range" id="sp-edit-bounce" min="10" max="40" step="1" oninput="if(SummonManager.selectedObject){SummonManager.selectedObject.bounceForce=Number(this.value);} this.nextElementSibling.textContent=this.value">
                         <span class="dp-val"></span></div>
+                    <div class="dp-row" id="sp-edit-weight-row" style="display:none" title="Heavier = harder to push, throw and blast, and hits harder"><label>Weight</label>
+                        <input type="range" class="dp-range" id="sp-edit-weight" min="0.2" max="10" step="0.1" oninput="SummonManager.setSelectedField('weight', Number(this.value)); this.nextElementSibling.textContent=this.value">
+                        <span class="dp-val"></span></div>
+                    <div class="dp-row" id="sp-edit-impact-row" style="display:none" title="How hard this block hurts what it lands on. 0 = harmless"><label>Impact damage ×</label>
+                        <input type="range" class="dp-range" id="sp-edit-impact" min="0" max="3" step="0.1" oninput="SummonManager.setSelectedField('impactMult', Number(this.value)); this.nextElementSibling.textContent=this.value">
+                        <span class="dp-val"></span></div>
+                    <div class="dp-row" id="sp-edit-grav-row" style="display:none" title="1 = normal, 0 = floats in place, negative = rises like a balloon"><label>Gravity ×</label>
+                        <input type="range" class="dp-range" id="sp-edit-grav" min="-1" max="3" step="0.1" oninput="SummonManager.setSelectedField('gravityMult', Number(this.value)); this.nextElementSibling.textContent=this.value">
+                        <span class="dp-val"></span></div>
                     <div class="dp-row" id="sp-edit-hp-row" style="display:none"><label>Health</label>
                         <input type="range" class="dp-range" id="sp-edit-hp" min="10" max="800" step="10" oninput="SummonManager.setSelectedHP(Number(this.value)); this.nextElementSibling.textContent=this.value">
                         <span class="dp-val"></span></div>
@@ -858,6 +867,11 @@ SummonManager.buildUI = function() {
                     <select id="sp-kind-select" class="dp-select" onchange="SummonManager.setSelectedKind(this.value)" title="Structure type"><option value="stairs">Stairs</option><option value="slope">Slope</option><option value="slide">Slide</option><option value="wall">Wall</option><option value="platform">One-way platform</option><option value="block">Solid block</option></select>
                     <button class="dp-btn warn" id="sp-kill-btn" data-act="killSelected" style="display:none">☠ Kill</button>
                 </div></div>
+                <details class="dp-section" id="sp-all-fields" ontoggle="SummonManager.renderAllFields()">
+                    <summary class="dp-title" style="cursor:pointer"><span>▸ All fields <span id="sp-all-count"></span></span><span style="text-transform:none;letter-spacing:0;font-weight:600">every value on this object</span></summary>
+                    <input id="sp-all-filter" class="dp-text" placeholder="filter… (speed, health, jump)" style="width:100%;box-sizing:border-box;margin:4px 0 6px" oninput="SummonManager.renderAllFields()">
+                    <div id="sp-all-rows"></div>
+                </details>
             </div>
         </div>
 
@@ -1224,9 +1238,69 @@ SummonManager.selectObject = function(obj) {
         }
         var physBtn = document.getElementById("sp-toggle-physics");
         if (physBtn && !isChar) physBtn.textContent = obj.movable ? "Freeze (static)" : "Enable physics";
+        // weight / impact / gravity: things with physics that are not characters
+        var phys = !isChar && !!obj.movable;
+        [["sp-edit-weight", obj.weight === undefined ? 1 : obj.weight], ["sp-edit-impact", obj.impactMult === undefined ? 1 : obj.impactMult], ["sp-edit-grav", obj.gravityMult === undefined ? 1 : obj.gravityMult]].forEach(function(r) {
+            var rowEl = document.getElementById(r[0] + "-row"); if (!rowEl) return;
+            rowEl.style.display = phys ? "flex" : "none";
+            if (phys) { val(r[0], r[1]); rowEl.querySelector(".dp-val").textContent = r[1]; var rg = document.getElementById(r[0]); if (rg && DevUI.paintRange) DevUI.paintRange(rg); }
+        });
+        this.renderAllFields();
         if (this.isOpen && this.toolMode == "select") DevUI.switchTab("inspect");
     }
     this.refreshObjectList();
+};
+
+SummonManager.setSelectedField = function(key, v) {
+    var o = this.selectedObject;
+    if (!o) return;
+    o[key] = v;
+};
+
+// "All fields": every plain value on the selected object (numbers, text, on/off), editable in place. Lists and
+// links to other objects are shown read-only. Private bookkeeping (names starting with "_") is left out.
+SummonManager.renderAllFields = function() {
+    var box = document.getElementById("sp-all-rows"), det = document.getElementById("sp-all-fields"), o = this.selectedObject;
+    if (!box || !det) return;
+    var keys = [];
+    if (o) for (var k in o) { if (k.charCodeAt(0) === 95 || typeof o[k] === "function") continue; keys.push(k); }
+    keys.sort();
+    var cnt = document.getElementById("sp-all-count"); if (cnt) cnt.textContent = o ? "(" + keys.length + ")" : "";
+    if (!det.open || !o) { box.innerHTML = ""; this.allFieldsFor = null; return; }
+    var f = (document.getElementById("sp-all-filter").value || "").toLowerCase();
+    if (f) keys = keys.filter(function(k) { return k.toLowerCase().indexOf(f) !== -1; });
+    var esc = function(x) { return String(x).replace(/[&<>"]/g, function(c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+    box.innerHTML = keys.map(function(k) {
+        var v = o[k], t = typeof v, ctl;
+        if (t === "number") ctl = '<input class="dp-text" type="number" step="any" data-field="' + k + '" value="' + (isFinite(v) ? Math.round(v * 1000) / 1000 : 0) + '" style="width:112px;flex:0 0 auto">';
+        else if (t === "boolean") ctl = '<label class="dp-toggle" style="margin:0"><input type="checkbox" data-field="' + k + '"' + (v ? " checked" : "") + '><span class="dp-switch"></span></label>';
+        else if (t === "string") ctl = '<input class="dp-text" type="text" data-field="' + k + '" value="' + esc(v) + '" style="width:112px;flex:0 0 auto">';
+        else ctl = '<span class="dp-val" style="width:112px;text-align:left;color:#8aa3b5">' + (v === null || v === undefined ? "—" : (Array.isArray(v) ? "list of " + v.length : (v.name ? "→ " + esc(v.name) : "…"))) + '</span>';
+        return '<div class="dp-row" style="margin:3px 0"><label style="width:auto;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + k + '">' + k + '</label>' + ctl + '</div>';
+    }).join("") || '<p class="dp-hint">No field matches that filter.</p>';
+    this.allFieldsFor = o;
+    box.querySelectorAll("[data-field]").forEach(function(el) {
+        el.addEventListener(el.type === "checkbox" ? "change" : "input", function() {
+            var cur = SummonManager.selectedObject; if (!cur) return;
+            var key = el.dataset.field;
+            if (el.type === "checkbox") cur[key] = el.checked;
+            else if (el.type === "number") { var n = Number(el.value); if (el.value !== "" && isFinite(n)) cur[key] = n; }
+            else cur[key] = el.value;
+        });
+        el.addEventListener("keydown", function(e) { e.stopPropagation(); });
+    });
+};
+// keep the open list showing live values (not the box being typed in)
+SummonManager.refreshAllFields = function() {
+    var det = document.getElementById("sp-all-fields"), o = this.selectedObject;
+    if (!det || !det.open || !o || this.allFieldsFor !== o) return;
+    det.querySelectorAll("[data-field]").forEach(function(el) {
+        if (document.activeElement === el) return;
+        var v = o[el.dataset.field];
+        if (el.type === "checkbox") el.checked = !!v;
+        else if (el.type === "number") { if (typeof v === "number" && isFinite(v)) { var s2 = String(Math.round(v * 1000) / 1000); if (el.value !== s2) el.value = s2; } }
+        else if (typeof v === "string" && el.value !== v) el.value = v;
+    });
 };
 
 SummonManager.toggleWavePause = function() {
