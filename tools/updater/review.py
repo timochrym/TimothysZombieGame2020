@@ -5,9 +5,10 @@
     python review.py brief CHECKLIST [--run] [--pins FILE]               claims next to evidence; writes .brief.md and .brief.html
     python review.py answer CHECKLIST --line "c1 Good · c4 Not right (why) · q1 Better"
     python review.py next [--all]                                        what the owner asked for: a prompt for the next agent session
-    python review.py ready CHECKLIST [--run] [--strict]                  is this checklist fit to push? (exit 1 when not)
+    python review.py ready CHECKLIST|--latest [--run] [--strict]         is this checklist fit to push? (exit 1 when not)
     python review.py graph [--workspace FOLDER] [--out FILE.md]         a generated map of how the projects connect (Mermaid)
     python review.py pr-body CHECKLIST                                   a pull request description: claims next to evidence
+    python review.py stats [--workspace FOLDER]                          how strong is the evidence agents bring, per project
     python review.py health [--workspace FOLDER]                         is each project in good order? (git, manifest, rules and tools)
     python review.py status [--workspace FOLDER] [--json]                what is waiting on you, in every project on this computer
     python review.py portfolio [--workspace FOLDER] [--out FILE]         the same as one offline page
@@ -28,6 +29,7 @@ import review_graph as rg
 import review_health as rh
 import review_next as rn
 import review_projects as rp
+import review_stats as rt
 import review_status as rs
 
 
@@ -161,8 +163,17 @@ def cmd_next(args, me, projects, loc):
     return 0
 
 
+def newest_checklist(folders):
+    rows = [r for f in folders for r in rs.scan(f)]
+    if not rows:
+        raise CliError('There is no checklist yet in %s.' % (', '.join(folders) or 'any review folder'))
+    return max(rows, key=lambda r: (r['date'], os.path.getmtime(r['path'])))['path']
+
+
 def cmd_ready(args, me, projects, loc):
-    path = find_checklist(checklist_folders(me, loc), args.checklist)
+    if not args.checklist and not args.latest:
+        raise CliError('Name a checklist, or use --latest.')
+    path = newest_checklist(checklist_folders(me, loc)) if args.latest else find_checklist(checklist_folders(me, loc), args.checklist)
     with open(path, encoding='utf-8') as fh:
         brief = rb.build(fh.read(), me['folder'], run=args.run, pins_file=None, timeout=args.timeout)
     problems, notes = [], []
@@ -182,6 +193,16 @@ def cmd_ready(args, me, projects, loc):
         print('NOTE     ' + line)
     print('NOT READY' if problems else 'READY')
     return 1 if problems else 0
+
+
+def cmd_stats(args, me, projects, loc):
+    for p in projects:
+        s = rt.stats(p, projects)
+        print('%-22s %s' % (p['name'], rt.line(s)))
+        if s['claims']:
+            print('    evidence: ' + ', '.join('%d %s' % (n, k) for k, n in s['kinds'].items() if n)
+                  + ('; verdicts: ' + ', '.join('%d %s' % (n, k) for k, n in s['verdicts'].items()) if s['verdicts'] else ''))
+    return 0
 
 
 def cmd_health(args, me, projects, loc):
@@ -262,7 +283,8 @@ def main(argv=None):
     b.add_argument('--timeout', type=int, default=600); b.add_argument('--no-html', action='store_true')
     a = sub.add_parser('answer'); a.add_argument('checklist'); a.add_argument('--line', required=True)
     x = sub.add_parser('next'); x.add_argument('--all', action='store_true')
-    r = sub.add_parser('ready'); r.add_argument('checklist'); r.add_argument('--run', action='store_true'); r.add_argument('--strict', action='store_true'); r.add_argument('--timeout', type=int, default=600)
+    r = sub.add_parser('ready'); r.add_argument('checklist', nargs='?'); r.add_argument('--latest', action='store_true'); r.add_argument('--run', action='store_true'); r.add_argument('--strict', action='store_true'); r.add_argument('--timeout', type=int, default=600)
+    t = sub.add_parser('stats'); t.add_argument('--workspace')
     h = sub.add_parser('health'); h.add_argument('--workspace')
     g = sub.add_parser('graph'); g.add_argument('--workspace'); g.add_argument('--out')
     pb = sub.add_parser('pr-body'); pb.add_argument('checklist')
@@ -272,7 +294,7 @@ def main(argv=None):
     try:
         me, projects, loc = context(args)
         return {'new': cmd_new, 'brief': cmd_brief, 'answer': cmd_answer, 'next': cmd_next, 'ready': cmd_ready,
-                 'health': cmd_health, 'graph': cmd_graph, 'pr-body': cmd_pr_body, 'status': cmd_status, 'portfolio': cmd_portfolio}[args.cmd](args, me, projects, loc)
+                 'stats': cmd_stats, 'health': cmd_health, 'graph': cmd_graph, 'pr-body': cmd_pr_body, 'status': cmd_status, 'portfolio': cmd_portfolio}[args.cmd](args, me, projects, loc)
     except (CliError, rb.BriefError, ra.AnswerError, OSError) as err:
         print('Error: %s' % err, file=sys.stderr)
         return 2

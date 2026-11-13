@@ -11,6 +11,7 @@ import time
 
 import review_health
 import review_projects as rp
+import review_stats
 import review_status as rs
 
 SCALE = ['Great', 'Good', 'Okay', 'Not right', 'Wrong idea', 'Not looked']
@@ -42,7 +43,8 @@ def build_model(projects, brief_url=file_url):
             'health': health,
             'id': p['id'], 'name': p['name'], 'folder': p['folder'], 'type': m.get('type', ''), 'goal': m.get('goal', ''),
             'output': m.get('output', ''), 'done': m.get('done', ''), 'branch': m.get('branch', ''),
-            'review': {'label': loc['label'], 'dir': loc['dir'], 'problem': loc['problem'], 'count': len(items)}})
+            'review': {'label': loc['label'], 'dir': loc['dir'], 'problem': loc['problem'], 'count': len(items),
+                       'evidence': review_stats.line(review_stats.stats(p, projects))}})
     model['waiting'].sort(key=lambda w: (w['date'], w['name']), reverse=True)
     return model
 
@@ -109,6 +111,7 @@ for (const p of D.projects) {
     p.goal ? el('div', {}, p.goal) : el('div', { className: 'dim' }, 'No goal written yet.'),
     el('div', { className: 'dim' }, 'Output: ' + (p.output || '\\u2014')), el('div', { className: 'dim' }, 'Done when: ' + (p.done || '\\u2014')),
     el('div', { className: 'dim' }, 'Branch ' + (p.branch || '?') + ' \\u00b7 ' + p.review.count + ' review(s) in ' + p.review.label + ' / ' + p.review.dir),
+    el('div', { className: 'dim' }, 'Evidence: ' + p.review.evidence),
     p.review.problem ? el('div', { className: 'bad' }, p.review.problem) : '',
     p.health && p.health.flags.length ? el('ul', { className: 'flags' }, ...p.health.flags.map((f) => el('li', {}, f))) : el('div', { className: 'ok' }, 'In good order.')));
 }
