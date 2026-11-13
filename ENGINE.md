@@ -201,7 +201,7 @@ Works for LAN players (toggle/piece/material and the aim point travel in the inp
 ## Level Studio (`studio.js`)
 
 B (or the 🛠 button / pause menu) opens the editor; the old developer panel lives on as **🧪 Cheats & tuning**.
-The document `{ name, mode, waves, ents }` is the source of truth; each entity has `cat`: `layout` (Object.loadMap
+The document `{ name, mode, waves, ents }` is the source of truth; each entity has `cat`: `layout` (GameObject.loadMap
 format), `gadget` (Gadgets format; movers store `dx2/dy2` relative to their start), `enemy` `{ power }`, `item`
 `{ power }`, `spawn` `{ player }`. `Studio.docToDef(doc)` turns it into a normal level definition (with `studioSpawns`
 for enemies/items, spawned by `Studio.afterReset()` at the end of `resetGame`). Saving also registers the level in

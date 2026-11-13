@@ -185,7 +185,7 @@ GameModes.register({
             var best = -1, bd = 140;
             for (let i = 0; i < rd.pts.length; i++) { var d = Math.hypot(rd.pts[i].x - wx, rd.pts[i].y - wy); if (d < bd) { bd = d; best = i; } }
             if (best >= 0) Dummy.drag = { i: best };
-        } else if (t === "tnt") { Object.addCrate(wx, wy, 70, "#e84545", { explosive: true, name: "TNT Barrel" }); rebuildAllObjects(); }
+        } else if (t === "tnt") { GameObject.addCrate(wx, wy, 70, "#e84545", { explosive: true, name: "TNT Barrel" }); rebuildAllObjects(); }
         else if (t === "bomb") { Components.blowUp(wx, wy, "#ff6b00", 26, 320, -40, null); screenShake = Math.max(screenShake, 8); }
         else if (t === "cannon" && rd) {
             var cx = rd.centerX(), cy = rd.centerY(), dx = wx - cx, dy = wy - cy, L = Math.hypot(dx, dy) || 1;
@@ -193,9 +193,9 @@ GameModes.register({
             Components.spawnSparks(cx, cy, "#fde68a", 10);
             if (typeof SFX !== "undefined") SFX.play("explode", cx, cy, 0.6, 1.4);
         }
-        else if (t === "pad") { Object.addBumper(Math.round(wx / 40) * 40, Math.round(wy / 40) * 40, 200, 40, 32, "#ff2e63", { name: "Bounce Pad" }); rebuildAllObjects(); }
-        else if (t === "spike") { var s = Object.addBox(Math.round(wx / 40) * 40, Math.round(wy / 40) * 40, 160, 40, "#94a3b8", { name: "Spike Block", texture: "hazard", kind: "block" }); s.isSpike = true; Dummy.spikes.push(s); rebuildAllObjects(); }
-        else if (t === "weight") { var w = Object.addCrate(wx, wy + 700, 120, "#1f2937", { name: "Heavy Weight", texture: "cart_iron", bounciness: -0.05 }); w.oneTon = true; w.yspeed = -6; rebuildAllObjects(); }
+        else if (t === "pad") { GameObject.addBumper(Math.round(wx / 40) * 40, Math.round(wy / 40) * 40, 200, 40, 32, "#ff2e63", { name: "Bounce Pad" }); rebuildAllObjects(); }
+        else if (t === "spike") { var s = GameObject.addBox(Math.round(wx / 40) * 40, Math.round(wy / 40) * 40, 160, 40, "#94a3b8", { name: "Spike Block", texture: "hazard", kind: "block" }); s.isSpike = true; Dummy.spikes.push(s); rebuildAllObjects(); }
+        else if (t === "weight") { var w = GameObject.addCrate(wx, wy + 700, 120, "#1f2937", { name: "Heavy Weight", texture: "cart_iron", bounciness: -0.05 }); w.oneTon = true; w.yspeed = -6; rebuildAllObjects(); }
         else if (t === "ball") {
             var top = (levelBounds ? levelBounds.topY : 2000) - 40;
             var fakeB = { x: wx, y: wy, s1: 80, s2: 80, zombiePower: "BALL", lastFacing: 1 };

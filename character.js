@@ -20,7 +20,7 @@ var PowerUpDefs = {
 class Character {
 
     constructor(name, hitbox, poly, color, xy, maxspeed, slower, gravity, bounciness, speed, moveType, health, lazerType = "ULDR", isZombie = false, zombiePower = "NORMAL") {
-        this.id = ++Object.nextId;
+        this.id = ++GameObject.nextId;
         this.name = name;
         this.hitbox = hitbox;
         this.poly = poly;

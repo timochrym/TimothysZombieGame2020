@@ -378,18 +378,18 @@ class LevelManager {
                 var cx = col * 80;
                 var cy = 360 + row * 80;
                 if (idx % 4 == 0) {
-                    Object.addCrate(cx, cy, 80, "#00f5d4", { bounciness: -0.9, name: "Stress Cube", texture: "neon_grid" });
+                    GameObject.addCrate(cx, cy, 80, "#00f5d4", { bounciness: -0.9, name: "Stress Cube", texture: "neon_grid" });
                 } else if (idx % 7 == 0) {
-                    Object.addCrate(cx, cy, 80, "#e84545", { explosive: true, name: "TNT Barrel" });
+                    GameObject.addCrate(cx, cy, 80, "#e84545", { explosive: true, name: "TNT Barrel" });
                 } else {
-                    Object.addCrate(cx, cy, 80, "#d9a05b", { name: "Stress Crate", texture: "crate_plank" });
+                    GameObject.addCrate(cx, cy, 80, "#d9a05b", { name: "Stress Crate", texture: "crate_plank" });
                 }
                 idx++;
             }
         }
 
         for (let i = 0; i < 4; i++) {
-            var cube = Object.addCrate((1360 + (i % 2) * 80) * STRUCT_SCALE, 160 + i * 80, 80, "#ffbe0b", {
+            var cube = GameObject.addCrate((1360 + (i % 2) * 80) * STRUCT_SCALE, 160 + i * 80, 80, "#ffbe0b", {
                 bounciness: -0.95,
                 name: "Cage Cube",
                 texture: "question_gold"
@@ -411,7 +411,7 @@ class LevelManager {
             var rx = Math.round((centerX + (Math.random() - 0.5) * 720) / 40) * 40;
             var ry = Math.round((640 + Math.random() * 360) / 40) * 40;
             var isBouncy = Math.random() < 0.45;
-            var c = Object.addCrate(
+            var c = GameObject.addCrate(
                 rx,
                 ry,
                 80,
@@ -535,7 +535,7 @@ class LevelManager {
         zombies = [];
         lazers = [];
         powerUps = [];
-        Object.loadMap([
+        GameObject.loadMap([
             { type: "box", name: "Main Floor", x: 0, y: -440, w: 3360, h: 960, color: "#7f4f24", texture: "grass_dirt" },
             { type: "box", name: "Left Wall", x: -1620, y: 1000, w: 120, h: 1920, color: "#4a5568", texture: "castle_stone" },
             { type: "box", name: "Right Wall", x: 1620, y: 1000, w: 120, h: 1920, color: "#4a5568", texture: "castle_stone" }
@@ -718,7 +718,7 @@ class WorldGenerator {
 
     static addGridBox(left, bottom, w, h, color, opts = {}) {
         left = this.tx(left); bottom = this.ty(bottom); w *= STRUCT_SCALE; h *= STRUCT_SCALE;
-        var obj = Object.addBox(left + w / 2, bottom + h / 2, w, h, color, opts);
+        var obj = GameObject.addBox(left + w / 2, bottom + h / 2, w, h, color, opts);
         obj.chunkIdx = this.activeBuildChunk;
         return obj;
     }
@@ -730,21 +730,21 @@ class WorldGenerator {
 
     static addGridRamp(left, bottom, w, h, dir, color, opts = {}) {
         left = this.tx(left); bottom = this.ty(bottom); w *= STRUCT_SCALE; h *= STRUCT_SCALE;
-        var obj = Object.addRamp(left + w / 2, bottom + h / 2, w, h, dir, color, opts);
+        var obj = GameObject.addRamp(left + w / 2, bottom + h / 2, w, h, dir, color, opts);
         obj.chunkIdx = this.activeBuildChunk;
         return obj;
     }
 
     static addGridBumper(left, bottom, w, h, bounce, color, opts = {}) {
         left = this.tx(left); bottom = this.ty(bottom); w *= STRUCT_SCALE; h = 40; // thin spring pad: walk over it, never blocked
-        var obj = Object.addBumper(left + w / 2, bottom + h / 2, w, h, bounce, color, opts);
+        var obj = GameObject.addBumper(left + w / 2, bottom + h / 2, w, h, bounce, color, opts);
         obj.chunkIdx = this.activeBuildChunk;
         return obj;
     }
 
     static addGridCrate(left, bottom, size, color, opts = {}) {
         left = this.tx(left); bottom = this.ty(bottom);
-        var obj = Object.addCrate(left + size / 2, bottom + size / 2, size, color, opts);
+        var obj = GameObject.addCrate(left + size / 2, bottom + size / 2, size, color, opts);
         obj.chunkIdx = this.activeBuildChunk;
         return obj;
     }

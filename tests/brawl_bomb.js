@@ -7,7 +7,7 @@ const { open } = require('./lib');
   const dropped = await ev(() => movingObjects.filter(o => o.name === 'Bomb').length + ' bomb(s) dropped by the timer');
   const r = await ev(() => {
     redGuy.dead = false; redGuy.x = brawl.stage.centerX - 200; redGuy.y = brawl.stage.topY + 60;
-    const o = Object.addCrate(redGuy.x + 60, redGuy.y, 54, '#1f2937', { explosive: true, name: 'Bomb' }); o.brawlBomb = brawl.tick; rebuildAllObjects();
+    const o = GameObject.addCrate(redGuy.x + 60, redGuy.y, 54, '#1f2937', { explosive: true, name: 'Bomb' }); o.brawlBomb = brawl.tick; rebuildAllObjects();
     const cpu = characters.find(c => c !== redGuy && !c.eliminated); window.__cpu = cpu;
     redGuy.dead = false; redGuy.x = o.x - 60; redGuy.y = o.y + 10; redGuy.xspeed = redGuy.yspeed = 0; redGuy.damagePct = 0;
     cpu.x = redGuy.x + 420; cpu.y = redGuy.y; cpu.xspeed = cpu.yspeed = 0; cpu.damagePct = 0; cpu.shielding = false; cpu.isCPU = false; cpu.input = cpu.input || {};

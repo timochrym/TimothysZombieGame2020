@@ -214,13 +214,13 @@ class SummonManager {
             copy = new Character(obj.name, zBox, zBox, obj.color, [obj.x + offsetX, obj.y + offsetY], obj.maxspeed, obj.slower, obj.gravity, obj.bounciness, obj.speed, obj.moveType, obj.maxHealth, obj.lazerType, obj.isZombie, obj.zombiePower);
             zombies.push(copy);
         } else if (obj.isRamp) {
-            copy = Object.addRamp(obj.x + offsetX, obj.y + offsetY, w, h, obj.rampDir, obj.color, { name: obj.name, texture: obj.texture });
+            copy = GameObject.addRamp(obj.x + offsetX, obj.y + offsetY, w, h, obj.rampDir, obj.color, { name: obj.name, texture: obj.texture });
         } else if (obj.isBumper) {
-            copy = Object.addBumper(obj.x + offsetX, obj.y + offsetY, w, h, obj.bounceForce, obj.color, { name: obj.name, texture: obj.texture });
+            copy = GameObject.addBumper(obj.x + offsetX, obj.y + offsetY, w, h, obj.bounceForce, obj.color, { name: obj.name, texture: obj.texture });
         } else if (obj.movable) {
-            copy = Object.addCrate(obj.x + offsetX, obj.y + offsetY, w, obj.color, { w: w, h: h, explosive: obj.explosive, bounciness: obj.bounciness, name: obj.name, texture: obj.texture });
+            copy = GameObject.addCrate(obj.x + offsetX, obj.y + offsetY, w, obj.color, { w: w, h: h, explosive: obj.explosive, bounciness: obj.bounciness, name: obj.name, texture: obj.texture });
         } else {
-            copy = Object.addBox(obj.x + offsetX, obj.y + offsetY, w, h, obj.color, { name: obj.name, texture: obj.texture });
+            copy = GameObject.addBox(obj.x + offsetX, obj.y + offsetY, w, h, obj.color, { name: obj.name, texture: obj.texture });
         }
         rebuildAllObjects();
         this.selectObject(copy);

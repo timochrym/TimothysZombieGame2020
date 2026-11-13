@@ -219,7 +219,7 @@ var DevActions = {
             var items = JSON.parse(document.getElementById("dp-json").value);
             staticObjects = staticObjects.filter(function(o) { return o.isInfiniteBase; });
             movingObjects = [];
-            Object.loadMap(items);
+            GameObject.loadMap(items);
             rebuildAllObjects();
             SummonManager.refreshObjectList();
             DevUI.toast("Imported " + items.length + " objects");
@@ -1117,21 +1117,21 @@ SummonManager.spawnAt = function(worldX, worldY) {
 
     if (t == "box" || t == "grass_box" || t == "wall" || t == "platform") {
         var bk = (t == "wall") ? "wall" : (t == "platform" ? "platform" : "block");
-        created = Object.addBox(rx, ry, w, h, col, { name: bk == "wall" ? "Wall" : (bk == "platform" ? "One-way Platform" : "Block"), texture: tex, kind: bk });
+        created = GameObject.addBox(rx, ry, w, h, col, { name: bk == "wall" ? "Wall" : (bk == "platform" ? "One-way Platform" : "Block"), texture: tex, kind: bk });
     } else if (t == "ramp_right" || t == "ramp_left") {
-        created = Object.addRamp(rx, ry, w, h, t == "ramp_right" ? "right" : "left", col, { name: "Stairs", texture: tex, kind: "stairs" });
+        created = GameObject.addRamp(rx, ry, w, h, t == "ramp_right" ? "right" : "left", col, { name: "Stairs", texture: tex, kind: "stairs" });
     } else if (t == "slope_right" || t == "slope_left") {
-        created = Object.addRamp(rx, ry, w, h, t == "slope_right" ? "right" : "left", col, { name: "Slope", texture: tex, kind: "slope" });
+        created = GameObject.addRamp(rx, ry, w, h, t == "slope_right" ? "right" : "left", col, { name: "Slope", texture: tex, kind: "slope" });
     } else if (t == "slide_right" || t == "slide_left") {
-        created = Object.addRamp(rx, ry, w, h, t == "slide_right" ? "right" : "left", col, { name: "Slide", texture: null, kind: "slide" });
+        created = GameObject.addRamp(rx, ry, w, h, t == "slide_right" ? "right" : "left", col, { name: "Slide", texture: null, kind: "slide" });
     } else if (t == "bumper") {
-        created = Object.addBumper(rx, ry, w, h, this.spawnBounce || 24, col, { name: "Bounce Pad", texture: tex });
+        created = GameObject.addBumper(rx, ry, w, h, this.spawnBounce || 24, col, { name: "Bounce Pad", texture: tex });
     } else if (t == "crate") {
-        created = Object.addCrate(rx, ry, w, col, { w: w, h: h, name: "Crate", texture: tex || "crate_plank" });
+        created = GameObject.addCrate(rx, ry, w, col, { w: w, h: h, name: "Crate", texture: tex || "crate_plank" });
     } else if (t == "tnt") {
-        created = Object.addCrate(rx, ry, w, "#e84545", { w: w, h: h, explosive: true, name: "TNT Barrel" });
+        created = GameObject.addCrate(rx, ry, w, "#e84545", { w: w, h: h, explosive: true, name: "TNT Barrel" });
     } else if (t == "bouncy_cube") {
-        created = Object.addCrate(rx, ry, w, col, { w: w, h: h, bounciness: -0.92, name: "Bouncy Cube", texture: tex || "neon_grid" });
+        created = GameObject.addCrate(rx, ry, w, col, { w: w, h: h, bounciness: -0.92, name: "Bouncy Cube", texture: tex || "neon_grid" });
     } else if (t == "zombie") {
         created = spawnZombie(this.spawnZombieType || "NORMAL", rx, ry);
     } else if (t == "powerup") {

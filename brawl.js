@@ -265,7 +265,7 @@ function updateBrawl() {
                 (brawl.bats = brawl.bats || []).push({ x: ix, y: st.topY + 520, vy: 0, t: brawl.tick });
                 Components.addFloatingText("🏏 BAT!  walk over it · E swings", ix, st.topY + 620, "#fde68a", 18);
             } else if (brawl.dropN % 3 === 2) {
-                var bomb = Object.addCrate(ix, st.topY + 520, 54, "#1f2937", { explosive: true, name: "Bomb" });
+                var bomb = GameObject.addCrate(ix, st.topY + 520, 54, "#1f2937", { explosive: true, name: "Bomb" });
                 bomb.brawlBomb = brawl.tick;
                 if (typeof rebuildAllObjects === "function") rebuildAllObjects();
                 Components.addFloatingText("💣 BOMB!  G grab · click throw", ix, st.topY + 620, "#fca5a5", 18);

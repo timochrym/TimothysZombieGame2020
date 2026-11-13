@@ -112,7 +112,7 @@ var Build = {
         }
         if (c > 0) mats[m.id] -= c;
         var opts = { name: "Built " + g.piece.label, texture: m.tex, kind: g.piece.id === "wall" ? "wall" : "block" };
-        var obj = g.piece.id === "ramp" ? Object.addRamp(g.x, g.y, g.w, g.h, g.dir, m.color, opts) : Object.addBox(g.x, g.y, g.w, g.h, m.color, opts);
+        var obj = g.piece.id === "ramp" ? GameObject.addRamp(g.x, g.y, g.w, g.h, g.dir, m.color, opts) : GameObject.addBox(g.x, g.y, g.w, g.h, m.color, opts);
         obj.buildHP = obj.buildMaxHP = m.hp;
         obj.builtBy = ch.playerIndex;
         obj.buildMat = m.id;

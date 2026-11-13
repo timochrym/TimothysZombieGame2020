@@ -408,7 +408,7 @@ var Net = {
             else if (t === "string" || t === "boolean") enc = v;
             else if (v === null) enc = null;
             else if (t === "object") {
-                if (v._nid || v instanceof Character || v instanceof Ragdoll || (v instanceof Object && v.constructor === Object)) {
+                if (v._nid || v instanceof Character || v instanceof Ragdoll || (v instanceof GameObject && v.constructor === GameObject)) {
                     enc = { $: this.nid(v) };
                     if (last[k] && last[k].$ === enc.$) continue;
                 } else {
@@ -534,7 +534,7 @@ var Net = {
         var self = this;
         var C = s.c;
         var map = this.objs;
-        var protoFor = { ch: Character.prototype, zb: Character.prototype, mv: Object.prototype, st: Object.prototype, rd: Ragdoll.prototype };
+        var protoFor = { ch: Character.prototype, zb: Character.prototype, mv: GameObject.prototype, st: GameObject.prototype, rd: Ragdoll.prototype };
         var fresh = [];
         var missing = false;
         var build = function(key, assign) {

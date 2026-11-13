@@ -18,12 +18,12 @@ function wordDef(names, fn, kind) { names.split(" ").forEach(function(n) { WORD_
 var WK2 = {
     crate: function(x, y, a, extra) {
         var size = Math.round(76 * a.s);
-        var c = Object.addCrate(x, y + size / 2, size, a.col || (extra && extra.col) || "#d9a05b", window.Object.assign({ name: (extra && extra.name) || "Crate", texture: (extra && extra.tex) || "crate_plank" }, a.explosive ? { explosive: true } : {}));
+        var c = GameObject.addCrate(x, y + size / 2, size, a.col || (extra && extra.col) || "#d9a05b", window.Object.assign({ name: (extra && extra.name) || "Crate", texture: (extra && extra.tex) || "crate_plank" }, a.explosive ? { explosive: true } : {}));
         if (a.heavy || (extra && extra.heavy)) c.weight = 3; if (a.light) c.weight = 0.4;
         if (a.bouncy) c.bounciness = -0.75;
         return c;
     },
-    box: function(x, y, w, h, a, name, kind, tex) { return Object.addBox(x, y, w, h, a.col || "#64748b", { name: name, kind: kind || "block", texture: tex || "stone_block" }); },
+    box: function(x, y, w, h, a, name, kind, tex) { return GameObject.addBox(x, y, w, h, a.col || "#64748b", { name: name, kind: kind || "block", texture: tex || "stone_block" }); },
     zombie: function(type, x, y, a) {
         var z = spawnZombie(type, x, y + 40);
         if (!z) return null;
@@ -56,10 +56,10 @@ wordDef("cloud", function(x, y, a) { WK2.box(x, y, 320 * a.s, 40, { col: a.col |
 wordDef("stairs staircase steps ladder", function(x, y, a) {
     // a staircase climbing toward the mouse side, made of 6 steps
     var n = Math.round(6 * a.s), st = 70;
-    for (let i = 0; i < n; i++) Object.addBox(x + i * st, y + (i + 1) * st / 2, st, (i + 1) * st, a.col || "#8b5a2b", { name: "Step", kind: "block", texture: "wood_plank" });
+    for (let i = 0; i < n; i++) GameObject.addBox(x + i * st, y + (i + 1) * st / 2, st, (i + 1) * st, a.col || "#8b5a2b", { name: "Step", kind: "block", texture: "wood_plank" });
 });
-wordDef("ramp slope hill", function(x, y, a) { Object.addRamp(x, y + 100 * a.s, 360 * a.s, 200 * a.s, "right", a.col || "#5d8a3a", { texture: "grass_top" }); });
-wordDef("trampoline spring bouncer pogo", function(x, y, a) { Object.addBumper(x, y + 13, 200 * a.s, 26, 30 + (a.bouncy ? 10 : 0) * 1, a.col || "#ff2e63", { name: "Trampoline" }); });
+wordDef("ramp slope hill", function(x, y, a) { GameObject.addRamp(x, y + 100 * a.s, 360 * a.s, 200 * a.s, "right", a.col || "#5d8a3a", { texture: "grass_top" }); });
+wordDef("trampoline spring bouncer pogo", function(x, y, a) { GameObject.addBumper(x, y + 13, 200 * a.s, 26, 30 + (a.bouncy ? 10 : 0) * 1, a.col || "#ff2e63", { name: "Trampoline" }); });
 wordDef("fan wind blower", function(x, y, a) { Gadgets.add({ type: "fan", x: x, y: y, w: 200 * a.s, h: 1100 * a.s, power: 1.8 }); });
 wordDef("car truck buggy jeep", function(x, y) { if (typeof Vehicles !== "undefined") Vehicles.spawnCar({ x: x, y: y + 20 }); }, "vehicle");
 wordDef("zombie monster enemy ghoul", function(x, y, a) { WK2.zombie("NORMAL", x, y, a); }, "monster");
@@ -88,7 +88,7 @@ function wordPet(kind) {
     return function(x, y, a) {
         var col = a.col || ({ dog: "#b45309", cat: "#71717a", bird: "#38bdf8" })[kind];
         var size = Math.round((kind === "bird" ? 44 : 60) * a.s);
-        var c = Object.addCrate(x, y + size / 2, size, "rgba(0,0,0,0)", { name: kind === "dog" ? "Dog" : kind === "cat" ? "Cat" : "Bird", texture: null });
+        var c = GameObject.addCrate(x, y + size / 2, size, "rgba(0,0,0,0)", { name: kind === "dog" ? "Dog" : kind === "cat" ? "Cat" : "Bird", texture: null });
         c.weight = 0.8; c.pet = { kind: kind, owner: redGuy, t: 0, bite: 0, col: col };      // the crate is invisible: the pet is drawn on top
         if (kind === "bird") { c.gravityMult = 0; c.gravity = 0; }
     };

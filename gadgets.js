@@ -86,7 +86,7 @@ var Gadgets = {
             var opts = { name: g.type === "cracked" ? "Cracked Wall" : (g.type === "mover" ? "Moving Platform" : "Door"),
                 texture: g.type === "cracked" ? "brick" : "lab_metal", kind: g.type === "mover" ? "block" : "wall" };
             var col = g.type === "lockdoor" ? (g.color || "#facc15") : (g.type === "cracked" ? "#a16207" : "#475569");
-            g.obj = Object.addBox(g.x, g.y, g.w, g.h, col, opts);
+            g.obj = GameObject.addBox(g.x, g.y, g.w, g.h, col, opts);
             g.obj.gadget = g;
             g.topY = g.y + g.h / 2;
             g.progress = 0;
@@ -94,7 +94,7 @@ var Gadgets = {
         }
         if (g.type === "qblock" || g.type === "brick") {
             g.w = g.w || 80; g.h = g.h || 80;
-            g.obj = Object.addBox(g.x, g.y, g.w, g.h, g.type === "qblock" ? "#f59e0b" : "#b0462d",
+            g.obj = GameObject.addBox(g.x, g.y, g.w, g.h, g.type === "qblock" ? "#f59e0b" : "#b0462d",
                 { name: g.type === "qblock" ? "? Block" : "Brick", texture: g.type === "qblock" ? "question_gold" : "brick", kind: "block" });
             g.obj.gadget = g;
             g.baseY = g.y; g.bump = 0;

@@ -6,7 +6,7 @@ const { open } = require('./lib');
   const r = await ev(() => {
     // a wall of placed blocks in front of P1, then fire
     const before = staticObjects.length;
-    for (let i = 0; i < 4; i++) { const bx = Object.addBox(redGuy.x + 500, redGuy.y - 20 + i * 80, 80, 80, '#a16207', { name: 'Wood', kind: 'block' }); bx.buildHP = 40; bx.buildMaxHP = 40; }
+    for (let i = 0; i < 4; i++) { const bx = GameObject.addBox(redGuy.x + 500, redGuy.y - 20 + i * 80, 80, 80, '#a16207', { name: 'Wood', kind: 'block' }); bx.buildHP = 40; bx.buildMaxHP = 40; }
     rebuildAllObjects(); if (typeof StaticGrid !== 'undefined') StaticGrid.build();
     redGuy.degree = 90; redGuy.bwIron = 30;
     const item = BW_SHOP.find(i => i.id === 'fireball');
