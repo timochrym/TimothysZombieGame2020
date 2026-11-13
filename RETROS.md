@@ -6,6 +6,27 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Enemy pathfinding: measured first, two fixes (work in progress)
+
+**Asked:** "lets bump up pathfinding and enemy tracking" (it was "still horrible").
+**Measured:** new `tests/enemy_chase.js`. On each Survival level, 9 enemies (normal, leaper, knight) start on
+different platforms. The hero stands still, then walks. The test counts how many touch the hero in 22 s, how long
+that takes, and how long they stand still while far away. First numbers: 63% reached, 11.4 s, 1.8 s stuck.
+**Found and fixed:**
+1. **Ramp nodes.** The graph kept floor nodes inside the solid wedge of a ramp, because the "is this point buried"
+   check skips ramps. On `bunker_bridges` an enemy on the ramp tried to walk down to such a node, hit rock, and
+   swung back and forth near x=1100. Every enemy from the right side passed there. Nodes inside ramp wedges are now removed.
+2. **Watchdog.** If the route length from an enemy's node does not get shorter for 2.5 s, the current hop is banned
+   for 7 s and the route is planned again. The old stuck check only caught enemies that did not move at all.
+**After:** 77% reached, 9.6 s, 1.3 s stuck. Classic arena 9/9, stress test 9/9, bounce chaos 8-9/9.
+**Went wrong:** my first numbers were unfair. (a) The test counted "reached" at 120 px, but melee enemies stop about
+130 px beside the hero on purpose, so many successes counted as failures. (b) The walking hero fell into pits.
+(c) Spawn sides were random, so one level changed from 9/9 to 5/9 between runs. All three fixed in the test.
+**Left:** `zigzag_tower` 5/9 and `bunker_bridges` 4/9 (still hero) are not solved. The test floor is set to today's
+numbers (72% / 11 s / 2 s) so it catches a regression; the goal is 85% / 8 s / 1 s.
+
+---
+
 ## Arena Mix: tank size changes shooting and level; stable test
 
 **Asked:** "Diepo size should affect shooting and level."

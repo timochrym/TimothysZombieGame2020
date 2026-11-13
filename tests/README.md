@@ -42,6 +42,7 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node fighting.js            # fists combo/uppercut/ground pound damage, no bullets, ammo + ragdoll settings, Brawl CPU punches
     node themes.js              # 5 themes x 5 games: sky/background brightness, brightness filter, saved, pause + panel rows
     node bubble_compact.js     # Bubble worm: combine, held movement and mass drops, eating, return to chain, respawn, cursor
+    node enemy_chase.js         # 9 enemies x 5 levels x (hero still / walking): % reaching the hero, avg time, stuck time; WHY=1 prints failures
     node arena_mix.js           # Arena Mix: play as tank / blob / worm, nine cross-game rules staged, live run, clean exit
     node brawl_combo.js         # Brawl: chained hits fade, combo break on the 6th, full strength after a pause
     node inspector_fields.js    # inspector Weight / Impact / Gravity + All fields; block damage by weight, heroes only bruised

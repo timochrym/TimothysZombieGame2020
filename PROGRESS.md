@@ -24,7 +24,14 @@ User decisions on 2026-11-13: **no multiplayer in Arena Mix** (dropped). **"Long
 1. ~~Make `tests/arena_mix.js` stable.~~ Done. The test staged food badly; five clean runs.
 2. ~~Tank size changes shooting and level (Arena Mix).~~ Done. Heavier tank: bigger and harder bullets, slower reload.
    New mass records give XP. A shrinking tank keeps its level.
-3. **Enemy pathfinding and tracking.** In progress. First measure (time to reach the hero, time stuck), then fix.
+3. **Enemy pathfinding and tracking.** In progress. Measured with `tests/enemy_chase.js` (9 enemies per level, fixed
+   spawn spots, hero still or walking). Today: **77% reach the hero, 9.6 s average, 1.3 s stuck** (before: 63%, 11.4 s,
+   1.8 s). Target: 85%, 8 s, 1 s. Done: (a) floor nodes inside a ramp wedge were still in the graph, so enemies on a
+   ramp walked toward rock and swung back and forth (bunker bridges); removed. (b) A progress watchdog bans a hop when
+   the route length does not shrink for 2.5 s. **Next:** `zigzag_tower` (5/9 still) and `bunker_bridges` (4/9 still,
+   2/9 walking) are the worst. Run `WHY=1 node enemy_chase.js bunker_bridges` to print what each failing enemy does,
+   then trace one enemy (see how `_trace` worked: position, next hop and key presses every second). Debug switches:
+   `window.__pfDbg = {noRamp:1, noWd:1}` before the level loads; `PFDBG='{"noWd":1}'` with the test.
 4. **Deeper blob / worm / bubble-worm rules.** Worm bites a bubble chain tail. Bubble worm against bubble worm.
    CPU blobs and worms must fear tanks. Check commit `220a1e2` (compact bubble worm form) against the new rules.
 5. **Older list:** editing hand / drag / play; pause menu, player 2 menu and right-click menus; Zombie Ball (smaller
