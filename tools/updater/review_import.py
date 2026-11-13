@@ -2,7 +2,7 @@
 
 Only cards that are still open (status "open") are converted; the old files are never changed, so nothing is lost and the old dashboard keeps
 working until you retire it. Mapping:
-  kind "review"    -> a claim `[r-xxxx] title | look: open <page>`; the old 5 4 3 2 1 later verdicts become Great Good Okay "Not right" "Wrong idea" "Not looked"
+  kind "review"    -> a claim `[r-xxxx] title | look: open <page> | link: <page> | pic: <screenshots>` (the page and pictures show on the review pages); the old 5 4 3 2 1 later verdicts become Great Good Okay "Not right" "Wrong idea" "Not looked"
   kind "question"  -> a `?` line with the old options as its options
   other kinds (proposals) are not reviews and are left alone
   an answer already in answers.json becomes an answer in the new file, with its note and date
@@ -43,7 +43,11 @@ def convert(questions, answers, today=None, status='open'):
         if card['kind'] == 'review':
             claim_no += 1
             ident = 'c%d' % claim_no
-            lines.append('- [ ] [%s] %s | look: %s' % (card['id'], title, _clean('open %s%s' % (card.get('page') or 'the page', (' (' + card['component'] + ')') if card.get('component') else ''), 100)))
+            shots = [i['src'] for i in (card.get('images') or []) if isinstance(i, dict) and i.get('src') and ',' not in i['src']]
+            if card.get('image') and ',' not in card['image']:
+                shots.insert(0, card['image'])
+            extra = (' | link: %s' % _clean(card['page'], 120) if card.get('page') else '') + (' | pic: %s' % ', '.join(_clean(x, 160) for x in shots) if shots else '')
+            lines.append('- [ ] [%s] %s | look: %s%s' % (card['id'], title, _clean('open %s%s' % (card.get('page') or 'the page', (' (' + card['component'] + ')') if card.get('component') else ''), 100), extra))
             verdict = VERDICT.get(str(old.get('choice')))
             if verdict:
                 got[ident] = {'v': verdict}
@@ -51,8 +55,10 @@ def convert(questions, answers, today=None, status='open'):
             q_no += 1
             ident = 'q%d' % q_no
             options = card.get('options') or []
-            lines.append('? [%s] %s%s | options: %s' % (card['id'], title, (' - ' + _clean(card.get('ask'), 70)) if card.get('ask') and card.get('ask') != card.get('title') else '',
-                                                       ', '.join(_label(o) for o in options)))
+            shots = [x['src'] for x in (card.get('images') or []) if isinstance(x, dict) and x.get('src') and ',' not in x['src']]
+            extra = (' | link: %s' % _clean(card['page'], 120) if card.get('page') else '') + (' | pic: %s' % ', '.join(_clean(x, 160) for x in shots) if shots else '')
+            lines.append('? [%s] %s%s | options: %s%s' % (card['id'], title, (' - ' + _clean(card.get('ask'), 70)) if card.get('ask') and card.get('ask') != card.get('title') else '',
+                                                       ', '.join(_label(o) for o in options), extra))
             chosen = next((o for o in options if str(o.get('value')) == str(old.get('choice'))), None)
             if chosen:
                 got[ident] = {'v': _label(chosen)}

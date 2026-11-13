@@ -7,6 +7,9 @@ into the chat ("c1 Good · c2 Not right (why) · q1 Too big") and a JSON file yo
 import html
 import json
 
+import os
+
+import review_media
 import review_theme
 
 SCALE = [('Great', 'Great: keep it'), ('Good', 'Good: keep it'), ('Okay', 'Okay: small tweaks'),
@@ -50,13 +53,13 @@ for (const c of D.claims) {
   const sel = el('select', { onchange(e) { (S[c.id] = S[c.id] || {}).v = e.target.value; save(); line(); } }, el('option', { value: '' }, 'Your verdict\\u2026'),
     ...SCALE.map(([short, long]) => el('option', { value: short, selected: (S[c.id] || {}).v === short }, long)));
   const card = el('section', { className: 'card' }, el('div', {}, el('strong', {}, c.id + '  ' + c.text), '  ', el('span', { className: 'badge ' + c.result.replace(' ', '-') }, c.result)),
-    el('ul', { className: 'ev' }, ...c.evidence.map(t => el('li', {}, t))), el('label', { className: 'row' }, sel, note(c.id)));
+    mediaBox(c.media), el('ul', { className: 'ev' }, ...c.evidence.map(t => el('li', {}, t))), el('label', { className: 'row' }, sel, note(c.id)));
   cardById[c.id] = card; root.append(card);
 }
 if (D.questions.length) root.append(el('h2', {}, 'Questions for you'));
 for (const q of D.questions) {
   const box = el('div', { className: 'opts' }, ...q.options.map(o => el('label', {}, el('input', { type: 'radio', name: q.id, checked: (S[q.id] || {}).v === o, onchange() { (S[q.id] = S[q.id] || {}).v = o; save(); line(); } }), ' ' + o)));
-  const card = el('section', { className: 'card' }, el('strong', {}, q.id + '  ' + q.text), box, el('label', { className: 'row' }, note(q.id)));
+  const card = el('section', { className: 'card' }, el('strong', {}, q.id + '  ' + q.text), mediaBox(q.media), box, el('label', { className: 'row' }, note(q.id)));
   cardById[q.id] = card; root.append(card);
 }
 const pinNodes = [], pinBox = document.getElementById('pinbox');
@@ -92,10 +95,35 @@ def _json_for_script(data):
     return json.dumps(data, ensure_ascii=False).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
 
 
-def page(brief):
+def app_url_of(repo):
+    """The `app_url:` line of the project's UPDATER.md (where its pages are served), or ''."""
+    import review_brief as rb
+    try:
+        with open(os.path.join(repo, 'UPDATER.md'), encoding='utf-8') as fh:
+            return review_media.app_url(rb.front_matter(fh.read())[0])
+    except (OSError, rb.BriefError):
+        return ''
+
+
+def media_for(claim, roots, app_url):
+    """-> {'link': {'text', 'url'} or None, 'pics': [data uri, ...]} for one claim; only what can really be shown."""
+    f = claim.get('fields', {})
+    link = f.get('link', '').strip()
+    pics = []
+    for name in review_media.items(f.get('pic', '')):
+        real = review_media.resolve(name, roots, review_media.MAX_INLINE)
+        uri = review_media.data_uri(real) if real else ''
+        if uri:
+            pics.append(uri)
+    return {'link': {'text': link, 'url': review_media.link_url(link, app_url)} if link else None, 'pics': pics}
+
+
+def page(brief, roots=None, app_url=None):
     ev = brief['ev']
+    roots = roots or [brief.get('repo', '')]
+    app_url = app_url if app_url is not None else app_url_of(brief.get('repo', ''))
     data = {'title': brief['title'], 'span': ev['span'], 'head': ev['head_sha'], 'scale': SCALE, 'commits': ev['commits'],
-            'claims': [{k: c[k] for k in ('id', 'text', 'result', 'evidence')} for c in brief['claims']], 'questions': brief['questions'],
+            'claims': [dict({k: c[k] for k in ('id', 'text', 'result', 'evidence')}, media=media_for(c, roots, app_url)) for c in brief['claims']], 'questions': [dict(q, media=media_for(q, roots, app_url)) for q in brief['questions']],
             'pins': brief.get('pins', [])}
     counts = {}
     for c in brief['claims']:

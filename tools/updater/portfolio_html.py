@@ -6,10 +6,12 @@ with textContent only, so text from a checklist or a manifest can never run as c
 """
 import html
 import json
+import os
 import pathlib
 import time
 
 import review_health
+import review_media
 import review_theme
 import review_next
 import review_coverage
@@ -24,7 +26,25 @@ def file_url(project, row):
     return pathlib.Path(row['brief_html']).as_uri() if row['brief_html'] else ''
 
 
-def build_model(projects, brief_url=file_url):
+def _media(project, row, claim, pic_url):
+    """What can really be shown beside one claim: its link (text and address) and its pictures (addresses from `pic_url`)."""
+    roots = [project['folder'], os.path.dirname(row['path'])]
+    pics = []
+    for n, name in enumerate(review_media.items(claim.get('pic', ''))):
+        real = review_media.resolve(name, roots)
+        src = pic_url(project, row, claim['id'], n, real) if real else ''
+        if src:
+            pics.append(src)
+    link = claim.get('link', '').strip()
+    return {'link': {'text': link, 'url': review_media.link_url(link, review_media.app_url(project['meta']))} if link else None, 'pics': pics}
+
+
+def inline_pic(project, row, claim_id, n, real):
+    """For a page that is one file: the picture embedded in it ('' when it is too large)."""
+    return review_media.data_uri(real)
+
+
+def build_model(projects, brief_url=file_url, pic_url=inline_pic):
     """-> {'generated', 'projects': [...], 'waiting': [...]}. `brief_url(project, row)` says where a brief page can be opened."""
     model = {'generated': time.strftime('%Y-%m-%d %H:%M'), 'projects': [], 'waiting': []}
     for p in projects:
@@ -34,6 +54,8 @@ def build_model(projects, brief_url=file_url):
         items = []
         for r in rows:
             item = {k: r[k] for k in ('name', 'title', 'date', 'claims', 'questions', 'answers', 'open', 'error', 'brief')}
+            item['claims'] = [dict(c, media=_media(p, r, c, pic_url)) for c in r['claims']]
+            item['questions'] = [dict(q, media=_media(p, r, q, pic_url)) for q in r['questions']]
             item['brief_url'] = brief_url(p, r)
             items.append(item)
             if r['open'] or r['error']:
@@ -85,13 +107,13 @@ function controls(w) {
   for (const c of w.claims.filter((c) => w.open.indexOf(c.id) >= 0)) {
     const sel = el('select', {}, el('option', { value: '' }, 'Verdict\\u2026'), ...D.scale.map((v) => el('option', { value: v }, v)));
     picks[c.id] = sel; notes[c.id] = el('input', { type: 'text', placeholder: 'Note (optional)' });
-    box.append(el('div', { className: 'row' }, el('strong', {}, c.id), ' ' + c.text, el('br')), el('div', { className: 'row' }, sel, notes[c.id]));
+    box.append(el('div', { className: 'row' }, el('strong', {}, c.id), ' ' + c.text, el('br')), mediaBox(c.media), el('div', { className: 'row' }, sel, notes[c.id]));
   }
   for (const q of w.questions.filter((q) => w.open.indexOf(q.id) >= 0)) {
     const sel = q.options.length ? el('select', {}, el('option', { value: '' }, 'Answer\\u2026'), ...q.options.map((o) => el('option', { value: o }, o)))
                                  : el('input', { type: 'text', placeholder: 'Answer' });
     picks[q.id] = sel; notes[q.id] = el('input', { type: 'text', placeholder: 'Note (optional)' });
-    box.append(el('div', { className: 'row' }, el('strong', {}, q.id), ' ' + q.text), el('div', { className: 'row' }, sel, notes[q.id]));
+    box.append(el('div', { className: 'row' }, el('strong', {}, q.id), ' ' + q.text), mediaBox(q.media), el('div', { className: 'row' }, sel, notes[q.id]));
   }
   const save = el('button', { type: 'button', textContent: 'Save answers', onclick: async () => {
     const parts = [];
@@ -111,6 +133,9 @@ lead.append(el('div', {}, el('h3', {}, 'Waiting on you', el('span', { className:
     ...(D.waiting.length ? D.waiting.slice(0, 6).map((w) => el('div', {}, el('strong', {}, w.project), ' \\u00b7 ' + w.title + ' ', el('span', { className: 'dim' }, w.open.length + ' open'))) : [el('div', { className: 'dim' }, 'Nothing \\u2014 you are all caught up.')])),
   el('div', {}, el('h3', {}, 'The agent does next', el('span', { className: 'n' }, String(asked.length))),
     ...(asked.length ? asked.map((p) => el('div', {}, el('strong', {}, p.name), ' \\u00b7 ' + p.asked + ' change(s) you asked for')) : [el('div', { className: 'dim' }, 'Nothing queued.')])));
+function readOnly(w) {            // a file you open without the website: the open claims with their links and pictures, but no answer boxes
+  return el('div', {}, ...w.claims.concat(w.questions).filter((c) => w.open.indexOf(c.id) >= 0).map((c) => el('div', {}, el('strong', {}, c.id), ' ' + c.text, mediaBox(c.media))));
+}
 if (!D.waiting.length) { waitBox.hidden = true; document.getElementById('needs').hidden = true; }
 for (const w of D.waiting) {
   const link = safeLink(w.brief_url);
@@ -119,7 +144,7 @@ for (const w of D.waiting) {
   waitBox.append(el('section', { className: 'card' },
     el('div', {}, el('strong', {}, w.project), ' \\u00b7 ' + w.title + ' ', el('span', { className: 'dim' }, w.date)),
     el('div', { className: 'dim' }, w.error ? 'Cannot be read: ' + w.error : 'Brief: ' + counts), el('div', {}, ...w.open.map((i) => el('span', { className: 'chip' }, i))),
-    link ? el('div', {}, el('a', { href: link }, 'Open the brief')) : '', L && !w.error ? controls(w) : ''));
+    el('div', { className: 'row' }, link ? el('a', { href: link }, 'Open the brief') : '', L ? el('a', { href: '/review/' + encodeURIComponent(w.project_id) + '/' + encodeURIComponent(w.name) }, 'See every item, with pictures') : ''), L && !w.error ? controls(w) : readOnly(w)));
 }
 for (const p of D.projects) {
   grid.append(el('section', { className: 'card' }, el('div', {}, p.type ? el('span', { className: 'badge ask' }, p.type) : '', el('strong', {}, p.name)),

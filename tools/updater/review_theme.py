@@ -22,6 +22,8 @@ body{background:radial-gradient(60% 40% at 12% 0%,var(--glow1),transparent 70%),
 details>summary{cursor:pointer;color:var(--soft);font-size:.92rem;margin-top:6px}details[open]>summary{margin-bottom:4px}
 .lead{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--accent);border-radius:14px;background:var(--card);overflow:hidden}
 .lead>div{padding:14px 16px}.lead>div+div{border-left:1px solid var(--line)}.lead h3{margin:0 0 6px;font-size:1rem}.lead .n{color:var(--soft);font-weight:400;font-size:.85rem;margin-left:4px}
+.media{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}.media img{max-height:150px;max-width:100%;border-radius:8px;border:1px solid var(--line);cursor:zoom-in;background:var(--card2)}
+.media img.zoom{max-height:none;width:100%;cursor:zoom-out}.btnlink{display:inline-block;color:var(--accent);border:1px solid var(--accent);border-radius:8px;padding:4px 12px;text-decoration:none;font-weight:600;font-size:.92rem}
 @media (max-width:560px){.lead{grid-template-columns:1fr}.lead>div+div{border-left:0;border-top:1px solid var(--line)}}
 """
 
@@ -34,6 +36,26 @@ JS = """
   if (btn) btn.onclick = function () { var m = modes[(modes.indexOf(get()) + 1) % 3]; try { localStorage.setItem(KEY, m); } catch (e) {} apply(m); };
 })();
 """
+
+MEDIA_JS = """
+// A claim's link and pictures: {link: {text, url} or null, pics: [src, ...]}. Only http(s) links and our own picture sources are used; a picture opens larger in place on click.
+function mediaBox(m) {
+  const kids = [];
+  if (m && m.link && m.link.text) {
+    if (/^https?:\\/\\//i.test(m.link.url || '')) kids.push(el('a', { className: 'btnlink', href: m.link.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open ' + m.link.text));
+    else kids.push(el('span', { className: 'dim' }, 'Page: ' + m.link.text));
+  }
+  for (const src of (m && m.pics) || []) {
+    if (typeof src === 'string' && (src.indexOf('data:image/') === 0 || /^\\/pic\\/[\\w.\\/-]+$/.test(src))) {
+      const img = el('img', { src: src, alt: 'A picture for this item', loading: 'lazy' });
+      img.onclick = () => img.classList.toggle('zoom'); kids.push(img);
+    }
+  }
+  return kids.length ? el('div', { className: 'media' }, ...kids) : '';
+}
+"""
+JS = JS + MEDIA_JS
+
 
 def bar(title, back=None):
     """The top bar. `back` is (href, label) or None; both are escaped."""

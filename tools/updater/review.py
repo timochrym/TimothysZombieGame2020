@@ -32,6 +32,7 @@ import review_branches as rbr
 import review_digest as rd
 import review_brief as rb
 import review_coverage as rcv
+import review_media as rm
 import review_graph as rg
 import review_health as rh
 import review_import as ri
@@ -151,7 +152,7 @@ def cmd_brief(args, me, projects, loc):
     if not args.no_html:
         import review_brief_html
         with open(stem + '.brief.html', 'w', encoding='utf-8') as fh:
-            fh.write(review_brief_html.page(brief))
+            fh.write(review_brief_html.page(brief, roots=[me['folder'], os.path.dirname(path)], app_url=rm.app_url(me['meta'])))
     print(rb.markdown(brief))
     print('Wrote %s.brief.md%s' % (stem, '' if args.no_html else ' and .brief.html'))
     return 0

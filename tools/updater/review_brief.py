@@ -45,6 +45,7 @@ import review_brief_run as rr
 
 FOUND, NOT_FOUND, DECIDE, REJECTED = 'Found', 'Not found', 'You decide', 'Rejected'
 CLAIM_KEYS = ('file', 'test', 'run', 'runs', 'expect', 'number', 'want', 'look')
+DISPLAY_KEYS = ('link', 'pic')          # shown beside the claim (see review_media.py); they are not evidence, so a claim with only these is still Rejected
 ALLOWED = rr.ALLOWED
 META_RE = re.compile(r'^([A-Za-z_][\w-]*):\s*(.*?)\s*$')
 
@@ -66,7 +67,7 @@ def _fields(text):
     fields, unknown = {}, []
     for part in parts[1:]:
         m = re.match(r'^(\w+):\s*(.*)$', part)
-        if m and m.group(1).lower() in CLAIM_KEYS + ('options',):
+        if m and m.group(1).lower() in CLAIM_KEYS + DISPLAY_KEYS + ('options',):
             fields[m.group(1).lower()] = m.group(2).strip()
         else:
             unknown.append(part)                  # a stray " | " or a misspelt field must never be dropped silently
@@ -104,7 +105,7 @@ def parse(text):
         elif s.startswith('?'):
             asked, fields = _fields(s[1:].strip())
             options = [o.strip() for o in fields.get('options', '').split(',') if o.strip()]
-            questions.append({'id': 'q%d' % (len(questions) + 1), 'text': asked, 'options': options})
+            questions.append({'id': 'q%d' % (len(questions) + 1), 'text': asked, 'options': options, 'fields': fields})
     if not claims and not questions:
         raise BriefError('The checklist has no claim lines (- [ ] ...) and no questions (? ...).')
     return meta, claims, questions
@@ -153,7 +154,7 @@ def check(claim, ev, repo, run=False, allow=ALLOWED, timeout=600, rundir=None, c
     f, lines, bad, manual = claim['fields'], [], False, False
     if f.get('_unknown'):
         return REJECTED, ['Not understood: %s (fields are separated by " | " and look like key: value; keys: %s).'
-                          % (' / '.join(f['_unknown']), ', '.join(CLAIM_KEYS))]
+                          % (' / '.join(f['_unknown']), ', '.join(CLAIM_KEYS + DISPLAY_KEYS))]
     if not any(k in f for k in CLAIM_KEYS):
         return REJECTED, ['Add file:, test:, run: or look: so this can be checked.']
     problem = _validate(f)
@@ -290,7 +291,7 @@ def main(argv=None):
         open(args.md, 'w', encoding='utf-8').write(text)
     if args.html:
         import review_brief_html
-        open(args.html, 'w', encoding='utf-8').write(review_brief_html.page(brief))
+        open(args.html, 'w', encoding='utf-8').write(review_brief_html.page(brief, roots=[brief['repo'], os.path.dirname(os.path.abspath(args.checklist))]))
     print(text)
     return 1 if args.strict and any(c['result'] in (NOT_FOUND, REJECTED) for c in brief['claims']) else 0
 
