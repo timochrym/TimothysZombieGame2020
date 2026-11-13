@@ -9,7 +9,7 @@ const KINDS = ['NORMAL', 'LEAPER', 'KNIGHT'];
   const only = process.argv[2]; const rows = []; const allErrs = [];
   for (const lvl of LEVELS.filter(l => !only || l === only)) {
     const { b, p, errs } = await open('survival', { w: 1280, h: 720 });
-    await p.evaluate((l) => { LevelManager.selectLevel(l); }, lvl); await p.waitForTimeout(1200);
+    await p.evaluate(([l, d]) => { window.__pfDbg = d; LevelManager.selectLevel(l); }, [lvl, JSON.parse(process.env.PFDBG || '{}')]); await p.waitForTimeout(1200);
     for (const mode of ['still', 'walking']) {
       const r = await p.evaluate(async ([mode, kinds]) => {
         SummonManager.pauseWaves = true; godMode = true; zombies.length = 0; lazers.length = 0;

@@ -337,7 +337,7 @@ class Pathfinder {
         for (let i = 0; i < cands.length; i++) {
             var n = cands[i];
             if (this.isPointBlocked(n.x, n.y + 34, 42, 54, n.sourceId)) continue;
-            if (ramps.length && this.insideRamp(ramps, n.x, n.y + 20, n.sourceId)) continue;
+            if (ramps.length && !(window.__pfDbg && window.__pfDbg.noRamp) && this.insideRamp(ramps, n.x, n.y + 20, n.sourceId)) continue;
             if (this.inHazard(n.x, n.y + 2)) continue;
             var dup = null;
             this.forNodesIn(n.x - 28, n.y - 24, n.x + 28, n.y + 24, function(e) { if (!dup) dup = e; });
@@ -879,7 +879,7 @@ class Pathfinder {
             z.navPath = path;
             // Progress watchdog. If the route length from the enemy's node does not get shorter for about 2.5 s, the
             // enemy is swinging between two hops (a graph error, a pad, a crowd). Ban the hop it keeps trying, replan.
-            if (goal && f && f.dist[cur.id] !== Infinity) {
+            if (goal && f && f.dist[cur.id] !== Infinity && !(window.__pfDbg && window.__pfDbg.noWd)) {
                 var dn = f.dist[cur.id];
                 if (z.navWdGx === undefined || Math.hypot(goal.x - z.navWdGx, goal.y - z.navWdGy) > 450) { z.navWdGx = goal.x; z.navWdGy = goal.y; z.navWdBest = dn; z.navWdT = 0; }
                 else if (dn < z.navWdBest - 40) { z.navWdBest = dn; z.navWdT = 0; }
