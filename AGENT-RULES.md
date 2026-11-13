@@ -6,25 +6,27 @@ if one of them disagrees with this file, the project's own rule wins.
 
 ## Start
 1. Read `UPDATER.md`. Its `goal`, `output` and `done` say what **Zombie Game** is for and when work is finished.
-2. The default branch is `main`. Work on your session branch. Do not push to `main` unless the owner has said you may.
-3. Use the git name and email already set on this computer (UPDATER.md has no `commit_name` and `commit_email` yet).
+2. Run `python tools/updater/review.py next`. It lists what the owner asked for, decided and has not answered yet in earlier reviews.
+   Do the asked-for changes first. Follow the decisions. Leave accepted work alone. Never guess an unanswered item.
+3. The default branch is `main`. Work on your session branch. Do not push to `main` unless the owner has said you may.
+4. Use the git name and email already set on this computer (UPDATER.md has no `commit_name` and `commit_email` yet).
 
 ## While you work
-4. Report outcomes as they are. If a test fails, say so and show the output. If you skipped a step, say so.
-5. Never skip, disable or delete a test to make a result green.
-6. Never write a secret (password, key, token) into a file.
+5. Report outcomes as they are. If a test fails, say so and show the output. If you skipped a step, say so.
+6. Never skip, disable or delete a test to make a result green.
+7. Never write a secret (password, key, token) into a file.
 
 ## At the end of every session: write a review checklist
-7. Write `reviews/TimothysZombieGame2020/YYYY-MM-DD-short-name.md` in the private repository `timochrym/Universal_Apps`. Use the format in the Updater's
+8. Write `reviews/TimothysZombieGame2020/YYYY-MM-DD-short-name.md` in the private repository `timochrym/Universal_Apps`. Use the format in the Updater's
    `templates/REVIEW-CHECKLIST.md`:
    - `base:` is the commit before your work. `head:` is your last commit.
    - One line per thing you did. Every line needs at least one of `file:`, `test:`, `run:` or `look:`.
    - Claim only what you did and can show. A vague line ("it is better now") is Rejected.
    - A number that changes from run to run needs `runs: 3` or more, with `number:` and `want:`.
    - Add questions for the owner as `?` lines, with the answers you accept.
-8. Check your own checklist: `python tools/updater/review_brief.py CHECKLIST.md --repo . --run`.
+9. Check your own checklist: `python tools/updater/review.py brief CHECKLIST --run`.
    Fix every Rejected line. Report every Not found line to the owner exactly as it is.
-   Never delete or soften a claim to make it pass.
-9. Commit the checklist. If the private repository `timochrym/Universal_Apps` is not attached to your session, write it in this project's own
+   Never delete or soften a claim to make it pass. Before your final push run `python tools/updater/review.py ready CHECKLIST`; it must say READY.
+10. Commit the checklist. If the private repository `timochrym/Universal_Apps` is not attached to your session, write it in this project's own
    `reviews/` folder instead and say so in your last message.
-10. Your last message says: what you did, how many claims are Found, Not found and You decide, and your questions.
+11. Your last message says: what you did, how many claims are Found, Not found and You decide, and your questions.
