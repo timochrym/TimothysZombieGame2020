@@ -9,7 +9,7 @@
     python review.py graph [--workspace FOLDER] [--out FILE.md]         a generated map of how the projects connect (Mermaid)
     python review.py pr-body CHECKLIST                                   a pull request description: claims next to evidence
     python review.py branches [--script FILE]                            which branches are finished (never deletes; --script writes the commands)
-    python review.py coverage [--days 30]                                how much recent work any checklist covers, by kind of writer
+    python review.py coverage [--days 30] [--fail-under N]                              how much recent work any checklist covers, by kind of writer
     python review.py stats [--workspace FOLDER]                          how strong is the evidence agents bring, per project
     python review.py digest [--only-if-waiting] [--subject] [--json]     a short text of what needs you, for a scheduler to send anywhere
     python review.py health [--workspace FOLDER]                         is each project in good order? (git, manifest, rules and tools)
@@ -251,6 +251,10 @@ def cmd_coverage(args, me, projects, loc):
         for who, (n, k) in sorted(c['by_writer'].items(), key=lambda x: -x[1][0]):
             print('    %-8s %4d commit(s), %d covered' % (who, n, k))
     print('\nAll projects: %s' % (rcv.line({'total': total, 'covered': covered, 'days': args.days})))
+    floor = getattr(args, 'fail_under', None)
+    if floor is not None and total and 100.0 * covered / total < floor:
+        print('Below the floor: %d%% covered, --fail-under asks for %g%%.' % (round(100 * covered / total), floor))
+        return 1
     return 0
 
 
@@ -359,7 +363,7 @@ def main(argv=None):
     r = sub.add_parser('ready'); r.add_argument('checklist', nargs='?'); r.add_argument('--latest', action='store_true'); r.add_argument('--run', action='store_true'); r.add_argument('--strict', action='store_true'); r.add_argument('--timeout', type=int, default=600)
     br = sub.add_parser('branches'); br.add_argument('--script')
     ic = sub.add_parser('import-cards'); ic.add_argument('--source', default='notes/debrief'); ic.add_argument('--status', default='open')
-    cv = sub.add_parser('coverage'); cv.add_argument('--days', type=int, default=30); cv.add_argument('--workspace')
+    cv = sub.add_parser('coverage'); cv.add_argument('--days', type=int, default=30); cv.add_argument('--fail-under', type=float, metavar='PERCENT', help='exit 1 when less than PERCENT of the recent commits are covered (for CI)'); cv.add_argument('--workspace')
     t = sub.add_parser('stats'); t.add_argument('--workspace')
     dg = sub.add_parser('digest'); dg.add_argument('--workspace'); dg.add_argument('--only-if-waiting', action='store_true'); dg.add_argument('--subject', action='store_true'); dg.add_argument('--json', action='store_true')
     h = sub.add_parser('health'); h.add_argument('--workspace')
