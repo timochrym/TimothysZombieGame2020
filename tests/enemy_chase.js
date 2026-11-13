@@ -15,7 +15,7 @@ const KINDS = ['NORMAL', 'LEAPER', 'KNIGHT'];
         SummonManager.pauseWaves = true; godMode = true; zombies.length = 0; lazers.length = 0;
         const hero = redGuy; const hx0 = hero.x, hy0 = hero.y;
         // spawn spots: tops of platforms, spread over the level, away from the hero
-        const tops = staticObjects.filter(o => !o.isRamp && !o.dead && (o.w || 0) >= 160 && Math.hypot(o.x - hx0, o.y - hy0) > 450).map(o => ({ x: o.x + ((o.w || 0) * 0.25) * (Math.random() < 0.5 ? -1 : 1), y: o.y + (o.h || 0) / 2 + 70 }));
+        let i0 = 0; const tops = staticObjects.filter(o => !o.isRamp && !o.dead && (o.w || 0) >= 160 && Math.hypot(o.x - hx0, o.y - hy0) > 450).map(o => ({ x: o.x + ((o.w || 0) * 0.25) * ((i0++ % 2) ? -1 : 1), y: o.y + (o.h || 0) / 2 + 70 }));
         const pts = []; const step = Math.max(1, Math.floor(tops.length / 9)); for (let i = 0; i < tops.length && pts.length < 9; i += step) pts.push(tops[i]);
         const list = pts.map((pt, i) => { spawnZombie(kinds[i % kinds.length], pt.x, pt.y); const z = zombies[zombies.length - 1]; z.hunter = true; z.maxHealth = z.health = 99999; z.t0 = null; z.reach = -1; z.stuck = 0; z.px = z.x; z.py = z.y; z.far = 0; return z; });
         const T = 60 * 22, out = { n: list.length, reached: 0, times: [], stuck: [], farEnd: [], why: [] };
