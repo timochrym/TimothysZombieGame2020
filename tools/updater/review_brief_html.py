@@ -7,12 +7,12 @@ into the chat ("c1 Good · c2 Not right (why) · q1 Too big") and a JSON file yo
 import html
 import json
 
+import review_theme
+
 SCALE = [('Great', 'Great: keep it'), ('Good', 'Good: keep it'), ('Okay', 'Okay: small tweaks'),
          ('Not right', 'Not right: redo it'), ('Wrong idea', 'Wrong idea: start over'), ('Not looked', "Haven't looked yet")]
 
 CSS = """
-:root{--bg:#eef1f6;--card:#fff;--text:#1d2433;--soft:#5b6578;--line:#d9deea;--accent:#1d4ed8;--ok:#176b3a;--bad:#a4262c;--ask:#8a5a00}
-@media (prefers-color-scheme:dark){:root{--bg:#131722;--card:#1c2231;--text:#e8ecf5;--soft:#a2abc0;--line:#2e3650;--accent:#7aa2ff;--ok:#6fd49a;--bad:#ff8b8b;--ask:#f0c36a}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,sans-serif}
 main{max-width:820px;margin:0 auto;padding:24px 16px 64px}h1{font-size:1.6rem;margin:.2em 0}h2{font-size:1.1rem;margin:1.6em 0 .5em}
 .sub{color:var(--soft)}.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:10px 0}
@@ -20,9 +20,9 @@ main{max-width:820px;margin:0 auto;padding:24px 16px 64px}h1{font-size:1.6rem;ma
 .Found{color:var(--ok)}.Not-found,.Rejected{color:var(--bad)}.You-decide{color:var(--ask)}
 ul.ev{margin:.4em 0 .6em;padding-left:1.2em;color:var(--soft);font-size:.92rem}code{font-family:ui-monospace,monospace;font-size:.9em}
 label.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}select,input[type=text],textarea{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
-input[type=text]{flex:1;min-width:160px}textarea{width:100%;min-height:90px}button{font:inherit;font-weight:600;color:#fff;background:var(--accent);border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
+input[type=text]{flex:1;min-width:160px}textarea{width:100%;min-height:90px}button{font:inherit;font-weight:600;color:var(--on);background:var(--accent);border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
 .opts label{margin-right:14px;white-space:nowrap}.pin{border-top:1px solid var(--line);padding:8px 0;font-size:.92rem}.dim{color:var(--soft)}.commit{font-size:.92rem;color:var(--soft)}
-"""
+""" + review_theme.TOKENS
 
 JS = """
 const D = JSON.parse(document.getElementById('data').textContent), SCALE = D.scale;
@@ -102,7 +102,7 @@ def page(brief):
         counts[c['result']] = counts.get(c['result'], 0) + 1
     summary = ', '.join('%d %s' % (n, k) for k, n in counts.items()) or 'no claims'
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            '<title>Review brief</title><style>%s</style></head><body><main>'
+            '<title>Review brief</title><style>%s</style></head><body>%s<main>'
             '<h1>%s</h1><p class="sub">Range <code>%s</code> &middot; %d commit(s) &middot; %d file(s) changed &middot; %s</p>'
             '<p><strong>%s</strong></p><div id="root"></div>'
             '<h2 id="pinhead" hidden>Pins (where you pointed)</h2><div id="pinbox"></div>'
@@ -112,5 +112,5 @@ def page(brief):
             '<p><button id="copy" type="button">Copy the line</button> <button id="dl" type="button">Download answers.json</button></p>'
             '<p class="sub">Nothing leaves this page. Paste the line into the chat, or save the file in the review folder.</p>'
             '</main><script id="data" type="application/json">%s</script><script>%s</script></body></html>') % (
-        CSS, html.escape(brief['title']), html.escape(ev['span']), len(ev['commits']), len(ev['changed']), html.escape(ev['shortstat']),
-        html.escape(summary), _json_for_script(data), JS)
+        CSS, review_theme.bar('Review brief'), html.escape(brief['title']), html.escape(ev['span']), len(ev['commits']), len(ev['changed']), html.escape(ev['shortstat']),
+        html.escape(summary), _json_for_script(data), review_theme.JS + JS)
