@@ -16,6 +16,24 @@ RETROS.md has the detail for each shipped update; TODO.md has the full checklist
 Fastest way to perfect each game: one shared engine fix at a time (so every game gets it), a test per fix, then one
 short play-through list from you per game. Your notes on what feels off are the part no test can replace.
 
+## FUTURE AGENDA (2026-11-13, order of work)
+
+Writing style from now on: about 80% ASD-STE100 (short, active sentences, one topic each) in replies and new notes.
+
+1. **Make `tests/arena_mix.js` stable.** Two checks fail on about half the runs (`tankEatsSmallerBlob`,
+   `equalSizesIgnoreEachOther`). Find out if the test or the rule is wrong.
+2. **Multiplayer in Arena Mix.** Now one human only. Add player 2 (keyboard or pad) and LAN joiners. Each player
+   chooses a body (tank, blob, worm, bubble worm). Joiners must draw the mixed arena (today they see "local-only").
+3. **Deeper blob / worm / bubble-worm rules.** Worm bites a bubble chain tail. Bubble worm against bubble worm.
+   CPU blobs and worms must fear tanks. Tune numbers after a play-through. Check commit `220a1e2` (compact bubble
+   worm form, bigger crosshair) from the other agent against the new rules.
+4. **Longer-term games** (needs your answer: see the question in the chat). One reading: progress that lasts
+   between sessions (levels, unlocks, upgrades kept).
+5. **Older list:** enemy tracking and pathfinding; editing hand / drag / play; pause menu, player 2 menu and right-click
+   menus; Zombie Ball (smaller pitch, bright look); Wobble Wheels rethink; a pass over every game.
+6. **Only you can do:** LAN test on two real devices; Control Panel LAN button; a play-through of each game with a
+   short "what feels wrong" list.
+
 ## PICK UP HERE (handoff note, 2026-11-12)
 
 Everything below "Done" is on `main` with a passing test. Work top to bottom through "Still to do".
