@@ -23,6 +23,14 @@ addons: updater_addons
 updater_source: https://github.com/timochrym/Updater.git
 updater_ref:
 updater_min: 2.8.0
+# Project manifest (drafted 2026-11-13). The Control Panel does not read these yet; people and agents do.
+# DRAFT: please confirm the value(s) of: done
+type: product
+goal: One engine, eight browser games with a shared arcade hub
+output: index.html (vanilla JS canvas game, no build step)
+done: tests/ pass (command not named yet; the arena_mix test is flaky)
+review_repo: timochrym/Universal_Apps
+review_dir: reviews/TimothysZombieGame2020
 ---
 
 # UPDATER.md
