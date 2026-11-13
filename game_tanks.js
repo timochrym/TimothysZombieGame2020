@@ -47,7 +47,10 @@ var Tanks = {
     },
     xpFor: function(l) { return Math.round(3 * Math.pow(l, 1.55)) + 4; },
     maxHp: function(k) { return 50 + 20 * k.st[1] + 2 * k.lvl; },
-    reload: function(k) { return 22 * Math.pow(0.9, k.st[6]) * (TNK_CLASSES[k.cls].rl || 1); },
+    // Arena Mix: a tank's mass changes how it shoots. Factor 1 = the starting mass (36). A heavy tank fires bigger,
+    // harder bullets but reloads more slowly; a light tank is quick but weak. Outside Arena Mix the factor is 1.
+    massFactor: function(k) { return (this.mixLayer && k.mixMass > 0) ? Math.max(0.7, Math.min(3.2, Math.sqrt(k.mixMass / 36))) : 1; },
+    reload: function(k) { var f = this.massFactor(k); return 22 * Math.pow(0.9, k.st[6]) * (TNK_CLASSES[k.cls].rl || 1) * (1 + (f - 1) * 0.3); },
     speed: function(k) { return (3.4 + 0.28 * k.st[7] - k.lvl * 0.02) * (TNK_CLASSES[k.cls].speed || 1) * arenaSpeed(k); },
     size: function(k) { if (k.mixMass > 0 && this.mixLayer) return Math.sqrt(k.mixMass) * 5; return 30 + k.lvl * 0.45; },      // Arena Mix: a tank's size follows its mass, like a blob
 
@@ -169,7 +172,7 @@ var Tanks = {
         var C = TNK_CLASSES[k.cls], rl = this.reload(k);
         if (k.reloadT > 0) return;
         k.reloadT = rl;
-        var r = this.size(k);
+        var r = this.size(k), mf = this.massFactor(k);
         for (let i = 0; i < C.b.length; i++) {
             var B = C.b[i];
             var go = function() {
@@ -178,7 +181,7 @@ var Tanks = {
                 var ca = Math.cos(a), sa = Math.sin(a), off = (B.off || 0) * r / 30;
                 var spd = (7 + 0.9 * k.st[3]) * (C.sp || 1) * (B.thrust ? 0.8 : 1);
                 var bx = k.x + ca * r * 1.6 * (B.len || 1) - sa * off, by = k.y + sa * r * 1.6 * (B.len || 1) + ca * off;
-                Tanks.bullets.push({ x: bx, y: by, vx: ca * spd + k.vx * 0.5, vy: sa * spd + k.vy * 0.5, r: 9 * (r / 30) * (C.size || 1) * (B.w ? Math.min(1.4, B.w * 0.8) : 1), dmg: (5.5 + 1.6 * k.st[5]) * (C.dm || 1), pen: (1 + 0.8 * k.st[4]) * (C.size || 1), owner: k, life: 110 + k.st[3] * 6 });
+                Tanks.bullets.push({ x: bx, y: by, vx: ca * spd + k.vx * 0.5, vy: sa * spd + k.vy * 0.5, r: 9 * (r / 30) * (C.size || 1) * (B.w ? Math.min(1.4, B.w * 0.8) : 1), dmg: (5.5 + 1.6 * k.st[5]) * (C.dm || 1) * mf, pen: (1 + 0.8 * k.st[4]) * (C.size || 1), owner: k, life: 110 + k.st[3] * 6 });
                 var rec = (C.recoil || 0.35) * (B.thrust ? 2.2 : 1);
                 k.vx -= ca * rec * 0.3; k.vy -= sa * rec * 0.3;
                 k.recoilT = 4;

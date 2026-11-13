@@ -8,7 +8,8 @@
 //   You pick a body: TANK, BLOB, WORM or BUBBLE WORM (a worm made of blob bubbles) - pause menu, or Q. CPUs of all three kinds share the arena.
 //   What happens when they meet:
 //     bullets   shrink blobs (shot below 12 they are gone) and hurt worms (heads most; bodies soak them)
-//     tanks     are blobs with a gun: they carry mass, eat food and anything 25% smaller, and are eaten by anything
+//     tanks     (size changes shooting and level: heavier = bigger, harder bullets but slower reload; new mass
+//               records earn XP) are blobs with a gun: they carry mass, eat food and anything 25% smaller, and are eaten by anything
 //               25% bigger. They can't split on purpose; a virus or heavy damage breaks pieces off - the biggest
 //               piece keeps the gun, the rest are inert lumps that can only be eaten
 //     worms     level up (Bite / Armor / Appetite) from eating, breaking the tank blocks with their heads, and
@@ -94,7 +95,7 @@ var Mix = {
     // a bigger blob or tank eats it. It cannot split on purpose. A virus, or being hurt badly, breaks pieces off: the
     // biggest piece keeps the gun, the rest are inert lumps that can only be eaten (they are ordinary food).
     tankMass: function(k) { return k.mixMass || 36; },
-    initTank: function(k) { k.mixMass = 36; k.mixLvl = k.lvl; k.mixSplitCd = 0; k.mixWasAlive = true; k.mixEaten = false; },
+    initTank: function(k) { k.mixMass = 36; k.mixPeak = 36; k.mixLvl = k.lvl; k.mixSplitCd = 0; k.mixWasAlive = true; k.mixEaten = false; },
     lumps: function(x, y, total, n, col, speed, from) {
         // "from": the tank that shed them can't eat its own pieces straight back (3 s)
         for (let i = 0; i < n; i++) { var a = (i / n) * Math.PI * 2 + Math.random() * 0.8; Cells.pellets.push({ x: x + Math.cos(a) * 12, y: y + Math.sin(a) * 12, m: Math.max(2, total / n), col: col, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, lump: true, from: from || null, born: this.t }); }
@@ -152,7 +153,10 @@ var Mix = {
                 continue;
             }
             if (!k0.mixWasAlive || !k0.mixMass) this.initTank(k0);
-            if (k0.lvl > k0.mixLvl) { k0.mixMass += (k0.lvl - k0.mixLvl) * 4; k0.mixLvl = k0.lvl; }
+            if (k0.lvl > k0.mixLvl) { k0.mixMass += (k0.lvl - k0.mixLvl) * 4; k0.mixLvl = k0.lvl; k0.mixPeak = Math.max(k0.mixPeak || 0, k0.mixMass); }
+            // size gives level: every new mass record earns XP (0.5 XP per point). A shrinking tank keeps its level.
+            if (k0.mixPeak === undefined) k0.mixPeak = k0.mixMass;
+            if (k0.mixMass > k0.mixPeak) { Tanks.gainXp(k0, (k0.mixMass - k0.mixPeak) * 0.5); k0.mixPeak = k0.mixMass; }
             if (k0.mixSplitCd > 0) k0.mixSplitCd--;
             // hurt badly -> pieces break off (once every 5 s at most, so steady fire still kills)
             if (k0.hp < Tanks.maxHp(k0) * 0.35 && k0.mixSplitCd <= 0 && k0.mixMass >= 30) this.splitTank(k0, 0.4, "badly damaged");
