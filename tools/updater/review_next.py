@@ -89,7 +89,8 @@ def text(project, orders):
         if o['fix']:
             out.append('The owner asked for changes:')
             for f in o['fix']:
-                out.append('- %s "%s": %s%s' % (f['id'], f['text'], f['verdict'], (' - ' + f['note']) if f['note'] else ''))
+                out.append('- %s "%s": %s%s' % (f['id'], f['text'], f['verdict'], (' - ' + f['note']) if f['note'] else
+                                                  ('' if f['pins'] else ' (no note was given: ask the owner what to change before you change anything)')))
                 for p in f['pins']:
                     where = ('canvas %s,%s' % (p['target']['canvas'].get('x'), p['target']['canvas'].get('y'))) if p['target']['canvas'] else p['target']['selector']
                     out.append('    - pointed at %s: %s' % (where, p['note'] or '(no note)'))

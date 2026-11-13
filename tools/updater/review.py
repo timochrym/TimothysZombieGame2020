@@ -10,7 +10,9 @@
     python review.py pr-body CHECKLIST                                   a pull request description: claims next to evidence
     python review.py branches [--script FILE]                            which branches are finished (never deletes; --script writes the commands)
     python review.py stats [--workspace FOLDER]                          how strong is the evidence agents bring, per project
+    python review.py digest [--only-if-waiting] [--subject] [--json]     a short text of what needs you, for a scheduler to send anywhere
     python review.py health [--workspace FOLDER]                         is each project in good order? (git, manifest, rules and tools)
+    python review.py import-cards [--source notes/debrief]               convert Universal Apps' older review cards into a checklist (nothing is changed or deleted)
     python review.py status [--workspace FOLDER] [--json]                what is waiting on you, in every project on this computer
     python review.py portfolio [--workspace FOLDER] [--out FILE]         the same as one offline page
 
@@ -26,9 +28,11 @@ import time
 
 import review_answers as ra
 import review_branches as rbr
+import review_digest as rd
 import review_brief as rb
 import review_graph as rg
 import review_health as rh
+import review_import as ri
 import review_next as rn
 import review_projects as rp
 import review_stats as rt
@@ -221,6 +225,21 @@ def cmd_branches(args, me, projects, loc):
     return 0
 
 
+def cmd_import_cards(args, me, projects, loc):
+    source = os.path.join(me['folder'], *args.source.split('/'))
+    if not os.path.isfile(os.path.join(source, 'questions.json')):
+        raise CliError('There is no questions.json in %s.' % source)
+    try:
+        path, count = ri.import_cards(source, target_dir(me, loc), status=args.status)
+    except FileExistsError as err:
+        raise CliError(str(err))
+    except ValueError as err:
+        raise CliError('Cannot read the old cards: %s' % err)
+    print('Nothing to convert: no %s review cards or questions.' % args.status if not count else
+          'Converted %d card(s) into %s (answers you already gave are kept; see the .details.md beside it).\nThe old files are untouched.' % (count, path))
+    return 0
+
+
 def cmd_stats(args, me, projects, loc):
     for p in projects:
         s = rt.stats(p, projects)
@@ -228,6 +247,20 @@ def cmd_stats(args, me, projects, loc):
         if s['claims']:
             print('    evidence: ' + ', '.join('%d %s' % (n, k) for k, n in s['kinds'].items() if n)
                   + ('; verdicts: ' + ', '.join('%d %s' % (n, k) for k, n in s['verdicts'].items()) if s['verdicts'] else ''))
+    return 0
+
+
+def cmd_digest(args, me, projects, loc):
+    d = rd.build(projects)
+    if args.only_if_waiting and not d['waiting']:
+        return 1
+    if args.json:
+        import json
+        print(json.dumps(dict(d, subject=rd.subject(d)), indent=2))
+    elif args.subject:
+        print(rd.subject(d))
+    else:
+        print(rd.text(d), end='')
     return 0
 
 
@@ -311,7 +344,9 @@ def main(argv=None):
     x = sub.add_parser('next'); x.add_argument('--all', action='store_true')
     r = sub.add_parser('ready'); r.add_argument('checklist', nargs='?'); r.add_argument('--latest', action='store_true'); r.add_argument('--run', action='store_true'); r.add_argument('--strict', action='store_true'); r.add_argument('--timeout', type=int, default=600)
     br = sub.add_parser('branches'); br.add_argument('--script')
+    ic = sub.add_parser('import-cards'); ic.add_argument('--source', default='notes/debrief'); ic.add_argument('--status', default='open')
     t = sub.add_parser('stats'); t.add_argument('--workspace')
+    dg = sub.add_parser('digest'); dg.add_argument('--workspace'); dg.add_argument('--only-if-waiting', action='store_true'); dg.add_argument('--subject', action='store_true'); dg.add_argument('--json', action='store_true')
     h = sub.add_parser('health'); h.add_argument('--workspace')
     g = sub.add_parser('graph'); g.add_argument('--workspace'); g.add_argument('--out')
     pb = sub.add_parser('pr-body'); pb.add_argument('checklist')
@@ -321,7 +356,7 @@ def main(argv=None):
     try:
         me, projects, loc = context(args)
         return {'new': cmd_new, 'brief': cmd_brief, 'answer': cmd_answer, 'next': cmd_next, 'ready': cmd_ready,
-                 'branches': cmd_branches, 'stats': cmd_stats, 'health': cmd_health, 'graph': cmd_graph, 'pr-body': cmd_pr_body, 'status': cmd_status, 'portfolio': cmd_portfolio}[args.cmd](args, me, projects, loc)
+                 'branches': cmd_branches, 'import-cards': cmd_import_cards, 'stats': cmd_stats, 'digest': cmd_digest, 'health': cmd_health, 'graph': cmd_graph, 'pr-body': cmd_pr_body, 'status': cmd_status, 'portfolio': cmd_portfolio}[args.cmd](args, me, projects, loc)
     except (CliError, rb.BriefError, ra.AnswerError, OSError) as err:
         print('Error: %s' % err, file=sys.stderr)
         return 2
