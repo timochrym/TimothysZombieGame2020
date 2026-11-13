@@ -315,29 +315,11 @@ class Pathfinder {
     }
 
     // add generated candidates as nodes (skip buried / hazardous / duplicate)
-    // Is a standing body at (x, y) inside the solid wedge of a ramp? (Ramps are not "solid blockers" because their
-    // own surface is walkable, so floor nodes under a ramp used to stay in the graph. Enemies on the ramp then tried to
-    // "walk" down to a node inside the rock and bounced back and forth: the bunker-bridges chase failure.)
-    static insideRamp(ramps, x, y, ownId) {
-        for (let i = 0; i < ramps.length; i++) {
-            var s = ramps[i];
-            if (s.id === ownId) continue;
-            var bd = CollisionDetector.getBounds(s), w = bd.right - bd.left, h = bd.top - bd.bottom;
-            if (x < bd.left + 2 || x > bd.right - 2 || w <= 0) continue;
-            var t = (x - bd.left) / w;
-            var surf = (s.rampDir == "left") ? (bd.top - t * h) : (bd.bottom + t * h);
-            if (y < surf - 6 && y > bd.bottom) return true;
-        }
-        return false;
-    }
-
     static addCandidates(cands) {
         var added = [];
-        var ramps = (typeof staticObjects !== "undefined") ? staticObjects.filter(function(s) { return s.isRamp && !s.dead && !s.noCollide; }) : [];
         for (let i = 0; i < cands.length; i++) {
             var n = cands[i];
             if (this.isPointBlocked(n.x, n.y + 34, 42, 54, n.sourceId)) continue;
-            if (ramps.length && !(window.__pfDbg && window.__pfDbg.noRamp) && this.insideRamp(ramps, n.x, n.y + 20, n.sourceId)) continue;
             if (this.inHazard(n.x, n.y + 2)) continue;
             var dup = null;
             this.forNodesIn(n.x - 28, n.y - 24, n.x + 28, n.y + 24, function(e) { if (!dup) dup = e; });
@@ -390,7 +372,11 @@ class Pathfinder {
             // stepping onto a bounce pad always launches you: only worth it when the bounce helps
             var padCost = b.isBumper ? 90 : 0;
             // 1. walk / ramp
-            if (adx <= 160 && Math.abs(dy) <= 130 && (Math.abs(dy) <= 44 || a.isRamp || b.isRamp)) {
+            // A ramp lets you climb a big vertical step, but only ALONG that ramp. (It used to link any ramp point to a
+            // floor point up to 130 px below it, which can be open space under the ramp: enemies then "walked" to a node
+            // they could not step onto and swung back and forth.)
+            var rampStep = (a.isRamp && b.isRamp && a.sourceId === b.sourceId);
+            if (adx <= 160 && Math.abs(dy) <= 130 && (Math.abs(dy) <= 44 || (rampStep && !(window.__pfDbg && window.__pfDbg.oldRampWalk)) || ((a.isRamp || b.isRamp) && window.__pfDbg && window.__pfDbg.oldRampWalk))) {
                 if (self.hasLineClearance(a.x, a.y, b.x, b.y) && !self.segmentHitsHazard(a.x, a.y, b.x, b.y)) {
                     self.addEdge(a, b, "walk", dist * (dy > 10 ? 1.1 : 1.0) + padCost, ALL);
                     return;
