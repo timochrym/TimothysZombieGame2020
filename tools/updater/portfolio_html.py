@@ -10,6 +10,7 @@ import pathlib
 import time
 
 import review_health
+import review_next
 import review_projects as rp
 import review_stats
 import review_status as rs
@@ -43,6 +44,7 @@ def build_model(projects, brief_url=file_url):
             'health': health,
             'id': p['id'], 'name': p['name'], 'folder': p['folder'], 'type': m.get('type', ''), 'goal': m.get('goal', ''),
             'output': m.get('output', ''), 'done': m.get('done', ''), 'branch': m.get('branch', ''),
+            'prompt': review_next.text(p, review_next.orders_for(review_stats.folders(p, projects))),
             'review': {'label': loc['label'], 'dir': loc['dir'], 'problem': loc['problem'], 'count': len(items),
                        'evidence': review_stats.line(review_stats.stats(p, projects))}})
     model['waiting'].sort(key=lambda w: (w['date'], w['name']), reverse=True)
@@ -60,7 +62,7 @@ main{max-width:900px;margin:0 auto;padding:24px 16px 64px}h1{font-size:1.6rem;ma
 .ok{color:var(--ok)}.bad{color:var(--bad)}.ask{color:var(--ask)}a{color:var(--accent)}ul.flags{margin:.5em 0 0;padding-left:1.1em;color:var(--ask);font-size:.92rem}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px}.grid .card{margin:0}
 select,input[type=text]{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 7px}input[type=text]{flex:1;min-width:140px}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}button{font:inherit;font-weight:600;color:#fff;background:var(--accent);border:0;border-radius:8px;padding:7px 14px;cursor:pointer}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}button{font:inherit;font-weight:600;color:#fff;background:var(--accent);border:0;border-radius:8px;padding:7px 14px;cursor:pointer}button.quiet{background:transparent;color:var(--accent);border:1px solid var(--line);padding:4px 10px;font-weight:500}
 """
 
 JS = """
@@ -70,6 +72,12 @@ const safeLink = (u) => typeof u === 'string' && (u.indexOf('file:///') === 0 ||
 const waitBox = document.getElementById('waiting'), grid = document.getElementById('projects');
 const flagged = D.projects.filter((p) => p.health && p.health.flags.length).length;
 document.getElementById('summary').textContent = D.projects.length + ' project(s), ' + D.waiting.length + ' review(s) waiting, ' + flagged + ' project(s) with something to look at. ' + (L ? 'Answers you save are written into the review folders.' : 'Read-only: answer in the chat or with review.py answer.');
+async function copy(text, button) {
+  const old = button.textContent;
+  try { await navigator.clipboard.writeText(text); button.textContent = 'Copied'; }
+  catch (e) { const t = el('textarea', { value: text }); document.body.append(t); t.select(); try { document.execCommand('copy'); button.textContent = 'Copied'; } catch (x) { button.textContent = 'Could not copy'; } t.remove(); }
+  setTimeout(() => { button.textContent = old; }, 1500);
+}
 function controls(w) {
   const picks = {}, notes = {}, box = el('div'), msg = el('div', { className: 'dim' });
   for (const c of w.claims.filter((c) => w.open.indexOf(c.id) >= 0)) {
@@ -113,6 +121,7 @@ for (const p of D.projects) {
     el('div', { className: 'dim' }, 'Branch ' + (p.branch || '?') + ' \\u00b7 ' + p.review.count + ' review(s) in ' + p.review.label + ' / ' + p.review.dir),
     el('div', { className: 'dim' }, 'Evidence: ' + p.review.evidence),
     p.review.problem ? el('div', { className: 'bad' }, p.review.problem) : '',
+    el('div', { className: 'row' }, el('button', { type: 'button', className: 'quiet', textContent: 'Copy next-work prompt', onclick: (e) => copy(p.prompt, e.target) })),
     p.health && p.health.flags.length ? el('ul', { className: 'flags' }, ...p.health.flags.map((f) => el('li', {}, f))) : el('div', { className: 'ok' }, 'In good order.')));
 }
 """
