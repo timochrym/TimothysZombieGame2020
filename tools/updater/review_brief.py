@@ -35,6 +35,7 @@ so one lucky or unlucky run cannot decide the claim.
 """
 import argparse
 import fnmatch
+import json
 import os
 import re
 import subprocess
@@ -74,9 +75,9 @@ def _fields(text):
     return parts[0], fields
 
 
-def parse(text):
-    """Checklist text -> (settings, claims, questions)."""
-    lines = text.lstrip('﻿').split('\n')
+def front_matter(text):
+    """The `---` settings block at the top of a Markdown file -> ({key: value}, the lines after it)."""
+    lines = text.lstrip('\ufeff').split('\n')
     meta, body = {}, lines
     if lines and lines[0].strip() == '---':
         end = next((i for i in range(1, len(lines)) if lines[i].strip() == '---'), None)
@@ -87,6 +88,12 @@ def parse(text):
             if m and not line.lstrip().startswith('#'):
                 meta[m.group(1).lower()] = m.group(2)
         body = lines[end + 1:]
+    return meta, body
+
+
+def parse(text):
+    """Checklist text -> (settings, claims, questions)."""
+    meta, body = front_matter(text)
     claims, questions = [], []
     for line in body:
         s = line.strip()
@@ -195,7 +202,31 @@ def check(claim, ev, repo, run=False, allow=ALLOWED, timeout=600, rundir=None, c
     return result, lines
 
 
-def build(text, repo, run=False, base=None, head=None, allow=ALLOWED, timeout=600):
+def load_pins(path):
+    """A Review Point export -> clean pins. A file that is not one is an error, never half read."""
+    try:
+        with open(path, encoding='utf-8') as fh:
+            data = json.load(fh)
+    except (OSError, ValueError) as err:
+        raise BriefError('Cannot read pins from %s: %s' % (path, err))
+    if not isinstance(data, dict) or data.get('version') != 1 or not isinstance(data.get('pins'), list):
+        raise BriefError('%s is not a Review Point export (version 1).' % path)
+    pins = []
+    for raw in data['pins']:
+        if not isinstance(raw, dict):
+            continue
+        tgt = raw.get('target') if isinstance(raw.get('target'), dict) else {}
+        cv = tgt.get('canvas') if isinstance(tgt.get('canvas'), dict) else None
+        img = raw.get('image') if isinstance(raw.get('image'), str) else ''
+        pins.append({
+            'id': str(raw.get('id', ''))[:12], 'claim': str(raw.get('claim', ''))[:8], 'note': str(raw.get('note', ''))[:500],
+            'target': {'selector': str(tgt.get('selector', ''))[:200], 'text': str(tgt.get('text', ''))[:80],
+                       'canvas': {k: cv[k] for k in ('x', 'y') if isinstance(cv.get(k), (int, float))} if cv else None},
+            'image': img if img.startswith('data:image/jpeg;base64,') and len(img) < 400000 else ''})
+    return pins
+
+
+def build(text, repo, run=False, base=None, head=None, allow=ALLOWED, timeout=600, pins_file=None):
     meta, claims, questions = parse(text)
     repo = os.path.abspath(repo or meta.get('repo') or '.')
     base, head = base or meta.get('base'), head or meta.get('head') or 'HEAD'
@@ -207,7 +238,8 @@ def build(text, repo, run=False, base=None, head=None, allow=ALLOWED, timeout=60
     cache = {}
     for claim in claims:
         claim['result'], claim['evidence'] = check(claim, ev, repo, run, allow, timeout, meta.get('rundir') and os.path.join(repo, meta['rundir']), cache)
-    return {'title': meta.get('title') or 'Review brief', 'repo': repo, 'ev': ev, 'claims': claims, 'questions': questions}
+    return {'title': meta.get('title') or 'Review brief', 'repo': repo, 'ev': ev, 'claims': claims, 'questions': questions,
+            'pins': load_pins(pins_file) if pins_file else []}
 
 
 def markdown(brief):
@@ -224,6 +256,12 @@ def markdown(brief):
     out += ['', '## What the commits say', ''] + ['- `%s` %s %s: %s' % (c['hash'], c['date'], c['author'], c['subject']) for c in ev['commits']]
     if brief['questions']:
         out += ['', '## Questions for you', ''] + ['- **%s** %s%s' % (q['id'], q['text'], ' (' + ' / '.join(q['options']) + ')' if q['options'] else '') for q in brief['questions']]
+    if brief.get('pins'):
+        out += ['', '## Pins (where you pointed)', '']
+        for p in brief['pins']:
+            t = p['target']
+            where = ('canvas %s at %s,%s' % (t['selector'], t['canvas'].get('x'), t['canvas'].get('y'))) if t['canvas'] else t['selector']
+            out.append('- **%s**%s %s (%s)' % (p['id'], ' (%s)' % p['claim'] if p['claim'] else '', p['note'].replace('\n', ' ') or '(no note)', where))
     return '\n'.join(out) + '\n'
 
 
@@ -236,13 +274,14 @@ def main(argv=None):
     ap.add_argument('--run', action='store_true', help='run the run: commands (the repo must be checked out at head)')
     ap.add_argument('--allow', action='append', default=[], help='allow one more command name for run:')
     ap.add_argument('--timeout', type=int, default=600)
+    ap.add_argument('--pins', help='a review-pins.json exported by review_point.user.js; shown under the claims it names')
     ap.add_argument('--md')
     ap.add_argument('--html')
     ap.add_argument('--strict', action='store_true', help='exit 1 when any claim is Not found or Rejected')
     args = ap.parse_args(argv)
     try:
         brief = build(open(args.checklist, encoding='utf-8').read(), args.repo, args.run, args.base, args.head,
-                      ALLOWED | set(args.allow), args.timeout)
+                      ALLOWED | set(args.allow), args.timeout, args.pins)
     except (BriefError, OSError) as err:
         print('Error: %s' % err, file=sys.stderr)
         return 2
