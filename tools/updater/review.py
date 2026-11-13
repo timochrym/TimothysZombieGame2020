@@ -6,6 +6,8 @@
     python review.py answer CHECKLIST --line "c1 Good · c4 Not right (why) · q1 Better"
     python review.py next [--all]                                        what the owner asked for: a prompt for the next agent session
     python review.py ready CHECKLIST [--run] [--strict]                  is this checklist fit to push? (exit 1 when not)
+    python review.py graph [--workspace FOLDER] [--out FILE.md]         a generated map of how the projects connect (Mermaid)
+    python review.py pr-body CHECKLIST                                   a pull request description: claims next to evidence
     python review.py status [--workspace FOLDER] [--json]                what is waiting on you, in every project on this computer
     python review.py portfolio [--workspace FOLDER] [--out FILE]         the same as one offline page
 
@@ -21,6 +23,7 @@ import time
 
 import review_answers as ra
 import review_brief as rb
+import review_graph as rg
 import review_next as rn
 import review_projects as rp
 import review_status as rs
@@ -179,6 +182,26 @@ def cmd_ready(args, me, projects, loc):
     return 1 if problems else 0
 
 
+def cmd_graph(args, me, projects, loc):
+    text = rg.mermaid(projects, time.strftime('%Y-%m-%d'))
+    if args.out:
+        os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+        with open(args.out, 'w', encoding='utf-8') as fh:
+            fh.write(text)
+        print('Wrote %s (%d project(s)).' % (args.out, len(projects)))
+    else:
+        print(text)
+    return 0
+
+
+def cmd_pr_body(args, me, projects, loc):
+    path = find_checklist(checklist_folders(me, loc), args.checklist)
+    with open(path, encoding='utf-8') as fh:
+        brief = rb.build(fh.read(), me['folder'])
+    print(rb.markdown(brief) + '\n_Claims are checked against git by `review.py brief`; "weak evidence" means a file changed but nothing ran._')
+    return 0
+
+
 def waiting(projects):
     """[(project name, review row)] for every checklist with something still open, newest first."""
     items = []
@@ -226,13 +249,15 @@ def main(argv=None):
     a = sub.add_parser('answer'); a.add_argument('checklist'); a.add_argument('--line', required=True)
     x = sub.add_parser('next'); x.add_argument('--all', action='store_true')
     r = sub.add_parser('ready'); r.add_argument('checklist'); r.add_argument('--run', action='store_true'); r.add_argument('--strict', action='store_true'); r.add_argument('--timeout', type=int, default=600)
+    g = sub.add_parser('graph'); g.add_argument('--workspace'); g.add_argument('--out')
+    pb = sub.add_parser('pr-body'); pb.add_argument('checklist')
     s = sub.add_parser('status'); s.add_argument('--workspace'); s.add_argument('--json', action='store_true')
     p = sub.add_parser('portfolio'); p.add_argument('--workspace'); p.add_argument('--out')
     args = ap.parse_args(argv)
     try:
         me, projects, loc = context(args)
         return {'new': cmd_new, 'brief': cmd_brief, 'answer': cmd_answer, 'next': cmd_next, 'ready': cmd_ready,
-                 'status': cmd_status, 'portfolio': cmd_portfolio}[args.cmd](args, me, projects, loc)
+                 'graph': cmd_graph, 'pr-body': cmd_pr_body, 'status': cmd_status, 'portfolio': cmd_portfolio}[args.cmd](args, me, projects, loc)
     except (CliError, rb.BriefError, ra.AnswerError, OSError) as err:
         print('Error: %s' % err, file=sys.stderr)
         return 2
