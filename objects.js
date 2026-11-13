@@ -1,7 +1,7 @@
-class Object {
+class GameObject {
 
     constructor(name, hitbox, poly, color, xy, maxspeed = 0, slower = 0, gravity = 0, bounciness = 0, movable = false, options = {}) {
-        this.id = ++Object.nextId;
+        this.id = ++GameObject.nextId;
         this.name = name;
         this.hitbox = hitbox;
         this.poly = poly;
@@ -75,7 +75,7 @@ class Object {
     static addBox(x, y, w, h, color = "#243b4a", options = {}) {
         var box = Math.makeHitbox(w, h);
         var opts = { w: w, h: h, name: options.name || "Platform", ...options };
-        var obj = new Object(opts.name, box, box, color, [x, y], 0, 0, 0, 0, false, opts);
+        var obj = new GameObject(opts.name, box, box, color, [x, y], 0, 0, 0, 0, false, opts);
         staticObjects.push(obj);
         return obj;
     }
@@ -91,7 +91,7 @@ class Object {
             triPoly = [[-hw, -hh], [hw, hh], [hw, -hh]];
         }
         var opts = { w: w, h: h, isRamp: true, rampDir: direction, name: options.name || ("Ramp (" + direction + ")"), ...options };
-        var obj = new Object(opts.name, hitbox, triPoly, color, [x, y], 0, 0, 0, 0, false, opts);
+        var obj = new GameObject(opts.name, hitbox, triPoly, color, [x, y], 0, 0, 0, 0, false, opts);
         staticObjects.push(obj);
         return obj;
     }
@@ -106,7 +106,7 @@ class Object {
             name: options.name || "Bounce Pad",
             ...options
         };
-        var obj = new Object(opts.name, box, box, color, [x, y], 0, 0, 0, 0, false, opts);
+        var obj = new GameObject(opts.name, box, box, color, [x, y], 0, 0, 0, 0, false, opts);
         staticObjects.push(obj);
         return obj;
     }
@@ -118,7 +118,7 @@ class Object {
         var isExplosive = options.explosive || false;
         var crateColor = isExplosive ? "#e84545" : color;
         var opts = { w: w, h: h, name: options.name || (isExplosive ? "TNT Barrel" : "Crate"), ...options };
-        var obj = new Object(
+        var obj = new GameObject(
             opts.name,
             box,
             box,
@@ -139,13 +139,13 @@ class Object {
         for (let i = 0; i < items.length; i++) {
             var it = items[i];
             if (it.type == "box") {
-                Object.addBox(it.x, it.y, it.w, it.h, it.color, it);
+                GameObject.addBox(it.x, it.y, it.w, it.h, it.color, it);
             } else if (it.type == "ramp") {
-                Object.addRamp(it.x, it.y, it.w, it.h, it.dir || "right", it.color, it);
+                GameObject.addRamp(it.x, it.y, it.w, it.h, it.dir || "right", it.color, it);
             } else if (it.type == "bumper") {
-                Object.addBumper(it.x, it.y, it.w, it.h, it.bounce || 22, it.color, it);
+                GameObject.addBumper(it.x, it.y, it.w, it.h, it.bounce || 22, it.color, it);
             } else if (it.type == "crate") {
-                Object.addCrate(it.x, it.y, it.size || 72, it.color, it);
+                GameObject.addCrate(it.x, it.y, it.size || 72, it.color, it);
             }
         }
         if (typeof Pathfinder !== "undefined") Pathfinder.rebuildGraph(true);
@@ -409,4 +409,4 @@ class Object {
     }
 }
 
-Object.nextId = 0;
+GameObject.nextId = 0;

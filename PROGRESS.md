@@ -187,3 +187,11 @@ What fills the packets: enemies are 70%, mostly route-planning data only the hos
 field in every packet; resting bodies resend all their points.
 **Doing now:** joiner-side movement for its own hero + host correction; packet diet.
 **Next:** the two LAN joiner bugs (Blob Arena food, soccer movement).
+
+## 2026-11-13: the game's `class Object` is now `class GameObject`
+The game declared its own `class Object` (objects.js), which hid JavaScript's built-in `Object` on the whole page: `Object.keys`, `Object.assign`, `Object.is` were
+undefined, code had to say `window.Object.keys(...)`, tools such as Playwright's page.evaluate and any userscript failed on the page, and `levels.js` called a plain
+`Object.keys(...)` that threw when a custom level was saved. The class is now `GameObject` (68 replacements in 18 files: `class`, `new`, its statics `addBox`,
+`addRamp`, `addBumper`, `addCrate`, `loadMap`, `nextId`, `prototype`, and the two checks in net.js). `window.Object.x` calls still work. Checked before and after on 14 of the
+game's tests and 3 LAN tests: the same results (brawl_bat is flaky on both: 1 of 3 passes before, 2 of 3 after; lan_perf is a timing threshold). The tests' restore hack for
+`Object.is` and friends is no longer needed but is harmless.

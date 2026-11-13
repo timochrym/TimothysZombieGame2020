@@ -26,23 +26,23 @@ function createMap() {
     // Always add the Infinite Subterranean Bedrock Base Floor ~2 screens down (top = -1600, bottom = -2400)
     // plus return Mega-Bounce Geysers so falling off any level lands on a playable deep floor!
     if (!brawlStage) {
-    Object.addBox(0, -2000, 12000, 800, "#2b2d42", {
+    GameObject.addBox(0, -2000, 12000, 800, "#2b2d42", {
         name: "Infinite Bedrock Floor",
         texture: "castle_stone",
         isInfiniteBase: true,
         baseOffsetX: 0
     });
-    Object.addBumper(-960, -1580, 240, 40, 38, "#ff2e63", {
+    GameObject.addBumper(-960, -1580, 240, 40, 38, "#ff2e63", {
         name: "Deep Return Geyser W",
         isInfiniteBase: true,
         baseOffsetX: -960
     });
-    Object.addBumper(0, -1580, 240, 40, 38, "#ff2e63", {
+    GameObject.addBumper(0, -1580, 240, 40, 38, "#ff2e63", {
         name: "Deep Return Geyser C",
         isInfiniteBase: true,
         baseOffsetX: 0
     });
-    Object.addBumper(960, -1580, 240, 40, 38, "#ff2e63", {
+    GameObject.addBumper(960, -1580, 240, 40, 38, "#ff2e63", {
         name: "Deep Return Geyser E",
         isInfiniteBase: true,
         baseOffsetX: 960
@@ -51,7 +51,7 @@ function createMap() {
 
     var currentLvl = (typeof LevelManager !== "undefined") ? LevelManager.getCurrentLevel() : null;
     if (currentLvl && currentLvl.layout) {
-        Object.loadMap(currentLvl.layout);
+        GameObject.loadMap(currentLvl.layout);
     }
     // Remember the arena's enclosure so nothing can ever leave it
     levelBounds = null;

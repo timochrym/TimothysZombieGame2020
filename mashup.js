@@ -69,7 +69,7 @@ var Mashup = {
         if (this.active("items") && !(typeof brawl !== "undefined" && brawl.active) && redGuy && !redGuy.dead && this.t % 900 === 450) {
             var x = redGuy.x + (Math.random() < 0.5 ? -1 : 1) * (200 + Math.random() * 300);
             if (Math.random() < 0.5 && typeof spawnPowerUp === "function") spawnPowerUp(x, redGuy.y + 400);
-            else { var bomb = Object.addCrate(x, redGuy.y + 500, 54, "#1f2937", { explosive: true, name: "Bomb" }); if (typeof rebuildAllObjects === "function") rebuildAllObjects(); Components.addFloatingText("💣 BOMB! G grab · click throw", x, redGuy.y + 560, "#fca5a5", 16); }
+            else { var bomb = GameObject.addCrate(x, redGuy.y + 500, 54, "#1f2937", { explosive: true, name: "Bomb" }); if (typeof rebuildAllObjects === "function") rebuildAllObjects(); Components.addFloatingText("💣 BOMB! G grab · click throw", x, redGuy.y + 560, "#fca5a5", 16); }
         }
         if (WordLab && WordLab.msgT > 0 && !inWords) WordLab.msgT--;
     },

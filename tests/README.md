@@ -56,7 +56,7 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
 
 Each prints its numbers and then the page errors (`[]` = none). See ROADMAP.md, "Your named feedback items".
 
-`lib.js` opens the game headless and restores the native `Object` helpers the engine's `class Object` shadows.
+`lib.js` opens the game headless and restores the native `Object` helpers the engine's `class GameObject` shadows.
 
 Follow-up assertions (exit nonzero on failure):
 

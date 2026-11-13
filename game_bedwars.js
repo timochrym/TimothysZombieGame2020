@@ -127,7 +127,7 @@ function bwBuy(ch, item) {
     else if (item.id === "sharp") { up.sharp = 1; bwFeed(BW_TEAMS[bwTeamOf(ch)].name + " bought Sharp (+25% team damage)", BW_TEAMS[bwTeamOf(ch)].color); }
     else if (item.id === "fireball") bwFireball(ch);
     else if (item.id === "egg") bwBridgeEgg(ch);
-    else if (item.id === "tnt") { var t = Object.addCrate(ch.x + (ch.lastFacing || 1) * 90, ch.y + 60, 70, "#e84545", { explosive: true, name: "TNT Barrel" }); t.xspeed = (ch.lastFacing || 1) * 6; t.yspeed = 6; if (typeof rebuildAllObjects === "function") rebuildAllObjects(); }
+    else if (item.id === "tnt") { var t = GameObject.addCrate(ch.x + (ch.lastFacing || 1) * 90, ch.y + 60, 70, "#e84545", { explosive: true, name: "TNT Barrel" }); t.xspeed = (ch.lastFacing || 1) * 6; t.yspeed = 6; if (typeof rebuildAllObjects === "function") rebuildAllObjects(); }
     Components.addFloatingText("+" + item.label, ch.x, ch.y + 110, "#86efac", 15);
     if (typeof SFX !== "undefined") SFX.play("pickup", ch.x, ch.y);
     return true;
@@ -155,7 +155,7 @@ function bwEggs() {
             var bx = E.x - Math.sign(E.vx) * 40, by = E.y - 50, solid = false;
             for (let i = 0; i < staticObjects.length; i++) { var q = staticObjects[i]; if (!q.dead && Math.abs(bx - q.x) < q.w / 2 + 38 && Math.abs(by - q.y) < q.h / 2 + 18) { solid = true; break; } }
             if (solid) continue;
-            var b = Object.addBox(bx, by, 80, 40, BW_TEAMS[E.team] ? BW_TEAMS[E.team].color : mat.color, { name: "Built Bridge", texture: mat.tex, kind: "block" });
+            var b = GameObject.addBox(bx, by, 80, 40, BW_TEAMS[E.team] ? BW_TEAMS[E.team].color : mat.color, { name: "Built Bridge", texture: mat.tex, kind: "block" });
             b.buildHP = b.buildMaxHP = mat.hp; b.builtBy = E.owner && E.owner.playerIndex; b.buildMat = mat.id; b.buildCost = 0;
             E.n++; placed = b;
         }
@@ -168,7 +168,7 @@ function bwEggs() {
 function bwFireball(ch) {
     var rad = Math.radians(ch.degree || 90), dx = Math.sin(rad), dy = Math.cos(rad);
     if (Math.abs(dx) < 0.2 && Math.abs(dy) < 0.2) { dx = ch.lastFacing || 1; dy = 0; }
-    var f = Object.addCrate(ch.x + dx * 80, ch.y + 20 + dy * 80, 40, "#f97316", { explosive: true, name: "Fireball" });
+    var f = GameObject.addCrate(ch.x + dx * 80, ch.y + 20 + dy * 80, 40, "#f97316", { explosive: true, name: "Fireball" });
     f.gravityMult = 0.04; f.gravity = gravity * 0.04; f.maxspeed = 40;
     f.xspeed = dx * 26; f.yspeed = dy * 26;
     f.thrownBy = ch; f.thrownTimer = 50; f.bwFire = true;
@@ -299,7 +299,7 @@ GameModes.register({
         for (let t = 0; t < 2; t++) {
             var side = BW_TEAMS[t].side;
             var bp = M && M.beds && M.beds[t] ? M.beds[t] : [side * 2380, 0];
-            var bed = Object.addBox(bp[0], bp[1] + 25, 160, 50, BW_TEAMS[t].color, { name: BW_TEAMS[t].name + " Bed", texture: t === 0 ? "wool_red" : "wool_blue", kind: "block" });
+            var bed = GameObject.addBox(bp[0], bp[1] + 25, 160, 50, BW_TEAMS[t].color, { name: BW_TEAMS[t].name + " Bed", texture: t === 0 ? "wool_red" : "wool_blue", kind: "block" });
             bed.buildHP = bed.buildMaxHP = 160; bed.isBed = true; bed.bedTeam = t;
             BW.beds[t] = bed;
             var gp = M && M.gens && M.gens[t] ? M.gens[t] : [side * 3110, 0];

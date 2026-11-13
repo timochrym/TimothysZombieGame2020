@@ -136,7 +136,7 @@ function terraBuildChunk(k) {
             if (solid && start < 0) start = c;
             if (!solid && start >= 0) {
                 var w = (c - start) * Tr.T;
-                var o = Object.addBox((terraCX(start) + terraCX(c - 1)) / 2, terraCY(r), w, Tr.T, "#000", { name: "Terrain", kind: "block", texture: "solid" });
+                var o = GameObject.addBox((terraCX(start) + terraCX(c - 1)) / 2, terraCY(r), w, Tr.T, "#000", { name: "Terrain", kind: "block", texture: "solid" });
                 o.invisible = true; o.terraChunk = k;
                 out.push(o);
                 start = -1;

@@ -12,7 +12,7 @@ hooks, ModeKit.addLevel/makeHero/room, Gadgets, PixelArt, the BALANCE table in v
 hub in hub.js). Each game is a game_*.js file loaded in index.html before hub.js.
 
 Engine gotchas:
-- objects.js defines `class Object`, which shadows the native Object. Use window.Object for native
+- objects.js defines `class GameObject`, which shadows the native Object. Use window.Object for native
   calls. Playwright tests need an init script that restores Object.is/keys/entries/getPrototypeOf
   on load.
 - World coordinates are +y up. Convert to screen with wsx(x)/wsy(y) and scale with cameraScaleX.

@@ -2,7 +2,7 @@
 // LEVEL STUDIO - a full level editor for every game on the engine (B / "🛠 Level Studio").
 //
 //   The DOCUMENT is the source of truth: { name, mode, waves, ents: [...] }. Every entity has a `cat`:
-//     layout  { type: box|ramp|bumper|crate, x, y, w, h, ... }   level geometry (Object.loadMap format)
+//     layout  { type: box|ramp|bumper|crate, x, y, w, h, ... }   level geometry (GameObject.loadMap format)
 //     gadget  { type: plate|door|exit|qblock|..., ... }           Gadgets format
 //     enemy   { power, x, y }                                    NORMAL/BAT/... or walker/hopper/... (Stomp Squad)
 //     item    { power, x, y }                                    power-up pickup
@@ -245,7 +245,7 @@ var Studio = {
         if (typeof Ragdolls !== "undefined") Ragdolls.list = [];
         if (typeof treasureChests !== "undefined") treasureChests = [];
         redGuy = null; blueGuy = null;
-        try { Object.loadMap(def.layout); } catch (e) { console.warn("studio layout", e); }
+        try { GameObject.loadMap(def.layout); } catch (e) { console.warn("studio layout", e); }
         try { Gadgets.load(JSON.parse(JSON.stringify(def.gadgets))); } catch (e) { console.warn("studio gadgets", e); }
         // enemy previews: real characters, never simulated while editing
         var plat = { walker: "NORMAL", hopper: "SLIME", flyer: "BAT", spiky: "KNIGHT", tank: "TANK" };
