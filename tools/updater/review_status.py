@@ -58,8 +58,8 @@ def status(path):
         return out
     out['title'] = meta.get('title') or name
     out['project'] = meta.get('project', '')
-    out['claims'] = [{'id': c['id'], 'text': c['text'], 'link': c['fields'].get('link', ''), 'pic': c['fields'].get('pic', ''), 'look': c['fields'].get('look', '')} for c in claims]
-    out['questions'] = [{'id': q['id'], 'text': q['text'], 'options': q['options'], 'link': q['fields'].get('link', ''), 'pic': q['fields'].get('pic', '')} for q in questions]
+    out['claims'] = [{'id': c['id'], 'text': c['text'], 'link': c['fields'].get('link', ''), 'pic': c['fields'].get('pic', ''), 'look': c['fields'].get('look', ''), 'try': c['fields'].get('try', ''), 'see': c['fields'].get('see', '')} for c in claims]
+    out['questions'] = [{'id': q['id'], 'text': q['text'], 'options': q['options'], 'link': q['fields'].get('link', ''), 'pic': q['fields'].get('pic', ''), 'try': q['fields'].get('try', ''), 'see': q['fields'].get('see', '')} for q in questions]
     got = ra.read_answers(path)
     out['answers'] = {k: v.get('v', '') for k, v in (got or {}).get('answers', {}).items() if isinstance(v, dict)}
     out['open'] = [i['id'] for i in out['claims'] + out['questions'] if i['id'] not in out['answers']]

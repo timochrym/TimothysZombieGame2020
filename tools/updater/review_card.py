@@ -19,6 +19,7 @@ def explain(lines, fields=None):
     """-> {'check': what a person must look at, 'findings': [{'k': 'ok'|'ask'|'bad', 't': plain sentence}]} from a claim's evidence lines."""
     fields = fields or {}
     check, found, weak = fields.get('look', ''), [], False
+    steps = [s.strip() for s in re.split(r'\s+>\s+|\s*;\s*', fields.get('try', '')) if s.strip()]
     for line in lines or []:
         m = re.match(r'^look:\s*(.*)$', line)
         if m:
@@ -58,9 +59,11 @@ def explain(lines, fields=None):
             continue
         bad = bool(re.search(r'NOT matched|not within|FAILED|Not valid|Not understood|Add file', line))
         found.append({'k': 'bad' if bad else 'ok', 't': line})
-    if check and not fields.get('link'):
+    if check and not fields.get('link') and not steps:
         found.append({'k': 'ask', 't': 'No link was given for this item, so you have to find it in the app yourself.'})
-    return {'check': check, 'findings': found, 'weak': weak}
+    if check and not (steps and fields.get('see')):
+        found.append({'k': 'ask', 't': 'The agent did not say how to test this or what good looks like. Ask it, or answer Not looked.'})
+    return {'check': check, 'findings': found, 'weak': weak, 'steps': steps, 'see': fields.get('see', '').strip()}
 
 
 CSS = """
@@ -77,6 +80,7 @@ CSS = """
 .picker input:checked+span{background:var(--accent);color:var(--on);border-color:var(--accent);font-weight:600}.picker input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
 .helpline{color:var(--soft);font-size:.88rem;margin-top:4px;min-height:1.2em}
 .btnlink.app{border-style:dashed}
+.steps{margin:2px 0 0;padding-left:22px}.steps li{margin:2px 0}
 """
 
 JS = """
@@ -90,15 +94,18 @@ function resultBadge(it) {
 }
 // What to check + the buttons to open it, then what the tool found. `app` is {url, text} for the project's own page, used when the item has no link of its own.
 function itemFacts(it, app) {
-  const kids = [];
-  if (it.check || (it.media && (it.media.link || it.media.pics.length))) {
-    kids.push(lab('What to check'));
-    if (it.check) kids.push(el('div', {}, it.check));
-    const m = it.media || { link: null, pics: [] };
+  const kids = [], m = it.media || { link: null, pics: [] }, steps = it.steps || [];
+  const hasLink = m.link && m.link.url, hasMedia = hasLink || m.pics.length || (m.link && m.link.text);
+  if (hasMedia || (it.check && app)) {
+    kids.push(lab('Open'));
     const box = mediaBox(m);
     if (box) kids.push(box);
-    if (!(m.link && m.link.url) && it.check && app && /^https?:\\/\\//i.test(app.url || '')) kids.push(el('div', { className: 'media' }, el('a', { className: 'btnlink app', href: app.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open ' + app.text)));
+    if (!hasLink && it.check && !steps.length && app) kids.push(el('div', { className: 'media' }, app.running ? el('a', { className: 'btnlink app', href: app.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open ' + app.text) : el('span', { className: 'ask' }, app.text + ' is not running. ' + (app.hint || ''))));
+    else if (hasLink && app && !app.running) kids.push(el('div', { className: 'ask' }, app.text + ' is not running. ' + (app.hint || '')));
   }
+  if (steps.length) kids.push(lab('How to test'), el('ol', { className: 'steps' }, ...steps.map((s) => el('li', {}, s))));
+  if (it.see) kids.push(lab('You should see'), el('div', {}, it.see));
+  if (it.check && !(steps.length && it.see)) kids.push(lab(steps.length || it.see ? 'Also' : 'What to check'), el('div', {}, it.check));
   if (it.findings && it.findings.length) kids.push(lab('What the tool found'), el('ul', { className: 'find' }, ...it.findings.map((f) => el('li', { className: f.k }, f.t))));
   return el('div', {}, ...kids);
 }

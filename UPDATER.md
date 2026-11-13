@@ -13,6 +13,7 @@ publish_folders:
 publish_folder_file: .user-folder
 server: on
 server_port: 8000
+start: Start LAN Game.command
 deps_file:
 auto_update_file: .auto-update
 send_on_update: off

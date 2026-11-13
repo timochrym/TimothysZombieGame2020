@@ -23,8 +23,11 @@ if one of them disagrees with this file, the project's own rule wins.
    - One line per thing you did. Every line needs at least one of `file:`, `test:`, `run:` or `look:`.
    - Claim only what you did and can show. A vague line ("it is better now") is Rejected.
    - A number that changes from run to run needs `runs: 3` or more, with `number:` and `want:`.
-   - If the owner must look at something, add `link:` (the page to open) and `pic:` (a screenshot saved in this repository, e.g. under
-     `reviews/TimothysZombieGame2020/pics/`, taken with the headless browser). They show as a button and a picture next to the line on the review pages.
+   - If the owner must look at something, say exactly how: `look:` (what), `link:` (the page to open; a name like `index.html`, the review
+     page turns it into the address of the app that is really running), `try:` (the steps, joined with ` > `: where to click and what to do)
+     and `see:` (what good looks like). `ready` refuses a `look:` without `try:` and `see:`. If it cannot be played (an internal change),
+     say so in `look:` and point to the number or test that shows it. Add `pic:` (a screenshot saved in this repository, e.g. under
+     `reviews/TimothysZombieGame2020/pics/`, taken with the headless browser) to show before and after.
    - Add questions for the owner as `?` lines, with the answers you accept.
 9. Check your own checklist: `python tools/updater/review.py brief CHECKLIST --run`.
    Fix every Rejected line. Report every Not found line to the owner exactly as it is.

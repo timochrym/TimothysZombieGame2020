@@ -53,7 +53,7 @@ function note(id) { return el('input', { type: 'text', placeholder: 'Note (optio
 const SHORT = SCALE.map((x) => x[0]);
 for (const c of D.claims) {
   const mine = () => (S[c.id] = S[c.id] || {});
-  const card = el('section', { className: 'card' },
+  const card = el('section', { className: 'card' }, lab('You are testing'),
     el('div', { className: 'what' }, el('span', { className: 'num' }, c.id), c.text, '  ', resultBadge(c)),
     el('div', { className: 'dim' }, RESULT_HELP[c.result] || ''),
     itemFacts(c, D.app), lab('Your answer'),
@@ -63,7 +63,7 @@ for (const c of D.claims) {
 if (D.questions.length) root.append(el('h2', {}, 'Questions for you'));
 for (const q of D.questions) {
   const mine = () => (S[q.id] = S[q.id] || {});
-  const card = el('section', { className: 'card' }, el('div', { className: 'what' }, el('span', { className: 'num' }, q.id), q.text), itemFacts({ media: q.media, check: '', findings: [] }, D.app), lab('Your answer'),
+  const card = el('section', { className: 'card' }, lab('Question'), el('div', { className: 'what' }, el('span', { className: 'num' }, q.id), q.text), itemFacts({ media: q.media, check: '', findings: [] }, D.app), lab('Your answer'),
     q.options.length ? picker('v-' + q.id, q.options, mine().v || '', (v) => { mine().v = v; save(); line(); }, {}) : '', el('div', { className: 'row' }, note(q.id)));
   cardById[q.id] = card; root.append(card);
 }
@@ -100,14 +100,14 @@ def _json_for_script(data):
     return json.dumps(data, ensure_ascii=False).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
 
 
-def app_url_of(repo):
-    """The `app_url:` line of the project's UPDATER.md (where its pages are served), or ''."""
+def meta_of(repo):
+    """The settings block of the project's UPDATER.md ({} when there is none)."""
     import review_brief as rb
     try:
         with open(os.path.join(repo, 'UPDATER.md'), encoding='utf-8') as fh:
-            return review_media.app_url(rb.front_matter(fh.read())[0])
+            return rb.front_matter(fh.read())[0]
     except (OSError, rb.BriefError):
-        return ''
+        return {}
 
 
 def media_for(claim, roots, app_url):
@@ -126,9 +126,12 @@ def media_for(claim, roots, app_url):
 def page(brief, roots=None, app_url=None, app=None):
     ev = brief['ev']
     roots = roots or [brief.get('repo', '')]
-    app_url = app_url if app_url is not None else app_url_of(brief.get('repo', ''))
-    if app is None and app_url:
-        app = {'text': os.path.basename(brief.get('repo', '')) or 'the app', 'url': app_url}
+    if app is None and app_url is not None:                       # a caller that already knows the address
+        app = {'text': os.path.basename(brief.get('repo', '')) or 'the app', 'base': app_url, 'url': app_url, 'running': bool(app_url), 'hint': ''}
+    if app is None:
+        repo = brief.get('repo', '')
+        app = review_media.resolve_app(repo, meta_of(repo), os.path.basename(repo) or 'the app')
+    app_url = app['base']
     data = {'title': brief['title'], 'span': ev['span'], 'head': ev['head_sha'], 'scale': SCALE, 'commits': ev['commits'],
             'claims': [dict({k: c[k] for k in ('id', 'text', 'result', 'evidence')}, media=media_for(c, roots, app_url), **review_card.explain(c['evidence'], c['fields'])) for c in brief['claims']], 'questions': [dict(q, media=media_for(q, roots, app_url)) for q in brief['questions']],
             'pins': brief.get('pins', []), 'app': app}

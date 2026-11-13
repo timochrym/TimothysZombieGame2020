@@ -28,7 +28,7 @@ def file_url(project, row):
     return pathlib.Path(row['brief_html']).as_uri() if row['brief_html'] else ''
 
 
-def _media(project, row, claim, pic_url):
+def _media(project, row, claim, pic_url, base=''):
     """What can really be shown beside one claim: its link (text and address) and its pictures (addresses from `pic_url`)."""
     roots = [project['folder'], os.path.dirname(row['path'])]
     pics = []
@@ -38,7 +38,7 @@ def _media(project, row, claim, pic_url):
         if src:
             pics.append(src)
     link = claim.get('link', '').strip()
-    return {'link': {'text': link, 'url': review_media.link_url(link, review_media.app_url(project['meta']))} if link else None, 'pics': pics}
+    return {'link': {'text': link, 'url': review_media.link_url(link, base)} if link else None, 'pics': pics}
 
 
 def _evidence(project, row):
@@ -51,10 +51,10 @@ def _evidence(project, row):
     return {c['id']: dict(review_card.explain(c['evidence'], c['fields']), result=c['result']) for c in brief['claims']}
 
 
-def facts(project, row, item, pic_url, ev=None):
+def facts(project, row, item, pic_url, ev=None, base=''):
     """One claim or question with everything a page draws: its media, what to check and what the tool found, in plain words."""
-    got = (ev or {}).get(item['id']) or review_card.explain([], {'look': item.get('look', ''), 'link': item.get('link', '')})
-    return dict(item, media=_media(project, row, item, pic_url), **got)
+    got = (ev or {}).get(item['id']) or review_card.explain([], {k: item.get(k, '') for k in ('look', 'link', 'try', 'see')})
+    return dict(item, media=_media(project, row, item, pic_url, base), **got)
 
 
 def inline_pic(project, row, claim_id, n, real):
@@ -69,13 +69,14 @@ def build_model(projects, brief_url=file_url, pic_url=inline_pic):
         loc = rp.review_location(p, projects)
         rows = rs.scan(loc['path']) if loc['path'] else []
         m = p['meta']
+        app = review_media.resolve_app(p['folder'], m, p['name'])
         items = []
         for r in rows:
             item = {k: r[k] for k in ('name', 'title', 'date', 'claims', 'questions', 'answers', 'open', 'error', 'brief')}
             ev = _evidence(p, dict(r, path=r['path'])) if r['open'] else {}
-            item['claims'] = [facts(p, r, c, pic_url, ev) for c in r['claims']]
-            item['questions'] = [facts(p, r, q, pic_url) for q in r['questions']]
-            item['app'] = review_media.app_link(m, p['name'])
+            item['claims'] = [facts(p, r, c, pic_url, ev, app['base']) for c in r['claims']]
+            item['questions'] = [facts(p, r, q, pic_url, None, app['base']) for q in r['questions']]
+            item['app'] = app
             item['brief_url'] = brief_url(p, r)
             items.append(item)
             if r['open'] or r['error']:
@@ -132,7 +133,8 @@ function reviewBlock(w) {
   const link = safeLink(w.brief_url), items = el('div', { className: 'media' });
   if (L) items.append(el('a', { href: '/review/' + encodeURIComponent(w.project_id) + '/' + encodeURIComponent(w.name) }, 'See every item, with pictures'));
   if (link) items.append(el('a', { href: link }, 'Open the brief (what the tool checked)'));
-  if (w.app && /^https?:\\/\\//i.test(w.app.url || '')) items.append(el('a', { className: 'btnlink app', href: w.app.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open ' + w.app.text + ' to test'));
+  if (w.app && w.app.running) items.append(el('a', { className: 'btnlink app', href: w.app.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open ' + w.app.text + ' to test'));
+  else if (w.app && w.app.hint) items.append(el('span', { className: 'ask' }, w.app.text + ' is not running. ' + w.app.hint));
   sec.append(items);
   for (const it of open) {
     const isQ = w.questions.indexOf(it) >= 0, got = (picks[it.id] = { v: '' }), noteBox = (notes[it.id] = el('input', { type: 'text', placeholder: 'Note (optional)' }));
@@ -142,7 +144,7 @@ function reviewBlock(w) {
         : it.options.length ? picker('v-' + w.name + it.id, it.options, '', (v) => { got.v = v; }, {})
         : el('input', { type: 'text', placeholder: 'Your answer', oninput: (e) => { got.v = e.target.value; } });
     }
-    sec.append(el('div', { className: 'item' }, el('div', { className: 'what' }, el('span', { className: 'num' }, it.id), it.text, '  ', isQ ? '' : resultBadge(it)),
+    sec.append(el('div', { className: 'item' }, lab(isQ ? 'Question' : 'You are testing'), el('div', { className: 'what' }, el('span', { className: 'num' }, it.id), it.text, '  ', isQ ? '' : resultBadge(it)),
       itemFacts(it, w.app), L && !w.error ? el('div', {}, lab(isQ ? 'Your answer' : 'Your verdict'), answer, el('div', { className: 'row' }, noteBox)) : ''));
   }
   if (L && !w.error && open.length) {

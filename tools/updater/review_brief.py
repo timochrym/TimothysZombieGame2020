@@ -11,7 +11,7 @@ A checklist is a Markdown file. The lines between the first two `---` are settin
     head: 136c22f         the last commit of the work (default: HEAD)
     ---
     - [ ] Enemies reach the hero more often | file: pathfinder.js | test: enemy_chase | run: node enemy_chase.js | expect: "reachedPct":\\s*7[3-9]
-    - [ ] Enemies no longer swing on bridges | file: pathfinder.js | look: watch one cross bunker_bridges
+    - [ ] Enemies no longer swing on bridges | file: pathfinder.js | look: watch one cross bunker_bridges | link: index.html | try: open Survival > pick bunker_bridges > watch the first crossing | see: the enemy crosses without turning back
     ? Is the chase better when you play? | options: Better, Same, Worse
 
 Every claim line needs at least one of these fields, or it is Rejected (a vague claim cannot be checked):
@@ -45,7 +45,7 @@ import review_brief_run as rr
 
 FOUND, NOT_FOUND, DECIDE, REJECTED = 'Found', 'Not found', 'You decide', 'Rejected'
 CLAIM_KEYS = ('file', 'test', 'run', 'runs', 'expect', 'number', 'want', 'look')
-DISPLAY_KEYS = ('link', 'pic')          # shown beside the claim (see review_media.py); they are not evidence, so a claim with only these is still Rejected
+DISPLAY_KEYS = ('link', 'pic', 'try', 'see')          # shown beside the claim (see review_media.py); they are not evidence, so a claim with only these is still Rejected
 ALLOWED = rr.ALLOWED
 META_RE = re.compile(r'^([A-Za-z_][\w-]*):\s*(.*?)\s*$')
 

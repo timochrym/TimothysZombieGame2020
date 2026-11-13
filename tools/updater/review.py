@@ -152,7 +152,7 @@ def cmd_brief(args, me, projects, loc):
     if not args.no_html:
         import review_brief_html
         with open(stem + '.brief.html', 'w', encoding='utf-8') as fh:
-            fh.write(review_brief_html.page(brief, roots=[me['folder'], os.path.dirname(path)], app_url=rm.app_url(me['meta']), app=rm.app_link(me['meta'], me['name'])))
+            fh.write(review_brief_html.page(brief, roots=[me['folder'], os.path.dirname(path)], app=rm.resolve_app(me['folder'], me['meta'], me['name'])))
     print(rb.markdown(brief))
     print('Wrote %s.brief.md%s' % (stem, '' if args.no_html else ' and .brief.html'))
     return 0
@@ -191,6 +191,10 @@ def cmd_ready(args, me, projects, loc):
             problems.append('%s is Rejected: %s' % (c['id'], c['evidence'][0]))
         elif c['result'] == rb.NOT_FOUND:
             (problems if args.strict else notes).append('%s is Not found (report it to the owner as it is): %s' % (c['id'], c['text']))
+    for c in brief['claims']:
+        f = c['fields']
+        if 'look' in f and not (f.get('try') and f.get('see')):
+            problems.append('%s asks the owner to look but does not say how: add try: (steps, joined with " > ") and see: (what good looks like), and link: (the page to open).' % c['id'])
     if not brief['claims']:
         problems.append('The checklist has no claims.')
     later = git(me['folder'], 'rev-list', '--count', '%s..HEAD' % brief['ev']['head_sha']).strip()
