@@ -6,6 +6,19 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Arena Mix: tank size changes shooting and level; stable test
+
+**Asked:** "Diepo size should affect shooting and level."
+**Shipped:** in Arena Mix a heavy tank fires bigger and harder bullets but reloads more slowly. Mass 36 / 144 / 400 gives
+bullet size 9 / 18 / 30, damage 5.5 / 11 / 17.6 and reload 22 / 28.6 / 36.5 ticks. A new mass record earns XP (0.5 XP
+per point), so eating makes a tank level up. A tank that shrinks keeps its level. Plain Tank Arena does not change.
+**Also:** `tests/arena_mix.js` was flaky (about half the runs). Cause: my test. The arena refilled worm food while a
+check was running, and the tank ate it, so the tank grew enough to eat a blob that should have been left alone. The
+test now stops the refill. Five clean runs.
+**Left:** the XP rate (0.5 per mass point) and the reload penalty are first guesses. They need a play-through.
+
+---
+
 ## Arena Mix rules v2: blobs absorb bullets, tanks are blobs with a gun, worms level up, shared power-ups
 
 **Asked:** bullets absorbed by blobs; worms can upgrade and break blocks; worms can kill tanks; blobs pop on worms
