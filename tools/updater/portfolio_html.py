@@ -121,7 +121,8 @@ for (const p of D.projects) {
     el('div', { className: 'dim' }, 'Branch ' + (p.branch || '?') + ' \\u00b7 ' + p.review.count + ' review(s) in ' + p.review.label + ' / ' + p.review.dir),
     el('div', { className: 'dim' }, 'Evidence: ' + p.review.evidence),
     p.review.problem ? el('div', { className: 'bad' }, p.review.problem) : '',
-    el('div', { className: 'row' }, el('button', { type: 'button', className: 'quiet', textContent: 'Copy next-work prompt', onclick: (e) => copy(p.prompt, e.target) })),
+    el('div', { className: 'row' }, el('button', { type: 'button', className: 'quiet', textContent: 'Copy next-work prompt', onclick: (e) => copy(p.prompt, e.target) }),
+      L ? el('a', { href: '/project/' + encodeURIComponent(p.id) }, 'Details') : ''),
     p.health && p.health.flags.length ? el('ul', { className: 'flags' }, ...p.health.flags.map((f) => el('li', {}, f))) : el('div', { className: 'ok' }, 'In good order.')));
 }
 """

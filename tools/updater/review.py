@@ -8,6 +8,7 @@
     python review.py ready CHECKLIST|--latest [--run] [--strict]         is this checklist fit to push? (exit 1 when not)
     python review.py graph [--workspace FOLDER] [--out FILE.md]         a generated map of how the projects connect (Mermaid)
     python review.py pr-body CHECKLIST                                   a pull request description: claims next to evidence
+    python review.py branches [--script FILE]                            which branches are finished (never deletes; --script writes the commands)
     python review.py stats [--workspace FOLDER]                          how strong is the evidence agents bring, per project
     python review.py health [--workspace FOLDER]                         is each project in good order? (git, manifest, rules and tools)
     python review.py status [--workspace FOLDER] [--json]                what is waiting on you, in every project on this computer
@@ -24,6 +25,7 @@ import sys
 import time
 
 import review_answers as ra
+import review_branches as rbr
 import review_brief as rb
 import review_graph as rg
 import review_health as rh
@@ -195,6 +197,30 @@ def cmd_ready(args, me, projects, loc):
     return 1 if problems else 0
 
 
+def cmd_branches(args, me, projects, loc):
+    result = rbr.branches(me)
+    if not result['default']:
+        raise CliError('Cannot tell the default branch (no origin/%s here). Fetch first, or set branch: in UPDATER.md.' % (me['meta'].get('branch') or 'main'))
+    counts = rbr.summary(result)
+    if result.get('shallow'):
+        print('WARNING: this clone is shallow (only recent history). Old branches show as "unknown" because they cannot be judged.\n         Run `git fetch --unshallow` in the project and ask again.\n')
+    print('%s: default branch %s; %s' % (me['name'], result['default'], ', '.join('%d %s' % (n, k) for k, n in sorted(counts.items())) or 'no other branches'))
+    for kind in ('unmerged', 'unknown', 'recent', 'merged', 'squash-merged', 'protected'):
+        names = [i for i in result['items'] if i['kind'] == kind]
+        if names:
+            print('\n%s (%d)' % (kind, len(names)))
+            for i in names[:30]:
+                print('    %-44s %s  %s%s' % (i['name'], i['date'], ('%d ahead' % i['ahead']) if i['ahead'] else 'nothing new', ''))
+            if len(names) > 30:
+                print('    ... and %d more' % (len(names) - 30))
+    if args.script:
+        with open(args.script, 'w', encoding='utf-8', newline='\n') as fh:
+            fh.write(rbr.delete_script(me, result))
+        os.chmod(args.script, 0o755)
+        print('\nWrote %s. Nothing was deleted: read it, then run it yourself if you agree.' % args.script)
+    return 0
+
+
 def cmd_stats(args, me, projects, loc):
     for p in projects:
         s = rt.stats(p, projects)
@@ -284,6 +310,7 @@ def main(argv=None):
     a = sub.add_parser('answer'); a.add_argument('checklist'); a.add_argument('--line', required=True)
     x = sub.add_parser('next'); x.add_argument('--all', action='store_true')
     r = sub.add_parser('ready'); r.add_argument('checklist', nargs='?'); r.add_argument('--latest', action='store_true'); r.add_argument('--run', action='store_true'); r.add_argument('--strict', action='store_true'); r.add_argument('--timeout', type=int, default=600)
+    br = sub.add_parser('branches'); br.add_argument('--script')
     t = sub.add_parser('stats'); t.add_argument('--workspace')
     h = sub.add_parser('health'); h.add_argument('--workspace')
     g = sub.add_parser('graph'); g.add_argument('--workspace'); g.add_argument('--out')
@@ -294,7 +321,7 @@ def main(argv=None):
     try:
         me, projects, loc = context(args)
         return {'new': cmd_new, 'brief': cmd_brief, 'answer': cmd_answer, 'next': cmd_next, 'ready': cmd_ready,
-                 'stats': cmd_stats, 'health': cmd_health, 'graph': cmd_graph, 'pr-body': cmd_pr_body, 'status': cmd_status, 'portfolio': cmd_portfolio}[args.cmd](args, me, projects, loc)
+                 'branches': cmd_branches, 'stats': cmd_stats, 'health': cmd_health, 'graph': cmd_graph, 'pr-body': cmd_pr_body, 'status': cmd_status, 'portfolio': cmd_portfolio}[args.cmd](args, me, projects, loc)
     except (CliError, rb.BriefError, ra.AnswerError, OSError) as err:
         print('Error: %s' % err, file=sys.stderr)
         return 2
