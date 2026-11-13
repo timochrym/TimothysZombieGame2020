@@ -9,6 +9,7 @@ import json
 
 import os
 
+import review_card
 import review_media
 import review_theme
 
@@ -25,7 +26,7 @@ ul.ev{margin:.4em 0 .6em;padding-left:1.2em;color:var(--soft);font-size:.92rem}c
 label.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}select,input[type=text],textarea{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
 input[type=text]{flex:1;min-width:160px}textarea{width:100%;min-height:90px}button{font:inherit;font-weight:600;color:var(--on);background:var(--accent);border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
 .opts label{margin-right:14px;white-space:nowrap}.pin{border-top:1px solid var(--line);padding:8px 0;font-size:.92rem}.dim{color:var(--soft)}.commit{font-size:.92rem;color:var(--soft)}
-""" + review_theme.TOKENS
+""" + review_theme.TOKENS + review_card.CSS
 
 JS = """
 const D = JSON.parse(document.getElementById('data').textContent), SCALE = D.scale;
@@ -49,17 +50,21 @@ function line() {
   out.value = parts.join(' \\u00b7 ');
 }
 function note(id) { return el('input', { type: 'text', placeholder: 'Note (optional)', value: (S[id] || {}).note || '', oninput(e) { (S[id] = S[id] || {}).note = e.target.value; save(); line(); } }); }
+const SHORT = SCALE.map((x) => x[0]);
 for (const c of D.claims) {
-  const sel = el('select', { onchange(e) { (S[c.id] = S[c.id] || {}).v = e.target.value; save(); line(); } }, el('option', { value: '' }, 'Your verdict\\u2026'),
-    ...SCALE.map(([short, long]) => el('option', { value: short, selected: (S[c.id] || {}).v === short }, long)));
-  const card = el('section', { className: 'card' }, el('div', {}, el('strong', {}, c.id + '  ' + c.text), '  ', el('span', { className: 'badge ' + c.result.replace(' ', '-') }, c.result)),
-    mediaBox(c.media), el('ul', { className: 'ev' }, ...c.evidence.map(t => el('li', {}, t))), el('label', { className: 'row' }, sel, note(c.id)));
+  const mine = () => (S[c.id] = S[c.id] || {});
+  const card = el('section', { className: 'card' },
+    el('div', { className: 'what' }, el('span', { className: 'num' }, c.id), c.text, '  ', resultBadge(c)),
+    el('div', { className: 'dim' }, RESULT_HELP[c.result] || ''),
+    itemFacts(c, D.app), lab('Your answer'),
+    picker('v-' + c.id, SHORT, mine().v || '', (v) => { mine().v = v; save(); line(); }, SCALE_HELP), el('div', { className: 'row' }, note(c.id)));
   cardById[c.id] = card; root.append(card);
 }
 if (D.questions.length) root.append(el('h2', {}, 'Questions for you'));
 for (const q of D.questions) {
-  const box = el('div', { className: 'opts' }, ...q.options.map(o => el('label', {}, el('input', { type: 'radio', name: q.id, checked: (S[q.id] || {}).v === o, onchange() { (S[q.id] = S[q.id] || {}).v = o; save(); line(); } }), ' ' + o)));
-  const card = el('section', { className: 'card' }, el('strong', {}, q.id + '  ' + q.text), mediaBox(q.media), box, el('label', { className: 'row' }, note(q.id)));
+  const mine = () => (S[q.id] = S[q.id] || {});
+  const card = el('section', { className: 'card' }, el('div', { className: 'what' }, el('span', { className: 'num' }, q.id), q.text), itemFacts({ media: q.media, check: '', findings: [] }, D.app), lab('Your answer'),
+    q.options.length ? picker('v-' + q.id, q.options, mine().v || '', (v) => { mine().v = v; save(); line(); }, {}) : '', el('div', { className: 'row' }, note(q.id)));
   cardById[q.id] = card; root.append(card);
 }
 const pinNodes = [], pinBox = document.getElementById('pinbox');
@@ -118,17 +123,19 @@ def media_for(claim, roots, app_url):
     return {'link': {'text': link, 'url': review_media.link_url(link, app_url)} if link else None, 'pics': pics}
 
 
-def page(brief, roots=None, app_url=None):
+def page(brief, roots=None, app_url=None, app=None):
     ev = brief['ev']
     roots = roots or [brief.get('repo', '')]
     app_url = app_url if app_url is not None else app_url_of(brief.get('repo', ''))
+    if app is None and app_url:
+        app = {'text': os.path.basename(brief.get('repo', '')) or 'the app', 'url': app_url}
     data = {'title': brief['title'], 'span': ev['span'], 'head': ev['head_sha'], 'scale': SCALE, 'commits': ev['commits'],
-            'claims': [dict({k: c[k] for k in ('id', 'text', 'result', 'evidence')}, media=media_for(c, roots, app_url)) for c in brief['claims']], 'questions': [dict(q, media=media_for(q, roots, app_url)) for q in brief['questions']],
-            'pins': brief.get('pins', [])}
+            'claims': [dict({k: c[k] for k in ('id', 'text', 'result', 'evidence')}, media=media_for(c, roots, app_url), **review_card.explain(c['evidence'], c['fields'])) for c in brief['claims']], 'questions': [dict(q, media=media_for(q, roots, app_url)) for q in brief['questions']],
+            'pins': brief.get('pins', []), 'app': app}
     counts = {}
     for c in brief['claims']:
         counts[c['result']] = counts.get(c['result'], 0) + 1
-    summary = ', '.join('%d %s' % (n, k) for k, n in counts.items()) or 'no claims'
+    summary = ', '.join('%d %s' % (n, review_card.RESULT_WORDS.get(k, ('', k))[1].lower()) for k, n in counts.items()) or 'no claims'
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             '<title>Review brief</title><style>%s</style></head><body>%s<main>'
             '<h1>%s</h1><p class="sub">Range <code>%s</code> &middot; %d commit(s) &middot; %d file(s) changed &middot; %s</p>'
@@ -141,4 +148,4 @@ def page(brief, roots=None, app_url=None):
             '<p class="sub">Nothing leaves this page. Paste the line into the chat, or save the file in the review folder.</p>'
             '</main><script id="data" type="application/json">%s</script><script>%s</script></body></html>') % (
         CSS, review_theme.bar('Review brief'), html.escape(brief['title']), html.escape(ev['span']), len(ev['commits']), len(ev['changed']), html.escape(ev['shortstat']),
-        html.escape(summary), _json_for_script(data), review_theme.JS + JS)
+        html.escape(summary), _json_for_script(data), review_theme.JS + review_card.js() + JS)

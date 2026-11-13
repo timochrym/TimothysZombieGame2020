@@ -10,6 +10,8 @@ import os
 import pathlib
 import time
 
+import review_brief as rb
+import review_card
 import review_health
 import review_media
 import review_theme
@@ -39,6 +41,22 @@ def _media(project, row, claim, pic_url):
     return {'link': {'text': link, 'url': review_media.link_url(link, review_media.app_url(project['meta']))} if link else None, 'pics': pics}
 
 
+def _evidence(project, row):
+    """claim id -> {'result', 'check', 'findings'} from a read-only brief (nothing is run); {} when the checklist has no base or git cannot be read."""
+    try:
+        with open(row['path'], encoding='utf-8') as fh:
+            brief = rb.build(fh.read(), project['folder'], run=False)
+    except (rb.BriefError, OSError):
+        return {}
+    return {c['id']: dict(review_card.explain(c['evidence'], c['fields']), result=c['result']) for c in brief['claims']}
+
+
+def facts(project, row, item, pic_url, ev=None):
+    """One claim or question with everything a page draws: its media, what to check and what the tool found, in plain words."""
+    got = (ev or {}).get(item['id']) or review_card.explain([], {'look': item.get('look', ''), 'link': item.get('link', '')})
+    return dict(item, media=_media(project, row, item, pic_url), **got)
+
+
 def inline_pic(project, row, claim_id, n, real):
     """For a page that is one file: the picture embedded in it ('' when it is too large)."""
     return review_media.data_uri(real)
@@ -54,8 +72,10 @@ def build_model(projects, brief_url=file_url, pic_url=inline_pic):
         items = []
         for r in rows:
             item = {k: r[k] for k in ('name', 'title', 'date', 'claims', 'questions', 'answers', 'open', 'error', 'brief')}
-            item['claims'] = [dict(c, media=_media(p, r, c, pic_url)) for c in r['claims']]
-            item['questions'] = [dict(q, media=_media(p, r, q, pic_url)) for q in r['questions']]
+            ev = _evidence(p, dict(r, path=r['path'])) if r['open'] else {}
+            item['claims'] = [facts(p, r, c, pic_url, ev) for c in r['claims']]
+            item['questions'] = [facts(p, r, q, pic_url) for q in r['questions']]
+            item['app'] = review_media.app_link(m, p['name'])
             item['brief_url'] = brief_url(p, r)
             items.append(item)
             if r['open'] or r['error']:
@@ -87,7 +107,7 @@ main{max-width:900px;margin:0 auto;padding:24px 16px 64px}h1{font-size:1.6rem;ma
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px}.grid .card{margin:0}
 select,input[type=text]{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 7px}input[type=text]{flex:1;min-width:140px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}button{font:inherit;font-weight:600;color:var(--on);background:var(--accent);border:0;border-radius:8px;padding:7px 14px;cursor:pointer}button.quiet{background:transparent;color:var(--accent);border:1px solid var(--line);padding:4px 10px;font-weight:500}
-""" + review_theme.TOKENS
+""" + review_theme.TOKENS + review_card.CSS
 
 JS = """
 const D = JSON.parse(document.getElementById('data').textContent), L = D.live;
@@ -95,57 +115,58 @@ const el = (tag, props, ...kids) => { const n = document.createElement(tag); if 
 const safeLink = (u) => typeof u === 'string' && (u.indexOf('file:///') === 0 || (u.charAt(0) === '/' && u.charAt(1) !== '/')) ? u : '';
 const waitBox = document.getElementById('waiting'), grid = document.getElementById('projects');
 const flagged = D.projects.filter((p) => p.health && p.health.flags.length).length;
-document.getElementById('summary').textContent = D.projects.length + ' project(s), ' + D.waiting.length + ' review(s) waiting, ' + flagged + ' project(s) with something to look at. ' + (L ? 'Answers you save are written into the review folders.' : 'Read-only: answer in the chat or with review.py answer.');
+document.getElementById('summary').textContent = D.waiting.length + ' review(s) waiting for you. ' + D.projects.length + ' projects' + (flagged ? ', ' + flagged + ' with setup notes (open Details on a project).' : '.') + (L ? ' Answers you save are written into the review folders.' : ' Read-only: answer in the chat or with review.py answer.');
 async function copy(text, button) {
   const old = button.textContent;
   try { await navigator.clipboard.writeText(text); button.textContent = 'Copied'; }
   catch (e) { const t = el('textarea', { value: text }); document.body.append(t); t.select(); try { document.execCommand('copy'); button.textContent = 'Copied'; } catch (x) { button.textContent = 'Could not copy'; } t.remove(); }
   setTimeout(() => { button.textContent = old; }, 1500);
 }
-function controls(w) {
-  const picks = {}, notes = {}, box = el('div'), msg = el('div', { className: 'dim' });
-  for (const c of w.claims.filter((c) => w.open.indexOf(c.id) >= 0)) {
-    const sel = el('select', {}, el('option', { value: '' }, 'Verdict\\u2026'), ...D.scale.map((v) => el('option', { value: v }, v)));
-    picks[c.id] = sel; notes[c.id] = el('input', { type: 'text', placeholder: 'Note (optional)' });
-    box.append(el('div', { className: 'row' }, el('strong', {}, c.id), ' ' + c.text, el('br')), mediaBox(c.media), el('div', { className: 'row' }, sel, notes[c.id]));
+function reviewBlock(w) {
+  const all = w.claims.concat(w.questions), open = all.filter((i) => w.open.indexOf(i.id) >= 0), done = all.length - open.length, picks = {}, notes = {};
+  const msg = el('div', { className: 'dim' });
+  const sec = el('section', { className: 'review', id: 'r-' + w.project_id + '-' + w.name },
+    el('header', {}, el('span', { className: 'badge ask' }, w.project), el('span', { className: 't' }, w.title), el('span', { className: 'dim' }, w.date)),
+    el('div', { className: 'dim' }, w.error ? 'This checklist cannot be read: ' + w.error : open.length + ' of ' + all.length + ' to answer' + (done ? ' (' + done + ' already answered)' : '')),
+    el('div', { className: 'prog' }, el('i', { style: 'width:' + Math.round(100 * done / Math.max(all.length, 1)) + '%' })));
+  const link = safeLink(w.brief_url), items = el('div', { className: 'media' });
+  if (L) items.append(el('a', { href: '/review/' + encodeURIComponent(w.project_id) + '/' + encodeURIComponent(w.name) }, 'See every item, with pictures'));
+  if (link) items.append(el('a', { href: link }, 'Open the brief (what the tool checked)'));
+  if (w.app && /^https?:\\/\\//i.test(w.app.url || '')) items.append(el('a', { className: 'btnlink app', href: w.app.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open ' + w.app.text + ' to test'));
+  sec.append(items);
+  for (const it of open) {
+    const isQ = w.questions.indexOf(it) >= 0, got = (picks[it.id] = { v: '' }), noteBox = (notes[it.id] = el('input', { type: 'text', placeholder: 'Note (optional)' }));
+    let answer = '';
+    if (L && !w.error) {
+      answer = !isQ ? picker('v-' + w.name + it.id, D.scale, '', (v) => { got.v = v; }, SCALE_HELP)
+        : it.options.length ? picker('v-' + w.name + it.id, it.options, '', (v) => { got.v = v; }, {})
+        : el('input', { type: 'text', placeholder: 'Your answer', oninput: (e) => { got.v = e.target.value; } });
+    }
+    sec.append(el('div', { className: 'item' }, el('div', { className: 'what' }, el('span', { className: 'num' }, it.id), it.text, '  ', isQ ? '' : resultBadge(it)),
+      itemFacts(it, w.app), L && !w.error ? el('div', {}, lab(isQ ? 'Your answer' : 'Your verdict'), answer, el('div', { className: 'row' }, noteBox)) : ''));
   }
-  for (const q of w.questions.filter((q) => w.open.indexOf(q.id) >= 0)) {
-    const sel = q.options.length ? el('select', {}, el('option', { value: '' }, 'Answer\\u2026'), ...q.options.map((o) => el('option', { value: o }, o)))
-                                 : el('input', { type: 'text', placeholder: 'Answer' });
-    picks[q.id] = sel; notes[q.id] = el('input', { type: 'text', placeholder: 'Note (optional)' });
-    box.append(el('div', { className: 'row' }, el('strong', {}, q.id), ' ' + q.text), mediaBox(q.media), el('div', { className: 'row' }, sel, notes[q.id]));
-  }
-  const save = el('button', { type: 'button', textContent: 'Save answers', onclick: async () => {
-    const parts = [];
-    for (const id in picks) { const v = picks[id].value.trim(); if (v) parts.push(id + ' ' + v + (notes[id].value.trim() ? ' (' + notes[id].value.trim() + ')' : '')); }
-    if (!parts.length) { msg.textContent = 'Choose at least one answer first.'; return; }
-    try {
-      const r = await fetch(L.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Review-Token': L.token },
-        body: JSON.stringify({ project: w.project_id, checklist: w.name, line: parts.join(' \\u00b7 ') }) });
-      const j = await r.json(); msg.textContent = r.ok ? 'Saved ' + j.saved.join(', ') + '. Still open: ' + (j.open.join(', ') || 'nothing') + '.' : 'Not saved: ' + (j.error || r.status);
-    } catch (e) { msg.textContent = 'Not saved: ' + e; }
-  } });
-  box.append(el('div', { className: 'row' }, save), msg);
-  return box;
+  if (L && !w.error && open.length) {
+    const save = el('button', { type: 'button', textContent: 'Save answers', onclick: async () => {
+      const parts = [];
+      for (const id in picks) { const v = (picks[id].v || '').trim(); if (v) parts.push(id + ' ' + v + (notes[id].value.trim() ? ' (' + notes[id].value.trim() + ')' : '')); }
+      if (!parts.length) { msg.textContent = 'Choose at least one answer first.'; return; }
+      try {
+        const r = await fetch(L.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Review-Token': L.token },
+          body: JSON.stringify({ project: w.project_id, checklist: w.name, line: parts.join(' · ') }) });
+        const j = await r.json(); msg.textContent = r.ok ? 'Saved ' + j.saved.join(', ') + '. Still open: ' + (j.open.join(', ') || 'nothing') + '.' : 'Not saved: ' + (j.error || r.status);
+      } catch (e) { msg.textContent = 'Not saved: ' + e; }
+    } });
+    sec.append(el('div', { className: 'row' }, save), msg);
+  } else if (!L && open.length) sec.append(el('div', { className: 'dim' }, 'To answer, open the review website (Review.command / Review.bat), or tell the agent in the chat.'));
+  return sec;
 }
 const lead = document.getElementById('lead'), asked = D.projects.filter((p) => p.asked);
 lead.append(el('div', {}, el('h3', {}, 'Waiting on you', el('span', { className: 'n' }, String(D.waiting.length))),
-    ...(D.waiting.length ? D.waiting.slice(0, 6).map((w) => el('div', {}, el('strong', {}, w.project), ' \\u00b7 ' + w.title + ' ', el('span', { className: 'dim' }, w.open.length + ' open'))) : [el('div', { className: 'dim' }, 'Nothing \\u2014 you are all caught up.')])),
+    ...(D.waiting.length ? D.waiting.slice(0, 6).map((w) => el('div', {}, el('a', { href: '#r-' + w.project_id + '-' + w.name }, w.project + ' · ' + w.title), ' ', el('span', { className: 'dim' }, w.open.length + ' to answer'))) : [el('div', { className: 'dim' }, 'Nothing — you are all caught up.')])),
   el('div', {}, el('h3', {}, 'The agent does next', el('span', { className: 'n' }, String(asked.length))),
-    ...(asked.length ? asked.map((p) => el('div', {}, el('strong', {}, p.name), ' \\u00b7 ' + p.asked + ' change(s) you asked for')) : [el('div', { className: 'dim' }, 'Nothing queued.')])));
-function readOnly(w) {            // a file you open without the website: the open claims with their links and pictures, but no answer boxes
-  return el('div', {}, ...w.claims.concat(w.questions).filter((c) => w.open.indexOf(c.id) >= 0).map((c) => el('div', {}, el('strong', {}, c.id), ' ' + c.text, mediaBox(c.media))));
-}
+    ...(asked.length ? asked.map((p) => el('div', {}, el('strong', {}, p.name), ' · ' + p.asked + ' change(s) you asked for')) : [el('div', { className: 'dim' }, 'Nothing queued.')])));
 if (!D.waiting.length) { waitBox.hidden = true; document.getElementById('needs').hidden = true; }
-for (const w of D.waiting) {
-  const link = safeLink(w.brief_url);
-  const names = []; if (w.brief) for (const k in w.brief) names.push(w.brief[k] + ' ' + k);
-  const counts = names.length ? names.join(', ') : 'no brief yet';
-  waitBox.append(el('section', { className: 'card' },
-    el('div', {}, el('strong', {}, w.project), ' \\u00b7 ' + w.title + ' ', el('span', { className: 'dim' }, w.date)),
-    el('div', { className: 'dim' }, w.error ? 'Cannot be read: ' + w.error : 'Brief: ' + counts), el('div', {}, ...w.open.map((i) => el('span', { className: 'chip' }, i))),
-    el('div', { className: 'row' }, link ? el('a', { href: link }, 'Open the brief') : '', L ? el('a', { href: '/review/' + encodeURIComponent(w.project_id) + '/' + encodeURIComponent(w.name) }, 'See every item, with pictures') : ''), L && !w.error ? controls(w) : readOnly(w)));
-}
+for (const w of D.waiting) waitBox.append(reviewBlock(w));
 for (const p of D.projects) {
   grid.append(el('section', { className: 'card' }, el('div', {}, p.type ? el('span', { className: 'badge ask' }, p.type) : '', el('strong', {}, p.name)),
     p.goal ? el('div', {}, p.goal) : el('div', { className: 'dim' }, 'No goal written yet.'),
@@ -170,7 +191,7 @@ def page(model, live=None):
     data = dict(model, scale=SCALE, live=live)
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             '<title>Review portfolio</title><style>%s</style></head><body>%s<main><h1>Review portfolio</h1>'
-            '<p class="sub">%s &middot; <span id="summary"></span></p><div class="lead" id="lead"></div><h2 id="needs">Needs you</h2><div id="waiting"></div>'
+            '<p class="sub">%s &middot; <span id="summary"></span></p><div class="lead" id="lead"></div><h2 id="needs">To answer</h2><div id="waiting"></div>'
             '<h2>Projects</h2><div id="projects" class="grid"></div></main>'
             '<script id="data" type="application/json">%s</script><script>%s</script></body></html>') % (
-        CSS, review_theme.bar('Reviews'), html.escape(model['generated']), _json_for_script(data), review_theme.JS + JS)
+        CSS, review_theme.bar('Reviews'), html.escape(model['generated']), _json_for_script(data), review_theme.JS + review_card.js() + JS)

@@ -152,7 +152,7 @@ def cmd_brief(args, me, projects, loc):
     if not args.no_html:
         import review_brief_html
         with open(stem + '.brief.html', 'w', encoding='utf-8') as fh:
-            fh.write(review_brief_html.page(brief, roots=[me['folder'], os.path.dirname(path)], app_url=rm.app_url(me['meta'])))
+            fh.write(review_brief_html.page(brief, roots=[me['folder'], os.path.dirname(path)], app_url=rm.app_url(me['meta']), app=rm.app_link(me['meta'], me['name'])))
     print(rb.markdown(brief))
     print('Wrote %s.brief.md%s' % (stem, '' if args.no_html else ' and .brief.html'))
     return 0

@@ -58,7 +58,7 @@ def status(path):
         return out
     out['title'] = meta.get('title') or name
     out['project'] = meta.get('project', '')
-    out['claims'] = [{'id': c['id'], 'text': c['text'], 'link': c['fields'].get('link', ''), 'pic': c['fields'].get('pic', '')} for c in claims]
+    out['claims'] = [{'id': c['id'], 'text': c['text'], 'link': c['fields'].get('link', ''), 'pic': c['fields'].get('pic', ''), 'look': c['fields'].get('look', '')} for c in claims]
     out['questions'] = [{'id': q['id'], 'text': q['text'], 'options': q['options'], 'link': q['fields'].get('link', ''), 'pic': q['fields'].get('pic', '')} for q in questions]
     got = ra.read_answers(path)
     out['answers'] = {k: v.get('v', '') for k, v in (got or {}).get('answers', {}).items() if isinstance(v, dict)}

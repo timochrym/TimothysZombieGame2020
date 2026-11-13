@@ -29,6 +29,16 @@ def app_url(meta):
     return 'http://localhost:%s/' % port if port.isdigit() and (meta.get('server') or '').strip().lower() not in ('off', 'no', 'false') else ''
 
 
+def app_link(meta, name='the app'):
+    """The project's own page as a button: {'text': 'Zombie Game', 'url': 'http://localhost:8000/index.html'}, or None when it has no address."""
+    base = app_url(meta)
+    if not base:
+        return None
+    page = (meta or {}).get('open', '').strip()
+    url = link_url(page, base) if page and not page.startswith(('/', '.')) else base
+    return {'text': name or 'the app', 'url': url or base}
+
+
 def link_url(value, app_url=''):
     """The address a person can click, or '' when there is none (the page name is then shown as plain text)."""
     value = (value or '').strip()
