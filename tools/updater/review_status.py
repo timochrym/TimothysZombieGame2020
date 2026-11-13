@@ -21,7 +21,7 @@ def checklist_files(review_dir):
     if not review_dir or not os.path.isdir(review_dir):
         return []
     return sorted(os.path.join(review_dir, n) for n in os.listdir(review_dir)
-                  if n.endswith('.md') and not n.endswith('.brief.md') and n.lower() != 'readme.md')
+                  if n.endswith('.md') and not n.endswith(('.brief.md', '.details.md')) and n.lower() != 'readme.md')
 
 
 def brief_counts(path):
