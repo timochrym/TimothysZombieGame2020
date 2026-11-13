@@ -22,6 +22,7 @@ const KINDS = ['NORMAL', 'LEAPER', 'KNIGHT'];
         let dir = 1, leg = 0;
         for (let f = 0; f < T; f++) {
             await new Promise(r => requestAnimationFrame(r));
+            if (hero.y < hy0 - 120 || hero.y > hy0 + 400 || Math.abs(hero.x - hx0) > 700) { hero.x = hx0; hero.y = hy0; hero.xspeed = hero.yspeed = 0; }      // the hero never leaves its start area (falling into a pit would test something else)
             if (mode === 'walking') { leg++; if (leg > 55) { leg = 0; dir = -dir; } /* short legs (about 500 px) so the hero stays on its platform */ hero.rightPressed = dir > 0; hero.leftPressed = dir < 0; }
             for (const z of list) {
                 if (z.dead) continue;

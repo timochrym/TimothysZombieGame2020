@@ -315,11 +315,29 @@ class Pathfinder {
     }
 
     // add generated candidates as nodes (skip buried / hazardous / duplicate)
+    // Is a standing body at (x, y) inside the solid wedge of a ramp? (Ramps are not "solid blockers" because their
+    // own surface is walkable, so floor nodes under a ramp used to stay in the graph. Enemies on the ramp then tried to
+    // "walk" down to a node inside the rock and bounced back and forth: the bunker-bridges chase failure.)
+    static insideRamp(ramps, x, y, ownId) {
+        for (let i = 0; i < ramps.length; i++) {
+            var s = ramps[i];
+            if (s.id === ownId) continue;
+            var bd = CollisionDetector.getBounds(s), w = bd.right - bd.left, h = bd.top - bd.bottom;
+            if (x < bd.left + 2 || x > bd.right - 2 || w <= 0) continue;
+            var t = (x - bd.left) / w;
+            var surf = (s.rampDir == "left") ? (bd.top - t * h) : (bd.bottom + t * h);
+            if (y < surf - 6 && y > bd.bottom) return true;
+        }
+        return false;
+    }
+
     static addCandidates(cands) {
         var added = [];
+        var ramps = (typeof staticObjects !== "undefined") ? staticObjects.filter(function(s) { return s.isRamp && !s.dead && !s.noCollide; }) : [];
         for (let i = 0; i < cands.length; i++) {
             var n = cands[i];
             if (this.isPointBlocked(n.x, n.y + 34, 42, 54, n.sourceId)) continue;
+            if (ramps.length && this.insideRamp(ramps, n.x, n.y + 20, n.sourceId)) continue;
             if (this.inHazard(n.x, n.y + 2)) continue;
             var dup = null;
             this.forNodesIn(n.x - 28, n.y - 24, n.x + 28, n.y + 24, function(e) { if (!dup) dup = e; });
@@ -859,6 +877,19 @@ class Pathfinder {
                 else path = z.navPath || [];
             }
             z.navPath = path;
+            // Progress watchdog. If the route length from the enemy's node does not get shorter for about 2.5 s, the
+            // enemy is swinging between two hops (a graph error, a pad, a crowd). Ban the hop it keeps trying, replan.
+            if (goal && f && f.dist[cur.id] !== Infinity) {
+                var dn = f.dist[cur.id];
+                if (z.navWdGx === undefined || Math.hypot(goal.x - z.navWdGx, goal.y - z.navWdGy) > 450) { z.navWdGx = goal.x; z.navWdGy = goal.y; z.navWdBest = dn; z.navWdT = 0; }
+                else if (dn < z.navWdBest - 40) { z.navWdBest = dn; z.navWdT = 0; }
+                else z.navWdT += 12;
+                if (z.navWdT > 150 && path && path.length && path[0].fromId !== undefined) {
+                    z.navBan = z.navBan || {};
+                    z.navBan[path[0].fromId + ">" + path[0].nodeId] = this.frameNo + 420;
+                    z.navWdT = 0; z.navWdBest = dn; z.navReplan = 0; z.navWdBans = (z.navWdBans || 0) + 1;
+                }
+            }
         }
         if (z.navAstarCd > 0) z.navAstarCd--;
         this.follow(z, target.x, tFoot);
