@@ -9,6 +9,7 @@ import json
 import pathlib
 import time
 
+import review_health
 import review_projects as rp
 import review_status as rs
 
@@ -33,7 +34,12 @@ def build_model(projects, brief_url=file_url):
             items.append(item)
             if r['open'] or r['error']:
                 model['waiting'].append(dict(item, project=p['name'], project_id=p['id']))
+        try:
+            health = review_health.health(p)
+        except Exception as err:                                    # a broken project must not take the whole page down
+            health = {'flags': ['Could not be checked: %s' % err]}
         model['projects'].append({
+            'health': health,
             'id': p['id'], 'name': p['name'], 'folder': p['folder'], 'type': m.get('type', ''), 'goal': m.get('goal', ''),
             'output': m.get('output', ''), 'done': m.get('done', ''), 'branch': m.get('branch', ''),
             'review': {'label': loc['label'], 'dir': loc['dir'], 'problem': loc['problem'], 'count': len(items)}})
@@ -49,7 +55,7 @@ main{max-width:900px;margin:0 auto;padding:24px 16px 64px}h1{font-size:1.6rem;ma
 .sub,.dim{color:var(--soft)}.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:10px 0}
 .badge{display:inline-block;font-weight:700;font-size:.8rem;padding:1px 9px;border-radius:99px;border:1px solid currentColor;margin-right:6px}
 .chip{display:inline-block;font-size:.85rem;padding:1px 8px;border-radius:8px;background:var(--bg);border:1px solid var(--line);margin:2px 4px 2px 0}
-.ok{color:var(--ok)}.bad{color:var(--bad)}.ask{color:var(--ask)}a{color:var(--accent)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.ask{color:var(--ask)}a{color:var(--accent)}ul.flags{margin:.5em 0 0;padding-left:1.1em;color:var(--ask);font-size:.92rem}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px}.grid .card{margin:0}
 select,input[type=text]{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 7px}input[type=text]{flex:1;min-width:140px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}button{font:inherit;font-weight:600;color:#fff;background:var(--accent);border:0;border-radius:8px;padding:7px 14px;cursor:pointer}
@@ -60,7 +66,8 @@ const D = JSON.parse(document.getElementById('data').textContent), L = D.live;
 const el = (tag, props, ...kids) => { const n = document.createElement(tag); if (props) for (const k in props) n[k] = props[k]; n.append(...kids); return n; };
 const safeLink = (u) => typeof u === 'string' && (u.indexOf('file:///') === 0 || (u.charAt(0) === '/' && u.charAt(1) !== '/')) ? u : '';
 const waitBox = document.getElementById('waiting'), grid = document.getElementById('projects');
-document.getElementById('summary').textContent = D.projects.length + ' project(s), ' + D.waiting.length + ' review(s) waiting. ' + (L ? 'Answers you save are written into the review folders.' : 'Read-only: answer in the chat or with review.py answer.');
+const flagged = D.projects.filter((p) => p.health && p.health.flags.length).length;
+document.getElementById('summary').textContent = D.projects.length + ' project(s), ' + D.waiting.length + ' review(s) waiting, ' + flagged + ' project(s) with something to look at. ' + (L ? 'Answers you save are written into the review folders.' : 'Read-only: answer in the chat or with review.py answer.');
 function controls(w) {
   const picks = {}, notes = {}, box = el('div'), msg = el('div', { className: 'dim' });
   for (const c of w.claims.filter((c) => w.open.indexOf(c.id) >= 0)) {
@@ -102,7 +109,8 @@ for (const p of D.projects) {
     p.goal ? el('div', {}, p.goal) : el('div', { className: 'dim' }, 'No goal written yet.'),
     el('div', { className: 'dim' }, 'Output: ' + (p.output || '\\u2014')), el('div', { className: 'dim' }, 'Done when: ' + (p.done || '\\u2014')),
     el('div', { className: 'dim' }, 'Branch ' + (p.branch || '?') + ' \\u00b7 ' + p.review.count + ' review(s) in ' + p.review.label + ' / ' + p.review.dir),
-    p.review.problem ? el('div', { className: 'bad' }, p.review.problem) : ''));
+    p.review.problem ? el('div', { className: 'bad' }, p.review.problem) : '',
+    p.health && p.health.flags.length ? el('ul', { className: 'flags' }, ...p.health.flags.map((f) => el('li', {}, f))) : el('div', { className: 'ok' }, 'In good order.')));
 }
 """
 

@@ -8,6 +8,7 @@
     python review.py ready CHECKLIST [--run] [--strict]                  is this checklist fit to push? (exit 1 when not)
     python review.py graph [--workspace FOLDER] [--out FILE.md]         a generated map of how the projects connect (Mermaid)
     python review.py pr-body CHECKLIST                                   a pull request description: claims next to evidence
+    python review.py health [--workspace FOLDER]                         is each project in good order? (git, manifest, rules and tools)
     python review.py status [--workspace FOLDER] [--json]                what is waiting on you, in every project on this computer
     python review.py portfolio [--workspace FOLDER] [--out FILE]         the same as one offline page
 
@@ -24,6 +25,7 @@ import time
 import review_answers as ra
 import review_brief as rb
 import review_graph as rg
+import review_health as rh
 import review_next as rn
 import review_projects as rp
 import review_status as rs
@@ -182,6 +184,18 @@ def cmd_ready(args, me, projects, loc):
     return 1 if problems else 0
 
 
+def cmd_health(args, me, projects, loc):
+    bad = 0
+    for p in projects:
+        h = rh.health(p)
+        bad += bool(h['flags'])
+        print('%-22s %s' % (p['name'], 'in good order' if not h['flags'] else '%d thing(s) to look at' % len(h['flags'])))
+        for flag in h['flags']:
+            print('    - ' + flag)
+    print('\n%d of %d project(s) in good order.' % (len(projects) - bad, len(projects)))
+    return 0
+
+
 def cmd_graph(args, me, projects, loc):
     text = rg.mermaid(projects, time.strftime('%Y-%m-%d'))
     if args.out:
@@ -249,6 +263,7 @@ def main(argv=None):
     a = sub.add_parser('answer'); a.add_argument('checklist'); a.add_argument('--line', required=True)
     x = sub.add_parser('next'); x.add_argument('--all', action='store_true')
     r = sub.add_parser('ready'); r.add_argument('checklist'); r.add_argument('--run', action='store_true'); r.add_argument('--strict', action='store_true'); r.add_argument('--timeout', type=int, default=600)
+    h = sub.add_parser('health'); h.add_argument('--workspace')
     g = sub.add_parser('graph'); g.add_argument('--workspace'); g.add_argument('--out')
     pb = sub.add_parser('pr-body'); pb.add_argument('checklist')
     s = sub.add_parser('status'); s.add_argument('--workspace'); s.add_argument('--json', action='store_true')
@@ -257,7 +272,7 @@ def main(argv=None):
     try:
         me, projects, loc = context(args)
         return {'new': cmd_new, 'brief': cmd_brief, 'answer': cmd_answer, 'next': cmd_next, 'ready': cmd_ready,
-                 'graph': cmd_graph, 'pr-body': cmd_pr_body, 'status': cmd_status, 'portfolio': cmd_portfolio}[args.cmd](args, me, projects, loc)
+                 'health': cmd_health, 'graph': cmd_graph, 'pr-body': cmd_pr_body, 'status': cmd_status, 'portfolio': cmd_portfolio}[args.cmd](args, me, projects, loc)
     except (CliError, rb.BriefError, ra.AnswerError, OSError) as err:
         print('Error: %s' % err, file=sys.stderr)
         return 2
