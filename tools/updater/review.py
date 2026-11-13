@@ -9,6 +9,7 @@
     python review.py graph [--workspace FOLDER] [--out FILE.md]         a generated map of how the projects connect (Mermaid)
     python review.py pr-body CHECKLIST                                   a pull request description: claims next to evidence
     python review.py branches [--script FILE]                            which branches are finished (never deletes; --script writes the commands)
+    python review.py coverage [--days 30]                                how much recent work any checklist covers, by kind of writer
     python review.py stats [--workspace FOLDER]                          how strong is the evidence agents bring, per project
     python review.py digest [--only-if-waiting] [--subject] [--json]     a short text of what needs you, for a scheduler to send anywhere
     python review.py health [--workspace FOLDER]                         is each project in good order? (git, manifest, rules and tools)
@@ -30,6 +31,7 @@ import review_answers as ra
 import review_branches as rbr
 import review_digest as rd
 import review_brief as rb
+import review_coverage as rcv
 import review_graph as rg
 import review_health as rh
 import review_import as ri
@@ -240,6 +242,18 @@ def cmd_import_cards(args, me, projects, loc):
     return 0
 
 
+def cmd_coverage(args, me, projects, loc):
+    total = covered = 0
+    for p in projects:
+        c = rcv.coverage(p, projects, args.days)
+        total, covered = total + c['total'], covered + c['covered']
+        print('%-22s %s' % (p['name'], rcv.line(c)))
+        for who, (n, k) in sorted(c['by_writer'].items(), key=lambda x: -x[1][0]):
+            print('    %-8s %4d commit(s), %d covered' % (who, n, k))
+    print('\nAll projects: %s' % (rcv.line({'total': total, 'covered': covered, 'days': args.days})))
+    return 0
+
+
 def cmd_stats(args, me, projects, loc):
     for p in projects:
         s = rt.stats(p, projects)
@@ -345,6 +359,7 @@ def main(argv=None):
     r = sub.add_parser('ready'); r.add_argument('checklist', nargs='?'); r.add_argument('--latest', action='store_true'); r.add_argument('--run', action='store_true'); r.add_argument('--strict', action='store_true'); r.add_argument('--timeout', type=int, default=600)
     br = sub.add_parser('branches'); br.add_argument('--script')
     ic = sub.add_parser('import-cards'); ic.add_argument('--source', default='notes/debrief'); ic.add_argument('--status', default='open')
+    cv = sub.add_parser('coverage'); cv.add_argument('--days', type=int, default=30); cv.add_argument('--workspace')
     t = sub.add_parser('stats'); t.add_argument('--workspace')
     dg = sub.add_parser('digest'); dg.add_argument('--workspace'); dg.add_argument('--only-if-waiting', action='store_true'); dg.add_argument('--subject', action='store_true'); dg.add_argument('--json', action='store_true')
     h = sub.add_parser('health'); h.add_argument('--workspace')
@@ -356,7 +371,7 @@ def main(argv=None):
     try:
         me, projects, loc = context(args)
         return {'new': cmd_new, 'brief': cmd_brief, 'answer': cmd_answer, 'next': cmd_next, 'ready': cmd_ready,
-                 'branches': cmd_branches, 'import-cards': cmd_import_cards, 'stats': cmd_stats, 'digest': cmd_digest, 'health': cmd_health, 'graph': cmd_graph, 'pr-body': cmd_pr_body, 'status': cmd_status, 'portfolio': cmd_portfolio}[args.cmd](args, me, projects, loc)
+                 'branches': cmd_branches, 'import-cards': cmd_import_cards, 'coverage': cmd_coverage, 'stats': cmd_stats, 'digest': cmd_digest, 'health': cmd_health, 'graph': cmd_graph, 'pr-body': cmd_pr_body, 'status': cmd_status, 'portfolio': cmd_portfolio}[args.cmd](args, me, projects, loc)
     except (CliError, rb.BriefError, ra.AnswerError, OSError) as err:
         print('Error: %s' % err, file=sys.stderr)
         return 2

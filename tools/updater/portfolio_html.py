@@ -11,6 +11,7 @@ import time
 
 import review_health
 import review_next
+import review_coverage
 import review_projects as rp
 import review_stats
 import review_status as rs
@@ -46,7 +47,8 @@ def build_model(projects, brief_url=file_url):
             'output': m.get('output', ''), 'done': m.get('done', ''), 'branch': m.get('branch', ''),
             'prompt': review_next.text(p, review_next.orders_for(review_stats.folders(p, projects))),
             'review': {'label': loc['label'], 'dir': loc['dir'], 'problem': loc['problem'], 'count': len(items),
-                       'evidence': review_stats.line(review_stats.stats(p, projects))}})
+                       'evidence': review_stats.line(review_stats.stats(p, projects)),
+                       'coverage': review_coverage.line(review_coverage.coverage(p, projects))}})
     model['waiting'].sort(key=lambda w: (w['date'], w['name']), reverse=True)
     return model
 
@@ -120,6 +122,7 @@ for (const p of D.projects) {
     el('div', { className: 'dim' }, 'Output: ' + (p.output || '\\u2014')), el('div', { className: 'dim' }, 'Done when: ' + (p.done || '\\u2014')),
     el('div', { className: 'dim' }, 'Branch ' + (p.branch || '?') + ' \\u00b7 ' + p.review.count + ' review(s) in ' + p.review.label + ' / ' + p.review.dir),
     el('div', { className: 'dim' }, 'Evidence: ' + p.review.evidence),
+    el('div', { className: 'dim' }, 'Coverage: ' + p.review.coverage),
     p.review.problem ? el('div', { className: 'bad' }, p.review.problem) : '',
     el('div', { className: 'row' }, el('button', { type: 'button', className: 'quiet', textContent: 'Copy next-work prompt', onclick: (e) => copy(p.prompt, e.target) }),
       L ? el('a', { href: '/project/' + encodeURIComponent(p.id) }, 'Details') : ''),
