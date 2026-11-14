@@ -474,7 +474,21 @@ GameModes.register({
     netState: function() {
         Snake.netTick = (Snake.netTick || 0) + 1;
         var fullMeta = (typeof Net !== "undefined" && Net.isFullSnap) || Snake.netTick % 30 === 1;
-        var lan = Snake.worms.filter(function(w) { return w.human === "lan" && w.alive; }).map(function(w) { return w.segs[0]; });
+        var lan = [];
+        for (let i = 0; i < Snake.worms.length; i++) {
+            var sw = Snake.worms[i];
+            if (sw.human === "lan" && sw.segs && sw.segs[0]) lan.push(sw.segs[0]);
+        }
+        var viewPts = lan.slice();
+        if (typeof Tanks !== "undefined" && Tanks.tanks) {
+            for (let i = 0; i < Tanks.tanks.length; i++) if (Tanks.tanks[i].human === "lan") viewPts.push(Tanks.tanks[i]);
+        }
+        if (typeof Cells !== "undefined" && Cells.players) {
+            for (let i = 0; i < Cells.players.length; i++) {
+                var cp = Cells.players[i];
+                if (cp.human === "lan") viewPts.push({ x: cp.cx || 0, y: cp.cy || 0 });
+            }
+        }
         var wm = {}, hasWm = false;
         var wList = Snake.worms.map(function(w) {
             var id = w.id || (w.id = Snake.nextId = (Snake.nextId || 0) + 1);
@@ -488,11 +502,11 @@ GameModes.register({
             }
             var sg = [];
             if (w.alive && w.segs.length) {
-                var inView = !lan.length;
+                var inView = !viewPts.length;
                 if (!inView) {
                     for (let i = 0; i < w.segs.length; i += 6) {
                         var s = w.segs[i];
-                        if (lan.some(function(lh) { return Math.abs(s.x - lh.x) < 2600 && Math.abs(s.y - lh.y) < 1800; })) { inView = true; break; }
+                        if (viewPts.some(function(lh) { return Math.abs(s.x - lh.x) < 2600 && Math.abs(s.y - lh.y) < 1800; })) { inView = true; break; }
                     }
                 }
                 if (inView) {
@@ -505,8 +519,8 @@ GameModes.register({
         });
         var st = { w: wList };
         if (hasWm) st.wm = wm;
-        if (Snake.netTick % 4 === 0) {
-            var near = Snake.pellets.filter(function(p) { return lan.some(function(h) { return Math.abs(p.x - h.x) < 2000 && Math.abs(p.y - h.y) < 1400; }); });
+        if ((typeof Net !== "undefined" && Net.isFullSnap) || Snake.netTick % 4 === 0) {
+            var near = viewPts.length ? Snake.pellets.filter(function(p) { return viewPts.some(function(h) { return Math.abs(p.x - h.x) < 2000 && Math.abs(p.y - h.y) < 1400; }); }) : [];
             st.p = near.map(function(p) { return [Math.round(p.x), Math.round(p.y), p.v, SNK_COLORS.indexOf(p.col)]; });
         }
         return st;

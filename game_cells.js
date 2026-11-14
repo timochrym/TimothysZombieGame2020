@@ -895,10 +895,30 @@ GameModes.register({
             u: (Cells.pickups || []).map(function(u) { return [Math.round(u.x), Math.round(u.y), u.kind]; })
         };
         if (hasPm) st.pm = pm;
-        if (Cells.netTick % 6 === 0) {
-            var lan = Cells.players.filter(function(p) { return p.human === "lan"; });
-            var boxes = lan.map(function(q) { var z = Math.max(0.22, Math.min(1.2, 1.3 / Math.pow(Math.max(20, Cells.mass(q) || 20) / 20, 0.32))); return [q.cx || 0, q.cy || 0, 1100 / z + 300, 650 / z + 300]; });
-            var near = Cells.pellets.filter(function(p) { for (let i = 0; i < boxes.length; i++) if (Math.abs(p.x - boxes[i][0]) < boxes[i][2] && Math.abs(p.y - boxes[i][1]) < boxes[i][3]) return true; return false; });
+        if ((typeof Net !== "undefined" && Net.isFullSnap) || Cells.netTick % 6 === 0) {
+            var boxes = [];
+            for (let i = 0; i < Cells.players.length; i++) {
+                var q = Cells.players[i];
+                if (q.human !== "lan") continue;
+                var z = Math.max(0.22, Math.min(1.2, 1.3 / Math.pow(Math.max(20, Cells.mass(q) || 20) / 20, 0.32)));
+                boxes.push([q.cx || 0, q.cy || 0, 1100 / z + 300, 650 / z + 300]);
+            }
+            if (typeof Tanks !== "undefined" && Tanks.tanks) {
+                for (let i = 0; i < Tanks.tanks.length; i++) {
+                    var tk = Tanks.tanks[i];
+                    if (tk.human === "lan") boxes.push([tk.x || 0, tk.y || 0, 1800, 1200]);
+                }
+            }
+            if (typeof Snake !== "undefined" && Snake.worms) {
+                for (let i = 0; i < Snake.worms.length; i++) {
+                    var sw = Snake.worms[i];
+                    if (sw.human === "lan" && sw.segs && sw.segs[0]) boxes.push([sw.segs[0].x, sw.segs[0].y, 1800, 1200]);
+                }
+            }
+            var near = boxes.length ? Cells.pellets.filter(function(p) {
+                for (let i = 0; i < boxes.length; i++) if (Math.abs(p.x - boxes[i][0]) < boxes[i][2] && Math.abs(p.y - boxes[i][1]) < boxes[i][3]) return true;
+                return false;
+            }) : [];
             st.p = near.map(function(p) { var ci = CEL_COLORS.indexOf(p.col); return [Math.round(p.x), Math.round(p.y), p.m, ci >= 0 ? ci : p.col]; });
         }
         return st;
