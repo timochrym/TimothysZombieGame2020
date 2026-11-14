@@ -421,6 +421,10 @@ GameModes.register({
         return null;
     },
 
+    canShoot: function() {
+        return typeof SandboxUI !== "undefined" && SandboxUI.tool === "play";
+    },
+
     onDamage: function(ch) {
         return !!(ch.isPlayer && sandboxCfg.invincible);
     },

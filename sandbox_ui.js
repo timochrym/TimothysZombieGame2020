@@ -16,7 +16,7 @@ var SandboxUI = {
     pauseOpen: false,
     pauseTab: "creative",
 
-    tool: "play", // play | select | drawFloor | drawPlat | drawWall | spawn | possess | grapple | delete
+    tool: "select", // select | play | drawFloor | drawPlat | drawWall | spawn | possess | grapple | delete
     selectedObj: null,
     selectedEnt: null,
     piePos: null,
