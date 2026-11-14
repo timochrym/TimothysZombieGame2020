@@ -239,11 +239,17 @@ try:
         const afterEject = vi.feed;
         k = tank(-100, 0); Tanks.bullets.push({ x: 0, y: 0, vx: 10, vy: 0, r: 9, dmg: 10, pen: 1, owner: k, life: 50 }); run();
         const afterBullet = vi.feed;
-        w = worm(0, 0, 40); w.boosting = true; w.ang = 0; Snake.buildGrid(); run();
+        w = worm(0, 0, 40); w.boosting = false; w.ang = 0; Snake.buildGrid(); run();
         const afterWorm = vi.feed;
         w.segs[0].x = 600;
-        Tanks.bullets.push({ x: 0, y: 0, vx: 10, vy: 0, r: 9, dmg: 10, pen: 1, owner: k, life: 50 }); run();
-        R.allFeedVirus = (afterEject === 1 && afterBullet === 2 && afterWorm === 4 && Cells.viruses.length === 2);
+        for (let b = 0; b < 3; b++) {
+            Tanks.bullets.push({ x: 0, y: 0, vx: 10, vy: 0, r: 9, dmg: 10, pen: 1, owner: k, life: 50 }); run();
+        }
+        const splitOk = (afterEject === 1 && afterBullet === 2 && afterWorm === 4 && Cells.viruses.length === 2);
+        clear(); Cells.viruses.push({ x: 0, y: 0, m: 100, feed: 0, vx: 0, vy: 0 });
+        w = worm(0, 0, 40); w.boosting = true; w.ang = 0; Snake.buildGrid(); run();
+        const popOk = Cells.pellets.filter(q => q.m === 12).length >= 5 && Snake.pellets.filter(q => q.v === 10).length >= 4;
+        R.allFeedVirus = splitOk && popOk;
 
         // 10. bullet falloff & high-dmg soft-cap balance
         clear(); bl = blob(300, 0, 200); Tanks.bullets.push({ x: 300, y: 0, vx: 10, vy: 0, r: 9, dmg: 30, pen: 1, owner: k, life: 100, maxLife: 100 }); run();

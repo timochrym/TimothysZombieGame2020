@@ -84,7 +84,7 @@ var Cells = {
         vi.fx = dx / L; vi.fy = dy / L;
         vi.feed = (vi.feed || 0) + (amt || 1);
         vi.m = Math.min(160, (vi.m || 100) + 10);
-        if (vi.feed >= 5) {
+        if (vi.feed >= 7) {
             vi.feed = 0; vi.m = 100;
             if (this.viruses.length < 32) {
                 this.viruses.push({ x: vi.x + vi.fx * 48, y: vi.y + vi.fy * 48, m: 100, feed: 0, vx: vi.fx * 26, vy: vi.fy * 26, launched: 45 });
@@ -94,6 +94,24 @@ var Cells = {
             return true;
         }
         return false;
+    },
+    popVirus: function(vIdx) {
+        var vi = this.viruses[vIdx];
+        if (!vi) return;
+        for (let s = 0; s < 6; s++) {
+            var a = (s / 6) * Math.PI * 2 + Math.random() * 0.4;
+            this.pellets.push({ x: vi.x + Math.cos(a) * 36, y: vi.y + Math.sin(a) * 36, m: 12, col: "#4ade80", vx: Math.cos(a) * 16, vy: Math.sin(a) * 16 });
+        }
+        if (typeof Mix !== "undefined" && Mix.on && typeof Snake !== "undefined") {
+            for (let s = 0; s < 4; s++) {
+                var a2 = (s / 4) * Math.PI * 2 + 0.3;
+                Snake.addPellet(vi.x + Math.cos(a2) * 32, vi.y + Math.sin(a2) * 32, 10, "#4ade80");
+            }
+        }
+        var lastV = this.viruses.length - 1;
+        if (vIdx < lastV) this.viruses[vIdx] = this.viruses[lastV];
+        this.viruses.pop();
+        if (this.viruses.length < 22) this.addVirus();
     },
 
     addPlayer: function(o) {
@@ -283,7 +301,7 @@ var Cells = {
             if (b.m < 32) continue;
             var dx = pl.aimX - b.x, dy = pl.aimY - b.y, L = Math.hypot(dx, dy) || 1, r = this.rad(b.m);
             b.m -= 14;
-            this.pellets.push({ x: b.x + dx / L * (r + 14), y: b.y + dy / L * (r + 14), m: 11, col: pl.color, vx: dx / L * 20, vy: dy / L * 20 });
+            this.pellets.push({ x: b.x + dx / L * (r + 14), y: b.y + dy / L * (r + 14), m: 11, col: pl.color, vx: dx / L * 20, vy: dy / L * 20, ejected: true });
         }
     },
 
@@ -444,10 +462,17 @@ var Cells = {
             var vRad = this.rad(vi.m || 100);
             for (let i = 0; i < B.length; i++) {
                 var bb = B[i];
-                if (bb.dead || bb.m < 95) continue;
-                var bRad = bRads[i] || this.rad(bb.m), hitR = Math.max(24, bRad - 14 + vRad * 0.35);
+                if (bb.dead) continue;
+                var isSnakeHeadBoost = bb.pl.chain && !bb.pl.compact && bb.pl.chainBoosting && bb.pl.chainList && bb === bb.pl.chainList[0];
+                if (!isSnakeHeadBoost && bb.m < 95) continue;
+                var bRad = bRads[i] || this.rad(bb.m), hitR = Math.max(24, bRad - (isSnakeHeadBoost ? 0 : 14) + vRad * 0.35);
                 var bdx = bb.x - vi.x, bdy = bb.y - vi.y;
                 if (bdx * bdx + bdy * bdy < hitR * hitR) {
+                    if (isSnakeHeadBoost) {
+                        this.popVirus(v);
+                        if (bb.pl.human !== undefined) { showBanner("SPIKE POP!", "points popped open!", "#4ade80"); screenShake = 5; }
+                        break;
+                    }
                     bb.pl.compact = false; bb.pl.chainMoving = false;
                     var pieces = Math.max(0, Math.min(CEL.MAXCELLS - this.mine(bb.pl).length, 5));
                     var lost = bb.m * 0.25;

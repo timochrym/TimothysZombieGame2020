@@ -348,16 +348,24 @@ var Mix = {
                     break;
                 }
             }
-            // boosting worms can feed viruses in their heading direction
-            if (w2.boosting && w2.len > 26 && !w2.mx.vFeedCd) {
-                for (let v = 0; v < viruses.length; v++) {
+            // boosting worms pop open spikes into globs; non-boosting worms feed/push spikes
+            if (!w2.mx.vFeedCd) {
+                for (let v = viruses.length - 1; v >= 0; v--) {
                     var viW = viruses[v], vrW = Cells.rad(viW.m || 100) + wr2 + 6;
                     var vdxW = h2.x - viW.x, vdyW = h2.y - viW.y;
                     if (vdxW * vdxW + vdyW * vdyW < vrW * vrW) {
-                        var firedW = Cells.feedVirus(viW, Math.cos(w2.ang), Math.sin(w2.ang), 2);
-                        w2.len = Math.max(12, w2.len - 4);
-                        w2.mx.vFeedCd = 15;
-                        this.burst(viW.x, viW.y, "#4ade80", firedW ? "ring" : "spark", firedW ? "SPIKE!" : "", firedW ? 55 : 22);
+                        if (w2.boosting) {
+                            Cells.popVirus(v);
+                            this.wormXp(w2, 20);
+                            w2.mx.vFeedCd = 18;
+                            this.burst(viW.x, viW.y, "#4ade80", "ring", "SPIKE POP!", 65);
+                            if (w2.human !== undefined && typeof SFX !== "undefined") SFX.play("pickup", h2.x, h2.y, 0.7);
+                        } else if (w2.len > 22) {
+                            var firedW = Cells.feedVirus(viW, Math.cos(w2.ang), Math.sin(w2.ang), 2);
+                            w2.len = Math.max(12, w2.len - 2);
+                            w2.mx.vFeedCd = 15;
+                            this.burst(viW.x, viW.y, "#4ade80", firedW ? "ring" : "spark", firedW ? "SPIKE!" : "", firedW ? 55 : 22);
+                        }
                         break;
                     }
                 }
