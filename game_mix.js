@@ -488,42 +488,77 @@ var Mix = {
                 }
             }
         }
-        // ---- a blob that touches a worm POPS like it hit a virus: it splits and part of its mass goes to the worm
+        // ---- flying Agar.io thrown mass damages snakes and snakes only
+        for (let i = cp0.length - 1; i >= 0; i--) {
+            var ep = cp0[i];
+            if (!ep.ejected || ep._gone || (ep.vx * ep.vx + ep.vy * ep.vy <= 4)) continue;
+            var hw = Snake.hitBody(ep.x, ep.y, 12, null);
+            if (!hw || !hw.alive) continue;
+            hw.len -= 4;
+            if (hw.len < 10) Snake.kill(hw, null);
+            ep._gone = true; ep.eaten = true; cpGone = true;
+            this.burst(ep.x, ep.y, ep.col || "#fff", "spark", "HIT!", 26);
+            if (hw.human !== undefined && typeof SFX !== "undefined") SFX.play("hit", ep.x, ep.y, 0.5);
+        }
+        // ---- a blob that touches a worm POPS less easily: requires deeper contact, medium blobs bounce, big blobs lose 15% into max 3 pieces
         for (let i = 0, n0 = blobs.length; i < n0; i++) {
             var b4 = blobs[i];
-            if (b4.dead || b4.popCd > 0 || Cells.protectedNow(b4.pl)) { if (b4.popCd > 0) b4.popCd--; continue; }
+            if (b4.dead || b4.popCd > 0 || (b4.pl.snakeGrace > 0) || Cells.protectedNow(b4.pl)) { if (b4.popCd > 0) b4.popCd--; continue; }
             if (b4.x * b4.x + b4.y * b4.y > MIX_SNK_RING_SQ) continue;
             var r4 = blobR[i];
-            var w4 = Snake.hitBody(b4.x, b4.y, r4 * 0.8, null);
+            var w4 = Snake.hitBody(b4.x, b4.y, r4 * 0.45, null);
             if (!w4 || !w4.alive) continue;
             S.blobPopped++;
-            if (b4.m < 30) {                                                   // too small to split: the worm takes it whole
-                w4.len += b4.m * 0.4; this.wormXp(w4, b4.m * 0.5);
+            if (b4.m < 25) {                                                   // tiny blob: worm absorbs it whole
+                w4.len += b4.m * 0.25; this.wormXp(w4, b4.m * 0.3);
                 this.burst(b4.x, b4.y, w4.color, "spark", "", 28);
                 this.note(b4.pl.human !== undefined || w4.human !== undefined, w4.name + " absorbed " + b4.pl.name, w4.color);
                 this._blobGone(blobs, b4, w4.name); anyDead = true; continue;
             }
-            var lost = b4.m * 0.25, left = b4.m - lost;
-            w4.len += lost * 0.3; this.wormXp(w4, lost * 0.4);
+            var hd = w4.segs[0], adx = b4.x - hd.x, ady = b4.y - hd.y, away = Math.sqrt(adx * adx + ady * ady) || 1;
+            if (b4.m < 80) {                                                   // medium blobs bounce off instead of popping
+                b4.vx += adx / away * 8; b4.vy += ady / away * 8; b4.popCd = 30;
+                continue;
+            }
+            var lost = b4.m * 0.15, left = b4.m - lost;
+            w4.len += lost * 0.18; this.wormXp(w4, lost * 0.25);
             this.burst(b4.x, b4.y, "#a78bfa", "ring", "POP!", r4 + 35);
             if (b4.pl.chain && !b4.pl.compact && b4.pl.chainList && b4 === b4.pl.chainList[0]) {
-                w4.len += b4.m * 0.45; this.wormXp(w4, b4.m * 0.5);
+                w4.len += b4.m * 0.35; this.wormXp(w4, b4.m * 0.4);
                 this.burst(b4.x, b4.y, w4.color, "ring", "SNAKE CUT!", r4 + 35);
                 this.note(b4.pl.human !== undefined || w4.human !== undefined, b4.pl.name + " bumped " + w4.name, w4.color);
                 Cells.killChain(b4.pl, null); anyDead = true; continue;
             }
-            if (b4.pl.chain) { b4.m = left; blobR[i] = Cells.rad(left); b4.popCd = 150; continue; }
-            var pieces = Math.max(0, Math.min(CEL.MAXCELLS - Cells.mine(b4.pl).length, 4)), each = left / (pieces + 1);
+            if (b4.pl.chain) { b4.m = left; blobR[i] = Cells.rad(left); b4.popCd = 240; continue; }
+            var pieces = Math.max(0, Math.min(CEL.MAXCELLS - Cells.mine(b4.pl).length, 3)), each = left / (pieces + 1);
             for (let q = 0; q < pieces; q++) {
                 var pa = q / pieces * Math.PI * 2;
-                blobs.push({ pl: b4.pl, x: b4.x, y: b4.y, m: each, vx: Math.cos(pa) * 16, vy: Math.sin(pa) * 16, mergeT: 600, popCd: 150 });
+                blobs.push({ pl: b4.pl, x: b4.x, y: b4.y, m: each, vx: Math.cos(pa) * 14, vy: Math.sin(pa) * 14, mergeT: 600, popCd: 240 });
                 blobR[blobs.length - 1] = Cells.rad(each);
             }
-            b4.m = each; blobR[i] = Cells.rad(each); b4.mergeT = 600; b4.popCd = 150;
-            var hd = w4.segs[0], adx = b4.x - hd.x, ady = b4.y - hd.y, away = Math.sqrt(adx * adx + ady * ady) || 1;
+            b4.m = each; blobR[i] = Cells.rad(each); b4.mergeT = 600; b4.popCd = 240;
             b4.vx += adx / away * 10; b4.vy += ady / away * 10;
             this.note(b4.pl.human !== undefined || w4.human !== undefined, b4.pl.name + " popped on " + w4.name, w4.color);
             if (b4.pl.human !== undefined) screenShake = 6;
+        }
+        // ---- snakes running head-first into bubble snakes die (with grace period if just activated / grew a lot)
+        for (let j = 0; j < worms.length; j++) {
+            var wS = worms[j];
+            if (!wS.alive || wS.safeT > 0) continue;
+            var hS = wS.segs[0], wrS = wormR[j] * 0.65;
+            if (hS.x * hS.x + hS.y * hS.y > MIX_SNK_RING_SQ) continue;
+            for (let i = 0; i < blobs.length; i++) {
+                var bS = blobs[i];
+                if (bS.dead || !bS.pl.chain || bS.pl.compact || (bS.pl.snakeGrace > 0) || Cells.protectedNow(bS.pl)) continue;
+                var hitS = wrS + blobR[i] * 0.78;
+                var sdx = hS.x - bS.x, sdy = hS.y - bS.y;
+                if (sdx * sdx + sdy * sdy < hitS * hitS) {
+                    Snake.kill(wS, bS.pl);
+                    this.burst(hS.x, hS.y, bS.pl.color, "ring", "CUT OFF!", 48);
+                    this.note(wS.human !== undefined || bS.pl.human !== undefined, wS.name + " crashed into " + bS.pl.name, bS.pl.color);
+                    break;
+                }
+            }
         }
         // ---- shared power-ups: tanks and worms pick up the same pickups blobs do
         //   speed = 1.5x movement · shield = can't be hurt or eaten · magnet = pulls food in · mass = a lump of size
@@ -602,7 +637,7 @@ var Mix = {
                             for (let i = 0; i < bkW.length; i++) {
                                 var f = bkW[i]; if (f._gone) continue;
                                 var fdx5 = f.x - h5.x, fdy5 = f.y - h5.y;
-                                if (fdx5 < rr5 && fdx5 > -rr5 && fdy5 < rr5 && fdy5 > -rr5) { w5.len += f.m * 0.6; f._gone = true; cpGone = true; S.crossFood++; }
+                                if (fdx5 < rr5 && fdx5 > -rr5 && fdy5 < rr5 && fdy5 > -rr5) { w5.len += f.m * (f.fromSpike ? 0.2 : 0.4); f._gone = true; cpGone = true; S.crossFood++; }
                             }
                         }
                     }

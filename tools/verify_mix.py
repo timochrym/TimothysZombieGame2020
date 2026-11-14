@@ -248,7 +248,7 @@ try:
         const splitOk = (afterEject === 1 && afterBullet === 2 && afterWorm === 4 && Cells.viruses.length === 2);
         clear(); Cells.viruses.push({ x: 0, y: 0, m: 100, feed: 0, vx: 0, vy: 0 });
         w = worm(0, 0, 40); w.boosting = true; w.ang = 0; Snake.buildGrid(); run();
-        const popOk = Cells.pellets.filter(q => q.m === 12).length >= 5 && Snake.pellets.filter(q => q.v === 10).length >= 4;
+        const popOk = Cells.pellets.filter(q => q.m === 12).length >= 5 && Snake.pellets.filter(q => q.v === 4).length >= 3;
         R.allFeedVirus = splitOk && popOk;
 
         // 10. bullet falloff & high-dmg soft-cap balance
@@ -257,6 +257,42 @@ try:
         clear(); bl = blob(300, 0, 200); Tanks.bullets.push({ x: 300, y: 0, vx: 10, vy: 0, r: 9, dmg: 30, pen: 1, owner: k, life: 10, maxLife: 100 }); run();
         const dmgFar = 200 - bl.m;
         R.bulletBalanceFalloff = dmgNear < 30 * 1.3 && dmgFar < dmgNear * 0.65;
+
+        // 11. Shift line-up, thrown mass damages snakes only, and snake-into-bubble-snake + grace period
+        clear(); const lp = { name: 'L', color: '#38bdf8', human: 0, alive: true, deadT: 0, aimX: 500, aimY: 0 };
+        Cells.players.push(lp);
+        const bL1 = { pl: lp, x: 0, y: 0, m: 120, vx: 0, vy: 0, mergeT: 100 };
+        const bL2 = { pl: lp, x: 40, y: 120, m: 60, vx: 0, vy: 0, mergeT: 100 };
+        Cells.blobs.push(bL1, bL2);
+        const prevShift = ShiftPressed, prevMX = mouseX, prevMY = mouseY;
+        Cells.cam.x = 0; Cells.cam.y = 0;
+        ShiftPressed = true; mouseX = cssW; mouseY = cssH / 2;
+        for (let s = 0; s < 35; s++) Cells.step();
+        ShiftPressed = prevShift; mouseX = prevMX; mouseY = prevMY;
+        const adxL = lp.aimX - bL1.x, adyL = lp.aimY - bL1.y, aLL = Math.hypot(adxL, adyL) || 1;
+        const gapL = (Cells.rad(bL1.m) + Cells.rad(bL2.m)) * 1.05;
+        const expX = bL1.x - (adxL / aLL) * gapL, expY = bL1.y - (adyL / aLL) * gapL;
+        R.shiftLineUp = Math.hypot(bL2.x - expX, bL2.y - expY) < 15;
+
+        clear(); w = worm(0, 0, 40); k = tank(400, 0); bl = blob(800, 0, 100); Snake.buildGrid();
+        const wLen0 = w.len, kHp0 = k.hp, blM0 = bl.m;
+        Cells.pellets.push({ x: -5 * SNK.SEG, y: 0, m: 11, col: '#fff', vx: 20, vy: 0, ejected: true });
+        Cells.pellets.push({ x: 400, y: 0, m: 11, col: '#fff', vx: 20, vy: 0, ejected: true });
+        Cells.pellets.push({ x: 800, y: 0, m: 11, col: '#fff', vx: 20, vy: 0, ejected: true });
+        run();
+        R.ejectDamagesSnakeOnly = (w.len < wLen0 - 2) && (k.hp === kHp0) && (bl.m === blM0);
+
+        clear();
+        const chPl = { name: 'C', color: '#fb923c', alive: true, deadT: 0, aimX: 0, aimY: 80, chain: true, compact: false, snakeGrace: 60 };
+        Cells.players.push(chPl);
+        const chB0 = { pl: chPl, x: 0, y: 80, m: 100, vx: 0, vy: 0, mergeT: 9999 };
+        const chB1 = { pl: chPl, x: 0, y: 0, m: 80, vx: 0, vy: 0, mergeT: 9999 };
+        Cells.blobs.push(chB0, chB1); chPl.chainList = [chB0, chB1];
+        w = worm(0, 0, 40); w.safeT = 0; Snake.buildGrid(); run();
+        const survivedGrace = w.alive === true;
+        chPl.snakeGrace = 0; w.segs[0].x = 0; w.segs[0].y = 0; Snake.buildGrid(); run();
+        const diedAfterGrace = w.alive === false;
+        R.snakeIntoBubbleSnake = survivedGrace && diedAfterGrace;
 
         cellsCfg.bots = bots; SNK.PELLETS = 1400; Mix.reset(); paused = false;
         return JSON.stringify(R);
@@ -282,6 +318,9 @@ try:
     assert r["virusBurnsBigBlob"] is True, r["virusBurnsBigBlob"]
     assert r["allFeedVirus"] is True, r["allFeedVirus"]
     assert r["bulletBalanceFalloff"] is True, r["bulletBalanceFalloff"]
+    assert r["shiftLineUp"] is True, r["shiftLineUp"]
+    assert r["ejectDamagesSnakeOnly"] is True, r["ejectDamagesSnakeOnly"]
+    assert r["snakeIntoBubbleSnake"] is True, r["snakeIntoBubbleSnake"]
     assert r["sharedPowerups"] == "tank speed x1.5, shield true, mass +30 | worm magnet true, length +30, shield true | left 0", r["sharedPowerups"]
     print("ALL ASSERTIONS PASSED!")
 

@@ -194,8 +194,8 @@ var Snake = {
             var d = ((w.want - w.ang + Math.PI * 3) % (Math.PI * 2)) - Math.PI, turn = 0.11 - Math.min(0.05, w.len / 4000);
             w.ang += Math.max(-turn, Math.min(turn, d));
             var boosting = w.boost && w.len > 14;
-            var sp = (boosting ? 7.2 : 3.6) * arenaSpeed(w);
-            if (boosting && this.t % 6 === 0) { w.len -= 1; var tl = w.segs[w.segs.length - 1]; this.addPellet(tl.x, tl.y, 1, w.color); }
+            var sp = (boosting ? 6.2 : 3.2) * arenaSpeed(w);
+            if (boosting && this.t % 4 === 0) { w.len -= 1; var tl = w.segs[w.segs.length - 1]; this.addPellet(tl.x, tl.y, 1, w.color); }
             var h = w.segs[0];
             var nh = { x: h.x + Math.cos(w.ang) * sp, y: h.y + Math.sin(w.ang) * sp };
             // body follows: each segment keeps SEG distance from the one ahead
@@ -218,7 +218,7 @@ var Snake = {
                 if (dxp < rPull && dxp > -rPull && dyp < rPull && dyp > -rPull) {
                     // pellets get sucked in for a frame or two before they disappear
                     if (dxp * dxp + dyp * dyp < rEat2) {
-                        w.len += p.v * 0.75; p.eaten = true;
+                        w.len += p.v * 0.65; p.eaten = true;
                         var lastP = ps.length - 1;
                         if (i < lastP) ps[i] = ps[lastP];
                         ps.pop();

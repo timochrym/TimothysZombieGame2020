@@ -100,12 +100,12 @@ var Cells = {
         if (!vi) return;
         for (let s = 0; s < 6; s++) {
             var a = (s / 6) * Math.PI * 2 + Math.random() * 0.4;
-            this.pellets.push({ x: vi.x + Math.cos(a) * 36, y: vi.y + Math.sin(a) * 36, m: 12, col: "#4ade80", vx: Math.cos(a) * 16, vy: Math.sin(a) * 16 });
+            this.pellets.push({ x: vi.x + Math.cos(a) * 36, y: vi.y + Math.sin(a) * 36, m: 12, col: "#4ade80", vx: Math.cos(a) * 16, vy: Math.sin(a) * 16, fromSpike: true });
         }
         if (typeof Mix !== "undefined" && Mix.on && typeof Snake !== "undefined") {
-            for (let s = 0; s < 4; s++) {
-                var a2 = (s / 4) * Math.PI * 2 + 0.3;
-                Snake.addPellet(vi.x + Math.cos(a2) * 32, vi.y + Math.sin(a2) * 32, 10, "#4ade80");
+            for (let s = 0; s < 3; s++) {
+                var a2 = (s / 3) * Math.PI * 2 + 0.3;
+                Snake.addPellet(vi.x + Math.cos(a2) * 32, vi.y + Math.sin(a2) * 32, 4, "#4ade80");
             }
         }
         var lastV = this.viruses.length - 1;
@@ -168,14 +168,10 @@ var Cells = {
         if (pl.chain && eject && !pl.ejectPrev) {
             pl.compact = !pl.compact;
             pl.chainMoving = false;
-            var hd = (pl.chainList && pl.chainList[0]) || me[0];
-            if (hd && hd.m >= 26) {
-                var edx = pl.aimX - hd.x, edy = pl.aimY - hd.y, eL = Math.hypot(edx, edy) || 1, er = this.rad(hd.m);
-                hd.m -= 8;
-                this.pellets.push({ x: hd.x + edx / eL * (er + 12), y: hd.y + edy / eL * (er + 12), m: 7, col: pl.color, vx: edx / eL * 22, vy: edy / eL * 22, ejected: true });
-            }
+            if (!pl.compact) pl.snakeGrace = Math.min(180, 60 + Math.round(M * 0.25));
         }
         pl.ejectPrev = eject;
+        pl.lineUp = !pl.chain && ((pl.human === 0 && typeof ShiftPressed !== "undefined" && ShiftPressed) || (pl.human === 1 && typeof RShiftPressed !== "undefined" && RShiftPressed));
         pl.chainBoosting = !!(pl.chain && split);
         pl.chainMoving = pl.chainBoosting;
         if (split && !pl.splitPrev && !pl.chain) this.split(pl, me);
@@ -301,7 +297,7 @@ var Cells = {
             if (b.m < 32) continue;
             var dx = pl.aimX - b.x, dy = pl.aimY - b.y, L = Math.hypot(dx, dy) || 1, r = this.rad(b.m);
             b.m -= 14;
-            this.pellets.push({ x: b.x + dx / L * (r + 14), y: b.y + dy / L * (r + 14), m: 11, col: pl.color, vx: dx / L * 20, vy: dy / L * 20, ejected: true });
+            this.pellets.push({ x: b.x + dx / L * (r + 14), y: b.y + dy / L * (r + 14), m: 11, col: pl.color, vx: dx / L * 20, vy: dy / L * 20, ejected: true, ownerPl: pl });
         }
     },
 
@@ -311,19 +307,40 @@ var Cells = {
         for (let i = 0; i < this.players.length; i++) if (this.players[i].chain && this.players[i].alive) this.chainStep(this.players[i]);
         var B = this.blobs;
         var bRads = this._bRads || (this._bRads = []);
+        // Shift line-up: conduct split Agar.io blobs into a neat single-file line
+        for (let pi = 0; pi < this.players.length; pi++) {
+            var lp = this.players[pi];
+            if (!lp.alive || lp.chain || !lp.lineUp) continue;
+            var lme = this.mine(lp);
+            if (lme.length < 2) continue;
+            lme.sort(function(a, b) { return b.m - a.m; });
+            lme[0]._lineTarget = null;
+            var hdx = lp.aimX - lme[0].x, hdy = lp.aimY - lme[0].y, hL = Math.hypot(hdx, hdy) || 1;
+            var dirX = hdx / hL, dirY = hdy / hL;
+            for (let k = 1; k < lme.length; k++) {
+                var prevB = lme[k - 1], curB = lme[k];
+                var gapL = (this.rad(prevB.m) + this.rad(curB.m)) * 1.05;
+                curB._lineTarget = { x: prevB.x - dirX * gapL, y: prevB.y - dirY * gapL };
+            }
+        }
         // move (precompute radii once)
         for (let i = 0; i < B.length; i++) {
             var b = B[i];
             if (b.dead) { bRads[i] = 0; continue; }
-            var pl = b.pl, dx = pl.aimX - b.x, dy = pl.aimY - b.y, L = Math.hypot(dx, dy) || 1;
+            var pl = b.pl, tx = (pl.lineUp && b._lineTarget) ? b._lineTarget.x : pl.aimX, ty = (pl.lineUp && b._lineTarget) ? b._lineTarget.y : pl.aimY;
+            var dx = tx - b.x, dy = ty - b.y, L = Math.hypot(dx, dy) || 1;
             var sp = this.speed(b.m) * Math.min(1, L / 60) * arenaSpeed(pl) * (pl.fx && pl.fx.speed > 0 ? 1.6 : 1);
+            if (pl.lineUp && b._lineTarget) {
+                sp = Math.min(L, Math.max(sp * 1.8, 12));
+                b._lineTarget = null;
+            }
             if (pl.chain) {
-                if (pl.compact) {
+                if (pl.compact && !b.lead) {
                     sp *= (pl.chainBoosting && b.m > 22) ? 1.5 : 0.85;
                 } else if (b.lead && !b.lead.dead) {
                     dx = b.lead.x - b.x; dy = b.lead.y - b.y; L = Math.hypot(dx, dy) || 1;
-                    var gap = (this.rad(b.m) + (this.rad(b.lead.m))) * 0.9;
-                    sp = Math.max(0, Math.min(L - gap, 28));
+                    var gap = (this.rad(b.m) + (this.rad(b.lead.m))) * (pl.compact ? 0.35 : 0.9);
+                    sp = Math.max(0, Math.min(L - gap, pl.compact ? 32 : 28));
                 } else if (pl.chainBoosting && b.m > 12) {
                     sp *= 1.75;
                 }
@@ -337,25 +354,25 @@ var Cells = {
             b.x = Math.max(-CEL.W / 2 + r * 0.5, Math.min(CEL.W / 2 - r * 0.5, b.x));
             b.y = Math.max(-CEL.H / 2 + r * 0.5, Math.min(CEL.H / 2 - r * 0.5, b.y));
         }
-        // own pieces: push apart until they may merge, then merge on overlap
+        // own pieces: push apart until they may merge, then merge on overlap (stay lined up while Shift held)
         for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++) {
             var a = B[i], c = B[j];
             if (a.pl !== c.pl || a.dead || c.dead) continue;
             var ddx = c.x - a.x, ddy = c.y - a.y, d = Math.hypot(ddx, ddy) || 0.01, ra = bRads[i], rc = bRads[j];
-            if (a.mergeT > 0 || c.mergeT > 0) {
+            if (a.mergeT > 0 || c.mergeT > 0 || a.pl.lineUp) {
                 if (d < ra + rc) { var push = (ra + rc - d) * 0.25; a.x -= ddx / d * push * c.m / (a.m + c.m); a.y -= ddy / d * push * c.m / (a.m + c.m); c.x += ddx / d * push * a.m / (a.m + c.m); c.y += ddy / d * push * a.m / (a.m + c.m); }
             } else if (d < Math.max(ra, rc) * 0.7) { a.m += c.m; bRads[i] = this.rad(a.m); c.dead = true; }
         }
-        // Bubble worms in snake form: bumping head into another snake's body kills like a snake
+        // Bubble worms in snake form: bumping head into another snake's body kills like a snake (unless in activation/growth grace period)
         for (let pi = 0; pi < this.players.length; pi++) {
             var cp = this.players[pi];
-            if (!cp.alive || !cp.chain || cp.compact || this.protectedNow(cp) || !cp.chainList || !cp.chainList.length) continue;
+            if (!cp.alive || !cp.chain || cp.compact || cp.snakeGrace > 0 || this.protectedNow(cp) || !cp.chainList || !cp.chainList.length) continue;
             var chd = cp.chainList[0];
             if (!chd || chd.dead) continue;
             var chr = this.rad(chd.m);
             for (let j = 0; j < B.length; j++) {
                 var ob = B[j];
-                if (ob.dead || ob.pl === cp || !ob.pl.chain || ob.pl.compact) continue;
+                if (ob.dead || ob.pl === cp || !ob.pl.chain || ob.pl.compact || ob.pl.snakeGrace > 0) continue;
                 var hitDist = (chr + bRads[j]) * 0.78;
                 var hdx = ob.x - chd.x, hdy = ob.y - chd.y;
                 if (hdx * hdx + hdy * hdy < hitDist * hitDist) {
@@ -395,6 +412,24 @@ var Cells = {
                     if (vdx0 * vdx0 + vdy0 * vdy0 < vr0 * vr0) {
                         this.feedVirus(vi0, p.vx || (vi0.x - p.x), p.vy || (vi0.y - p.y), 1);
                         p.eaten = true; eatenE = true; break;
+                    }
+                }
+                if (!eatenE && p.vx * p.vx + p.vy * p.vy > 4) {
+                    for (let i = 0; i < B.length; i++) {
+                        var bc = B[i];
+                        if (bc.dead || !bc.pl.chain || bc.pl === p.ownerPl || this.protectedNow(bc.pl)) continue;
+                        var rc2 = (bRads[i] || this.rad(bc.m)) + 10;
+                        var cdx = p.x - bc.x, cdy = p.y - bc.y;
+                        if (cdx * cdx + cdy * cdy < rc2 * rc2) {
+                            bc.m -= 6;
+                            if (bc.m < 6) {
+                                bc.dead = true;
+                                if (!this.mine(bc.pl).some(function(q) { return !q.dead; })) this.killChain(bc.pl, p.ownerPl || null);
+                            } else {
+                                bRads[i] = this.rad(bc.m);
+                            }
+                            p.eaten = true; eatenE = true; break;
+                        }
                     }
                 }
                 if (eatenE) continue;
