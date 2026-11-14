@@ -8,6 +8,7 @@ anything else is left out and the claim still shows its plain text. Pictures are
 """
 import base64
 import os
+import pathlib
 import re
 import time
 import urllib.error
@@ -75,6 +76,35 @@ def find_running(folder, meta, now=None):
     return found
 
 
+def needs_server(meta):
+    """True when the project's manifest says it only works through a server (`server: on`). Anything else can be opened from its files."""
+    return ((meta or {}).get('server') or '').strip().lower() in ('on', 'yes', 'true', '1')
+
+
+def file_url(folder, page):
+    """The file:// address of a page inside the project folder, or '' (a web address, an absolute or climbing path, or a file that is not there).
+    A #part or ?query after the name is kept. This is what a saved page opens when no server answers (a page opened as a file cannot use http links
+    it was written with: the server may be stopped, or on another port by now)."""
+    page = (page or '').strip()
+    if not folder or not page or re.match(r'^[a-z][a-z0-9+.-]*:', page, re.I) or page.startswith(('/', '\\')):
+        return ''
+    name, sep, tail = page.partition('#')
+    name = name.split('?', 1)[0].replace('\\', '/')
+    parts = [x for x in name.split('/') if x]
+    if not parts or any(x in ('.', '..') or ':' in x for x in parts):
+        return ''
+    root = os.path.realpath(folder)
+    full = os.path.realpath(os.path.join(root, *parts))
+    if not (full.startswith(root + os.sep) and os.path.isfile(full)):
+        return ''
+    return pathlib.Path(full).as_uri() + (sep + tail if sep else '')
+
+
+def link_file(value, folder, meta):
+    """A claim's page name as a file:// address, for a project that can be opened from its files ('' for one that needs a server)."""
+    return '' if needs_server(meta) else file_url(folder, value)
+
+
 def resolve_app(folder, meta, name=''):
     """-> {'text', 'base', 'url', 'running', 'hint'}. `base` and `url` are only set when the app is really answering, so a button never points at nothing."""
     meta = meta or {}
@@ -87,7 +117,8 @@ def resolve_app(folder, meta, name=''):
     url = ''
     if base:
         url = link_url(page, base) if page and not page.startswith(('/', '.')) else base
-    return {'text': name or 'the app', 'base': base, 'url': url or base, 'running': bool(base), 'hint': '' if base else hint}
+    own = '' if needs_server(meta) else file_url(folder, page or 'index.html')       # the project's own page as a file: what a saved page opens when nothing answers
+    return {'text': name or 'the app', 'base': base, 'url': url or base, 'running': bool(base), 'hint': '' if base else hint, 'file': own}
 
 
 def app_link(meta, name='the app'):

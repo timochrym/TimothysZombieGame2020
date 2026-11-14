@@ -120,7 +120,8 @@ def media_for(claim, roots, app_url):
         uri = review_media.data_uri(real) if real else ''
         if uri:
             pics.append(uri)
-    return {'link': {'text': link, 'url': review_media.link_url(link, app_url)} if link else None, 'pics': pics}
+    folder = roots[0] if roots else ''
+    return {'link': {'text': link, 'url': review_media.link_url(link, app_url), 'file': review_media.link_file(link, folder, meta_of(folder))} if link else None, 'pics': pics}
 
 
 def page(brief, roots=None, app_url=None, app=None):
@@ -150,5 +151,5 @@ def page(brief, roots=None, app_url=None, app=None):
             '<p><button id="copy" type="button">Copy the line</button> <button id="dl" type="button">Download answers.json</button></p>'
             '<p class="sub">Nothing leaves this page. Paste the line into the chat, or save the file in the review folder.</p>'
             '</main><script id="data" type="application/json">%s</script><script>%s</script></body></html>') % (
-        CSS, review_theme.bar('Review brief'), html.escape(brief['title']), html.escape(ev['span']), len(ev['commits']), len(ev['changed']), html.escape(ev['shortstat']),
+        CSS, review_theme.bar('review brief', ('/', 'Test queue')), html.escape(brief['title']), html.escape(ev['span']), len(ev['commits']), len(ev['changed']), html.escape(ev['shortstat']),
         html.escape(summary), _json_for_script(data), review_theme.JS + review_card.js() + JS)

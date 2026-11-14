@@ -100,8 +100,9 @@ function itemFacts(it, app) {
     kids.push(lab('Open'));
     const box = mediaBox(m);
     if (box) kids.push(box);
-    if (!hasLink && it.check && !steps.length && app) kids.push(el('div', { className: 'media' }, app.running ? el('a', { className: 'btnlink app', href: app.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open ' + app.text) : el('span', { className: 'ask' }, app.text + ' is not running. ' + (app.hint || ''))));
-    else if (hasLink && app && !app.running) kids.push(el('div', { className: 'ask' }, app.text + ' is not running. ' + (app.hint || '')));
+    const appA = app ? pageLink(app.text, app.running ? app.url : '', app.file, 'btnlink app') : null;       // the running app, else (on a saved page) the project's own file
+    if (!hasLink && it.check && !steps.length && app) kids.push(el('div', { className: 'media' }, appA || el('span', { className: 'ask' }, app.text + ' is not running. ' + (app.hint || ''))));
+    else if (hasLink && app && !app.running && !(m.link && m.link.file && location.protocol === 'file:')) kids.push(el('div', { className: 'ask' }, app.text + ' is not running. ' + (app.hint || '')));
   }
   if (steps.length) kids.push(lab('How to test'), el('ol', { className: 'steps' }, ...steps.map((s) => el('li', {}, s))));
   if (it.see) kids.push(lab('You should see'), el('div', {}, it.see));
