@@ -222,10 +222,12 @@ var EntityTakeover = {
         }
     },
 
-    swapPlayers: function() {
-        if (typeof GameModes !== "undefined" && GameModes.current && GameModes.current.id === "mix" && typeof Mix !== "undefined" && Mix.swapCharacter) {
-            return Mix.swapCharacter();
-        }
+    swapPlayers: function(pid) {
+        var mid = typeof GameModes !== "undefined" && GameModes.current ? GameModes.current.id : "";
+        if (mid === "mix" && typeof Mix !== "undefined" && Mix.swapCharacter) return Mix.swapCharacter();
+        if (mid === "tanks" && typeof Tanks !== "undefined" && Tanks.swapBot) return Tanks.swapBot(pid);
+        if (mid === "cells" && typeof Cells !== "undefined" && Cells.swapBot) return Cells.swapBot(pid);
+        if (mid === "snake" && typeof Snake !== "undefined" && Snake.swapBot) return Snake.swapBot(pid);
         if (typeof redGuy !== "undefined" && redGuy && typeof blueGuy !== "undefined" && blueGuy && !redGuy.dead && !blueGuy.dead) {
             var tmp = redGuy;
             redGuy = blueGuy;

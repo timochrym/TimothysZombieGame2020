@@ -416,6 +416,27 @@ var Tanks = {
         }
         ctx.fillStyle = k.color; ctx.strokeStyle = "#7f1d1d"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill(); ctx.stroke();
         ctx.restore();
+    },
+    swapBot: function(pid) {
+        var cur = pid !== undefined
+            ? this.tanks.find(function(k) { return k.pid === pid; })
+            : this.tanks.find(function(k) { return k.human === 0; });
+        var bots = this.tanks.filter(function(k) { return k.alive && k.human === undefined && k !== cur; });
+        if (!bots.length) return false;
+        this._swapIdx = ((this._swapIdx || 0) + 1) % bots.length;
+        var bot = bots[this._swapIdx];
+        if (cur) {
+            bot.human = cur.human; bot.pid = cur.pid;
+            cur.human = undefined; cur.pid = undefined;
+        } else {
+            bot.human = pid !== undefined ? "lan" : 0;
+            if (pid !== undefined) bot.pid = pid;
+        }
+        if (pid === undefined) {
+            this.cam.x = bot.x; this.cam.y = bot.y;
+            if (typeof showBanner === "function") showBanner("SWAPPED", "Now controlling " + (bot.name || "Tank"), "#38bdf8");
+        }
+        return true;
     }
 };
 
@@ -568,6 +589,10 @@ GameModes.register({
     },
 
     onKey: function(code) {
+        if (code === "KeyV" || code === "BracketRight") {
+            if (typeof Net !== "undefined" && Net.role === "client") { Net.send({ t: "sb", act: { k: "swap" } }); return true; }
+            return Tanks.swapBot ? Tanks.swapBot() : false;
+        }
         var me = Tanks.tanks.find(function(k) { return k.human === 0; });
         if (!me) return false;
         var m = /^Digit([1-8])$/.exec(code);

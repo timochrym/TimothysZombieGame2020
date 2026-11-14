@@ -368,7 +368,7 @@ var Net = {
                     if (typeof rebuildAllObjects === "function") rebuildAllObjects();
                 }
             } else if (k === "swap" && typeof EntityTakeover !== "undefined") {
-                EntityTakeover.swapPlayers();
+                EntityTakeover.swapPlayers(pid);
             } else if (k === "possess" && typeof EntityTakeover !== "undefined") {
                 var pe = this.findByNid(act.nid);
                 if (pe) EntityTakeover.possess(pe, act.slot || 0);

@@ -759,6 +759,27 @@ var Cells = {
         var chainHuman = hum.find(function(p) { return p.chain; });
         var hint = chainHuman ? (chainHuman.compact ? "BUBBLE · mouse moves · hold Space: boost · W: snake form" : "SNAKE · mouse steers · hold Space: boost · W: bubble form") + " · bumping snakes kills · Esc menu" : "Mouse moves · Space split · W eject · eat anything 25% smaller · green spikes pop big blobs · Esc menu";
         uiText(hint + (multiplayer ? " · P2: arrows, Enter action, / eject or combine" : ""), cssW / 2, cssH - 11, 12, "rgba(220,230,240,0.85)", "center", "700");
+    },
+    swapBot: function(pid) {
+        var cur = pid !== undefined
+            ? this.players.find(function(p) { return p.pid === pid; })
+            : this.players.find(function(p) { return p.human === 0; });
+        var bots = this.players.filter(function(p) { return p.alive && p.human === undefined && p !== cur; });
+        if (!bots.length) return false;
+        this._swapIdx = ((this._swapIdx || 0) + 1) % bots.length;
+        var bot = bots[this._swapIdx];
+        if (cur) {
+            bot.human = cur.human; bot.pid = cur.pid;
+            cur.human = undefined; cur.pid = undefined;
+        } else {
+            bot.human = pid !== undefined ? "lan" : 0;
+            if (pid !== undefined) bot.pid = pid;
+        }
+        if (pid === undefined) {
+            this.cam.x = bot.cx || 0; this.cam.y = bot.cy || 0;
+            if (typeof showBanner === "function") showBanner("SWAPPED", "Now controlling " + (bot.name || "Blob"), "#a78bfa");
+        }
+        return true;
     }
 };
 
@@ -812,6 +833,13 @@ GameModes.register({
         }
         Cells.players.forEach(function(p) { var M = 0, x = 0, y = 0; B.forEach(function(bb) { if (bb.pl === p) { M += bb.m; x += bb.x * bb.m; y += bb.y * bb.m; } }); if (M) { p.cx = x / M; p.cy = y / M; } });
         Cells.render(); Cells.hud();
+    },
+    onKey: function(code) {
+        if (code === "KeyV" || code === "BracketRight") {
+            if (typeof Net !== "undefined" && Net.role === "client") { Net.send({ t: "sb", act: { k: "swap" } }); return true; }
+            return Cells.swapBot ? Cells.swapBot() : false;
+        }
+        return false;
     },
     netInput: function() {
         var c = Cells.cam;

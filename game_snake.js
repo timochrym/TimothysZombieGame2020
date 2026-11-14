@@ -356,6 +356,27 @@ var Snake = {
             uiText("length " + hw.finalLen + "  ·  " + (hw.deadT > 60 ? (hw.human === 1 ? "Enter / ↑" : "click / Space") + " to play again" : "…"), cssW / 2, y + 70, 15, "#cbd5e1", "center", "800");
         }
         uiText((hs[0] && hs[0].keyMode ? "A/D turn" : "Mouse steers") + " · click / Space / W boost (costs length) · cut others off · Esc menu" + (multiplayer ? " · P2: ←/→ turn, ↑ boost" : ""), cssW / 2, cssH - 14, 12, "rgba(220,230,240,0.7)", "center", "700");
+    },
+    swapBot: function(pid) {
+        var cur = pid !== undefined
+            ? this.worms.find(function(w) { return w.pid === pid; })
+            : this.worms.find(function(w) { return w.human === 0; });
+        var bots = this.worms.filter(function(w) { return w.alive && w.human === undefined && w !== cur; });
+        if (!bots.length) return false;
+        this._swapIdx = ((this._swapIdx || 0) + 1) % bots.length;
+        var bot = bots[this._swapIdx];
+        if (cur) {
+            bot.human = cur.human; bot.pid = cur.pid;
+            cur.human = undefined; cur.pid = undefined;
+        } else {
+            bot.human = pid !== undefined ? "lan" : 0;
+            if (pid !== undefined) bot.pid = pid;
+        }
+        if (pid === undefined && bot.segs && bot.segs[0]) {
+            this.cam.x = bot.segs[0].x; this.cam.y = bot.segs[0].y;
+            if (typeof showBanner === "function") showBanner("SWAPPED", "Now controlling " + (bot.name || "Worm"), "#f472b6");
+        }
+        return true;
     }
 };
 
@@ -396,6 +417,13 @@ GameModes.register({
         Snake.hud();
     },
     screenDraw: function() { Snake.t++; Snake.render(); Snake.hud(); },
+    onKey: function(code) {
+        if (code === "KeyV" || code === "BracketRight") {
+            if (typeof Net !== "undefined" && Net.role === "client") { Net.send({ t: "sb", act: { k: "swap" } }); return true; }
+            return Snake.swapBot ? Snake.swapBot() : false;
+        }
+        return false;
+    },
     netInput: function() {
         var me = Snake.humans()[0];
         var x = { b: (mouseDown || SpacePressed || WASDupPressed) ? 1 : 0 };

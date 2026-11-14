@@ -690,6 +690,9 @@ var SandboxUI = {
     },
 
     renderAdminHTML: function() {
+        var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
+        var mid = typeof GameModes !== "undefined" && GameModes.current ? GameModes.current.id : "";
+        var isIo = ["tanks", "cells", "snake", "mix"].indexOf(mid) !== -1;
         var isGod = !!(typeof godMode !== "undefined" && godMode) || !!(typeof arenaCheats !== "undefined" && arenaCheats.god) || !!(typeof sandboxCfg !== "undefined" && sandboxCfg.invincible);
         var unlimAmmo = typeof settings !== "undefined" && settings.ammo === "unlimited";
         var grav = typeof devOpts !== "undefined" ? (devOpts.gravityMult || 1) : 1;
@@ -697,19 +700,19 @@ var SandboxUI = {
         var isHost = typeof Net !== "undefined" && Net.role === "host";
         var html = '<div class="sb-sec">👑 Admin Commands</div>' +
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px">' +
-            '<button class="sb-btn" id="sb-adm-boss">👑 Spawn Boss</button>' +
+            (!own ? '<button class="sb-btn" id="sb-adm-boss">👑 Spawn Boss</button>' +
             '<button class="sb-btn" id="sb-adm-horde">🧟 Summon Horde</button>' +
-            '<button class="sb-btn" id="sb-adm-heal">❤ Heal All</button>' +
+            '<button class="sb-btn" id="sb-adm-heal">❤ Heal All</button>' : '') +
             '<button class="sb-btn" id="sb-adm-respawn">🔄 Respawn All</button>' +
-            '<button class="sb-btn" id="sb-adm-clearfoe">🧹 Clear Foes</button>' +
-            '<button class="sb-btn" style="color:#f87171" id="sb-adm-clearworld">💥 Clear World</button>' +
+            (!own ? '<button class="sb-btn" id="sb-adm-clearfoe">🧹 Clear Foes</button>' +
+            '<button class="sb-btn" style="color:#f87171" id="sb-adm-clearworld">💥 Clear World</button>' : '') +
             '</div>' +
-            '<div class="sb-sec">Global Rules</div><div class="sb-card">' +
+            ((!own || isIo) ? '<div class="sb-sec">Global Rules</div><div class="sb-card">' +
             '<label class="sb-row" style="cursor:pointer"><span>🛡 God Mode (All)</span><input type="checkbox" id="sb-adm-god" ' + (isGod ? 'checked' : '') + '></label>' +
-            '<label class="sb-row" style="cursor:pointer"><span>∞ Unlimited Ammo</span><input type="checkbox" id="sb-adm-ammo" ' + (unlimAmmo ? 'checked' : '') + '></label>' +
+            (!own ? '<label class="sb-row" style="cursor:pointer"><span>∞ Unlimited Ammo</span><input type="checkbox" id="sb-adm-ammo" ' + (unlimAmmo ? 'checked' : '') + '></label>' +
             '<div style="margin-bottom:2px"><div class="sb-row" style="margin-bottom:2px"><span>🌍 Gravity</span><strong>' + grav.toFixed(1) + 'x</strong></div>' +
-            '<input type="range" id="sb-adm-grav" min="0" max="2.5" step="0.1" value="' + grav + '" style="width:100%"></div>' +
-            '</div>';
+            '<input type="range" id="sb-adm-grav" min="0" max="2.5" step="0.1" value="' + grav + '" style="width:100%"></div>' : '') +
+            '</div>' : '');
         if (isHost || isClient) {
             var plist = isHost ? Net.peerList() : (Net.lobbyPlayers || []);
             html += '<div class="sb-sec">📡 LAN Players (' + (plist.length + (isHost ? 1 : 0)) + ')</div><div class="sb-card">';
@@ -755,25 +758,30 @@ var SandboxUI = {
         }
 
         // Universal Physics & Cheats
+        var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
+        var mid = m ? m.id : "";
+        var isIo = ["tanks", "cells", "snake", "mix"].indexOf(mid) !== -1;
         var isGod = !!(typeof godMode !== "undefined" && godMode) || !!(typeof arenaCheats !== "undefined" && arenaCheats.god);
         var unlimAmmo = typeof settings !== "undefined" && settings.ammo === "unlimited";
         var grav = typeof devOpts !== "undefined" ? (devOpts.gravityMult || 1) : 1;
         var uz = typeof userZoom !== "undefined" ? userZoom : 1;
         var hb = typeof devOpts !== "undefined" && !!devOpts.showHitboxes;
 
-        html += '<div class="sb-sec">Universal Physics & Cheats</div><div class="sb-card">' +
-            '<label class="sb-row" style="cursor:pointer"><span>🛡 God Mode (Invincible)</span><input type="checkbox" id="sb-u-god" ' + (isGod ? 'checked' : '') + '></label>' +
-            '<label class="sb-row" style="cursor:pointer"><span>∞ Unlimited Ammo</span><input type="checkbox" id="sb-u-ammo" ' + (unlimAmmo ? 'checked' : '') + '></label>' +
-            '<label class="sb-row" style="cursor:pointer"><span>🟩 Show Hitboxes</span><input type="checkbox" id="sb-u-hb" ' + (hb ? 'checked' : '') + '></label>' +
-            '<div style="margin-bottom:6px"><div class="sb-row" style="margin-bottom:2px"><span>🌍 Gravity</span><strong>' + grav.toFixed(1) + 'x</strong></div>' +
-            '<input type="range" id="sb-u-grav" min="0" max="2.5" step="0.1" value="' + grav + '" style="width:100%"></div>' +
-            '<div><div class="sb-row" style="margin-bottom:2px"><span>🔎 Camera Zoom</span><strong>' + uz.toFixed(2) + 'x</strong></div>' +
-            '<input type="range" id="sb-u-zoom" min="0.4" max="2.2" step="0.05" value="' + uz + '" style="width:100%"></div>' +
-            '</div>';
+        if (!own || isIo) {
+            html += '<div class="sb-sec">Universal Physics & Cheats</div><div class="sb-card">' +
+                '<label class="sb-row" style="cursor:pointer"><span>🛡 God Mode (Invincible)</span><input type="checkbox" id="sb-u-god" ' + (isGod ? 'checked' : '') + '></label>' +
+                (!own ? '<label class="sb-row" style="cursor:pointer"><span>∞ Unlimited Ammo</span><input type="checkbox" id="sb-u-ammo" ' + (unlimAmmo ? 'checked' : '') + '></label>' +
+                '<label class="sb-row" style="cursor:pointer"><span>🟩 Show Hitboxes</span><input type="checkbox" id="sb-u-hb" ' + (hb ? 'checked' : '') + '></label>' +
+                '<div style="margin-bottom:6px"><div class="sb-row" style="margin-bottom:2px"><span>🌍 Gravity</span><strong>' + grav.toFixed(1) + 'x</strong></div>' +
+                '<input type="range" id="sb-u-grav" min="0" max="2.5" step="0.1" value="' + grav + '" style="width:100%"></div>' +
+                '<div><div class="sb-row" style="margin-bottom:2px"><span>🔎 Camera Zoom</span><strong>' + uz.toFixed(2) + 'x</strong></div>' +
+                '<input type="range" id="sb-u-zoom" min="0.4" max="2.2" step="0.05" value="' + uz + '" style="width:100%"></div>' : '') +
+                '</div>';
+        }
 
         html += '<div class="sb-sec">Quick Actions</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
-            '<button class="sb-btn" id="sb-act-heal">❤ Heal All</button>' +
-            '<button class="sb-btn" id="sb-act-clear">🧹 Clear Foes</button>' +
+            (!own ? '<button class="sb-btn" id="sb-act-heal">❤ Heal All</button>' +
+            '<button class="sb-btn" id="sb-act-clear">🧹 Clear Foes</button>' : '') +
             '<button class="sb-btn" id="sb-act-restart">🔄 Restart</button>' +
             '<button class="sb-btn active" id="sb-act-hub">🕹 Arcade Hub</button>' +
             '</div>';
@@ -893,26 +901,46 @@ var SandboxUI = {
         }
 
         // World Telemetry Footer
-        html += '<div class="sb-sec">World Telemetry</div><div class="sb-card" style="font-size:11px">' +
-            '<div class="sb-row"><span>Frame Rate</span><strong id="sb-world-fps">' + (typeof measuredFPS !== "undefined" ? measuredFPS : 60) + ' FPS</strong></div>' +
-            '<div class="sb-row"><span>Players / Enemies</span><strong>' + (typeof characters !== "undefined" ? characters.length : 0) + ' / ' + (typeof zombies !== "undefined" ? zombies.length : 0) + '</strong></div>' +
-            '<div class="sb-row" style="margin-bottom:0"><span>Ragdolls / Objects</span><strong>' + (typeof Ragdolls !== "undefined" ? Ragdolls.list.length : 0) + ' / ' + (typeof staticObjects !== "undefined" ? staticObjects.length : 0) + '</strong></div>' +
-            '</div>';
+        var ownT = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
+        var midT = GameModes.current ? GameModes.current.id : "";
+        html += '<div class="sb-sec">Telemetry</div><div class="sb-card" style="font-size:11px">' +
+            '<div class="sb-row"><span>Frame Rate</span><strong id="sb-world-fps">' + (typeof measuredFPS !== "undefined" ? measuredFPS : 60) + ' FPS</strong></div>';
+        if (!ownT) {
+            html += '<div class="sb-row"><span>Players / Enemies</span><strong>' + (typeof characters !== "undefined" ? characters.length : 0) + ' / ' + (typeof zombies !== "undefined" ? zombies.length : 0) + '</strong></div>' +
+                '<div class="sb-row" style="margin-bottom:0"><span>Ragdolls / Objects</span><strong>' + (typeof Ragdolls !== "undefined" ? Ragdolls.list.length : 0) + ' / ' + (typeof staticObjects !== "undefined" ? staticObjects.length : 0) + '</strong></div>';
+        } else if (midT === "tanks") {
+            html += '<div class="sb-row" style="margin-bottom:0"><span>Tanks / Shapes</span><strong>' + (typeof Tanks !== "undefined" ? Tanks.tanks.length : 0) + ' / ' + (typeof Tanks !== "undefined" ? Tanks.shapes.length : 0) + '</strong></div>';
+        } else if (midT === "cells") {
+            html += '<div class="sb-row" style="margin-bottom:0"><span>Blobs / Viruses</span><strong>' + (typeof Cells !== "undefined" ? Cells.blobs.length : 0) + ' / ' + (typeof Cells !== "undefined" ? Cells.viruses.length : 0) + '</strong></div>';
+        } else if (midT === "snake") {
+            html += '<div class="sb-row" style="margin-bottom:0"><span>Worms / Pellets</span><strong>' + (typeof Snake !== "undefined" ? Snake.worms.length : 0) + ' / ' + (typeof Snake !== "undefined" ? Snake.pellets.length : 0) + '</strong></div>';
+        } else if (midT === "mix") {
+            html += '<div class="sb-row" style="margin-bottom:0"><span>Tanks / Blobs / Worms</span><strong>' + (typeof Tanks !== "undefined" ? Tanks.tanks.length : 0) + ' / ' + (typeof Cells !== "undefined" ? Cells.blobs.length : 0) + ' / ' + (typeof Snake !== "undefined" ? Snake.worms.length : 0) + '</strong></div>';
+        }
+        html += '</div>';
         return html;
     },
 
     renderQuickTargetsHTML: function() {
         var id = GameModes.current ? GameModes.current.id : "";
+        var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
         var chips = [];
         if (id === "sport" && typeof Ball !== "undefined") {
             chips.push(["⚽ Ball", "ball"]);
             if (typeof Flail !== "undefined" && Flail.on() && Flail.men[0]) chips.push(["🟢 Keeper", "flail0"]);
-        } else if (id === "mix" || id === "tanks" || id === "cells" || id === "snake") {
+        } else if (id === "mix") {
             if (typeof Tanks !== "undefined" && Tanks.tanks[0]) chips.push(["🛡 Tank", "tank0"]);
             if (typeof Cells !== "undefined" && Cells.blobs[0]) chips.push(["🟢 Blob", "blob0"]);
             if (typeof Snake !== "undefined" && Snake.worms[0]) chips.push(["🐍 Worm", "worm0"]);
             if (typeof Cells !== "undefined" && Cells.viruses[0]) chips.push(["🦠 Virus", "virus0"]);
-        } else {
+        } else if (id === "tanks") {
+            if (typeof Tanks !== "undefined" && Tanks.tanks[0]) chips.push(["🛡 Tank", "tank0"]);
+        } else if (id === "cells") {
+            if (typeof Cells !== "undefined" && Cells.blobs[0]) chips.push(["🟢 Blob", "blob0"]);
+            if (typeof Cells !== "undefined" && Cells.viruses[0]) chips.push(["🦠 Virus", "virus0"]);
+        } else if (id === "snake") {
+            if (typeof Snake !== "undefined" && Snake.worms[0]) chips.push(["🐍 Worm", "worm0"]);
+        } else if (!own) {
             if (typeof redGuy !== "undefined" && redGuy && !redGuy.dead) chips.push(["🧑 P1", "p1"]);
             if (typeof blueGuy !== "undefined" && blueGuy && !blueGuy.dead) chips.push(["🧑 P2", "p2"]);
             if (typeof zombies !== "undefined" && zombies[0]) chips.push(["🧟 Enemy", "z0"]);
@@ -943,7 +971,13 @@ var SandboxUI = {
     },
 
     renderSideToolsHTML: function(sb) {
-        var tools = [
+        var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
+        var mid = typeof GameModes !== "undefined" && GameModes.current ? GameModes.current.id : "";
+        var isIo = ["tanks", "cells", "snake", "mix"].indexOf(mid) !== -1;
+        var tools = own ? [
+            ["play", "🎮 Play / Normal"],
+            ["inspect", "🔍 Inspect Anything"]
+        ] : [
             ["play", "🎮 Play / Normal"],
             ["inspect", "🔍 Inspect Anything"],
             ["select", "✋ Select / Box"],
@@ -956,22 +990,29 @@ var SandboxUI = {
             ["delete", "🗑 Delete"]
         ];
         var selCount = this.selectedGroup.filter(function(it) { return it && !it.dead; }).length;
-        return '<div class="sb-sec">Active Tool</div>' +
+        var html = '<div class="sb-sec">Active Tool</div>' +
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px">' +
             tools.map(function(t) {
                 return '<button class="sb-btn ' + (SandboxUI.tool === t[0] ? 'active' : '') + '" style="text-align:left;padding:6px 7px;font-size:11px" data-sbtool="' + t[0] + '">' + t[1] + '</button>';
-            }).join("") + '</div>' +
-            '<div class="sb-sec">Selection Tools (' + selCount + ' selected)</div>' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px">' +
-            '<button class="sb-btn" style="font-size:11px" id="sb-sel-allobj">▦ All Objects</button>' +
-            '<button class="sb-btn" style="font-size:11px" id="sb-sel-allmob">🧟 All Enemies</button>' +
-            '<button class="sb-btn" style="font-size:11px;grid-column:span 2" id="sb-sel-clear">✕ Clear Selection</button>' +
-            '</div>' +
-            '<div class="sb-sec">Character Swap &amp; Overlays</div>' +
-            '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-swap">🔄 Swap P1 ↔ P2 [V]</button>' +
-            '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-spawn">🔍 Universal Spawner [B]</button>' +
-            '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-roster">👥 Entity Roster</button>' +
-            (sb ? '<button class="sb-btn" style="width:100%" id="sb-tl-floor">▦ Toggle Sandbox Floor</button>' : '');
+            }).join("") + '</div>';
+        if (!own) {
+            html += '<div class="sb-sec">Selection Tools (' + selCount + ' selected)</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px">' +
+                '<button class="sb-btn" style="font-size:11px" id="sb-sel-allobj">▦ All Objects</button>' +
+                '<button class="sb-btn" style="font-size:11px" id="sb-sel-allmob">🧟 All Enemies</button>' +
+                '<button class="sb-btn" style="font-size:11px;grid-column:span 2" id="sb-sel-clear">✕ Clear Selection</button>' +
+                '</div>';
+        }
+        if (!own || isIo) {
+            html += '<div class="sb-sec">' + (isIo ? 'Bot / Player Swap' : 'Character Swap &amp; Overlays') + '</div>' +
+                '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-swap">' + (isIo ? '🔄 Swap with Bot / Player [V]' : '🔄 Swap P1 ↔ P2 [V]') + '</button>';
+        }
+        if (!own) {
+            html += '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-spawn">🔍 Universal Spawner [B]</button>' +
+                '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-roster">👥 Entity Roster</button>' +
+                (sb ? '<button class="sb-btn" style="width:100%" id="sb-tl-floor">▦ Toggle Sandbox Floor</button>' : '');
+        }
+        return html;
     },
 
     renderSideGamesHTML: function(cur) {
@@ -1072,26 +1113,32 @@ var SandboxUI = {
     renderPauseHTML: function() {
         var self = this;
         var isClient = typeof Net !== "undefined" && Net.role === "client";
-        var tabs = [["creative", "Creative Rules"], ["cheats", "Cheats & Physics"], ["entities", "Entity Controls"], ["arcade", "Switch Game"], ["admin", "👑 Admin"]];
+        var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
+        var mid = typeof GameModes !== "undefined" && GameModes.current ? GameModes.current.id : "";
+        var isIo = ["tanks", "cells", "snake", "mix"].indexOf(mid) !== -1;
+        var tabs = own
+            ? (isIo ? [["entities", "Bot / Player Swap"], ["arcade", "Switch Game"], ["admin", "👑 Admin"]] : [["arcade", "Switch Game"], ["admin", "👑 Admin"]])
+            : [["creative", "Creative Rules"], ["cheats", "Cheats & Physics"], ["entities", "Entity Controls"], ["arcade", "Switch Game"], ["admin", "👑 Admin"]];
+        if (!tabs.some(function(t) { return t[0] === self.pauseTab; })) self.pauseTab = tabs[0][0];
         var body = "";
-        if (this.pauseTab === "creative") {
+        if (this.pauseTab === "creative" && !own) {
             body = '<label style="display:flex;justify-content:space-between;padding:8px;background:rgba(15,23,42,0.6);border-radius:8px;margin-bottom:6px"><span>Floor Grid</span><input type="checkbox" id="sb-p-floor" ' + (sandboxCfg.showFloor ? "checked" : "") + '></label>' +
                 '<label style="display:flex;justify-content:space-between;padding:8px;background:rgba(15,23,42,0.6);border-radius:8px;margin-bottom:6px"><span>Noclip Flight</span><input type="checkbox" id="sb-p-noclip" ' + (sandboxCfg.noclip ? "checked" : "") + '></label>' +
                 '<label style="display:flex;justify-content:space-between;padding:8px;background:rgba(15,23,42,0.6);border-radius:8px;margin-bottom:6px"><span>Invincible (God Mode)</span><input type="checkbox" id="sb-p-inv" ' + (sandboxCfg.invincible ? "checked" : "") + '></label>';
-        } else if (this.pauseTab === "cheats") {
+        } else if (this.pauseTab === "cheats" && !own) {
             body = '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px"><span>Gravity</span><span>' + (devOpts.gravityMult || 1).toFixed(1) + 'x</span></div>' +
                 '<input type="range" id="sb-p-grav" min="0" max="2.5" step="0.1" value="' + (devOpts.gravityMult || 1) + '" style="width:100%"></div>' +
                 '<button class="sb-btn" style="width:100%;margin-bottom:6px" id="sb-p-clear">🧹 Clear All Objects &amp; Enemies</button>' +
                 '<button class="sb-btn" style="width:100%" id="sb-p-horde">🧟 Summon Test Horde</button>';
         } else if (this.pauseTab === "entities") {
-            body = '<button class="sb-btn" style="width:100%;margin-bottom:6px" id="sb-p-swap">🔄 Swap P1 ↔ P2 Characters</button>' +
-                '<button class="sb-btn" style="width:100%;margin-bottom:6px" id="sb-p-eject">↩ Eject to Hero</button>' +
-                '<button class="sb-btn" style="width:100%" id="sb-p-roster">👥 Open Entity Roster</button>';
+            body = '<button class="sb-btn" style="width:100%;margin-bottom:6px" id="sb-p-swap">' + (isIo ? '🔄 Swap with Bot / Player [V]' : '🔄 Swap P1 ↔ P2 Characters') + '</button>' +
+                (!own ? '<button class="sb-btn" style="width:100%;margin-bottom:6px" id="sb-p-eject">↩ Eject to Hero</button>' +
+                '<button class="sb-btn" style="width:100%" id="sb-p-roster">👥 Open Entity Roster</button>' : '');
         } else if (this.pauseTab === "admin") {
             body = this.renderAdminHTML();
         } else {
             body = '<button class="sb-btn active" style="width:100%;margin-bottom:8px" id="sb-p-hub">🕹 ' + (isClient ? 'Open Games List' : 'Open Arcade Hub') + '</button>' +
-                '<button class="sb-btn" style="width:100%;margin-bottom:8px" id="sb-p-reset">✨ Reset Blank World</button>' +
+                (!own ? '<button class="sb-btn" style="width:100%;margin-bottom:8px" id="sb-p-reset">✨ Reset Blank World</button>' : '') +
                 (isClient ? '<button class="sb-btn" style="width:100%;color:#f87171" id="sb-p-leave">📡 Leave LAN Game</button>' : '');
         }
 
