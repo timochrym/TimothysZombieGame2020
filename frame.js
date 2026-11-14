@@ -987,6 +987,7 @@ function frame() {
     // modes with their own full screen (grid sims, board games) skip the platformer world entirely
     if (GameModes.flag("ownScreen", false) && GameModes.has("screenFrame")) {
         GameModes.call("screenFrame"); drawBanners();
+        if (typeof UniversalInspect !== "undefined") UniversalInspect.drawOverlay();
         if (typeof Net !== "undefined" && Net.role === "host") Net.hostFrame();     // keeps LAN clients told which game is on
         return;
     }

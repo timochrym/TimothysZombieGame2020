@@ -416,7 +416,48 @@ GameModes.register({
         Snake.render();
         Snake.hud();
     },
-    screenDraw: function() { Snake.t++; Snake.render(); Snake.hud(); },
+    screenDraw: function() {
+        Snake.t++;
+        var isCl = typeof Net !== "undefined" && Net.role === "client";
+        var myW = isCl ? Snake.worms.find(function(w) { return w.pid === Net.pid; }) : null;
+        for (let i = 0; i < Snake.worms.length; i++) {
+            var w = Snake.worms[i];
+            if (!w.alive || !w.segs || !w.segs.length) continue;
+            if (w === myW) {
+                var sc = Snake.toScreen(w.segs[0].x, w.segs[0].y);
+                var ta = Math.atan2(mouseY - sc[1], mouseX - sc[0]);
+                var da = Math.atan2(Math.sin(ta - w.ang), Math.cos(ta - w.ang));
+                w.ang += Math.max(-0.14, Math.min(0.14, da));
+                var wsp = (mouseDown || SpacePressed || WASDupPressed) ? 5.2 : 3.2;
+                w.segs[0].x += Math.cos(w.ang) * wsp; w.segs[0].y += Math.sin(w.ang) * wsp;
+                if (w._tx !== undefined) {
+                    var dw = Math.hypot(w._tx - w.segs[0].x, w._ty - w.segs[0].y);
+                    if (dw >= 120) { w.segs[0].x = w._tx; w.segs[0].y = w._ty; }
+                    else if (dw > 8) { w.segs[0].x += (w._tx - w.segs[0].x) * 0.12; w.segs[0].y += (w._ty - w.segs[0].y) * 0.12; }
+                }
+                for (let s = 1; s < w.segs.length; s++) {
+                    var prev = w.segs[s - 1], cur = w.segs[s];
+                    var dx = prev.x - cur.x, dy = prev.y - cur.y, d = Math.hypot(dx, dy);
+                    if (d > 5.5) { cur.x = prev.x - dx / d * 5.5; cur.y = prev.y - dy / d * 5.5; }
+                }
+                var wh = w.segs[0], wr = 18;
+                var se = Snake._eatenPellets || (Snake._eatenPellets = []), now = performance.now();
+                for (let p = Snake.pellets.length - 1; p >= 0; p--) {
+                    var g = Snake.pellets[p];
+                    if (Math.abs(g.x - wh.x) < wr && Math.abs(g.y - wh.y) < wr && Math.hypot(g.x - wh.x, g.y - wh.y) < wr) {
+                        w.len += g.v || 1;
+                        se.push([Math.round(g.x), Math.round(g.y), now + 900]);
+                        if (se.length > 160) se.shift();
+                        Snake.pellets.splice(p, 1);
+                    }
+                }
+            } else if (w._tx !== undefined) {
+                w.segs[0].x += (w._tx - w.segs[0].x) * 0.45;
+                w.segs[0].y += (w._ty - w.segs[0].y) * 0.45;
+            }
+        }
+        Snake.render(); Snake.hud();
+    },
     onKey: function(code) {
         if (code === "KeyV" || code === "BracketRight") {
             if (typeof Net !== "undefined" && Net.role === "client") { Net.send({ t: "sb", act: { k: "swap" } }); return true; }

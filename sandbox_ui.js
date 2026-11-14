@@ -824,6 +824,7 @@ var SandboxUI = {
                 '<button class="sb-btn" id="sb-in-heal" style="padding:4px">❤ Heal/+</button>' +
                 '<button class="sb-btn" id="sb-in-yeet" style="padding:4px">🚀 Yeet</button>' +
                 ((sel.kind === "character" || sel.kind === "enemy") ? '<button class="sb-btn" id="sb-in-pos" style="padding:4px">⚡ Possess</button>' : '') +
+                ((sel.kind === "tank" || sel.kind === "blob" || sel.kind === "worm") ? '<button class="sb-btn active" id="sb-in-swap" style="padding:4px">🔄 Swap</button>' : '') +
                 '<button class="sb-btn ' + (isFrozen ? 'active' : '') + '" id="sb-in-freeze" style="padding:4px">' + (isFrozen ? '❄ Frozen' : '❄ Freeze') + '</button>' +
                 '<button class="sb-btn" id="sb-in-del" style="padding:4px;color:#f87171">🗑 Delete</button>' +
                 '</div>';
@@ -1315,6 +1316,16 @@ var SandboxUI = {
             };
             if (el("sb-in-pos")) el("sb-in-pos").onclick = function() {
                 if (typeof EntityTakeover !== "undefined") EntityTakeover.possess(o);
+                self.render();
+            };
+            if (el("sb-in-swap")) el("sb-in-swap").onclick = function() {
+                var tid = sel.kind === "blob" ? (o.pl ? o.pl.id : o.id) : o.id;
+                if (!self.sendNet({ k: "swapTo", kind: sel.kind, id: tid }) && typeof EntityTakeover !== "undefined" && EntityTakeover.swapTo) {
+                    EntityTakeover.swapTo(sel.kind, o);
+                }
+                if (sel.kind === "tank" && typeof UniversalInspect !== "undefined") UniversalInspect.selected = UniversalInspect._tankDesc(o);
+                else if (sel.kind === "blob" && typeof UniversalInspect !== "undefined") UniversalInspect.selected = UniversalInspect._blobDesc(o);
+                else if (sel.kind === "worm" && typeof UniversalInspect !== "undefined") UniversalInspect.selected = UniversalInspect._wormDesc(o);
                 self.render();
             };
             if (el("sb-in-freeze")) el("sb-in-freeze").onclick = function() {

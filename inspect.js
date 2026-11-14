@@ -349,14 +349,21 @@ var UniversalInspect = {
         };
     },
 
+    _whoLabel: function(h) {
+        if (h === 0) return " (P1)";
+        if (h === "lan") return " (P2 LAN)";
+        if (h === 1) return " (P2)";
+        return " (Bot)";
+    },
+
     _tankDesc: function(k) {
         return {
             kind: "tank",
             icon: "🛡",
-            title: (k.name || "Tank") + (k.human !== undefined ? " (Human)" : " (Bot)"),
+            title: (k.name || "Tank") + this._whoLabel(k.human),
             sub: "Diep Tank · Lv " + (k.lvl || 1) + " · " + (k.cls || "basic"),
             obj: k,
-            color: k.col || "#38bdf8",
+            color: k.color || k.col || "#38bdf8",
             radius: Tanks.size(k) + 12,
             pos: function() { return { x: k.x, y: k.y }; },
             vel: function() { return { vx: k.vx || 0, vy: k.vy || 0 }; },
@@ -385,14 +392,14 @@ var UniversalInspect = {
     },
 
     _blobDesc: function(b) {
-        var o = b.owner || {};
+        var o = b.pl || b.owner || {};
         return {
             kind: "blob",
-            icon: "🟢",
-            title: (o.name || "Blob") + (o.human !== undefined ? " (Human)" : " (Bot)"),
-            sub: "Agar Blob · Mass " + Math.round(b.m),
+            icon: o.chain ? "📿" : "🟢",
+            title: (o.name || "Blob") + this._whoLabel(o.human),
+            sub: (o.chain ? "Bubble Worm" : "Agar Blob") + " · Mass " + Math.round(b.m),
             obj: b,
-            color: o.col || "#4ade80",
+            color: o.color || o.col || "#4ade80",
             radius: Cells.rad(b.m) + 10,
             pos: function() { return { x: b.x, y: b.y }; },
             vel: function() { return { vx: b.vx || 0, vy: b.vy || 0 }; },
@@ -422,13 +429,13 @@ var UniversalInspect = {
         return {
             kind: "worm",
             icon: "🐍",
-            title: (w.name || "Worm") + (w.human !== undefined ? " (Human)" : " (Bot)"),
+            title: (w.name || "Worm") + this._whoLabel(w.human),
             sub: "Slither Worm · Length " + Math.round(w.len),
             obj: w,
-            color: w.col || "#a855f7",
+            color: w.color || w.col || "#a855f7",
             radius: Snake.rad(w) + 14,
             pos: function() { return { x: w.segs[0].x, y: w.segs[0].y }; },
-            vel: function() { var sp = w.boost ? 7 : 3.5; return { vx: Math.cos(w.ang || 0) * sp, vy: Math.sin(w.ang || 0) * sp }; },
+            vel: function() { var sp = w.boosting ? 7 : 3.5; return { vx: Math.cos(w.ang || 0) * sp, vy: Math.sin(w.ang || 0) * sp }; },
             hpInfo: function() { return { val: Math.round(w.len), max: Math.max(300, Math.round(w.len * 1.4)), label: "LEN" }; },
             isDead: function() { return !w.alive; }
         };

@@ -820,12 +820,37 @@ GameModes.register({
     // food any blob touches disappears right away instead of waiting for the next packet.
     screenDraw: function() {
         Cells.t++;
-        var B = Cells.blobs, P = Cells.pellets;
+        var B = Cells.blobs, P = Cells.pellets, c = Cells.cam;
+        var isCl = typeof Net !== "undefined" && Net.role === "client";
+        var ax = (mouseX - cssW / 2) / (c.z || 1) + c.x, ay = (mouseY - cssH / 2) / (c.z || 1) + c.y;
+        var myPl = isCl ? Cells.players.find(function(p) { return p.pid === Net.pid; }) : null;
+        if (myPl) { myPl.aimX = ax; myPl.aimY = ay; }
+        var myBlobs = [];
         for (let i = 0; i < B.length; i++) {
             var q = B[i];
+            if (isCl && myPl && q.pl === myPl) {
+                myBlobs.push(q);
+                var dx = ax - q.x, dy = ay - q.y, d = Math.hypot(dx, dy);
+                if (d > 6) { var s = Math.min(3.4, d * 0.12); q.x += dx / d * s; q.y += dy / d * s; }
+                if (q.tx !== undefined) {
+                    var db = Math.hypot(q.tx - q.x, q.ty - q.y);
+                    if (db >= 120) { q.x = q.tx; q.y = q.ty; }
+                    else if (db > 8) { q.x += (q.tx - q.x) * 0.12; q.y += (q.ty - q.y) * 0.12; }
+                }
+                continue;
+            }
             if (q.tx === undefined) continue;
             q.tx += q.vx * 0.5; q.ty += q.vy * 0.5;                       // keep moving at the last known speed
             q.x += (q.tx - q.x) * 0.35; q.y += (q.ty - q.y) * 0.35;
+        }
+        if (myPl && myPl.chain && myBlobs.length > 1) {
+            for (let i = 1; i < myBlobs.length; i++) {
+                var seg = myBlobs[i], ld = seg.lead || myBlobs[i - 1];
+                if (!ld) continue;
+                var sdx = ld.x - seg.x, sdy = ld.y - seg.y, sd = Math.hypot(sdx, sdy);
+                var wantD = (Cells.rad(ld.m) + Cells.rad(seg.m)) * 0.75;
+                if (sd > wantD) { seg.x += (sdx / sd) * (sd - wantD) * 0.55; seg.y += (sdy / sd) * (sd - wantD) * 0.55; }
+            }
         }
         for (let k = P.length - 1; k >= 0; k--) {
             var f = P[k];

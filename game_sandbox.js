@@ -263,6 +263,62 @@ var EntityTakeover = {
         return false;
     },
 
+    swapTo: function(kind, idOrObj, pid) {
+        var mid = typeof GameModes !== "undefined" && GameModes.current ? GameModes.current.id : "";
+        var target = null, tKind = kind;
+        if (kind === "tank" && typeof Tanks !== "undefined") {
+            target = (typeof idOrObj === "object" && idOrObj) ? idOrObj : Tanks.tanks.find(function(k) { return k.id === idOrObj; });
+        } else if (kind === "blob" && typeof Cells !== "undefined") {
+            target = (typeof idOrObj === "object" && idOrObj) ? (idOrObj.pl || idOrObj) : Cells.players.find(function(p) { return p.id === idOrObj; });
+            if (target) tKind = target.chain ? "chain" : "blob";
+        } else if (kind === "worm" && typeof Snake !== "undefined") {
+            target = (typeof idOrObj === "object" && idOrObj) ? idOrObj : Snake.worms.find(function(w) { return w.id === idOrObj; });
+        }
+        if (!target || !target.alive) return false;
+        var cur = null;
+        if (mid === "mix" && typeof Mix !== "undefined") {
+            if (pid !== undefined) {
+                cur = (typeof Tanks !== "undefined" && Tanks.tanks.find(function(k) { return k.pid === pid; })) ||
+                      (typeof Cells !== "undefined" && Cells.players.find(function(p) { return p.pid === pid; })) ||
+                      (typeof Snake !== "undefined" && Snake.worms.find(function(w) { return w.pid === pid; }));
+            } else {
+                var m = Mix.me(); cur = m ? m.ref : null;
+            }
+        } else if (kind === "tank") {
+            cur = pid !== undefined ? Tanks.tanks.find(function(k) { return k.pid === pid; }) : Tanks.tanks.find(function(k) { return k.human === 0; });
+        } else if (kind === "blob") {
+            cur = pid !== undefined ? Cells.players.find(function(p) { return p.pid === pid; }) : Cells.players.find(function(p) { return p.human === 0; });
+        } else if (kind === "worm") {
+            cur = pid !== undefined ? Snake.worms.find(function(w) { return w.pid === pid; }) : Snake.worms.find(function(w) { return w.human === 0; });
+        }
+        if (cur === target) return true;
+        if (cur) {
+            var oldH = cur.human, oldPid = cur.pid;
+            cur.human = target.human; cur.pid = target.pid;
+            target.human = oldH !== undefined ? oldH : (pid !== undefined ? "lan" : 0);
+            target.pid = oldPid !== undefined ? oldPid : pid;
+        } else {
+            target.human = pid !== undefined ? "lan" : 0;
+            if (pid !== undefined) target.pid = pid;
+        }
+        if (mid === "mix" && typeof Mix !== "undefined") {
+            if (pid !== undefined && typeof Net !== "undefined" && Net.peers && Net.peers[pid]) {
+                Net.peers[pid].mixBody = tKind;
+                if (Net.peers[pid].inp && Net.peers[pid].inp.x) delete Net.peers[pid].inp.x.body;
+            } else if (pid === undefined) {
+                mixCfg.body = tKind; Mix._pillsBody = null;
+            }
+        }
+        if (pid === undefined) {
+            var cam = (mid === "mix" && typeof Mix !== "undefined") ? Mix.cam : (kind === "tank" ? Tanks.cam : (kind === "blob" ? Cells.cam : Snake.cam));
+            var tx = kind === "worm" ? (target.segs && target.segs[0] ? target.segs[0].x : 0) : (kind === "blob" ? (target.cx || 0) : target.x);
+            var ty = kind === "worm" ? (target.segs && target.segs[0] ? target.segs[0].y : 0) : (kind === "blob" ? (target.cy || 0) : target.y);
+            if (cam) { cam.x = tx; cam.y = ty; }
+            if (typeof showBanner === "function") showBanner("SWAPPED", "Now controlling " + (target.name || tKind), "#38bdf8");
+        }
+        return true;
+    },
+
     drive: function(ent, slot) {
         slot = slot === 1 ? 1 : (ent && ent._possessedBy === 1 ? 1 : 0);
         if (!ent || ent.dead) { this.release(true, slot); return; }

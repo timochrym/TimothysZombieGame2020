@@ -369,6 +369,8 @@ var Net = {
                 }
             } else if (k === "swap" && typeof EntityTakeover !== "undefined") {
                 EntityTakeover.swapPlayers(pid);
+            } else if (k === "swapTo" && typeof EntityTakeover !== "undefined" && EntityTakeover.swapTo) {
+                EntityTakeover.swapTo(act.kind, act.id, pid);
             } else if (k === "possess" && typeof EntityTakeover !== "undefined") {
                 var pe = this.findByNid(act.nid);
                 if (pe) EntityTakeover.possess(pe, act.slot || 0);
@@ -918,6 +920,7 @@ var Net = {
         if (GameModes.current && GameModes.current.flags && GameModes.current.flags.ownScreen && GameModes.has("screenDraw")) {
             GameModes.call("screenDraw");
             if (typeof drawBanners === "function") drawBanners();
+            if (typeof UniversalInspect !== "undefined") UniversalInspect.drawOverlay();
             if (this.menuOpen) this.drawClientMenu();
             return;
         }

@@ -474,7 +474,33 @@ GameModes.register({
     },
     screenDraw: function() {
         Tanks.t++;
-        for (let i = 0; i < Tanks.bullets.length; i++) { var b = Tanks.bullets[i]; if (b.vx || b.vy) { b.x += b.vx; b.y += b.vy; } }
+        var now = performance.now();
+        for (let i = Tanks.bullets.length - 1; i >= 0; i--) {
+            var b = Tanks.bullets[i];
+            if (b.vx || b.vy) { b.x += b.vx; b.y += b.vy; }
+            if (b._hit) { Tanks.bullets.splice(i, 1); continue; }
+            for (let j = 0; j < Tanks.shapes.length; j++) {
+                var q = Tanks.shapes[j], sr = TNK_SHAPES[q.type] ? TNK_SHAPES[q.type].r : 18;
+                if (Math.abs(b.x - q.x) < sr + b.r && Math.abs(b.y - q.y) < sr + b.r && Math.hypot(b.x - q.x, b.y - q.y) < sr + b.r) {
+                    b._hit = true; q.hitT = 4; q.hp = Math.max(0, q.hp - (b.dmg || 5));
+                    if (typeof Components !== "undefined") Components.spawnSparks(b.x, b.y, "#fde047", 4);
+                    break;
+                }
+            }
+            if (!b._hit) {
+                for (let j = 0; j < Tanks.tanks.length; j++) {
+                    var tk = Tanks.tanks[j];
+                    if (!tk.alive || tk === b.owner) continue;
+                    var tr = Tanks.size ? Tanks.size(tk) : 22;
+                    if (Math.hypot(b.x - tk.x, b.y - tk.y) < tr + b.r) {
+                        b._hit = true; tk.flash = 4;
+                        if (typeof Components !== "undefined") Components.spawnSparks(b.x, b.y, tk.color || "#fff", 4);
+                        break;
+                    }
+                }
+            }
+            if (b._hit || (b._pred && now - (b._born || 0) > 1200)) Tanks.bullets.splice(i, 1);
+        }
         var me = Tanks.locals()[0];
         for (let i = 0; i < Tanks.tanks.length; i++) {
             var k = Tanks.tanks[i];
@@ -499,6 +525,35 @@ GameModes.register({
                 var d = Math.hypot(me._tx - me.x, me._ty - me.y);
                 if (d >= 120) { me.x = me._tx; me.y = me._ty; }
                 else if (d > 8) { me.x += (me._tx - me.x) * 0.12; me.y += (me._ty - me.y) * 0.12; }
+            }
+            me._localCd = Math.max(0, (me._localCd || 0) - 1);
+            if ((mouseDown || SpacePressed) && me._localCd <= 0) {
+                var cls = (typeof TNK_CLASSES !== "undefined" && TNK_CLASSES[me.cls]) ? TNK_CLASSES[me.cls] : { b: [{ a: 0, off: 0, len: 1, w: 1 }], reload: 1 };
+                var st = me.st || [0,0,0,0,0,0,0,0];
+                me._localCd = Math.max(6, Math.round((24 - st[6] * 2) * (cls.reload || 1)));
+                var ks = Tanks.size ? Tanks.size(me) : 22;
+                var bsp = (7.5 + st[3] * 0.7), bdmg = (5 + st[4] * 2.2) * (cls.dmg || 1);
+                for (let bi = 0; bi < cls.b.length; bi++) {
+                    var B = cls.b[bi], ang = me.ang + (B.a || 0);
+                    var bw = ks * 0.42 * (B.w || 1), blen = ks * 1.15 * (B.len || 1);
+                    var ox = Math.cos(me.ang + 1.57) * ((B.off || 0) * ks / 30), oy = Math.sin(me.ang + 1.57) * ((B.off || 0) * ks / 30);
+                    Tanks.bullets.push({
+                        x: me.x + ox + Math.cos(ang) * blen, y: me.y + oy + Math.sin(ang) * blen,
+                        vx: Math.cos(ang) * bsp, vy: Math.sin(ang) * bsp, r: bw * 0.65,
+                        owner: me, dmg: bdmg, _pred: true, _born: now
+                    });
+                }
+                if (typeof SFX !== "undefined") SFX.play("shoot", me.x, me.y, 0.2);
+            }
+            var ks2 = Tanks.size ? Tanks.size(me) : 22;
+            for (let i = 0; i < Tanks.shapes.length; i++) {
+                var q2 = Tanks.shapes[i], sr2 = TNK_SHAPES[q2.type] ? TNK_SHAPES[q2.type].r : 18;
+                var dx2 = me.x - q2.x, dy2 = me.y - q2.y, d2 = Math.hypot(dx2, dy2);
+                if (d2 > 0 && d2 < ks2 + sr2) {
+                    var push = (ks2 + sr2 - d2) * 0.5;
+                    me.x += dx2 / d2 * push; me.y += dy2 / d2 * push;
+                    q2.hitT = 3;
+                }
             }
         }
         Tanks.render(); Tanks.hud();
