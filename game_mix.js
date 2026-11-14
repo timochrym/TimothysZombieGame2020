@@ -228,9 +228,14 @@ var Mix = {
             if (bu.maxLife) effDmg *= (0.35 + 0.65 * Math.min(1, bu.life / bu.maxLife));
             for (let j = 0; j < blobs.length; j++) {
                 var bl = blobs[j];
-                if (bl.dead || Cells.protectedNow(bl.pl)) continue;
+                if (bl.dead) continue;
                 var br = blobR[j], rr = br + bur, dx = bux - bl.x, dy = buy - bl.y;
                 if (dx > rr || dx < -rr || dy > rr || dy < -rr || dx * dx + dy * dy > rr * rr) continue;
+                if (Cells.protectedNow(bl.pl)) {
+                    used = true; bu.pen = 0;
+                    this.burst(bux, buy, "#38bdf8", "spark", "SHIELD!", 24);
+                    break;
+                }
                 bl.m -= effDmg * 1.3; used = true; S.bulletBlob++;
                 bl.vx = (bl.vx || 0) + (bu.vx || 0) * 0.16; bl.vy = (bl.vy || 0) + (bu.vy || 0) * 0.16;
                 this.burst(bux, buy, bl.pl.color || "#a78bfa", "spark", "", 22);
@@ -247,9 +252,14 @@ var Mix = {
             if (!used && bux * bux + buy * buy <= MIX_SNK_RING_SQ) {
                 for (let j = 0; j < worms.length; j++) {
                     var w = worms[j];
-                    if (!w.alive || w.safeT > 0 || arenaProtected(w)) continue;
+                    if (!w.alive) continue;
                     var h = w.segs[0], wr = wormR[j], rrW = wr + bur, dxW = bux - h.x, dyW = buy - h.y;
                     if (dxW > rrW || dxW < -rrW || dyW > rrW || dyW < -rrW || dxW * dxW + dyW * dyW >= rrW * rrW) continue;
+                    if (w.safeT > 0 || arenaProtected(w)) {
+                        used = true; bu.pen = 0;
+                        this.burst(bux, buy, "#38bdf8", "spark", "SHIELD!", 24);
+                        break;
+                    }
                     w.len -= effDmg * 1.6 * (1 - 0.1 * (w.mx ? w.mx.st[1] : 0)); used = true; S.bulletWorm++;
                     this.burst(bux, buy, w.color, "spark", "", 24);
                     if (bu.owner && bu.owner.alive) Tanks.gainXp(bu.owner, 3);
@@ -263,9 +273,14 @@ var Mix = {
                 if (!used) {
                     var hitW = Snake.hitBody(bux, buy, bur, null);
                     if (hitW && hitW.alive) {
-                        hitW.len = Math.max(12, hitW.len - effDmg * 0.18 * (1 - 0.1 * (hitW.mx ? hitW.mx.st[1] : 0)));
-                        used = true; bu.pen -= 0.5; S.bulletWorm++;
-                        this.burst(bux, buy, hitW.color, "spark", "", 18);
+                        if (hitW.safeT > 0 || arenaProtected(hitW)) {
+                            used = true; bu.pen = 0;
+                            this.burst(bux, buy, "#38bdf8", "spark", "SHIELD!", 22);
+                        } else {
+                            hitW.len = Math.max(12, hitW.len - effDmg * 0.18 * (1 - 0.1 * (hitW.mx ? hitW.mx.st[1] : 0)));
+                            used = true; bu.pen -= 0.5; S.bulletWorm++;
+                            this.burst(bux, buy, hitW.color, "spark", "", 18);
+                        }
                     }
                 }
             }

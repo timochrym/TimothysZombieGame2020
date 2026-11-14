@@ -294,6 +294,14 @@ try:
         const diedAfterGrace = w.alive === false;
         R.snakeIntoBubbleSnake = survivedGrace && diedAfterGrace;
 
+        clear(); bl = blob(0, 0, 100); bl.pl.fx.shield = 60;
+        w = worm(400, 0, 40); w.safeT = 60; Snake.buildGrid();
+        k = tank(-200, 0);
+        Tanks.bullets.push({ x: 0, y: 0, vx: 10, vy: 0, r: 9, dmg: 20, pen: 2, owner: k, life: 50 });
+        Tanks.bullets.push({ x: 400 - 5 * SNK.SEG, y: 0, vx: 10, vy: 0, r: 9, dmg: 20, pen: 2, owner: k, life: 50 });
+        run();
+        R.shieldBlocksBullets = (bl.m === 100) && (w.len === 40) && (Tanks.bullets.length === 0);
+
         cellsCfg.bots = bots; SNK.PELLETS = 1400; Mix.reset(); paused = false;
         return JSON.stringify(R);
     })()""")
@@ -321,6 +329,7 @@ try:
     assert r["shiftLineUp"] is True, r["shiftLineUp"]
     assert r["ejectDamagesSnakeOnly"] is True, r["ejectDamagesSnakeOnly"]
     assert r["snakeIntoBubbleSnake"] is True, r["snakeIntoBubbleSnake"]
+    assert r["shieldBlocksBullets"] is True, r["shieldBlocksBullets"]
     assert r["sharedPowerups"] == "tank speed x1.5, shield true, mass +30 | worm magnet true, length +30, shield true | left 0", r["sharedPowerups"]
     print("ALL ASSERTIONS PASSED!")
 
