@@ -852,9 +852,17 @@ GameModes.register({
                 if (sd > wantD) { seg.x += (sdx / sd) * (sd - wantD) * 0.55; seg.y += (sdy / sd) * (sd - wantD) * 0.55; }
             }
         }
+        var ce = Cells._eatenPellets || (Cells._eatenPellets = []), now = performance.now();
         for (let k = P.length - 1; k >= 0; k--) {
             var f = P[k];
-            for (let i = 0; i < B.length; i++) { var r = Cells.rad(B[i].m); if (B[i].m > f.m * 1.25 && Math.abs(f.x - B[i].x) < r && Math.abs(f.y - B[i].y) < r && Math.hypot(f.x - B[i].x, f.y - B[i].y) < r) { P.splice(k, 1); break; } }
+            for (let i = 0; i < B.length; i++) {
+                var r = Cells.rad(B[i].m);
+                if (B[i].m > f.m * 1.25 && Math.abs(f.x - B[i].x) < r && Math.abs(f.y - B[i].y) < r && Math.hypot(f.x - B[i].x, f.y - B[i].y) < r) {
+                    ce.push([Math.round(f.x), Math.round(f.y), now + 280]);
+                    if (ce.length > 200) ce.shift();
+                    P.splice(k, 1); break;
+                }
+            }
         }
         Cells.players.forEach(function(p) { var M = 0, x = 0, y = 0; B.forEach(function(bb) { if (bb.pl === p) { M += bb.m; x += bb.x * bb.m; y += bb.y * bb.m; } }); if (M) { p.cx = x / M; p.cy = y / M; } });
         Cells.render(); Cells.hud();

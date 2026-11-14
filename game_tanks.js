@@ -580,17 +580,29 @@ GameModes.register({
             }
             return [id, tk.alive ? 1 : 0, Math.round(tk.x), Math.round(tk.y), Math.round(tk.ang * 100) / 100, Math.round(tk.hp), tk.lvl, tk.score, tk.xp, tk.pts, tk.inv, tk.flash, tk.deadT, tk.choose ? 1 : 0];
         });
-        var lan = T.filter(function(tk) { return tk.human === "lan"; });
-        var bl = lan.length ? Tanks.bullets.filter(function(bb) {
-            return lan.some(function(tk) { return Math.abs(bb.x - tk.x) < 2600 && Math.abs(bb.y - tk.y) < 1800; });
+        var viewPts = T.filter(function(tk) { return tk.human === "lan"; });
+        if (typeof Cells !== "undefined" && Cells.players) {
+            for (let i = 0; i < Cells.players.length; i++) {
+                var cp = Cells.players[i];
+                if (cp.human === "lan") viewPts.push({ x: cp.cx || 0, y: cp.cy || 0 });
+            }
+        }
+        if (typeof Snake !== "undefined" && Snake.worms) {
+            for (let i = 0; i < Snake.worms.length; i++) {
+                var sw = Snake.worms[i];
+                if (sw.human === "lan" && sw.segs && sw.segs[0]) viewPts.push(sw.segs[0]);
+            }
+        }
+        var bl = viewPts.length ? Tanks.bullets.filter(function(bb) {
+            return viewPts.some(function(tk) { return Math.abs(bb.x - tk.x) < 2600 && Math.abs(bb.y - tk.y) < 1800; });
         }) : Tanks.bullets;
         var st = {
             k: k,
             b: bl.map(function(bb) { return [Math.round(bb.x), Math.round(bb.y), Math.round(bb.r), T.indexOf(bb.owner), Math.round((bb.vx || 0) * 10) / 10, Math.round((bb.vy || 0) * 10) / 10, Math.round((bb.dmg || 5) * 10) / 10]; })
         };
         if (hasKm) st.km = km;
-        if (Tanks.netTick % 3 === 0) {
-            var sh = lan.length ? Tanks.shapes.filter(function(q) { return lan.some(function(tk) { return Math.abs(q.x - tk.x) < 2800 && Math.abs(q.y - tk.y) < 2000; }); }) : Tanks.shapes;
+        if ((typeof Net !== "undefined" && Net.isFullSnap) || Tanks.netTick % 3 === 0) {
+            var sh = viewPts.length ? Tanks.shapes.filter(function(q) { return viewPts.some(function(tk) { return Math.abs(q.x - tk.x) < 2800 && Math.abs(q.y - tk.y) < 2000; }); }) : Tanks.shapes;
             st.s = sh.map(function(q) { return [q.type.charAt(0), Math.round(q.x), Math.round(q.y), Math.round(q.ang * 100) / 100, Math.round(q.hp), q.hitT]; });
         }
         return st;

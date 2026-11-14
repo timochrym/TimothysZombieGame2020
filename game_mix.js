@@ -195,6 +195,10 @@ var Mix = {
     say: function(text, col) { this.log.unshift({ text: text, col: col || "#e2e8f0", t: 240 }); if (this.log.length > 5) this.log.length = 5; },
     note: function(human, text, col) { this.say(text, col); if (human) showBanner(text, "", col || "#fde047"); },
     burst: function(x, y, col, kind, text, maxR) {
+        if (typeof Net !== "undefined" && Net.role === "host" && Net.peerCount() > 0) {
+            var nf = this._netFx || (this._netFx = []);
+            if (nf.length < 20) nf.push([Math.round(x), Math.round(y), col || "#fde047", kind || "spark", text || "", Math.round(maxR || 44)]);
+        }
         if (Math.abs(x - this.cam.x) > 1400 || Math.abs(y - this.cam.y) > 950) return;
         if (this.fx.length >= 48) mixSwapPop(this.fx, 0);
         this.fx.push({ x: x, y: y, col: col || "#fde047", kind: kind || "spark", text: text || "", r: maxR || 44, t: 0, life: kind === "ring" ? 28 : 20 });
@@ -641,16 +645,30 @@ var Mix = {
                 b4.vx += adx / away * 8; b4.vy += ady / away * 8; b4.popCd = 30;
                 continue;
             }
+            if (b4.pl.chain && !b4.pl.compact) {
+                var isHeadB = b4.pl.chainList && b4 === b4.pl.chainList[0];
+                var wDmg = isHeadB ? Math.max(14, Math.round(b4.m * 0.22)) : Math.max(6, Math.round(b4.m * 0.08));
+                w4.len -= wDmg;
+                var orbs = Math.min(8, Math.max(3, Math.round(wDmg / 5)));
+                var orbM = Math.max(4, Math.round(wDmg / orbs * 1.1));
+                for (let oq = 0; oq < orbs; oq++) {
+                    var oa = Math.random() * Math.PI * 2, osp = 4 + Math.random() * 6;
+                    Cells.pellets.push({ x: b4.x + Math.cos(oa) * (r4 + 8), y: b4.y + Math.sin(oa) * (r4 + 8), m: orbM, col: w4.color || "#fde047", vx: Math.cos(oa) * osp, vy: Math.sin(oa) * osp });
+                }
+                b4.m += wDmg * 0.35; blobR[i] = Cells.rad(b4.m); b4.popCd = 24;
+                b4.vx += adx / away * 9; b4.vy += ady / away * 9;
+                if (w4.len < 10) {
+                    Snake.kill(w4, b4.pl);
+                    this.burst(b4.x, b4.y, b4.pl.color, "ring", "SHRED!", r4 + 42);
+                    this.note(b4.pl.human !== undefined || w4.human !== undefined, b4.pl.name + " shredded " + w4.name, b4.pl.color);
+                } else {
+                    this.burst(b4.x, b4.y, b4.pl.color, "ring", "-" + wDmg + " FOOD", r4 + 34);
+                }
+                continue;
+            }
             var lost = b4.m * 0.15, left = b4.m - lost;
             w4.len += lost * 0.25; this.wormXp(w4, lost * 0.35);
             this.burst(b4.x, b4.y, "#a78bfa", "ring", "POP!", r4 + 35);
-            if (b4.pl.chain && !b4.pl.compact && b4.pl.chainList && b4 === b4.pl.chainList[0] && !(b4.pl.snakeGrace > 0)) {
-                w4.len += b4.m * 0.35; this.wormXp(w4, b4.m * 0.4);
-                this.burst(b4.x, b4.y, w4.color, "ring", "SNAKE CUT!", r4 + 35);
-                this.note(b4.pl.human !== undefined || w4.human !== undefined, b4.pl.name + " bumped " + w4.name, w4.color);
-                Cells.killChain(b4.pl, null); anyDead = true; continue;
-            }
-            if (b4.pl.chain) { b4.m = left; blobR[i] = Cells.rad(left); b4.popCd = 30; continue; }
             var cap = (cellsCfg.maxCells > 0) ? cellsCfg.maxCells : Infinity;
             var pieces = Math.max(0, Math.min(cap - Cells.mine(b4.pl).length, 3)), each = left / (pieces + 1);
             for (let q = 0; q < pieces; q++) {
@@ -702,9 +720,16 @@ var Mix = {
                 var hitS = wrS + blobR[i] * 0.78;
                 var sdx = hS.x - bS.x, sdy = hS.y - bS.y;
                 if (sdx * sdx + sdy * sdy < hitS * hitS) {
+                    var gain = Math.max(24, Math.round(wS.len * 0.45));
                     Snake.kill(wS, bS.pl);
-                    bS.m += 12; blobR[i] = Cells.rad(bS.m);
-                    this.burst(hS.x, hS.y, bS.pl.color, "ring", "CUT OFF!", 48);
+                    bS.m += gain; blobR[i] = Cells.rad(bS.m);
+                    var dropN = Math.min(10, Math.max(4, Math.round(wS.len / 12)));
+                    var dropM = Math.max(5, Math.round(gain * 0.14));
+                    for (let oq = 0; oq < dropN; oq++) {
+                        var oa = Math.random() * Math.PI * 2, osp = 4 + Math.random() * 6;
+                        Cells.pellets.push({ x: hS.x, y: hS.y, m: dropM, col: wS.color || "#fde047", vx: Math.cos(oa) * osp, vy: Math.sin(oa) * osp });
+                    }
+                    this.burst(hS.x, hS.y, bS.pl.color, "ring", "+" + gain + " FOOD!", 54);
                     this.note(wS.human !== undefined || bS.pl.human !== undefined, wS.name + " crashed into " + bS.pl.name, bS.pl.color);
                     break;
                 }
@@ -1192,14 +1217,17 @@ GameModes.register({
                 m.ref._localCd = Math.max(0, (m.ref._localCd || 0) - 1);
                 if ((mouseDown || SpacePressed) && m.ref._localCd <= 0 && typeof TNK_CLASSES !== "undefined") {
                     var cls = TNK_CLASSES[m.ref.cls] || TNK_CLASSES.tank;
-                    var reload = Math.max(6, Math.round((cls.reload || 22) * Math.pow(0.9, m.ref.st ? m.ref.st[6] : 0)));
-                    m.ref._localCd = reload;
-                    var bsp = 8.5 + (m.ref.st ? m.ref.st[3] * 1.1 : 0), bdmg = 5 + (m.ref.st ? m.ref.st[5] * 2 : 0);
-                    var bars = cls.barrels || [[0, 26, 8]];
+                    var st = m.ref.st || [0,0,0,0,0,0,0,0];
+                    m.ref._localCd = Math.max(6, Math.round((24 - st[6] * 2) * (cls.reload || 1)));
+                    var ks0 = Tanks.size ? Tanks.size(m.ref) : 22;
+                    var bsp = 7.5 + st[3] * 0.7, bdmg = (5 + st[4] * 2.2) * (cls.dmg || 1);
+                    var bars = cls.b || [{ a: 0, off: 0, len: 1, w: 1 }];
                     for (let bi = 0; bi < bars.length; bi++) {
-                        var ang = m.ref.ang + (bars[bi][0] || 0), blen = bars[bi][1] || 26, bw = bars[bi][2] || 8;
+                        var B = bars[bi], ang = m.ref.ang + (B.a || 0);
+                        var bw = ks0 * 0.42 * (B.w || 1), blen = ks0 * 1.15 * (B.len || 1);
+                        var ox = Math.cos(m.ref.ang + 1.57) * ((B.off || 0) * ks0 / 30), oy = Math.sin(m.ref.ang + 1.57) * ((B.off || 0) * ks0 / 30);
                         Tanks.bullets.push({
-                            x: m.ref.x + Math.cos(ang) * blen, y: m.ref.y + Math.sin(ang) * blen,
+                            x: m.ref.x + ox + Math.cos(ang) * blen, y: m.ref.y + oy + Math.sin(ang) * blen,
                             vx: Math.cos(ang) * bsp, vy: Math.sin(ang) * bsp, r: bw * 0.65,
                             owner: m.ref, dmg: bdmg, _pred: true, _born: now
                         });
@@ -1346,6 +1374,7 @@ GameModes.register({
             cp: Cells.players.map(function(p) { return p.chain ? 1 : 0; }),
             wx: wx
         };
+        if (Mix._netFx && Mix._netFx.length) { out.fx = Mix._netFx.slice(); Mix._netFx.length = 0; }
         if (full || Mix._lastLgKey !== lgKey) { Mix._lastLgKey = lgKey; out.lg = lgArr; }
         return out;
     },
@@ -1366,6 +1395,15 @@ GameModes.register({
             var bk = me.kind === "blob" ? (me.ref.chain ? "chain" : "blob") : me.kind;
             mixCfg.body = bk;
             if (Mix._lanBody === bk) Mix._lanBody = null;
+            var meKey = bk + ":" + (me.ref.id || 0);
+            if (me.alive && (Mix._lastMeKey !== meKey || Math.hypot(me.x - Mix.cam.x, me.y - Mix.cam.y) > 900)) {
+                Mix.cam.x = me.x; Mix.cam.y = me.y;
+            }
+            Mix._lastMeKey = meKey;
+        }
+        if (m.fx) for (let i = 0; i < m.fx.length; i++) {
+            var f = m.fx[i];
+            Mix.burst(f[0], f[1], f[2], f[3], f[4], f[5]);
         }
         if (m.lg && m.lg.length) Mix.log = m.lg.map(function(L) { return { text: L[0], col: L[1], t: 180 }; });
     },

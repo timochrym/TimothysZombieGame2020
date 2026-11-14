@@ -460,7 +460,7 @@ var Net = {
         ch.upPressed = !!i.u; ch.downPressed = !!i.d; ch.leftPressed = !!i.l; ch.rightPressed = !!i.r;
         ch.shootPressed = !!i.sh;
         ch.abilityPressed = !!i.it;
-        var n = ch.netIn;
+        var n = ch.netIn || (ch.netIn = {});
         n.shoot = !!i.sh; n.jet = !!i.jt; n.interact = !!i.it;
         ch.netAim = false;
         if (i.ax !== undefined && i.ay !== undefined) {

@@ -454,6 +454,11 @@ GameModes.register({
             } else if (w._tx !== undefined) {
                 w.segs[0].x += (w._tx - w.segs[0].x) * 0.45;
                 w.segs[0].y += (w._ty - w.segs[0].y) * 0.45;
+                for (let s = 1; s < w.segs.length; s++) {
+                    var rp = w.segs[s - 1], rc = w.segs[s];
+                    var rdx = rp.x - rc.x, rdy = rp.y - rc.y, rd = Math.hypot(rdx, rdy);
+                    if (rd > 5.5) { rc.x = rp.x - rdx / rd * 5.5; rc.y = rp.y - rdy / rd * 5.5; }
+                }
             }
         }
         Snake.render(); Snake.hud();
