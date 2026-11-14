@@ -311,7 +311,7 @@ try:
     assert r["smallBlobShotToBits"] is True
     assert r["tankCollectsWormFood"] == "mass +0.7", r["tankCollectsWormFood"]
     assert r["tankMassDecays"] == "1000 -> 998.0 in a second", r["tankMassDecays"]
-    assert r["bulletVsWorm"] == "head 60 -> 44, with 5 Armor -> 36", r["bulletVsWorm"]
+    assert r["bulletVsWorm"] == "head 60 -> 52, with 5 Armor -> 47", r["bulletVsWorm"]
     assert r["tankSizeFollowsMass"] == "30 -> 100", r["tankSizeFollowsMass"]
     assert r["tankEatsSmallerBlob"] is True
     assert r["biggerBlobAbsorbsTank"] is True

@@ -260,7 +260,7 @@ var Mix = {
                         this.burst(bux, buy, "#38bdf8", "spark", "SHIELD!", 24);
                         break;
                     }
-                    w.len -= effDmg * 1.6 * (1 - 0.1 * (w.mx ? w.mx.st[1] : 0)); used = true; S.bulletWorm++;
+                    w.len -= effDmg * 0.85 * (1 - 0.1 * (w.mx ? w.mx.st[1] : 0)); used = true; S.bulletWorm++;
                     this.burst(bux, buy, w.color, "spark", "", 24);
                     if (bu.owner && bu.owner.alive) Tanks.gainXp(bu.owner, 3);
                     if (w.len < 12) {
@@ -277,8 +277,8 @@ var Mix = {
                             used = true; bu.pen = 0;
                             this.burst(bux, buy, "#38bdf8", "spark", "SHIELD!", 22);
                         } else {
-                            hitW.len = Math.max(12, hitW.len - effDmg * 0.18 * (1 - 0.1 * (hitW.mx ? hitW.mx.st[1] : 0)));
-                            used = true; bu.pen -= 0.5; S.bulletWorm++;
+                            hitW.len = Math.max(12, hitW.len - effDmg * 0.08 * (1 - 0.1 * (hitW.mx ? hitW.mx.st[1] : 0)));
+                            used = true; S.bulletWorm++;
                             this.burst(bux, buy, hitW.color, "spark", "", 18);
                         }
                     }
@@ -309,10 +309,10 @@ var Mix = {
                 var sh = shapes[i], SH = TNK_SHAPES[sh.type], rrS = SH.r + wr2;
                 var dxS = sh.x - h2.x, dyS = sh.y - h2.y;
                 if (dxS > rrS || dxS < -rrS || dyS > rrS || dyS < -rrS || dxS * dxS + dyS * dyS > rrS * rrS) continue;
-                sh.hp -= (0.5 + bite * 0.45) * boost; sh.hitT = 4;
+                sh.hp -= (0.4 + bite * 0.35) * boost; sh.hitT = 4;
                 if (sh.hp <= 0) {
                     mixSwapPop(shapes, i); Tanks.addShape();
-                    this.wormXp(w2, SH.xp); w2.len += 2 + SH.xp * 0.1; S.shapeBroken++;
+                    this.wormXp(w2, SH.xp); w2.len += 3 + SH.xp * 0.15; S.shapeBroken++;
                     this.burst(sh.x, sh.y, w2.color, "spark", w2.human !== undefined ? "CRACK!" : "", 28);
                     if (w2.human !== undefined && typeof SFX !== "undefined") SFX.play("pickup", h2.x, h2.y, 0.5);
                 }
