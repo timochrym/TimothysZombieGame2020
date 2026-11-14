@@ -401,9 +401,21 @@ GameModes.register({
         return st;
     },
     applyNetState: function(m) {
+        var prev = {};
+        for (let i = 0; i < Snake.worms.length; i++) {
+            var pw = Snake.worms[i];
+            if (pw.alive && pw.segs && pw.segs[0]) prev[pw.pid || pw.name] = pw;
+        }
         Snake.worms = m.w.map(function(o) {
             var segs = []; for (let i = 0; i < o.sg.length; i += 2) { segs.push({ x: o.sg[i], y: o.sg[i + 1] }); segs.push({ x: o.sg[i], y: o.sg[i + 1] }); }
-            return { name: o.n, color: o.c, human: o.h === -1 ? undefined : o.h, pid: o.p, alive: !!o.a, len: o.l, ang: o.g, boosting: !!o.b, safeT: o.s, segs: segs.length ? segs : [{ x: 0, y: 0 }], deathMsg: o.dm, finalLen: o.fl, deadT: o.dt };
+            var w = { name: o.n, color: o.c, human: o.h === -1 ? undefined : o.h, pid: o.p, alive: !!o.a, len: o.l, ang: o.g, boosting: !!o.b, safeT: o.s, segs: segs.length ? segs : [{ x: 0, y: 0 }], deathMsg: o.dm, finalLen: o.fl, deadT: o.dt };
+            w._tx = w.segs[0].x; w._ty = w.segs[0].y;
+            var old = prev[o.p || o.n];
+            if (old && w.alive && Math.hypot(w._tx - old.segs[0].x, w._ty - old.segs[0].y) < 140) {
+                w.segs[0].x = old.segs[0].x; w.segs[0].y = old.segs[0].y;
+                if (typeof Net !== "undefined" && w.pid === Net.pid) w.ang = old.ang;
+            }
+            return w;
         });
         if (m.p) Snake.pellets = m.p.map(function(a) { return { x: a[0], y: a[1], v: a[2], col: SNK_COLORS[a[3]] || "#ffffff", ph: (a[0] + a[1]) % 6 }; });
     },

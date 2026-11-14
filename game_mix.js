@@ -1022,22 +1022,52 @@ GameModes.register({
     screenFrame: function() { Mix.frame(); },
     screenDraw: function() {
         Mix.t++;
-        // Local client prediction for Player 2: smooth 60fps aim, movement, and bullet motion between host snapshots
+        // Local client prediction & snapshot interpolation for 60fps smooth movement without snap-back jitter
         for (let i = 0; i < Tanks.bullets.length; i++) { var b = Tanks.bullets[i]; if (b.vx || b.vy) { b.x += b.vx; b.y += b.vy; } }
         var m = Mix.me(), c = Cells.cam;
+        // Glide remote tanks, blobs, and worms toward their latest snapshot targets
+        for (let i = 0; i < Tanks.tanks.length; i++) {
+            var k = Tanks.tanks[i];
+            if (!k.alive || (m && m.ref === k) || k._tx === undefined) continue;
+            k.x += (k._tx - k.x) * 0.45; k.y += (k._ty - k.y) * 0.45;
+            k.ang += Math.atan2(Math.sin(k._ta - k.ang), Math.cos(k._ta - k.ang)) * 0.45;
+        }
+        for (let i = 0; i < Cells.blobs.length; i++) {
+            var bl = Cells.blobs[i];
+            if (bl.dead || (m && bl.pl === m.ref) || bl.tx === undefined) continue;
+            bl.x += (bl.tx - bl.x) * 0.45; bl.y += (bl.ty - bl.y) * 0.45;
+        }
+        for (let i = 0; i < Snake.worms.length; i++) {
+            var w = Snake.worms[i];
+            if (!w.alive || (m && m.ref === w) || w._tx === undefined || !w.segs[0]) continue;
+            w.segs[0].x += (w._tx - w.segs[0].x) * 0.45; w.segs[0].y += (w._ty - w.segs[0].y) * 0.45;
+        }
         if (m && m.alive) {
             if (m.kind === "tank") {
                 var sc = Tanks.toScreen(m.x, m.y);
                 m.ref.ang = Math.atan2(mouseY - sc[1], mouseX - sc[0]);
                 var mx = (WASDrightPressed ? 1 : 0) - (WASDleftPressed ? 1 : 0), my = (WASDdownPressed ? 1 : 0) - (WASDupPressed ? 1 : 0);
-                if (mx || my) { var sp = 3.2 + (m.ref.st ? m.ref.st[7] * 0.45 : 0); m.ref.x += mx * sp * 0.7; m.ref.y += my * sp * 0.7; }
+                if (mx || my) {
+                    var sp = 3.2 + (m.ref.st ? m.ref.st[7] * 0.45 : 0), len = Math.hypot(mx, my) || 1;
+                    m.ref.x += (mx / len) * sp; m.ref.y += (my / len) * sp;
+                }
+                if (m.ref._tx !== undefined) {
+                    var dt = Math.hypot(m.ref._tx - m.ref.x, m.ref._ty - m.ref.y);
+                    if (dt >= 120) { m.ref.x = m.ref._tx; m.ref.y = m.ref._ty; }
+                    else if (dt > 8) { m.ref.x += (m.ref._tx - m.ref.x) * 0.12; m.ref.y += (m.ref._ty - m.ref.y) * 0.12; }
+                }
             } else if (m.kind === "blob") {
                 var ax = (mouseX - cssW / 2) / c.z + c.x, ay = (mouseY - cssH / 2) / c.z + c.y;
                 for (let i = 0; i < Cells.blobs.length; i++) {
-                    var bl = Cells.blobs[i];
-                    if (bl.dead || bl.pl !== m.ref) continue;
-                    var dx = ax - bl.x, dy = ay - bl.y, d = Math.hypot(dx, dy);
-                    if (d > 6) { var s = Math.min(3.4, d * 0.12); bl.x += dx / d * s; bl.y += dy / d * s; }
+                    var mb = Cells.blobs[i];
+                    if (mb.dead || mb.pl !== m.ref) continue;
+                    var dx = ax - mb.x, dy = ay - mb.y, d = Math.hypot(dx, dy);
+                    if (d > 6) { var s = Math.min(3.4, d * 0.12); mb.x += dx / d * s; mb.y += dy / d * s; }
+                    if (mb.tx !== undefined) {
+                        var db = Math.hypot(mb.tx - mb.x, mb.ty - mb.y);
+                        if (db >= 120) { mb.x = mb.tx; mb.y = mb.ty; }
+                        else if (db > 8) { mb.x += (mb.tx - mb.x) * 0.12; mb.y += (mb.ty - mb.y) * 0.12; }
+                    }
                 }
             } else if (m.kind === "worm") {
                 var scW = Tanks.toScreen(m.x, m.y), ta = Math.atan2(mouseY - scW[1], mouseX - scW[0]);
@@ -1045,6 +1075,11 @@ GameModes.register({
                 m.ref.ang += Math.max(-0.14, Math.min(0.14, da));
                 var wsp = (mouseDown || SpacePressed || WASDupPressed) ? 5.2 : 3.2;
                 m.ref.segs[0].x += Math.cos(m.ref.ang) * wsp; m.ref.segs[0].y += Math.sin(m.ref.ang) * wsp;
+                if (m.ref._tx !== undefined) {
+                    var dw = Math.hypot(m.ref._tx - m.ref.segs[0].x, m.ref._ty - m.ref.segs[0].y);
+                    if (dw >= 120) { m.ref.segs[0].x = m.ref._tx; m.ref.segs[0].y = m.ref._ty; }
+                    else if (dw > 8) { m.ref.segs[0].x += (m.ref._tx - m.ref.segs[0].x) * 0.12; m.ref.segs[0].y += (m.ref._ty - m.ref.segs[0].y) * 0.12; }
+                }
             }
         }
         Mix.draw();
@@ -1091,8 +1126,6 @@ GameModes.register({
     },
     applyNetState: function(m) {
         if (!m) return;
-        var prev = Mix.me();
-        var px = prev && prev.alive ? prev.x : 0, py = prev && prev.alive ? prev.y : 0, pk = prev ? prev.kind : null;
         var tMode = GameModes.get("tanks"), cMode = GameModes.get("cells"), sMode = GameModes.get("snake");
         if (m.t && tMode && tMode.applyNetState) tMode.applyNetState(m.t);
         if (m.c && cMode && cMode.applyNetState) cMode.applyNetState(m.c);
@@ -1104,13 +1137,6 @@ GameModes.register({
             if (q) w.mx = { lvl: q[0], pts: q[1], st: [q[2], q[3], q[4]], biteCd: 0, vFeedCd: 0 };
         }
         var me = Mix.me();
-        if (me && me.alive && pk === me.kind) {
-            var d = Math.hypot(me.x - px, me.y - py);
-            if (d > 0 && d < 50) {
-                if (me.kind === "tank") { me.ref.x = px + (me.x - px) * 0.55; me.ref.y = py + (me.y - py) * 0.55; }
-                else if (me.kind === "worm" && me.ref.segs[0]) { me.ref.segs[0].x = px + (me.x - px) * 0.55; me.ref.segs[0].y = py + (me.y - py) * 0.55; }
-            }
-        }
         if (me) {
             var bk = me.kind === "blob" ? (me.ref.chain ? "chain" : "blob") : me.kind;
             mixCfg.body = bk;
