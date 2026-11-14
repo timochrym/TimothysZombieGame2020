@@ -200,17 +200,23 @@ var Snake = {
             w.segs = out;
             w.boosting = boosting;
             // eat
-            var r = this.radius(w);
-            for (let i = this.pellets.length - 1; i >= 0; i--) {
-                var p = this.pellets[i];
-                if (Math.abs(p.x - nh.x) < r + 14 && Math.abs(p.y - nh.y) < r + 14) {
+            var r = this.radius(w), rPull = r + 14, rEat = r + 6, rEat2 = rEat * rEat, rWall = SNK.R - r;
+            var ps = this.pellets;
+            for (let i = ps.length - 1; i >= 0; i--) {
+                var p = ps[i], dxp = p.x - nh.x, dyp = p.y - nh.y;
+                if (dxp < rPull && dxp > -rPull && dyp < rPull && dyp > -rPull) {
                     // pellets get sucked in for a frame or two before they disappear
-                    if (Math.hypot(p.x - nh.x, p.y - nh.y) < r + 6) { w.len += p.v * 0.75; p.eaten = true; this.pellets.splice(i, 1); }
-                    else { p.x += (nh.x - p.x) * 0.3; p.y += (nh.y - p.y) * 0.3; }
+                    if (dxp * dxp + dyp * dyp < rEat2) {
+                        w.len += p.v * 0.75; p.eaten = true;
+                        var lastP = ps.length - 1;
+                        if (i < lastP) ps[i] = ps[lastP];
+                        ps.pop();
+                    }
+                    else { p.x -= dxp * 0.3; p.y -= dyp * 0.3; }
                 }
             }
             // die on the wall or another worm's body
-            if (Math.hypot(nh.x, nh.y) > SNK.R - r) { this.kill(w, null); continue; }
+            if (nh.x * nh.x + nh.y * nh.y > rWall * rWall) { this.kill(w, null); continue; }
             if (w.safeT > 0) { w.safeT--; continue; }
             var hit = this.hitBody(nh.x, nh.y, r * 0.7, w);
             if (hit) this.kill(w, hit);

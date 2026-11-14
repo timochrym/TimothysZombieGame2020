@@ -32,9 +32,36 @@ function mixSwapPop(arr, i) {
     arr.pop();
 }
 
+function mixBuildGrid(list, grid, used) {
+    for (let u = 0; u < used.length; u++) grid[used[u]].length = 0;
+    used.length = 0;
+    for (let i = 0; i < list.length; i++) {
+        var p = list[i];
+        p._gone = false;
+        var cx = (p.x + 3200) >> 8; if (cx < 0) cx = 0; else if (cx > 31) cx = 31;
+        var cy = (p.y + 3200) >> 8; if (cy < 0) cy = 0; else if (cy > 31) cy = 31;
+        var idx = (cy << 5) | cx;
+        var b = grid[idx];
+        if (!b) b = grid[idx] = [];
+        if (b.length === 0) used.push(idx);
+        b.push(p);
+    }
+}
+
+function mixCompactGone(list) {
+    var w = 0;
+    for (let i = 0; i < list.length; i++) {
+        var p = list[i];
+        if (!p._gone) list[w++] = p;
+    }
+    list.length = w;
+}
+
 var Mix = {
     on: false, t: 0, cam: { x: 0, y: 0, z: 0.8 }, view: null, log: [], fx: [],
     _blobR: [], _wormR: [], _tankS: [], _takers: [], _pills: [],
+    _cpGrid: new Array(1024), _cpUsed: [], _spGrid: new Array(1024), _spUsed: [],
+    _radarBg: null, _pillsCanvas: null, _pillsBody: "",
     stat: { bulletBlob: 0, bulletWorm: 0, blobAteTank: 0, tankAteBlob: 0, tankAteTank: 0, tankSplit: 0, blobPopped: 0, wormBite: 0, wormWall: 0, shapeBroken: 0, crossFood: 0, pickups: 0 },
 
     // every arena draws with the same camera; none of them may move it (this file does)
@@ -273,7 +300,15 @@ var Mix = {
             }
         }
         var sp0 = Snake.pellets, cp0 = Cells.pellets, viruses = Cells.viruses;
+        var cpGrid = this._cpGrid, spGrid = this._spGrid;
+        var cpBuilt = false, spBuilt = false, cpGone = false, spGone = false;
         var doWormFood = (this.t & 1) === 1;
+        if (doWormFood) {
+            if (sp0.length > 0 && tanks.length > 0) { mixBuildGrid(sp0, spGrid, this._spUsed); spBuilt = true; }
+        } else {
+            if (cp0.length > 0 && (tanks.length > 0 || worms.length > 0)) { mixBuildGrid(cp0, cpGrid, this._cpUsed); cpBuilt = true; }
+            if (sp0.length > 0 && blobs.length > 0) { mixBuildGrid(sp0, spGrid, this._spUsed); spBuilt = true; }
+        }
         for (let i = 0; i < tanks.length; i++) {
             var k = tanks[i];
             if (!k.alive) continue;
@@ -305,22 +340,40 @@ var Mix = {
             // decay like a blob (same setting as Blob Arena)
             if (cellsCfg.decay > 0 && k.mixMass > 40) { k.mixMass -= k.mixMass * cellsCfg.decay * (cellsCfg.decayGrow ? 1 + k.mixMass / 800 : 1); km = k.mixMass; }
             var ks2 = ks * ks;
+            var cx0 = ((kx - ks + 3200) >> 8); if (cx0 < 0) cx0 = 0;
+            var cx1 = ((kx + ks + 3200) >> 8); if (cx1 > 31) cx1 = 31;
+            var cy0 = ((ky - ks + 3200) >> 8); if (cy0 < 0) cy0 = 0;
+            var cy1 = ((ky + ks + 3200) >> 8); if (cy1 > 31) cy1 = 31;
             // collect some of the worms' food too (a third of its value, like blob food)
             if (doWormFood) {
-                for (let q = sp0.length - 1; q >= 0; q--) {
-                    var g0 = sp0[q], gdx = g0.x - kx, gdy = g0.y - ky;
-                    if (gdx < ks && gdx > -ks && gdy < ks && gdy > -ks && gdx * gdx + gdy * gdy < ks2) {
-                        k.mixMass += g0.v * 0.35; Tanks.gainXp(k, 1); mixSwapPop(sp0, q); S.crossFood++;
+                if (spBuilt) {
+                    for (let gy = cy0; gy <= cy1; gy++) {
+                        var row = gy << 5;
+                        for (let gx = cx0; gx <= cx1; gx++) {
+                            var bk = spGrid[row | gx];
+                            if (!bk || !bk.length) continue;
+                            for (let q = 0; q < bk.length; q++) {
+                                var g0 = bk[q]; if (g0._gone) continue;
+                                var gdx = g0.x - kx, gdy = g0.y - ky;
+                                if (gdx * gdx + gdy * gdy < ks2) { k.mixMass += g0.v * 0.35; Tanks.gainXp(k, 1); g0._gone = true; spGone = true; S.crossFood++; }
+                            }
+                        }
                     }
                 }
             } else {
                 // eat food (and the inert lumps other tanks dropped)
-                for (let q = cp0.length - 1; q >= 0; q--) {
-                    var f0 = cp0[q];
-                    if (f0.from === k && this.t - f0.born < 180) continue;
-                    var fdx = f0.x - kx, fdy = f0.y - ky;
-                    if (fdx < ks && fdx > -ks && fdy < ks && fdy > -ks && fdx * fdx + fdy * fdy < ks2) {
-                        k.mixMass += f0.m * (f0.lump ? 0.8 : 0.35); mixSwapPop(cp0, q); S.crossFood++;
+                if (cpBuilt) {
+                    for (let gy = cy0; gy <= cy1; gy++) {
+                        var rowC = gy << 5;
+                        for (let gx = cx0; gx <= cx1; gx++) {
+                            var bkC = cpGrid[rowC | gx];
+                            if (!bkC || !bkC.length) continue;
+                            for (let q = 0; q < bkC.length; q++) {
+                                var f0 = bkC[q]; if (f0._gone || (f0.from === k && this.t - f0.born < 180)) continue;
+                                var fdx = f0.x - kx, fdy = f0.y - ky;
+                                if (fdx * fdx + fdy * fdy < ks2) { k.mixMass += f0.m * (f0.lump ? 0.8 : 0.35); f0._gone = true; cpGone = true; S.crossFood++; }
+                            }
+                        }
                     }
                 }
             }
@@ -405,20 +458,36 @@ var Mix = {
             if (fx.speed > 0) fx.speed--;
             if (fx.magnet > 0) {
                 fx.magnet--;
+                if (!cpBuilt && cp0.length > 0) { mixBuildGrid(cp0, cpGrid, this._cpUsed); cpBuilt = true; }
+                if (!T.tank && !spBuilt && sp0.length > 0) { mixBuildGrid(sp0, spGrid, this._spUsed); spBuilt = true; }
                 var magSq = 380 * 380;
-                for (let z = 0; z < cp0.length; z++) {
-                    var mp = cp0[z], mdx = T.x - mp.x, mdy = T.y - mp.y;
-                    if (mdx < 380 && mdx > -380 && mdy < 380 && mdy > -380) {
-                        var mdsq = mdx * mdx + mdy * mdy;
-                        if (mdsq < magSq && mdsq > 1) { var md = Math.sqrt(mdsq); mp.x += mdx / md * 7; mp.y += mdy / md * 7; }
+                var mx0 = ((T.x - 380 + 3200) >> 8); if (mx0 < 0) mx0 = 0;
+                var mx1 = ((T.x + 380 + 3200) >> 8); if (mx1 > 31) mx1 = 31;
+                var my0 = ((T.y - 380 + 3200) >> 8); if (my0 < 0) my0 = 0;
+                var my1 = ((T.y + 380 + 3200) >> 8); if (my1 > 31) my1 = 31;
+                if (cpBuilt) {
+                    for (let gy = my0; gy <= my1; gy++) {
+                        var rowM = gy << 5;
+                        for (let gx = mx0; gx <= mx1; gx++) {
+                            var bkM = cpGrid[rowM | gx]; if (!bkM || !bkM.length) continue;
+                            for (let z = 0; z < bkM.length; z++) {
+                                var mp = bkM[z]; if (mp._gone) continue;
+                                var mdx = T.x - mp.x, mdy = T.y - mp.y, mdsq = mdx * mdx + mdy * mdy;
+                                if (mdsq < magSq && mdsq > 1) { var md = Math.sqrt(mdsq); mp.x += mdx / md * 7; mp.y += mdy / md * 7; }
+                            }
+                        }
                     }
                 }
-                if (!T.tank) {
-                    for (let z = 0; z < sp0.length; z++) {
-                        var mp2 = sp0[z], mdx2 = T.x - mp2.x, mdy2 = T.y - mp2.y;
-                        if (mdx2 < 380 && mdx2 > -380 && mdy2 < 380 && mdy2 > -380) {
-                            var mdsq2 = mdx2 * mdx2 + mdy2 * mdy2;
-                            if (mdsq2 < magSq && mdsq2 > 1) { var md2 = Math.sqrt(mdsq2); mp2.x += mdx2 / md2 * 7; mp2.y += mdy2 / md2 * 7; }
+                if (!T.tank && spBuilt) {
+                    for (let gy = my0; gy <= my1; gy++) {
+                        var rowM2 = gy << 5;
+                        for (let gx = mx0; gx <= mx1; gx++) {
+                            var bkM2 = spGrid[rowM2 | gx]; if (!bkM2 || !bkM2.length) continue;
+                            for (let z = 0; z < bkM2.length; z++) {
+                                var mp2 = bkM2[z]; if (mp2._gone) continue;
+                                var mdx2 = T.x - mp2.x, mdy2 = T.y - mp2.y, mdsq2 = mdx2 * mdx2 + mdy2 * mdy2;
+                                if (mdsq2 < magSq && mdsq2 > 1) { var md2 = Math.sqrt(mdsq2); mp2.x += mdx2 / md2 * 7; mp2.y += mdy2 / md2 * 7; }
+                            }
                         }
                     }
                 }
@@ -438,27 +507,55 @@ var Mix = {
             }
         }
         // ---- food crosses over (every other tick is plenty)
-        if ((this.t & 1) === 0) {
-            for (let j = 0; j < worms.length; j++) {
-                var w5 = worms[j];
-                if (!w5.alive) continue;
-                var h5 = w5.segs[0], rr5 = wormR[j] + 8;
-                for (let i = cp0.length - 1; i >= 0; i--) {
-                    var f = cp0[i], fdx5 = f.x - h5.x, fdy5 = f.y - h5.y;
-                    if (fdx5 < rr5 && fdx5 > -rr5 && fdy5 < rr5 && fdy5 > -rr5) { w5.len += f.m * 0.6; mixSwapPop(cp0, i); S.crossFood++; }
+        if (!doWormFood) {
+            if (cpBuilt) {
+                for (let j = 0; j < worms.length; j++) {
+                    var w5 = worms[j];
+                    if (!w5.alive) continue;
+                    var h5 = w5.segs[0], rr5 = wormR[j] + 8;
+                    var wx0 = ((h5.x - rr5 + 3200) >> 8); if (wx0 < 0) wx0 = 0;
+                    var wx1 = ((h5.x + rr5 + 3200) >> 8); if (wx1 > 31) wx1 = 31;
+                    var wy0 = ((h5.y - rr5 + 3200) >> 8); if (wy0 < 0) wy0 = 0;
+                    var wy1 = ((h5.y + rr5 + 3200) >> 8); if (wy1 > 31) wy1 = 31;
+                    for (let gy = wy0; gy <= wy1; gy++) {
+                        var rowW = gy << 5;
+                        for (let gx = wx0; gx <= wx1; gx++) {
+                            var bkW = cpGrid[rowW | gx]; if (!bkW || !bkW.length) continue;
+                            for (let i = 0; i < bkW.length; i++) {
+                                var f = bkW[i]; if (f._gone) continue;
+                                var fdx5 = f.x - h5.x, fdy5 = f.y - h5.y;
+                                if (fdx5 < rr5 && fdx5 > -rr5 && fdy5 < rr5 && fdy5 > -rr5) { w5.len += f.m * 0.6; f._gone = true; cpGone = true; S.crossFood++; }
+                            }
+                        }
+                    }
                 }
             }
-            for (let i = 0; i < blobs.length; i++) {
-                var b5 = blobs[i];
-                if (b5.dead) continue;
-                var r5 = blobR[i], r5sq = r5 * r5;
-                for (let j = sp0.length - 1; j >= 0; j--) {
-                    var g = sp0[j], gdx5 = g.x - b5.x, gdy5 = g.y - b5.y;
-                    if (gdx5 < r5 && gdx5 > -r5 && gdy5 < r5 && gdy5 > -r5 && gdx5 * gdx5 + gdy5 * gdy5 < r5sq) { b5.m += g.v; mixSwapPop(sp0, j); S.crossFood++; }
+            if (spBuilt) {
+                for (let i = 0; i < blobs.length; i++) {
+                    var b5 = blobs[i];
+                    if (b5.dead) continue;
+                    var r5 = blobR[i], r5sq = r5 * r5;
+                    var bx0 = ((b5.x - r5 + 3200) >> 8); if (bx0 < 0) bx0 = 0;
+                    var bx1 = ((b5.x + r5 + 3200) >> 8); if (bx1 > 31) bx1 = 31;
+                    var by0 = ((b5.y - r5 + 3200) >> 8); if (by0 < 0) by0 = 0;
+                    var by1 = ((b5.y + r5 + 3200) >> 8); if (by1 > 31) by1 = 31;
+                    for (let gy = by0; gy <= by1; gy++) {
+                        var rowB = gy << 5;
+                        for (let gx = bx0; gx <= bx1; gx++) {
+                            var bkB = spGrid[rowB | gx]; if (!bkB || !bkB.length) continue;
+                            for (let j = 0; j < bkB.length; j++) {
+                                var g = bkB[j]; if (g._gone) continue;
+                                var gdx5 = g.x - b5.x, gdy5 = g.y - b5.y;
+                                if (gdx5 * gdx5 + gdy5 * gdy5 < r5sq) { b5.m += g.v; g._gone = true; spGone = true; S.crossFood++; }
+                            }
+                        }
+                    }
                 }
             }
-            while (sp0.length < SNK.PELLETS) Snake.addPellet();
         }
+        if (cpGone) mixCompactGone(cp0);
+        if (spGone) mixCompactGone(sp0);
+        if (!doWormFood) while (sp0.length < SNK.PELLETS) Snake.addPellet();
         if (anyDead) {
             var wIdx = 0;
             for (let i = 0; i < blobs.length; i++) if (!blobs[i].dead) blobs[wIdx++] = blobs[i];
@@ -541,17 +638,26 @@ var Mix = {
         var size = 108, rx = cssW - size - 16, ry = cssH - size - 44;
         if (rx < 360 || ry < 160) return;
         var half = size * 0.5, cx = rx + half, cy = ry + half, scale = (size - 10) / 6000;
-        ctx.save();
-        ctx.fillStyle = "rgba(10,16,30,0.72)";
-        ctx.strokeStyle = "rgba(253,224,71,0.35)";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.roundRect(rx, ry, size, size, 10); ctx.fill(); ctx.stroke();
-        // nested arenas: Tank square (6000), Blob square (5200), Worm ring (2400)
-        var bw = 5200 * scale;
-        ctx.strokeStyle = "rgba(167,139,250,0.45)"; ctx.lineWidth = 1;
-        ctx.strokeRect(cx - bw * 0.5, cy - bw * 0.5, bw, bw);
-        ctx.strokeStyle = "rgba(244,114,182,0.5)";
-        ctx.beginPath(); ctx.arc(cx, cy, 2400 * scale, 0, 7); ctx.stroke();
+        if (!this._radarBg) {
+            var rc = document.createElement("canvas");
+            rc.width = size; rc.height = size;
+            var g = rc.getContext("2d");
+            g.fillStyle = "rgba(10,16,30,0.72)";
+            g.strokeStyle = "rgba(253,224,71,0.35)";
+            g.lineWidth = 1.5;
+            g.beginPath(); g.roundRect(1, 1, size - 2, size - 2, 10); g.fill(); g.stroke();
+            var bw = 5200 * scale;
+            g.strokeStyle = "rgba(167,139,250,0.45)"; g.lineWidth = 1;
+            g.strokeRect(half - bw * 0.5, half - bw * 0.5, bw, bw);
+            g.strokeStyle = "rgba(244,114,182,0.5)";
+            g.beginPath(); g.arc(half, half, 2400 * scale, 0, 7); g.stroke();
+            g.font = "800 9px system-ui, sans-serif";
+            g.textAlign = "center";
+            g.fillStyle = "rgba(226,232,240,0.7)";
+            g.fillText("3-IN-1 RADAR", half, size - 5);
+            this._radarBg = rc;
+        }
+        ctx.drawImage(this._radarBg, rx, ry);
         // entity dots
         ctx.fillStyle = "#60a5fa";
         for (let i = 0; i < Tanks.tanks.length; i++) {
@@ -576,8 +682,6 @@ var Mix = {
             ctx.fillStyle = "#fde047";
             ctx.beginPath(); ctx.arc(px, py, 2.5, 0, 7); ctx.fill();
         }
-        uiText("3-IN-1 RADAR", cx, ry + size - 5, 9, "rgba(226,232,240,0.7)", "center", "800");
-        ctx.restore();
     },
 
     draw: function() {
@@ -622,28 +726,37 @@ var Mix = {
         for (let i = 0; i < MIX_BODIES.length; i++) if (MIX_BODIES[i][0] === mixCfg.body) { name = MIX_BODIES[i][1]; break; }
         var extra = "";
         if (m && m.alive && m.kind === "tank") extra = " · mass " + Math.round(this.tankMass(m.ref));
-        else if (m && m.alive && mixCfg.body === "chain" && m.ref.chainList) extra = " · " + m.ref.chainList.length + " bubbles";
+        else if (m && m.alive && mixCfg.body === "chain" && m.ref.chainList) { var bc = m.ref.chainList.length; extra = " · " + bc + (bc === 1 ? " bubble" : " bubbles"); }
         if (m && m.alive && m.kind === "worm" && m.ref.mx) { var X = m.ref.mx; extra = " · Lv " + X.lvl + (X.pts ? " · " + X.pts + " pt: 1 Bite " + X.st[0] + " · 2 Armor " + X.st[1] + " · 3 Appetite " + X.st[2] : " (B" + X.st[0] + " A" + X.st[1] + " P" + X.st[2] + ")"); }
         uiPanel(14, 76, Math.max(330, 60 + (name.length + extra.length + 34) * 6.4), 34, "#fde047", 0.8);
         uiText("ARENA MIX · you: " + name + " · Q: switch body" + extra, 26, 98, 12, "#fde68a", "left", "800");
 
-        // clickable quick-switch body pills
-        this._pills.length = 0;
-        var px = 14, py = 114;
-        ctx.save();
-        for (let i = 0; i < MIX_BODIES.length; i++) {
-            var bd = MIX_BODIES[i], active = bd[0] === mixCfg.body;
-            var lbl = bd[0] === "chain" ? "📿 Bubble" : bd[1];
-            var pw = lbl.length * 7.2 + 18;
-            ctx.fillStyle = active ? "rgba(253,224,71,0.24)" : "rgba(15,23,42,0.72)";
-            ctx.strokeStyle = active ? "#fde047" : "rgba(148,163,184,0.35)";
-            ctx.lineWidth = active ? 1.5 : 1;
-            ctx.beginPath(); ctx.roundRect(px, py, pw, 22, 6); ctx.fill(); ctx.stroke();
-            uiText(lbl, px + pw * 0.5, py + 15, 11, active ? "#fef08a" : "#cbd5e1", "center", active ? "800" : "700");
-            this._pills.push({ id: bd[0], x: px, y: py, w: pw, h: 22 });
-            px += pw + 6;
+        // clickable quick-switch body pills (cached to offscreen canvas per active body)
+        if (!this._pillsCanvas || this._pillsBody !== mixCfg.body) {
+            this._pillsBody = mixCfg.body;
+            this._pills.length = 0;
+            var pc = this._pillsCanvas || (this._pillsCanvas = document.createElement("canvas"));
+            pc.width = 360; pc.height = 26;
+            var pg = pc.getContext("2d");
+            pg.clearRect(0, 0, 360, 26);
+            var px = 0;
+            for (let i = 0; i < MIX_BODIES.length; i++) {
+                var bd = MIX_BODIES[i], active = bd[0] === mixCfg.body;
+                var lbl = bd[0] === "chain" ? "📿 Bubble" : bd[1];
+                var pw = lbl.length * 7.2 + 18;
+                pg.fillStyle = active ? "rgba(253,224,71,0.24)" : "rgba(15,23,42,0.72)";
+                pg.strokeStyle = active ? "#fde047" : "rgba(148,163,184,0.35)";
+                pg.lineWidth = active ? 1.5 : 1;
+                pg.beginPath(); pg.roundRect(px + 1, 1, pw, 22, 6); pg.fill(); pg.stroke();
+                pg.font = (active ? "800 " : "700 ") + "11px system-ui, sans-serif";
+                pg.textAlign = "center";
+                pg.fillStyle = active ? "#fef08a" : "#cbd5e1";
+                pg.fillText(lbl, px + 1 + pw * 0.5, 16);
+                this._pills.push({ id: bd[0], x: 14 + px, y: 114, w: pw, h: 22 });
+                px += pw + 6;
+            }
         }
-        ctx.restore();
+        ctx.drawImage(this._pillsCanvas, 14, 113);
 
         var lw = 0;
         for (let i = 0; i < this.log.length; i++) {

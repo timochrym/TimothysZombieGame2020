@@ -286,14 +286,23 @@ var Cells = {
             }
         }
         // pellets (and ejected mass, which drifts to a stop)
+        var bRads = this._bRads || (this._bRads = []);
+        for (let i = 0; i < B.length; i++) bRads[i] = B[i].dead ? 0 : this.rad(B[i].m);
         for (let k = this.pellets.length - 1; k >= 0; k--) {
             var p = this.pellets[k];
             if (p.vx || p.vy) { p.x += p.vx; p.y += p.vy; p.vx *= 0.88; p.vy *= 0.88; if (Math.abs(p.vx) + Math.abs(p.vy) < 0.1) p.vx = p.vy = 0; }
+            var px = p.x, py = p.y, pm = p.m;
             for (let i = 0; i < B.length; i++) {
                 var q = B[i];
-                if (q.dead) continue;
-                var rq = this.rad(q.m);
-                if (Math.abs(p.x - q.x) < rq && Math.abs(p.y - q.y) < rq && Math.hypot(p.x - q.x, p.y - q.y) < rq && (p.m < 5 || q.m > 20)) { q.m += p.m; this.pellets.splice(k, 1); break; }
+                if (q.dead || (pm >= 5 && q.m <= 20)) continue;
+                var rq = bRads[i], dx = px - q.x, dy = py - q.y;
+                if (dx < rq && dx > -rq && dy < rq && dy > -rq && dx * dx + dy * dy < rq * rq) {
+                    q.m += pm; bRads[i] = this.rad(q.m);
+                    var lastC = this.pellets.length - 1;
+                    if (k < lastC) this.pellets[k] = this.pellets[lastC];
+                    this.pellets.pop();
+                    break;
+                }
             }
         }
         // viruses pop big blobs
