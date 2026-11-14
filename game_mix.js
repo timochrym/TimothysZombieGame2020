@@ -992,17 +992,17 @@ var Mix = {
         if (m && m.alive && m.kind === "tank") extra = " · mass " + Math.round(this.tankMass(m.ref));
         else if (m && m.alive && mixCfg.body === "chain" && m.ref.chainList) { var bc = m.ref.chainList.length; extra = " · " + bc + (bc === 1 ? " bubble" : " bubbles"); }
         if (m && m.alive && m.kind === "worm" && m.ref.mx) { var X = m.ref.mx; extra = " · Lv " + X.lvl + (X.pts ? " · " + X.pts + " pt: 1 Bite " + X.st[0] + " · 2 Armor " + X.st[1] + " · 3 Appetite " + X.st[2] : " (B" + X.st[0] + " A" + X.st[1] + " P" + X.st[2] + ")"); }
-        uiPanel(14, 76, Math.max(330, 60 + (name.length + extra.length + 34) * 6.4), 34, "#fde047", 0.8);
-        uiText("ARENA MIX · you: " + name + " · Q: switch body" + extra, 26, 98, 12, "#fde68a", "left", "800");
+        uiPanel(14, 76, Math.max(360, 60 + (name.length + extra.length + 42) * 6.4), 34, "#fde047", 0.8);
+        uiText("ARENA MIX · you: " + name + " · Q: body · V: swap" + extra, 26, 98, 12, "#fde68a", "left", "800");
 
         // clickable quick-switch body pills (cached to offscreen canvas per active body)
         if (!this._pillsCanvas || this._pillsBody !== mixCfg.body) {
             this._pillsBody = mixCfg.body;
             this._pills.length = 0;
             var pc = this._pillsCanvas || (this._pillsCanvas = document.createElement("canvas"));
-            pc.width = 360; pc.height = 26;
+            pc.width = 450; pc.height = 26;
             var pg = pc.getContext("2d");
-            pg.clearRect(0, 0, 360, 26);
+            pg.clearRect(0, 0, 450, 26);
             var px = 0;
             for (let i = 0; i < MIX_BODIES.length; i++) {
                 var bd = MIX_BODIES[i], active = bd[0] === mixCfg.body;
@@ -1019,6 +1019,16 @@ var Mix = {
                 this._pills.push({ id: bd[0], x: 14 + px, y: 114, w: pw, h: 22 });
                 px += pw + 6;
             }
+            var swLbl = "🔄 Swap [V]", swW = swLbl.length * 6.8 + 16;
+            pg.fillStyle = "rgba(56,189,248,0.18)";
+            pg.strokeStyle = "#38bdf8";
+            pg.lineWidth = 1.2;
+            pg.beginPath(); pg.roundRect(px + 1, 1, swW, 22, 6); pg.fill(); pg.stroke();
+            pg.font = "800 11px system-ui, sans-serif";
+            pg.textAlign = "center";
+            pg.fillStyle = "#bae6fd";
+            pg.fillText(swLbl, px + 1 + swW * 0.5, 16);
+            this._swapPill = { id: "_swap", x: 14 + px, y: 114, w: swW, h: 22 };
         }
         ctx.drawImage(this._pillsCanvas, 14, 113);
 
@@ -1040,6 +1050,45 @@ var Mix = {
         var i = MIX_BODIES.findIndex(function(b) { return b[0] === mixCfg.body; });
         this.setBody(MIX_BODIES[(i + (dir || 1) + MIX_BODIES.length) % MIX_BODIES.length][0]);
         showBanner("You are a " + MIX_BODIES.find(function(b) { return b[0] === mixCfg.body; })[1].replace(/^\S+\s/, "").toUpperCase(), "", "#fde047");
+    },
+
+    swapCharacter: function() {
+        var pool = [];
+        for (let i = 0; i < Tanks.tanks.length; i++) if (Tanks.tanks[i].alive) pool.push({ kind: "tank", ref: Tanks.tanks[i], x: Tanks.tanks[i].x, y: Tanks.tanks[i].y });
+        for (let i = 0; i < Cells.players.length; i++) if (Cells.players[i].alive) {
+            var cp = Cells.players[i], hd = cp.chain && cp.chainList && cp.chainList[0];
+            pool.push({ kind: cp.chain ? "chain" : "blob", ref: cp, x: hd ? hd.x : (cp.cx || 0), y: hd ? hd.y : (cp.cy || 0) });
+        }
+        for (let i = 0; i < Snake.worms.length; i++) if (Snake.worms[i].alive) pool.push({ kind: "worm", ref: Snake.worms[i], x: Snake.worms[i].segs[0].x, y: Snake.worms[i].segs[0].y });
+
+        var cur = pool.find(function(it) { return it.ref.human === 0; });
+        var lanPeer = pool.find(function(it) { return it.ref.human === "lan"; });
+        var next = null;
+        if (lanPeer && cur && lanPeer !== cur) {
+            // Swap P1 and LAN P2
+            var pPid = lanPeer.ref.pid, pName = lanPeer.ref.name, pCol = lanPeer.ref.color;
+            var cName = cur.ref.name, cCol = cur.ref.color;
+            cur.ref.human = "lan"; cur.ref.pid = pPid; cur.ref.name = pName; cur.ref.color = pCol;
+            lanPeer.ref.human = 0; lanPeer.ref.pid = undefined; lanPeer.ref.name = cName; lanPeer.ref.color = cCol;
+            if (typeof Net !== "undefined" && Net.peers && Net.peers[pPid]) {
+                Net.peers[pPid].mixBody = cur.kind;
+                if (Net.peers[pPid].inp && Net.peers[pPid].inp.x) delete Net.peers[pPid].inp.x.body;
+            }
+            next = lanPeer;
+        } else {
+            var others = pool.filter(function(it) { return it.ref.human !== 0; });
+            if (!others.length) return false;
+            this._swapIdx = ((this._swapIdx || 0) + 1) % others.length;
+            next = others[this._swapIdx];
+            if (cur) cur.ref.human = undefined;
+            next.ref.human = 0;
+        }
+        mixCfg.body = next.kind;
+        this._pillsBody = null;
+        this.cam.x = next.x; this.cam.y = next.y;
+        this.burst(next.x, next.y, "#38bdf8", "ring", "SWAP!", 75);
+        showBanner("SWAPPED", "Now controlling " + (next.ref.name || next.kind), "#38bdf8");
+        return true;
     }
 };
 
@@ -1316,6 +1365,7 @@ GameModes.register({
         if (me) {
             var bk = me.kind === "blob" ? (me.ref.chain ? "chain" : "blob") : me.kind;
             mixCfg.body = bk;
+            if (Mix._lanBody === bk) Mix._lanBody = null;
         }
         if (m.lg && m.lg.length) Mix.log = m.lg.map(function(L) { return { text: L[0], col: L[1], t: 180 }; });
     },
@@ -1335,6 +1385,7 @@ GameModes.register({
     },
     onKey: function(code) {
         if (typeof Net !== "undefined" && Net.role === "client") {
+            if (code === "KeyV" || code === "BracketRight") { Net.send({ t: "sb", act: { k: "swap" } }); return true; }
             if (code === "KeyQ") {
                 var i = MIX_BODIES.findIndex(function(b) { return b[0] === mixCfg.body; });
                 var nb = MIX_BODIES[(i + 1 + MIX_BODIES.length) % MIX_BODIES.length][0];
@@ -1357,6 +1408,7 @@ GameModes.register({
             }
             return false;
         }
+        if (code === "KeyV" || code === "BracketRight") { return Mix.swapCharacter(); }
         if (code === "KeyQ") { Mix.nextBody(1); return true; }
         if (mixCfg.body === "worm") { var wi = ["Digit1", "Digit2", "Digit3"].indexOf(code), me = Mix.me(); if (wi >= 0 && me && me.alive) { Mix.wormStat(me.ref, wi); return true; } }
         if (mixCfg.body === "tank") { var tk = GameModes.get("tanks"); if (tk && tk.onKey) return tk.onKey(code); }
@@ -1364,6 +1416,12 @@ GameModes.register({
     },
     onClick: function(wx, wy, button) {
         if (button === 0 && typeof mouseX === "number" && typeof mouseY === "number") {
+            var sp = Mix._swapPill;
+            if (sp && mouseX >= sp.x && mouseX <= sp.x + sp.w && mouseY >= sp.y && mouseY <= sp.y + sp.h) {
+                if (typeof Net !== "undefined" && Net.role === "client") Net.send({ t: "sb", act: { k: "swap" } });
+                else Mix.swapCharacter();
+                return true;
+            }
             for (let i = 0; i < Mix._pills.length; i++) {
                 var p = Mix._pills[i];
                 if (mouseX >= p.x && mouseX <= p.x + p.w && mouseY >= p.y && mouseY <= p.y + p.h) {

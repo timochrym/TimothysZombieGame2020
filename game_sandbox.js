@@ -223,6 +223,9 @@ var EntityTakeover = {
     },
 
     swapPlayers: function() {
+        if (typeof GameModes !== "undefined" && GameModes.current && GameModes.current.id === "mix" && typeof Mix !== "undefined" && Mix.swapCharacter) {
+            return Mix.swapCharacter();
+        }
         if (typeof redGuy !== "undefined" && redGuy && typeof blueGuy !== "undefined" && blueGuy && !redGuy.dead && !blueGuy.dead) {
             var tmp = redGuy;
             redGuy = blueGuy;
