@@ -302,6 +302,38 @@ var Mix = {
                     if (w2.human !== undefined && typeof SFX !== "undefined") SFX.play("pickup", h2.x, h2.y, 0.5);
                 }
             }
+        }
+        // ---- Agar.io blobs vs Diep.io blocks: big blobs crush/absorb them for mass; small blobs bounce & chip them
+        for (let i = 0; i < blobs.length; i++) {
+            var bs = blobs[i];
+            if (bs.dead) continue;
+            var brs = blobR[i];
+            for (let j = shapes.length - 1; j >= 0; j--) {
+                var sh = shapes[j], SH = TNK_SHAPES[sh.type], rrB = SH.r + brs;
+                var dxB = sh.x - bs.x, dyB = sh.y - bs.y;
+                if (dxB > rrB || dxB < -rrB || dyB > rrB || dyB < -rrB) continue;
+                var d2B = dxB * dxB + dyB * dyB;
+                if (d2B > rrB * rrB) continue;
+                if (brs > SH.r * 1.15) {
+                    sh.hp -= Math.max(1.5, bs.m * 0.08); sh.hitT = 4;
+                } else {
+                    var dB = Math.sqrt(d2B) || 1, overlap = rrB - dB;
+                    bs.x -= (dxB / dB) * overlap * 0.5; bs.y -= (dyB / dB) * overlap * 0.5;
+                    sh.vx = (sh.vx || 0) + (dxB / dB) * 1.2; sh.vy = (sh.vy || 0) + (dyB / dB) * 1.2;
+                    sh.hp -= Math.max(0.4, bs.m * 0.03); sh.hitT = 4;
+                }
+                if (sh.hp <= 0) {
+                    mixSwapPop(shapes, j); Tanks.addShape();
+                    bs.m += Math.max(2, SH.xp * 0.4); blobR[i] = Cells.rad(bs.m); S.shapeBroken++;
+                    this.burst(sh.x, sh.y, SH.col, "spark", bs.pl.human !== undefined ? "CRUSH!" : "", 28);
+                    if (bs.pl.human !== undefined && typeof SFX !== "undefined") SFX.play("pickup", bs.x, bs.y, 0.5);
+                }
+            }
+        }
+        for (let j = 0; j < worms.length; j++) {
+            var w2 = worms[j];
+            if (!w2.alive || !w2.mx) continue;
+            var h2 = w2.segs[0], wr2 = wormR[j], bite = w2.mx.st[0], boost = w2.boosting ? 2 : 1;
             if (w2.mx.biteCd <= 0) {
                 for (let i = 0; i < tanks.length; i++) {
                     var k2 = tanks[i];
@@ -466,6 +498,12 @@ var Mix = {
             var lost = b4.m * 0.25, left = b4.m - lost;
             w4.len += lost * 0.3; this.wormXp(w4, lost * 0.4);
             this.burst(b4.x, b4.y, "#a78bfa", "ring", "POP!", r4 + 35);
+            if (b4.pl.chain && !b4.pl.compact && b4.pl.chainList && b4 === b4.pl.chainList[0]) {
+                w4.len += b4.m * 0.45; this.wormXp(w4, b4.m * 0.5);
+                this.burst(b4.x, b4.y, w4.color, "ring", "SNAKE CUT!", r4 + 35);
+                this.note(b4.pl.human !== undefined || w4.human !== undefined, b4.pl.name + " bumped " + w4.name, w4.color);
+                Cells.killChain(b4.pl, null); anyDead = true; continue;
+            }
             if (b4.pl.chain) { b4.m = left; blobR[i] = Cells.rad(left); b4.popCd = 150; continue; }
             var pieces = Math.max(0, Math.min(CEL.MAXCELLS - Cells.mine(b4.pl).length, 4)), each = left / (pieces + 1);
             for (let q = 0; q < pieces; q++) {

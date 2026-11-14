@@ -66,7 +66,19 @@ var Cells = {
     },
     rndPos: function(pad) { return [(Math.random() - 0.5) * (CEL.W - pad * 2), (Math.random() - 0.5) * (CEL.H - pad * 2)]; },
     addPellet: function(x, y, m, col) { if (x === undefined) { var p = this.rndPos(20); x = p[0]; y = p[1]; } this.pellets.push({ x: x, y: y, m: m || 1, col: col || CEL_COLORS[(Math.random() * CEL_COLORS.length) | 0], vx: 0, vy: 0 }); },
-    addVirus: function() { var p = this.rndPos(300); this.viruses.push({ x: p[0], y: p[1], m: 100, feed: 0, vx: 0, vy: 0 }); },
+    addVirus: function() {
+        var best = this.rndPos(300), bestD = -1;
+        for (let t = 0; t < 12; t++) {
+            var p = this.rndPos(300), md = 1e9;
+            for (let i = 0; i < this.viruses.length; i++) {
+                var v = this.viruses[i], d = Math.hypot(v.x - p[0], v.y - p[1]);
+                if (d < md) md = d;
+            }
+            if (md > bestD) { bestD = md; best = p; }
+            if (md >= 340) break;
+        }
+        this.viruses.push({ x: best[0], y: best[1], m: 100, feed: 0, vx: 0, vy: 0 });
+    },
     feedVirus: function(vi, dx, dy, amt) {
         var L = Math.hypot(dx, dy) || 1;
         vi.fx = dx / L; vi.fy = dy / L;
@@ -74,7 +86,7 @@ var Cells = {
         vi.m = Math.min(160, (vi.m || 100) + 10);
         if (vi.feed >= 5) {
             vi.feed = 0; vi.m = 100;
-            if (this.viruses.length < 44) {
+            if (this.viruses.length < 32) {
                 this.viruses.push({ x: vi.x + vi.fx * 48, y: vi.y + vi.fy * 48, m: 100, feed: 0, vx: vi.fx * 26, vy: vi.fy * 26, launched: 45 });
             } else {
                 vi.vx = (vi.vx || 0) + vi.fx * 24; vi.vy = (vi.vy || 0) + vi.fy * 24; vi.launched = 45;
@@ -146,8 +158,9 @@ var Cells = {
             }
         }
         pl.ejectPrev = eject;
-        pl.chainMoving = !!(pl.chain && pl.compact && split);
-        if (split && !pl.splitPrev && !pl.compact) { if (pl.chain) this.chainDash(pl); else this.split(pl, me); }
+        pl.chainBoosting = !!(pl.chain && split);
+        pl.chainMoving = pl.chainBoosting;
+        if (split && !pl.splitPrev && !pl.chain) this.split(pl, me);
         if (eject && !pl.chain && this.t % 4 === 0) this.eject(pl, me);
         pl.splitPrev = split;
     },
@@ -174,8 +187,8 @@ var Cells = {
             var dd = Math.hypot(prey.x - big.x, prey.y - big.y);
             if (big.m > prey.m * 2.8 && dd < r + 260 && me.length < 3 && Math.random() < 0.5) { pl.aimX = pl.goal[0]; pl.aimY = pl.goal[1]; return { split: true }; }
         } else {
-            var best = null, bd = 1e9;
-            for (let i = 0; i < this.pellets.length; i += 3) { var p = this.pellets[i], d2 = Math.hypot(p.x - cx, p.y - cy); if (d2 < bd) { bd = d2; best = p; } }
+            var best = null, bd = 1e9, pStep = Math.max(1, (this.pellets.length / 60) | 0);
+            for (let i = 0; i < this.pellets.length; i += pStep) { var p = this.pellets[i], d2 = Math.hypot(p.x - cx, p.y - cy); if (d2 < bd) { bd = d2; best = p; } }
             pl.goal = best ? [best.x, best.y] : [0, 0];
             // big blobs avoid viruses
             for (let i = 0; i < this.viruses.length; i++) { var v = this.viruses[i]; if (big.m > 130 && Math.hypot(v.x - cx, v.y - cy) < r + 160) pl.goal = [cx - (v.x - cx), cy - (v.y - cy)]; }
@@ -191,21 +204,23 @@ var Cells = {
     // its head (the next bubble takes over) or be cut down from the tail. W toggles a single stationary bubble;
     // hold Space in that form to move slowly and shed mass. In chain form Space is a short lunge.
     chainStep: function(pl) {
-        var list = (pl.chainList || []).filter(function(b) { return !b.dead && Cells.blobs.indexOf(b) !== -1; });
+        var list = pl.chainList || [], out = [];
+        for (let i = 0; i < list.length; i++) if (!list[i].dead && list[i].pl === pl) out.push(list[i]);
+        list = out;
         var mine = this.mine(pl);
-        for (let i = 0; i < mine.length; i++) if (list.indexOf(mine[i]) === -1) list.push(mine[i]);        // new pieces join at the tail
+        for (let i = 0; i < mine.length; i++) if (list.indexOf(mine[i]) === -1) list.push(mine[i]);
         if (!list.length) { pl.chainList = []; return; }
         var total = 0;
         for (let i = 0; i < list.length; i++) { list[i].lead = i ? list[i - 1] : null; list[i].mergeT = 9999; total += list[i].m; }
         if (pl.compact) {
             var core = list[0];
-            core.m = total; core.lead = null; core.vx = core.vy = 0;
-            this.blobs = this.blobs.filter(function(b) { return b.pl !== pl || b === core; });
+            core.m = total; core.lead = null;
+            for (let i = 1; i < list.length; i++) list[i].dead = true;
             pl.chainList = [core];
-            // Drop beyond the rim so the bubble cannot immediately reclaim its own fuel.
+            // Boost in bubble form: low energy cost (0.1% mass every 8 ticks)
             var dx = pl.aimX - core.x, dy = pl.aimY - core.y, distance = Math.hypot(dx, dy);
-            if (pl.chainMoving && total > 20 && distance > 1 && this.t % 6 === 0) {
-                var cost = Math.min(total - 20, total * 0.004), r = this.rad(total) + 16;
+            if (pl.chainBoosting && total > 22 && distance > 1 && this.t % 8 === 0) {
+                var cost = Math.min(total - 20, Math.max(0.25, total * 0.001)), r = this.rad(total) + 16;
                 core.m -= cost;
                 this.pellets.push({ x: core.x - dx / distance * r, y: core.y - dy / distance * r,
                     m: cost, col: pl.color, vx: -dx / distance * 5, vy: -dy / distance * 5 });
@@ -215,27 +230,39 @@ var Cells = {
         var want = Math.max(1, Math.min(20, Math.floor(Math.sqrt(total / 8))));
         var head = list[0], tail = list[list.length - 1];
         if (list.length < want && tail.m > 12 && this.t % 6 === 0) {
-            var seed = Math.min(6, tail.m * 0.3);                  // a small bud at the tail; the taper below fills it
+            var seed = Math.min(6, tail.m * 0.3);
             tail.m -= seed;
             var nb = { pl: pl, x: tail.x - (tail.lead ? (tail.lead.x - tail.x) * 0.3 : 6), y: tail.y - (tail.lead ? (tail.lead.y - tail.y) * 0.3 : 6), m: seed, vx: 0, vy: 0, mergeT: 9999, lead: tail };
             this.blobs.push(nb); list.push(nb);
+        }
+        // Smooth boost in snake form: low energy cost (0.15% mass every 6 ticks)
+        if (pl.chainBoosting && total > 22 && this.t % 6 === 0) {
+            var bCost = Math.min(total - 20, Math.max(0.3, total * 0.0015));
+            tail.m = Math.max(4, tail.m - bCost);
+            this.pellets.push({ x: tail.x, y: tail.y, m: bCost, col: pl.color, vx: (Math.random() - 0.5) * 3, vy: (Math.random() - 0.5) * 3 });
         }
         // mass settles into a taper: the head is the biggest and each bubble behind is 90% of the one ahead
         var wsum = 0, wgt = 1;
         for (let i = 0; i < list.length; i++) { wsum += wgt; wgt *= 0.9; }
         wgt = 1;
-        for (let i = 0; i < list.length; i++) { var target = total * wgt / wsum; list[i].m += (target - list[i].m) * 0.03; wgt *= 0.9; }
+        for (let i = 0; i < list.length; i++) { var target = total * wgt / wsum; list[i].m += (target - list[i].m) * 0.04; wgt *= 0.9; }
         pl.chainList = list;
         if (pl.dashCd > 0) pl.dashCd--;
     },
-    chainDash: function(pl) {
-        var head = pl.chainList && pl.chainList[0];
-        if (!head || pl.dashCd > 0 || head.m < 22) return;
-        var dx = pl.aimX - head.x, dy = pl.aimY - head.y, L = Math.hypot(dx, dy) || 1;
-        head.vx += dx / L * 20; head.vy += dy / L * 20; pl.dashCd = 45;
-        var cost = head.m * 0.04; head.m -= cost;
-        this.pellets.push({ x: head.x - dx / L * this.rad(head.m), y: head.y - dy / L * this.rad(head.m), m: Math.max(1, cost), col: pl.color, vx: -dx / L * 8, vy: -dy / L * 8 });
-        if (pl.human !== undefined && typeof SFX !== "undefined") SFX.play("whoosh");
+    killChain: function(pl, by) {
+        if (!pl || !pl.alive || this.protectedNow(pl)) return;
+        var list = pl.chainList && pl.chainList.length ? pl.chainList : this.mine(pl);
+        var total = 0;
+        for (let i = 0; i < list.length; i++) { total += list[i].m || 0; list[i].dead = true; }
+        var nDrops = Math.max(1, Math.min(18, list.length));
+        var step = Math.max(1, Math.ceil(list.length / nDrops));
+        var globM = Math.max(3, (total * 0.75) / Math.max(1, Math.ceil(list.length / step)));
+        for (let i = 0; i < list.length; i += step) {
+            this.pellets.push({ x: list[i].x, y: list[i].y, m: globM, col: pl.color, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6 });
+        }
+        pl.chainList = [];
+        if (by && by.human !== undefined && typeof SFX !== "undefined") SFX.play("kill", list[0] ? list[0].x : 0, list[0] ? list[0].y : 0, 0.7);
+        this.die(pl, by || null);
     },
     split: function(pl, me) {
         var n = me.length;
@@ -265,25 +292,30 @@ var Cells = {
         for (let i = 0; i < this.players.length; i++) if (this.players[i].alive) this.input(this.players[i]);
         for (let i = 0; i < this.players.length; i++) if (this.players[i].chain && this.players[i].alive) this.chainStep(this.players[i]);
         var B = this.blobs;
-        // move
+        var bRads = this._bRads || (this._bRads = []);
+        // move (precompute radii once)
         for (let i = 0; i < B.length; i++) {
-            var b = B[i], pl = b.pl, dx = pl.aimX - b.x, dy = pl.aimY - b.y, L = Math.hypot(dx, dy) || 1;
+            var b = B[i];
+            if (b.dead) { bRads[i] = 0; continue; }
+            var pl = b.pl, dx = pl.aimX - b.x, dy = pl.aimY - b.y, L = Math.hypot(dx, dy) || 1;
             var sp = this.speed(b.m) * Math.min(1, L / 60) * arenaSpeed(pl) * (pl.fx && pl.fx.speed > 0 ? 1.6 : 1);
-            if (pl.chain && b.lead && !b.lead.dead) {            // bubble worm: every bubble but the head follows the one ahead
-                dx = b.lead.x - b.x; dy = b.lead.y - b.y; L = Math.hypot(dx, dy) || 1;
-                var gap = (this.rad(b.m) + this.rad(b.lead.m)) * 0.92;
-                sp = Math.max(0, Math.min(L - gap, 14));
-            }
-            if (pl.chain && pl.compact) {
-                sp *= pl.chainMoving && b.m > 20 ? 0.7 : 0;
-                b.vx = b.vy = 0;
+            if (pl.chain) {
+                if (pl.compact) {
+                    sp *= (pl.chainBoosting && b.m > 22) ? 1.5 : 0.85;
+                } else if (b.lead && !b.lead.dead) {
+                    dx = b.lead.x - b.x; dy = b.lead.y - b.y; L = Math.hypot(dx, dy) || 1;
+                    var gap = (this.rad(b.m) + (this.rad(b.lead.m))) * 0.9;
+                    sp = Math.max(0, Math.min(L - gap, 28));
+                } else if (pl.chainBoosting && b.m > 12) {
+                    sp *= 1.75;
+                }
             }
             b.x += dx / L * sp + b.vx; b.y += dy / L * sp + b.vy;
             b.vx *= 0.9; b.vy *= 0.9;
             if (b.mergeT > 0) b.mergeT--;
-            // decay: blobs above 35 lose a share of their mass every tick; with "grows with size" the share climbs too
             if (cellsCfg.decay > 0 && b.m > 35) b.m -= b.m * cellsCfg.decay * (cellsCfg.decayGrow ? 1 + b.m / 800 : 1);
             var r = this.rad(b.m);
+            bRads[i] = r;
             b.x = Math.max(-CEL.W / 2 + r * 0.5, Math.min(CEL.W / 2 - r * 0.5, b.x));
             b.y = Math.max(-CEL.H / 2 + r * 0.5, Math.min(CEL.H / 2 - r * 0.5, b.y));
         }
@@ -291,54 +323,107 @@ var Cells = {
         for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++) {
             var a = B[i], c = B[j];
             if (a.pl !== c.pl || a.dead || c.dead) continue;
-            var ddx = c.x - a.x, ddy = c.y - a.y, d = Math.hypot(ddx, ddy) || 0.01, ra = this.rad(a.m), rc = this.rad(c.m);
+            var ddx = c.x - a.x, ddy = c.y - a.y, d = Math.hypot(ddx, ddy) || 0.01, ra = bRads[i], rc = bRads[j];
             if (a.mergeT > 0 || c.mergeT > 0) {
                 if (d < ra + rc) { var push = (ra + rc - d) * 0.25; a.x -= ddx / d * push * c.m / (a.m + c.m); a.y -= ddy / d * push * c.m / (a.m + c.m); c.x += ddx / d * push * a.m / (a.m + c.m); c.y += ddy / d * push * a.m / (a.m + c.m); }
-            } else if (d < Math.max(ra, rc) * 0.7) { a.m += c.m; c.dead = true; }
+            } else if (d < Math.max(ra, rc) * 0.7) { a.m += c.m; bRads[i] = this.rad(a.m); c.dead = true; }
+        }
+        // Bubble worms in snake form: bumping head into another snake's body kills like a snake
+        for (let pi = 0; pi < this.players.length; pi++) {
+            var cp = this.players[pi];
+            if (!cp.alive || !cp.chain || cp.compact || this.protectedNow(cp) || !cp.chainList || !cp.chainList.length) continue;
+            var chd = cp.chainList[0];
+            if (!chd || chd.dead) continue;
+            var chr = this.rad(chd.m);
+            for (let j = 0; j < B.length; j++) {
+                var ob = B[j];
+                if (ob.dead || ob.pl === cp || !ob.pl.chain || ob.pl.compact) continue;
+                var hitDist = (chr + bRads[j]) * 0.78;
+                var hdx = ob.x - chd.x, hdy = ob.y - chd.y;
+                if (hdx * hdx + hdy * hdy < hitDist * hitDist) {
+                    this.killChain(cp, ob.pl);
+                    break;
+                }
+            }
         }
         // eat other blobs
         for (let i = 0; i < B.length; i++) for (let j = 0; j < B.length; j++) {
             var e = B[i], f = B[j];
             if (i === j || e.dead || f.dead || e.pl === f.pl || this.protectedNow(f.pl) || e.m < f.m * 1.25) continue;
             var rd = Math.hypot(f.x - e.x, f.y - e.y);
-            if (rd < this.rad(e.m) - this.rad(f.m) * 0.4) {
-                e.m += f.m; f.dead = true;
+            if (rd < bRads[i] - bRads[j] * 0.4) {
+                e.m += f.m; bRads[i] = this.rad(e.m); f.dead = true;
                 if (e.pl.human !== undefined && typeof SFX !== "undefined") SFX.play("kill", e.x, e.y, 0.6);
                 if (!this.mine(f.pl).some(function(q) { return !q.dead; })) this.die(f.pl, e.pl);
             }
         }
-        // pellets (and ejected mass, which drifts to a stop)
-        var bRads = this._bRads || (this._bRads = []);
-        for (let i = 0; i < B.length; i++) bRads[i] = B[i].dead ? 0 : this.rad(B[i].m);
-        for (let k = this.pellets.length - 1; k >= 0; k--) {
-            var p = this.pellets[k];
-            if (p.vx || p.vy) { p.x += p.vx; p.y += p.vy; p.vx *= 0.88; p.vy *= 0.88; if (Math.abs(p.vx) + Math.abs(p.vy) < 0.1) p.vx = p.vy = 0; }
-            var px = p.x, py = p.y, pm = p.m, eatenP = false;
+        // pellets (and ejected mass): spatial 32x32 grid for O(blobs) eating instead of O(pellets * blobs)
+        var G = 32, invW = G / CEL.W, invH = G / CEL.H, halfCW = CEL.W * 0.5, halfCH = CEL.H * 0.5;
+        var grid = this._pGrid;
+        if (!grid) { grid = this._pGrid = new Array(G * G); for (let g = 0; g < G * G; g++) grid[g] = []; }
+        else for (let g = 0; g < G * G; g++) grid[g].length = 0;
+        var ps = this.pellets;
+        for (let k = ps.length - 1; k >= 0; k--) {
+            var p = ps[k];
+            if (p.vx || p.vy) {
+                p.x += p.vx; p.y += p.vy; p.vx *= 0.88; p.vy *= 0.88;
+                if (Math.abs(p.vx) + Math.abs(p.vy) < 0.1) p.vx = p.vy = 0;
+            }
             if (p.ejected) {
+                var eatenE = false;
                 for (let v = 0; v < this.viruses.length; v++) {
                     var vi0 = this.viruses[v], vr0 = this.rad(vi0.m || 100) + 8;
-                    var vdx0 = px - vi0.x, vdy0 = py - vi0.y;
+                    var vdx0 = p.x - vi0.x, vdy0 = p.y - vi0.y;
                     if (vdx0 * vdx0 + vdy0 * vdy0 < vr0 * vr0) {
-                        this.feedVirus(vi0, p.vx || (vi0.x - px), p.vy || (vi0.y - py), 1);
-                        var lastE = this.pellets.length - 1;
-                        if (k < lastE) this.pellets[k] = this.pellets[lastE];
-                        this.pellets.pop();
-                        eatenP = true;
-                        break;
+                        this.feedVirus(vi0, p.vx || (vi0.x - p.x), p.vy || (vi0.y - p.y), 1);
+                        p.eaten = true; eatenE = true; break;
                     }
                 }
-                if (eatenP) continue;
+                if (eatenE) continue;
             }
-            for (let i = 0; i < B.length; i++) {
-                var q = B[i];
-                if (q.dead || (pm >= 5 && q.m <= 20)) continue;
-                var rq = bRads[i], dx = px - q.x, dy = py - q.y;
-                if (dx < rq && dx > -rq && dy < rq && dy > -rq && dx * dx + dy * dy < rq * rq) {
-                    q.m += pm; bRads[i] = this.rad(q.m);
-                    var lastC = this.pellets.length - 1;
-                    if (k < lastC) this.pellets[k] = this.pellets[lastC];
-                    this.pellets.pop();
-                    break;
+            var gx = Math.max(0, Math.min(G - 1, ((p.x + halfCW) * invW) | 0));
+            var gy = Math.max(0, Math.min(G - 1, ((p.y + halfCH) * invH) | 0));
+            grid[gy * G + gx].push(p);
+        }
+        for (let i = 0; i < B.length; i++) {
+            var q = B[i];
+            if (q.dead) continue;
+            var rq = bRads[i], rq2 = rq * rq;
+            var gx0 = Math.max(0, ((q.x - rq + halfCW) * invW) | 0), gx1 = Math.min(G - 1, ((q.x + rq + halfCW) * invW) | 0);
+            var gy0 = Math.max(0, ((q.y - rq + halfCH) * invH) | 0), gy1 = Math.min(G - 1, ((q.y + rq + halfCH) * invH) | 0);
+            for (let gy = gy0; gy <= gy1; gy++) {
+                var rowOff = gy * G;
+                for (let gx = gx0; gx <= gx1; gx++) {
+                    var cell = grid[rowOff + gx];
+                    for (let ci = 0; ci < cell.length; ci++) {
+                        var cp2 = cell[ci];
+                        if (cp2.eaten || (cp2.m >= 5 && q.m <= 20)) continue;
+                        var dx = cp2.x - q.x, dy = cp2.y - q.y;
+                        if (dx * dx + dy * dy < rq2) {
+                            cp2.eaten = true; q.m += cp2.m; rq = bRads[i] = this.rad(q.m); rq2 = rq * rq;
+                        }
+                    }
+                }
+            }
+        }
+        for (let k = ps.length - 1; k >= 0; k--) {
+            if (ps[k].eaten) {
+                var lastC = ps.length - 1;
+                if (k < lastC) ps[k] = ps[lastC];
+                ps.pop();
+            }
+        }
+        // viruses gently repel each other so spikes never pile up in one location
+        var V = this.viruses;
+        for (let i = 0; i < V.length; i++) {
+            var va = V[i];
+            for (let j = i + 1; j < V.length; j++) {
+                var vb = V[j], dxv = vb.x - va.x, dyv = vb.y - va.y, d2v = dxv * dxv + dyv * dyv;
+                if (d2v < 180 * 180) {
+                    var dv = Math.sqrt(d2v) || 1, pushV = (180 - dv) * 0.04;
+                    var nxv = dxv / dv, nyv = dyv / dv;
+                    va.x -= nxv * pushV; va.y -= nyv * pushV;
+                    vb.x += nxv * pushV; vb.y += nyv * pushV;
                 }
             }
         }
@@ -548,7 +633,7 @@ var Cells = {
         }
         ctx.fillStyle = "rgba(15,23,42,0.8)"; ctx.fillRect(0, cssH - 30, cssW, 30);
         var chainHuman = hum.find(function(p) { return p.chain; });
-        var hint = chainHuman ? (chainHuman.compact ? "BUBBLE · hold Space: move + shed mass · W: snake form" : "SNAKE · mouse steers · W: stop + combine mass · Space: dash") + " · eat players 25% smaller · Esc menu" : "Mouse moves · Space split · W eject · eat anything 25% smaller · green spikes pop big blobs · Esc menu";
+        var hint = chainHuman ? (chainHuman.compact ? "BUBBLE · mouse moves · hold Space: boost · W: snake form" : "SNAKE · mouse steers · hold Space: boost · W: bubble form") + " · bumping snakes kills · Esc menu" : "Mouse moves · Space split · W eject · eat anything 25% smaller · green spikes pop big blobs · Esc menu";
         uiText(hint + (multiplayer ? " · P2: arrows, Enter action, / eject or combine" : ""), cssW / 2, cssH - 11, 12, "rgba(220,230,240,0.85)", "center", "700");
     }
 };
