@@ -534,15 +534,27 @@ var Cells = {
             }
         }
         this.blobs = B.filter(function(q) { return !q.dead; });
-        // Combine excess pellets into bigger earning globs instead of discarding value or lagging
+        // Group neighboring excess pellets into bigger combined globs so total mass is preserved without lag
         var foodCap = cellsCfg.food + 120;
         if (this.pellets.length > foodCap) {
-            var targetLen = cellsCfg.food + 40;
-            var idx = 0;
-            while (this.pellets.length > targetLen && idx < this.pellets.length - 1) {
-                var extra = this.pellets.pop();
-                this.pellets[idx].m += extra.m;
-                idx = (idx + 1) % Math.max(1, this.pellets.length);
+            var targetLen = cellsCfg.food + 40, cellSz = 220, buckets = Object.create(null);
+            for (let i = 0; i < this.pellets.length && this.pellets.length > targetLen; i++) {
+                var gp = this.pellets[i];
+                if (gp.ejected) continue;
+                var key = ((gp.x / cellSz) | 0) + "," + ((gp.y / cellSz) | 0);
+                var hostIdx = buckets[key];
+                if (hostIdx === undefined) {
+                    buckets[key] = i;
+                } else {
+                    var hp = this.pellets[hostIdx], tot = hp.m + gp.m;
+                    hp.x = (hp.x * hp.m + gp.x * gp.m) / tot;
+                    hp.y = (hp.y * hp.m + gp.y * gp.m) / tot;
+                    hp.m = tot;
+                    var last = this.pellets.length - 1;
+                    if (i < last) this.pellets[i] = this.pellets[last];
+                    this.pellets.pop();
+                    i--;
+                }
             }
         }
         while (this.pellets.length < cellsCfg.food) this.addPellet();

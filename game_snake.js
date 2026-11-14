@@ -161,12 +161,8 @@ var Snake = {
         for (let i = 0; i < nSeg; i += step) {
             this.addPellet(w.segs[i].x + (Math.random() - 0.5) * 20, w.segs[i].y + (Math.random() - 0.5) * 20, val, col);
         }
-        // Combine excess small pellets into bigger earning globs to prevent lag spikes
-        var cap = SNK.FOOD + 180;
-        while (this.pellets.length > cap) {
-            var a = this.pellets[0], b = this.pellets.pop();
-            a.v += b.v;
-        }
+        // Group neighboring excess pellets into bigger globs to cap entity count without losing food value
+        this.groupPellets(SNK.PELLETS + 180, SNK.PELLETS + 60);
         if (by) { by.kills++; }
         if (w.human !== undefined) {
             w.deathMsg = by ? "Eaten by " + by.name : "You hit the wall";
@@ -233,7 +229,29 @@ var Snake = {
             if (hit) this.kill(w, hit);
         }
         while (this.pellets.length < SNK.PELLETS) this.addPellet();
-        if (this.pellets.length > SNK.PELLETS * 2) this.pellets.splice(0, this.pellets.length - SNK.PELLETS * 2);
+        if (this.pellets.length > SNK.PELLETS + 180) this.groupPellets(SNK.PELLETS + 180, SNK.PELLETS + 60);
+    },
+
+    groupPellets: function(cap, targetLen) {
+        if (this.pellets.length <= cap) return;
+        var cellSz = 220, buckets = Object.create(null);
+        for (let i = 0; i < this.pellets.length && this.pellets.length > targetLen; i++) {
+            var gp = this.pellets[i];
+            var key = ((gp.x / cellSz) | 0) + "," + ((gp.y / cellSz) | 0);
+            var hostIdx = buckets[key];
+            if (hostIdx === undefined) {
+                buckets[key] = i;
+            } else {
+                var hp = this.pellets[hostIdx], tot = hp.v + gp.v;
+                hp.x = (hp.x * hp.v + gp.x * gp.v) / tot;
+                hp.y = (hp.y * hp.v + gp.y * gp.v) / tot;
+                hp.v = tot;
+                var last = this.pellets.length - 1;
+                if (i < last) this.pellets[i] = this.pellets[last];
+                this.pellets.pop();
+                i--;
+            }
+        }
     },
 
     toScreen: function(x, y) { var c = this.cam; return [(x - c.x) * c.z + cssW / 2, (y - c.y) * c.z + cssH / 2]; },
