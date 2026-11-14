@@ -7,9 +7,11 @@ Tasks     a rank board of Up next / Doing / Waiting on you / Later for every pro
           drag a card (or Alt+Up / Alt+Down, or its buttons) to rank it, Later parks it; add a task; import a .csv or .tsv with a preview first
 History   every project's commits by day, with who wrote them (Claude, Codex, a person, CI), how big, whether a review covers them, and the reviews of that
           time; filter by project and range, search, load older
+Proposals what agents suggest (notes/proposals.md): the ones waiting for your decision first, with Approve / Not now / No; the rest by state (review_notes.py)
+Retros    how each agent session went, with what agents ask of you on top (notes/retros.json, RETROS.md)
 """
 
-PANES = [('tasks', 'Tasks'), ('history', 'History')]
+PANES = [('tasks', 'Tasks'), ('history', 'History'), ('proposals', 'Proposals'), ('retros', 'Retros')]
 
 CSS = """
 .wsbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px}.wsbar .grow{flex:1;min-width:160px}
@@ -36,6 +38,13 @@ CSS = """
 .who{font-size:.7rem;font-weight:700;letter-spacing:.03em;padding:1px 8px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
 .who.Claude{color:#c084fc}.who.Codex{color:#5ab0ff}.who.Gemini{color:#fbbf24}.who.human{color:var(--ok)}.who.CI{color:var(--soft)}
 @media (max-width:640px){.hrow{flex-wrap:wrap;gap:4px 8px}.hrow .sj{flex-basis:100%;order:5}.hrow .st{white-space:normal}.day>h3{top:60px}}
+.pcard{padding:14px 16px;margin:0 0 10px}.pcard .h{font-weight:650;letter-spacing:-.015em;margin-bottom:4px}.pcard .h .num{color:var(--soft);font-weight:500;margin-right:8px}
+.pcard .body{color:var(--soft);font-size:.9rem;white-space:pre-wrap;max-height:9.5em;overflow:hidden;position:relative;margin:4px 0 8px}.pcard details[open] .body{max-height:none}
+.pcard .tl{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.pcard .tl .badge{margin:0;font-size:.7rem}.pcard .decide{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}.pcard .decide input{flex:1;min-width:180px}
+.pcard .decide button.no{background:var(--card2)!important;color:var(--bad)!important;border:1px solid var(--line);box-shadow:none!important}.pcard .decide button.park{background:var(--card2)!important;color:var(--text)!important;border:1px solid var(--line);box-shadow:none!important}
+.pcard .out{margin-top:6px;font-size:.9rem}.asks{padding:14px 18px;margin:0 0 16px;border-color:color-mix(in srgb,var(--accent) 42%,var(--line))!important}.asks h3{margin:0 0 6px;font-size:1rem}.asks li{margin:3px 0}
+.rcard{padding:14px 16px;margin:0 0 10px}.rcard .h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.rcard .h .t{font-weight:650;flex:1;min-width:0;overflow-wrap:anywhere}.rcard .stars{color:var(--ask);letter-spacing:2px;font-size:.85rem}
+.rcard .sec{margin:8px 0 0}.rcard .sec b{display:block;font-size:.76rem;letter-spacing:.04em;text-transform:uppercase;color:var(--soft);margin-bottom:2px}.rcard .sec li{margin:2px 0;font-size:.92rem}
 .hrow.rv{background:var(--card);border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}.cov{color:var(--ok);font-size:.78rem;white-space:nowrap}
 """
 
@@ -176,16 +185,78 @@ JS = r"""
     if (document.activeElement === document.body && WS.q) search.focus();
   }
 
+  // ---------------------------------------------------------------- Proposals
+  let propProject = 'all', retroProject = 'all'; const retroShown = {};
+  async function loadProposals() { try { WS.proposals = await api('/api/proposals?project=all'); } catch (e) { pane('proposals').replaceChildren(el('div', { className: 'bad' }, String(e.message))); return; } drawProposals(); }
+  const confirmArm = (btn, label, run) => { let armed = 0; btn.onclick = () => { if (!armed) { armed = setTimeout(() => { armed = 0; btn.textContent = label; }, 4000); btn.textContent = 'Confirm: ' + label; return; } clearTimeout(armed); armed = 0; run(); }; };
+  function proposalCard(proj, p, deciding) {
+    const body = el('details', {}, el('summary', {}, 'Read the prompt'), el('div', { className: 'body', textContent: p.body }));
+    const card = el('section', { className: 'card pcard' }, el('div', { className: 'h' }, el('span', { className: 'num' }, '#' + p.n), p.title),
+      p.states.length ? el('div', { className: 'tl' }, ...p.states.map((s) => el('span', { className: 'badge ' + (s[0] === 'done' ? 'ok' : s[0] === 'declined' || s[0] === 'not-now' ? 'bad' : 'ask') }, s[0] + (s[1] ? ' ' + s[1] : '')))) : '',
+      p.note ? el('div', { className: 'dim' }, 'Your note: ' + p.note) : '', p.reason ? el('div', { className: 'dim' }, 'Your reason: ' + p.reason) : '', p.outcome ? el('div', { className: 'out' }, el('b', {}, 'Outcome: '), p.outcome) : '', p.body ? body : '');
+    if (deciding) {
+      const note = el('input', { type: 'text', placeholder: 'Note or reason (optional)', maxLength: 300 });
+      const go = async (action, text) => { try { const j = await api('/api/proposals', { project: proj.id, n: p.n, action, note: note.value.trim() }); note_(text); WS.loaded.proposals = false; await loadProposals(); } catch (e) { note_('Not saved: ' + e.message); } };
+      const yes = el('button', { type: 'button' }, 'Approve'), park = el('button', { type: 'button', className: 'park' }, 'Not now'), no = el('button', { type: 'button', className: 'no' }, 'No');
+      confirmArm(yes, 'Approve', () => go('approve', 'Approved. The prompt was added to notes/approved.md.')); confirmArm(park, 'Not now', () => go('notnow', 'Parked for later.')); confirmArm(no, 'No', () => go('no', 'Declined.'));
+      card.append(el('div', { className: 'decide' }, note, yes, park, no));
+    }
+    return card;
+  }
+  const note_ = (t) => note(t);
+  function drawProposals() {
+    const root = pane('proposals'), data = WS.proposals.projects;
+    if (!data.length) { root.replaceChildren(el('div', { className: 'dim' }, 'No project keeps proposals yet. Agents add them to notes/proposals.md.')); return; }
+    const waiting = data.reduce((n, p) => n + p.proposals.groups[0].items.length, 0); tabCount('proposals', waiting);
+    const pills = el('div', { className: 'pills' }, pill('All projects', undefined, propProject === 'all', () => { propProject = 'all'; drawProposals(); }), ...data.map((p) => pill(p.name, p.proposals.groups[0].items.length || undefined, propProject === p.id, () => { propProject = p.id; drawProposals(); })));
+    const out = [el('div', { className: 'wsbar' }, pills)];
+    for (const proj of data) {
+      if (propProject !== 'all' && propProject !== proj.id) continue;
+      for (const g of proj.proposals.groups) {
+        if (!g.items.length) continue;
+        const items = g.key === 'waiting' ? g.items : g.items.slice().reverse();
+        const list = el('div', {}, ...items.slice(0, g.key === 'waiting' ? 50 : 30).map((p) => proposalCard(proj, p, g.key === 'waiting')));
+        out.push(g.key === 'waiting' ? el('div', {}, el('h2', { style: 'margin-top:8px' }, g.label + ' ', el('span', { className: 'dim' }, proj.name + ' · ' + g.items.length)), list)
+          : el('details', { className: 'card', style: 'margin:0 0 12px;padding:12px 16px' }, el('summary', { style: 'margin:0' }, g.label + ' · ' + proj.name + ' · ' + g.items.length), el('div', { style: 'margin-top:10px' }, list)));
+      }
+    }
+    root.replaceChildren(...out);
+  }
+
+  // ---------------------------------------------------------------- Retros
+  async function loadRetros() { try { WS.retros = await api('/api/retros?project=all'); } catch (e) { pane('retros').replaceChildren(el('div', { className: 'bad' }, String(e.message))); return; } drawRetros(); }
+  function drawRetros() {
+    const root = pane('retros'), data = WS.retros.projects;
+    if (!data.length) { root.replaceChildren(el('div', { className: 'dim' }, 'No project keeps retros yet. Agents add them to notes/retros.json or RETROS.md.')); return; }
+    const pills = el('div', { className: 'pills' }, pill('All projects', undefined, retroProject === 'all', () => { retroProject = 'all'; drawRetros(); }), ...data.map((p) => pill(p.name, p.retros.entries.length, retroProject === p.id, () => { retroProject = p.id; drawRetros(); })));
+    const out = [el('div', { className: 'wsbar' }, pills)];
+    const sel = data.filter((p) => retroProject === 'all' || p.id === retroProject);
+    const asks = [].concat(...sel.map((p) => p.retros.asks.slice(0, 5).map((a) => [p.name, a])));
+    if (asks.length) out.push(el('section', { className: 'card asks' }, el('h3', {}, 'What agents ask of you'), el('ul', {}, ...asks.slice(0, 8).map(([n, a]) => el('li', {}, el('span', { className: 'badge ask' }, n), ' ' + a)))));
+    for (const proj of sel) {
+      const cap = retroShown[proj.id] ? proj.retros.entries.length : 12;
+      for (const e of proj.retros.entries.slice(0, cap)) {
+        const stars = +e.rating > 0 ? '★'.repeat(Math.min(+e.rating, 5)) : '';
+        out.push(el('section', { className: 'card rcard' }, el('div', { className: 'h' }, el('span', { className: 'badge ask' }, proj.name), el('span', { className: 't' }, e.title), stars ? el('span', { className: 'stars', title: 'How the session felt: ' + e.rating + ' of 5' }, stars) : '', e.when ? el('span', { className: 'dim' }, e.when) : ''),
+          ...e.sections.map(([label, lines]) => el('div', { className: 'sec' }, el('b', {}, label), el('ul', { style: 'margin:0;padding-left:18px' }, ...lines.map((l) => el('li', {}, l)))))));
+      }
+      if (proj.retros.entries.length > cap) out.push(el('button', { type: 'button', className: 'quiet', onclick: () => { retroShown[proj.id] = true; drawRetros(); } }, 'Show all ' + proj.retros.entries.length + ' from ' + proj.name));
+    }
+    root.replaceChildren(...out);
+  }
+
   // ---------------------------------------------------------------- wiring: load a pane the first time it opens
   const tabCount = (k, n) => { const e = document.getElementById('tabn-' + k); if (e) e.textContent = n || ''; };
   const open = (name) => {
-    if (name !== 'tasks' && name !== 'history') return;
+    const loaders = { tasks: loadTasks, history: loadHistory, proposals: loadProposals, retros: loadRetros };
+    if (!loaders[name]) return;
     if (!L) { needLive(name); return; }
-    if (!WS.loaded[name]) { WS.loaded[name] = true; (name === 'tasks' ? loadTasks : loadHistory)(); }
+    if (!WS.loaded[name]) { WS.loaded[name] = true; loaders[name](); }
   };
   const base = window.showTab;
   window.showTab = function (name) { base(name); open(name); };
-  const here = (location.hash || '').slice(1); if (here === 'tasks' || here === 'history') open(here);
+  const here = (location.hash || '').slice(1); open(here);
+  if (L) api('/api/proposals?project=all').then((j) => { WS.proposals = j; tabCount('proposals', j.projects.reduce((n, p) => n + p.proposals.groups[0].items.length, 0)); }).catch(() => {});
   if (L) api('/api/tasks?project=all').then((j) => { WS.tasks = j; tabCount('tasks', j.projects.reduce((n, p) => n + p.board.next.length + p.board.doing.length + p.board.waiting.length, 0)); }).catch(() => {});
 })();
 """
