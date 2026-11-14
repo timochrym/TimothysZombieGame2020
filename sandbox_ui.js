@@ -69,15 +69,18 @@ var SandboxUI = {
             }
             if (e.code === "KeyB" || e.code === "Slash" || ((e.ctrlKey || e.metaKey) && e.code === "KeyK")) {
                 e.preventDefault();
+                e.stopImmediatePropagation();
                 self.spawnerOpen = !self.spawnerOpen;
                 self.ctxMenu = null;
                 self.render();
             } else if (e.code === "Escape" && self.spawnerOpen) {
                 e.preventDefault();
+                e.stopImmediatePropagation();
                 self.spawnerOpen = false;
                 self.render();
             } else if (e.code === "Tab") {
                 e.preventDefault();
+                e.stopImmediatePropagation();
                 self.rosterOpen = !self.rosterOpen;
                 self.render();
             }
@@ -92,7 +95,7 @@ var SandboxUI = {
 
                 var rect = cv.getBoundingClientRect();
                 var sx = e.clientX - rect.left, sy = e.clientY - rect.top;
-                var wpos = typeof screenToWorld === "function" ? screenToWorld(sx, sy) : { x: 0, y: 0 };
+                var wpos = typeof sbScreenToWorld === "function" ? sbScreenToWorld(sx, sy) : { x: 0, y: 0 };
 
                 if (self.tool === "drawFloor" || self.tool === "drawPlat" || self.tool === "drawWall") {
                     self.dragDraw = { x1: e.clientX, y1: e.clientY, x2: e.clientX, y2: e.clientY, wx1: wpos.x, wy1: wpos.y };
@@ -175,7 +178,7 @@ var SandboxUI = {
                     }
                 } else if (self.dragMove && self.dragMove.obj) {
                     var rect = cv.getBoundingClientRect();
-                    var wpos = typeof screenToWorld === "function" ? screenToWorld(e.clientX - rect.left, e.clientY - rect.top) : { x: 0, y: 0 };
+                    var wpos = typeof sbScreenToWorld === "function" ? sbScreenToWorld(e.clientX - rect.left, e.clientY - rect.top) : { x: 0, y: 0 };
                     self.dragMove.obj.x = Math.round((wpos.x + self.dragMove.ox) / 20) * 20;
                     self.dragMove.obj.y = Math.round((wpos.y + self.dragMove.oy) / 20) * 20;
                     if (typeof rebuildAllObjects === "function") rebuildAllObjects();
@@ -186,7 +189,7 @@ var SandboxUI = {
                 if (!self.isSandbox()) return;
                 if (self.dragDraw) {
                     var rect = cv.getBoundingClientRect();
-                    var wpos2 = typeof screenToWorld === "function" ? screenToWorld(e.clientX - rect.left, e.clientY - rect.top) : { x: 0, y: 0 };
+                    var wpos2 = typeof sbScreenToWorld === "function" ? sbScreenToWorld(e.clientX - rect.left, e.clientY - rect.top) : { x: 0, y: 0 };
                     var cx = (self.dragDraw.wx1 + wpos2.x) / 2, cy = (self.dragDraw.wy1 + wpos2.y) / 2;
                     var bw = Math.max(80, Math.round(Math.abs(wpos2.x - self.dragDraw.wx1) / 20) * 20);
                     var bh = Math.max(self.tool === "drawPlat" ? 36 : 60, Math.round(Math.abs(wpos2.y - self.dragDraw.wy1) / 20) * 20);
@@ -214,8 +217,10 @@ var SandboxUI = {
                 if (!self.isSandbox()) return;
                 e.preventDefault();
                 var rect = cv.getBoundingClientRect();
-                var wpos = typeof screenToWorld === "function" ? screenToWorld(e.clientX - rect.left, e.clientY - rect.top) : { x: 0, y: 0 };
-                self.ctxMenu = { sx: e.clientX, sy: e.clientY, wx: wpos.x, wy: wpos.y };
+                var wpos = typeof sbScreenToWorld === "function" ? sbScreenToWorld(e.clientX - rect.left, e.clientY - rect.top) : { x: 0, y: 0 };
+                var mx = Math.min(window.innerWidth - 205, Math.max(8, e.clientX));
+                var my = Math.min(window.innerHeight - 210, Math.max(8, e.clientY));
+                self.ctxMenu = { sx: mx, sy: my, wx: wpos.x, wy: wpos.y };
                 self.render();
             });
         }
@@ -280,10 +285,10 @@ var SandboxUI = {
 
         var html = "";
 
-        // 1. Top-Center Compact Action Pill (Spawner, Roster, Floor, Grapple, Pause)
+        // 1. Top-Left Compact Action Bar (never overlaps #top-right-bar)
         var posTarget = typeof EntityTakeover !== "undefined" ? EntityTakeover.target : null;
-        html += '<div class="sb-pe sb-glass" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);border-radius:999px;padding:5px 10px;display:flex;align-items:center;gap:6px">' +
-            '<span style="font-weight:900;color:#38bdf8;padding:0 6px">✨ BLANK SANDBOX</span>' +
+        html += '<div class="sb-pe sb-glass" style="position:fixed;top:10px;left:12px;border-radius:12px;padding:5px 10px;display:flex;align-items:center;gap:6px">' +
+            '<span style="font-weight:900;color:#38bdf8;padding:0 4px">✨ BLANK SANDBOX</span>' +
             '<button class="sb-btn ' + (this.spawnerOpen ? 'active' : '') + '" id="sb-top-spawn">🔍 Spawner [B]</button>' +
             '<button class="sb-btn ' + (this.rosterOpen ? 'active' : '') + '" id="sb-top-roster">👥 Entities [Tab]</button>' +
             '<button class="sb-btn ' + (sandboxCfg.showFloor ? 'active' : '') + '" id="sb-top-floor">▦ Floor</button>' +
@@ -498,7 +503,7 @@ var SandboxUI = {
         if (el("sb-top-roster")) el("sb-top-roster").onclick = function() { self.rosterOpen = !self.rosterOpen; self.render(); };
         if (el("sb-top-floor")) el("sb-top-floor").onclick = function() {
             sandboxCfg.showFloor = !sandboxCfg.showFloor; saveSandboxCfg();
-            LevelManager.selectLevel("sandbox_blank");
+            if (typeof SandboxFloor !== "undefined") SandboxFloor.sync();
             self.render();
         };
         if (el("sb-top-eject")) el("sb-top-eject").onclick = function() { EntityTakeover.release(false); self.render(); };
@@ -605,7 +610,7 @@ var SandboxUI = {
         };
         if (el("sb-ctx-floor")) el("sb-ctx-floor").onclick = function() {
             sandboxCfg.showFloor = !sandboxCfg.showFloor; saveSandboxCfg();
-            LevelManager.selectLevel("sandbox_blank");
+            if (typeof SandboxFloor !== "undefined") SandboxFloor.sync();
             self.ctxMenu = null; self.render();
         };
         if (el("sb-ctx-clear")) el("sb-ctx-clear").onclick = function() {
@@ -623,7 +628,7 @@ var SandboxUI = {
         if (el("sb-p-resume")) el("sb-p-resume").onclick = function() { closePause(); };
         if (el("sb-p-floor")) el("sb-p-floor").onchange = function(e) {
             sandboxCfg.showFloor = e.target.checked; saveSandboxCfg();
-            LevelManager.selectLevel("sandbox_blank");
+            if (typeof SandboxFloor !== "undefined") SandboxFloor.sync();
         };
         if (el("sb-p-noclip")) el("sb-p-noclip").onchange = function(e) { sandboxCfg.noclip = e.target.checked; saveSandboxCfg(); };
         if (el("sb-p-inv")) el("sb-p-inv").onchange = function(e) { sandboxCfg.invincible = e.target.checked; saveSandboxCfg(); };

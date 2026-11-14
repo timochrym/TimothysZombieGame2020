@@ -21,6 +21,33 @@ function saveSandboxCfg() {
     try { localStorage.setItem("timsSandboxCfg", JSON.stringify(sandboxCfg)); } catch (e) {}
 }
 
+function sbWorldToScreen(wx, wy) {
+    var s = (typeof cameraScaleX !== "undefined" && cameraScaleX) ? cameraScaleX : 1;
+    var x0 = (typeof xc !== "undefined") ? xc : 0;
+    var y0 = (typeof yc !== "undefined") ? yc : 0;
+    return { x: x0 + wx * s, y: y0 - wy * s };
+}
+
+function sbScreenToWorld(sx, sy) {
+    var s = (typeof cameraScaleX !== "undefined" && cameraScaleX) ? cameraScaleX : 1;
+    var x0 = (typeof xc !== "undefined") ? xc : 0;
+    var y0 = (typeof yc !== "undefined") ? yc : 0;
+    return { x: (sx - x0) / s, y: (y0 - sy) / s };
+}
+
+var SandboxFloor = {
+    sync: function() {
+        for (var i = staticObjects.length - 1; i >= 0; i--) {
+            if (staticObjects[i] && staticObjects[i]._isSandboxFloor) staticObjects.splice(i, 1);
+        }
+        if (sandboxCfg.showFloor) {
+            var fl = GameObject.addBox(0, -140, 12000, 200, "#1e293b", { name: "Sandbox Floor", texture: "neon_grid", kind: "block" });
+            fl._isSandboxFloor = true;
+        }
+        if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+    }
+};
+
 // Blank empty level: zero pre-placed geometry or gadgets
 ModeKit.addLevel("sandbox_blank", {
     name: "✨ Blank Empty World",
@@ -138,8 +165,8 @@ var GrappleHook = {
             var ch = list[i];
             var g = ch._grapple;
             if (!g || ch.dead) continue;
-            var s1 = worldToScreen(ch.x, ch.y);
-            var s2 = worldToScreen(g.x, g.y);
+            var s1 = sbWorldToScreen(ch.x, ch.y);
+            var s2 = sbWorldToScreen(g.x, g.y);
             ctx.save();
             ctx.strokeStyle = "#38bdf8";
             ctx.lineWidth = Math.max(2, 3 * cameraScaleX);
@@ -365,10 +392,7 @@ GameModes.register({
         Gadgets.load(lvl.gadgets || []);
         if (typeof SummonManager !== "undefined") SummonManager.pauseWaves = true;
         EntityTakeover.release(true);
-        if (sandboxCfg.showFloor) {
-            GameObject.addBox(0, -140, 12000, 200, "#1e293b", { name: "Sandbox Floor", texture: "neon_grid", kind: "block" });
-            rebuildAllObjects();
-        }
+        SandboxFloor.sync();
     },
 
     createPlayers: function() {
@@ -404,7 +428,7 @@ GameModes.register({
 
     onKey: function(code) {
         if (code === "KeyG") {
-            var w = typeof screenToWorld === "function" ? screenToWorld(mouseX, mouseY) : { x: 200, y: 200 };
+            var w = sbScreenToWorld(mouseX, mouseY);
             GrappleHook.toggle(GrappleHook.activeTarget(), w.x, w.y);
             return true;
         }
@@ -437,11 +461,11 @@ GameModes.register({
             var gx0 = Math.floor(left / 160) * 160;
             var gy0 = Math.floor(bot / 160) * 160;
             for (var gx = gx0; gx <= right; gx += 160) {
-                var a = worldToScreen(gx, bot), b = worldToScreen(gx, top);
+                var a = sbWorldToScreen(gx, bot), b = sbWorldToScreen(gx, top);
                 ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
             }
             for (var gy = gy0; gy <= top; gy += 160) {
-                var c = worldToScreen(left, gy), d = worldToScreen(right, gy);
+                var c = sbWorldToScreen(left, gy), d = sbWorldToScreen(right, gy);
                 ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(d.x, d.y); ctx.stroke();
             }
             ctx.restore();
@@ -452,7 +476,7 @@ GameModes.register({
         GrappleHook.drawAll();
         if (EntityTakeover.target && !EntityTakeover.target.dead) {
             var t = EntityTakeover.target;
-            var sp = worldToScreen(t.x, t.y + (t.s2 || 60) / 2 + 26);
+            var sp = sbWorldToScreen(t.x, t.y + (t.s2 || 60) / 2 + 26);
             uiText("⚡ CONTROLLING (F to eject)", sp.x, sp.y, 12, "#38bdf8", "center", "900");
         }
     },
