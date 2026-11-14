@@ -41,7 +41,7 @@ var SandboxFloor = {
             if (staticObjects[i] && staticObjects[i]._isSandboxFloor) staticObjects.splice(i, 1);
         }
         if (sandboxCfg.showFloor) {
-            var fl = GameObject.addBox(0, -140, 12000, 200, "#1e293b", { name: "Sandbox Floor", texture: "neon_grid", kind: "block" });
+            var fl = GameObject.addBox(0, -120, 6000, 160, "#1e293b", { name: "Sandbox Floor", texture: "neon_grid", kind: "block" });
             fl._isSandboxFloor = true;
         }
         if (typeof rebuildAllObjects === "function") rebuildAllObjects();

@@ -16,7 +16,7 @@ var SandboxUI = {
     pauseOpen: false,
     pauseTab: "creative",
 
-    tool: "select", // select | drawFloor | drawPlat | drawWall | spawn | possess | grapple | delete
+    tool: "play", // play | select | drawFloor | drawPlat | drawWall | spawn | possess | grapple | delete
     selectedObj: null,
     selectedEnt: null,
     piePos: null,
@@ -92,6 +92,16 @@ var SandboxUI = {
                 self.ctxMenu = null;
                 if (self.spawnerOpen) { self.spawnerOpen = false; self.render(); }
                 if (e.button === 2) return; // handled in contextmenu
+
+                // In Play / Shoot mode, let the game handle shooting normally without selecting/dragging floors
+                if (self.tool === "play") {
+                    if (self.piePos) { self.piePos = null; self.render(); }
+                    return;
+                }
+
+                // Editor / Build / Possess / Grapple tools: don't fire weapon while building!
+                if (typeof mouseDown !== "undefined") mouseDown = false;
+                if (typeof PlayerInput !== "undefined" && PlayerInput[0]) PlayerInput[0].shoot = false;
 
                 var rect = cv.getBoundingClientRect();
                 var sx = e.clientX - rect.left, sy = e.clientY - rect.top;
@@ -181,7 +191,6 @@ var SandboxUI = {
                     var wpos = typeof sbScreenToWorld === "function" ? sbScreenToWorld(e.clientX - rect.left, e.clientY - rect.top) : { x: 0, y: 0 };
                     self.dragMove.obj.x = Math.round((wpos.x + self.dragMove.ox) / 20) * 20;
                     self.dragMove.obj.y = Math.round((wpos.y + self.dragMove.oy) / 20) * 20;
-                    if (typeof rebuildAllObjects === "function") rebuildAllObjects();
                 }
             });
 
@@ -194,7 +203,6 @@ var SandboxUI = {
                     var bw = Math.max(80, Math.round(Math.abs(wpos2.x - self.dragDraw.wx1) / 20) * 20);
                     var bh = Math.max(self.tool === "drawPlat" ? 36 : 60, Math.round(Math.abs(wpos2.y - self.dragDraw.wy1) / 20) * 20);
                     if (Math.abs(wpos2.x - self.dragDraw.wx1) < 20 && Math.abs(wpos2.y - self.dragDraw.wy1) < 20) {
-                        // Quick single click defaults to a nice wide floor / platform / tall wall
                         if (self.tool === "drawFloor") { bw = 480; bh = 80; }
                         else if (self.tool === "drawPlat") { bw = 360; bh = 36; }
                         else { bw = 80; bh = 360; }
@@ -210,7 +218,11 @@ var SandboxUI = {
                     self.dragDraw = null;
                     self.render();
                 }
-                if (self.dragMove) { self.dragMove = null; self.render(); }
+                if (self.dragMove) {
+                    if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                    self.dragMove = null;
+                    self.render();
+                }
             });
 
             cv.addEventListener("contextmenu", function(e) {
@@ -298,6 +310,7 @@ var SandboxUI = {
 
         // 2. Pro Studio Dock (L1): Left Tool Rail
         var tools = [
+            ["play", "🎮 Play / Shoot"],
             ["select", "✋ Select / Move"],
             ["drawFloor", "🧱 Draw Floor"],
             ["drawPlat", "➖ Draw Platform"],
@@ -405,11 +418,15 @@ var SandboxUI = {
             '<button class="sb-btn" style="padding:3px 8px" id="sb-sp-close">✕</button></div>';
 
         if (this.spawnerMode === "spotlight") {
-            return '<div class="sb-pe sb-glass" style="position:fixed;top:64px;left:50%;transform:translateX(-50%);width:540px;max-width:92vw;border-radius:14px;padding:12px">' +
+            return '<div class="sb-pe sb-glass" style="position:fixed;top:64px;left:50%;transform:translateX(-50%);width:580px;max-width:92vw;border-radius:14px;padding:12px">' +
                 modeSwitcher +
-                '<input class="sb-input" id="sb-sp-search" placeholder="Search EVERY object from all 23 games (bed, tnt, portal, grapple, boss, tank...)" value="' + this.spawnerSearch + '" />' +
-                '<div class="sb-scroll" style="max-height:290px;overflow-y:auto;margin-top:8px;display:flex;flex-direction:column;gap:4px">' +
-                filtered.slice(0, 60).map(function(it) {
+                '<input class="sb-input" id="sb-sp-search" placeholder="Search EVERY object & enemy from all 23 games (zombie, boss, bed, tnt, portal, tank...)" value="' + this.spawnerSearch + '" />' +
+                '<div class="sb-scroll" style="display:flex;gap:4px;overflow-x:auto;margin-top:8px;padding-bottom:4px">' +
+                cats.map(function(c) {
+                    return '<button class="sb-btn ' + (self.spawnerCat === c ? 'active' : '') + '" style="white-space:nowrap;padding:3px 8px;font-size:11px" data-spcat="' + c + '">' + c + '</button>';
+                }).join("") + '</div>' +
+                '<div class="sb-scroll" style="max-height:290px;overflow-y:auto;margin-top:6px;display:flex;flex-direction:column;gap:4px">' +
+                filtered.map(function(it) {
                     var sel = self.selectedCatalogId === it.id;
                     return '<button class="sb-btn ' + (sel ? 'active' : '') + '" data-spitem="' + it.id + '" style="display:flex;justify-content:space-between;align-items:center;text-align:left">' +
                         '<span>' + it.icon + ' <strong>' + it.name + '</strong></span>' +
