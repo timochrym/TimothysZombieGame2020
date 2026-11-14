@@ -115,28 +115,38 @@ var Snake = {
     },
 
     hitBody: function(x, y, rad, self) {
-        var cx = Math.floor(x / 80), cy = Math.floor(y / 80);
-        for (let gx = cx - 1; gx <= cx + 1; gx++) for (let gy = cy - 1; gy <= cy + 1; gy++) {
-            var cell = this.grid[gx + "," + gy];
-            if (!cell) continue;
-            for (let i = 0; i < cell.length; i++) {
-                var s = cell[i];
-                if (s.w === self) continue;
-                if (Math.hypot(s.x - x, s.y - y) < rad + s.r) return s.w;
+        var g = this.grid;
+        if (!g || !g.size) return null;
+        var cx = Math.floor(x * 0.0125) + 512, cy = Math.floor(y * 0.0125) + 512;
+        for (let gx = cx - 1; gx <= cx + 1; gx++) {
+            var base = gx * 1024;
+            for (let gy = cy - 1; gy <= cy + 1; gy++) {
+                var cell = g.get(base + gy);
+                if (!cell) continue;
+                for (let i = 0; i < cell.length; i += 4) {
+                    var w = cell[i + 3];
+                    if (w === self) continue;
+                    var dx = cell[i] - x, dy = cell[i + 1] - y, rr = rad + cell[i + 2];
+                    if (dx * dx + dy * dy < rr * rr) return w;
+                }
             }
         }
         return null;
     },
 
     buildGrid: function() {
-        this.grid = {};
+        var g = this.grid;
+        if (g instanceof Map) g.clear();
+        else g = this.grid = new Map();
         for (let k = 0; k < this.worms.length; k++) {
             var w = this.worms[k];
             if (!w.alive) continue;
-            var r = this.radius(w);
-            for (let i = 3; i < w.segs.length; i += 2) {        // skip the head area, every other segment is plenty
-                var s = w.segs[i], key = Math.floor(s.x / 80) + "," + Math.floor(s.y / 80);
-                (this.grid[key] || (this.grid[key] = [])).push({ x: s.x, y: s.y, r: r * 0.8, w: w });
+            var r = this.radius(w) * 0.8, segs = w.segs;
+            for (let i = 3; i < segs.length; i += 2) {        // skip the head area, every other segment is plenty
+                var s = segs[i], key = (Math.floor(s.x * 0.0125) + 512) * 1024 + (Math.floor(s.y * 0.0125) + 512);
+                var cell = g.get(key);
+                if (cell) cell.push(s.x, s.y, r, w);
+                else g.set(key, [s.x, s.y, r, w]);
             }
         }
     },

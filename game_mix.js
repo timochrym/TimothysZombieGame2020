@@ -24,9 +24,17 @@ var mixSave = { best: { tank: 0, blob: 0, worm: 0, chain: 0 } };
 try { var _ms = JSON.parse(localStorage.getItem("timsArenaMixBest") || "null"); if (_ms && _ms.best) for (var _mk in mixSave.best) mixSave.best[_mk] = _ms.best[_mk] || 0; } catch (e) {}
 var MIX_BODIES = [["tank", "🛡 Tank"], ["blob", "🫧 Blob"], ["worm", "🪱 Worm"], ["chain", "📿 Bubble worm"]];
 var MIX_CHAIN_CPUS = 3;          // CPU bubble worms in the arena
+var MIX_SNK_RING_SQ = 2650 * 2650;
+
+function mixSwapPop(arr, i) {
+    var last = arr.length - 1;
+    if (i < last) arr[i] = arr[last];
+    arr.pop();
+}
 
 var Mix = {
-    on: false, t: 0, cam: { x: 0, y: 0, z: 0.8 }, view: null, log: [],
+    on: false, t: 0, cam: { x: 0, y: 0, z: 0.8 }, view: null, log: [], fx: [],
+    _blobR: [], _wormR: [], _tankS: [], _takers: [], _pills: [],
     stat: { bulletBlob: 0, bulletWorm: 0, blobAteTank: 0, tankAteBlob: 0, tankAteTank: 0, tankSplit: 0, blobPopped: 0, wormBite: 0, wormWall: 0, shapeBroken: 0, crossFood: 0, pickups: 0 },
 
     // every arena draws with the same camera; none of them may move it (this file does)
@@ -51,7 +59,7 @@ var Mix = {
         var mp = multiplayer; multiplayer = false;         // one human here for now (P1); everyone else is a CPU
         Tanks.reset(); Cells.reset(); Snake.reset();
         multiplayer = mp;
-        this.t = 0; this.log = [];
+        this.t = 0; this.log = []; this.fx.length = 0;
         for (var k in this.stat) this.stat[k] = 0;
         for (let i = 0; i < MIX_CHAIN_CPUS; i++) { var cw = Cells.addPlayer({ name: ["Beads", "Pearls", "Abacus", "Rosary", "Bobbles"][i % 5], color: ["#fb923c", "#2dd4bf", "#e879f9", "#a3e635", "#f87171"][i % 5] }); cw.chain = true; }
         this.setBody(mixCfg.body);
@@ -74,7 +82,10 @@ var Mix = {
         else if (body === "chain") Cells.addPlayer(o).chain = true;
         else Snake.spawn(o);
         var m = this.me();
-        if (m) { this.cam.x = m.x; this.cam.y = m.y; }
+        if (m) {
+            this.cam.x = m.x; this.cam.y = m.y;
+            this.burst(m.x, m.y, "#fde047", "ring", "YOU", 70);
+        }
     },
     // the human's body as { kind, x, y, alive, ref }
     me: function() {
@@ -89,6 +100,11 @@ var Mix = {
     },
     say: function(text, col) { this.log.unshift({ text: text, col: col || "#e2e8f0", t: 240 }); if (this.log.length > 5) this.log.length = 5; },
     note: function(human, text, col) { this.say(text, col); if (human) showBanner(text, "", col || "#fde047"); },
+    burst: function(x, y, col, kind, text, maxR) {
+        if (Math.abs(x - this.cam.x) > 1400 || Math.abs(y - this.cam.y) > 950) return;
+        if (this.fx.length >= 48) mixSwapPop(this.fx, 0);
+        this.fx.push({ x: x, y: y, col: col || "#fde047", kind: kind || "spark", text: text || "", r: maxR || 44, t: 0, life: kind === "ring" ? 28 : 20 });
+    },
 
     // ------------------------------------------------------------ tanks are blobs with a gun
     // In the mix a tank carries MASS like a blob (its size follows it). It eats food and smaller blobs or tanks, and
@@ -127,29 +143,36 @@ var Mix = {
         }
     },
 
+    _blobGone: function(blobs, b, byName) {
+        b.dead = true;
+        for (let i = 0; i < blobs.length; i++) if (blobs[i].pl === b.pl && !blobs[i].dead) return;
+        Cells.die(b.pl, { name: byName });
+    },
+
     // ------------------------------------------------------------ when the three games meet
     interact: function() {
-        var S = this.stat, self = this;
+        var S = this.stat;
         var blobs = Cells.blobs, worms = Snake.worms, tanks = Tanks.tanks, bullets = Tanks.bullets;
-        var blobGone = function(b, byName) {
-            b.dead = true;
-            if (!blobs.some(function(q) { return q.pl === b.pl && !q.dead; })) Cells.die(b.pl, { name: byName });
-        };
+        var blobR = this._blobR, wormR = this._wormR, tankS = this._tankS;
+        var anyDead = false;
+
         // ---- worm bookkeeping: levels, appetite
         for (let j = 0; j < worms.length; j++) {
             var w0 = worms[j];
-            if (!w0.alive) { w0.mx = null; continue; }
+            if (!w0.alive) { w0.mx = null; wormR[j] = 0; continue; }
             if (!w0.mx) w0.mx = { lvl: 1, xp: 0, pts: 0, st: [0, 0, 0], biteCd: 0, last: w0.len };
             var x0 = w0.mx, grew = w0.len - x0.last;
             if (grew > 0) { w0.len += grew * 0.12 * x0.st[2]; this.wormXp(w0, grew * 0.5); }
             x0.last = w0.len;
             if (x0.biteCd > 0) x0.biteCd--;
+            wormR[j] = Snake.radius(w0);
         }
         // ---- tank bookkeeping: mass, level growth, death lumps
         for (let i = 0; i < tanks.length; i++) {
             var k0 = tanks[i];
             if (!k0.alive) {
                 if (k0.mixWasAlive) { k0.mixWasAlive = false; if (!k0.mixEaten && k0.mixMass > 8) this.lumps(k0.x, k0.y, k0.mixMass * 0.8, Math.max(3, Math.min(7, Math.round(k0.mixMass / 12))), k0.color, 12); k0.mixMass = 0; }
+                tankS[i] = 0;
                 continue;
             }
             if (!k0.mixWasAlive || !k0.mixMass) this.initTank(k0);
@@ -159,108 +182,183 @@ var Mix = {
             if (k0.mixMass > k0.mixPeak) { Tanks.gainXp(k0, (k0.mixMass - k0.mixPeak) * 0.5); k0.mixPeak = k0.mixMass; }
             if (k0.mixSplitCd > 0) k0.mixSplitCd--;
             // hurt badly -> pieces break off (once every 5 s at most, so steady fire still kills)
-            if (k0.hp < Tanks.maxHp(k0) * 0.35 && k0.mixSplitCd <= 0 && k0.mixMass >= 30) this.splitTank(k0, 0.4, "badly damaged");
+            if (k0.hp < Tanks.maxHp(k0) * 0.35 && k0.mixSplitCd <= 0 && k0.mixMass >= 30) {
+                if (this.splitTank(k0, 0.4, "badly damaged")) this.burst(k0.x, k0.y, k0.color, "ring", "SPLIT!", Tanks.size(k0) + 40);
+            }
+            tankS[i] = Tanks.size(k0);
+        }
+        // cache blob radii once per frame
+        for (let j = 0; j < blobs.length; j++) {
+            var bj = blobs[j];
+            blobR[j] = bj.dead ? 0 : Cells.rad(bj.m);
         }
         // ---- bullets: they shrink blobs (a blob shot below 12 is gone) and hurt worms (heads most, bodies soak)
         for (let i = bullets.length - 1; i >= 0; i--) {
-            var bu = bullets[i], used = false;
-            for (let j = 0; j < blobs.length && !used; j++) {
+            var bu = bullets[i], used = false, bux = bu.x, buy = bu.y, bur = bu.r;
+            for (let j = 0; j < blobs.length; j++) {
                 var bl = blobs[j];
                 if (bl.dead || Cells.protectedNow(bl.pl)) continue;
-                var br = Cells.rad(bl.m);
-                if (Math.abs(bu.x - bl.x) > br + bu.r || Math.hypot(bu.x - bl.x, bu.y - bl.y) > br + bu.r) continue;
+                var br = blobR[j], rr = br + bur, dx = bux - bl.x, dy = buy - bl.y;
+                if (dx > rr || dx < -rr || dy > rr || dy < -rr || dx * dx + dy * dy > rr * rr) continue;
                 bl.m -= bu.dmg * 1.3; used = true; S.bulletBlob++;
+                this.burst(bux, buy, bl.pl.color || "#a78bfa", "spark", "", 22);
                 if (bu.owner && bu.owner.alive) Tanks.gainXp(bu.owner, 2);
                 if (bl.m < 12) {
-                    blobGone(bl, bu.owner ? bu.owner.name : "a tank");
+                    this._blobGone(blobs, bl, bu.owner ? bu.owner.name : "a tank"); anyDead = true;
                     if (bu.owner && bu.owner.alive) Tanks.gainXp(bu.owner, 40);
                     this.note(bu.owner && bu.owner.human !== undefined, (bu.owner ? bu.owner.name : "A tank") + " shot " + bl.pl.name + " to bits", "#93c5fd");
+                } else {
+                    blobR[j] = Cells.rad(bl.m);
                 }
+                break;
             }
-            for (let j = 0; j < worms.length && !used; j++) {
-                var w = worms[j];
-                if (!w.alive || w.safeT > 0 || arenaProtected(w)) continue;
-                var h = w.segs[0], wr = Snake.radius(w);
-                if (Math.hypot(bu.x - h.x, bu.y - h.y) < wr + bu.r) {
+            if (!used && bux * bux + buy * buy <= MIX_SNK_RING_SQ) {
+                for (let j = 0; j < worms.length; j++) {
+                    var w = worms[j];
+                    if (!w.alive || w.safeT > 0 || arenaProtected(w)) continue;
+                    var h = w.segs[0], wr = wormR[j], rrW = wr + bur, dxW = bux - h.x, dyW = buy - h.y;
+                    if (dxW > rrW || dxW < -rrW || dyW > rrW || dyW < -rrW || dxW * dxW + dyW * dyW >= rrW * rrW) continue;
                     w.len -= bu.dmg * 1.6 * (1 - 0.1 * (w.mx ? w.mx.st[1] : 0)); used = true; S.bulletWorm++;
+                    this.burst(bux, buy, w.color, "spark", "", 24);
                     if (bu.owner && bu.owner.alive) Tanks.gainXp(bu.owner, 3);
                     if (w.len < 12) {
                         Snake.kill(w, null); w.deathMsg = "Shot by " + (bu.owner ? bu.owner.name : "a tank");
                         if (bu.owner && bu.owner.alive) Tanks.gainXp(bu.owner, 45);
                         this.note(bu.owner && bu.owner.human !== undefined, (bu.owner ? bu.owner.name : "A tank") + " shot " + w.name, "#93c5fd");
                     }
+                    break;
+                }
+                if (!used) {
+                    var hitW = Snake.hitBody(bux, buy, bur, null);
+                    if (hitW && hitW.alive) {
+                        hitW.len = Math.max(12, hitW.len - bu.dmg * 0.25 * (1 - 0.1 * (hitW.mx ? hitW.mx.st[1] : 0)));
+                        used = true; S.bulletWorm++;
+                        this.burst(bux, buy, hitW.color, "spark", "", 18);
+                    }
                 }
             }
-            if (!used) { var hitW = Snake.hitBody(bu.x, bu.y, bu.r, null); if (hitW && hitW.alive) { hitW.len = Math.max(12, hitW.len - bu.dmg * 0.25 * (1 - 0.1 * (hitW.mx ? hitW.mx.st[1] : 0))); used = true; S.bulletWorm++; } }
-            if (used) { bu.pen -= 1; if (bu.pen <= 0) bullets.splice(i, 1); }
+            if (used) { bu.pen -= 1; if (bu.pen <= 0) mixSwapPop(bullets, i); }
         }
         // ---- worms: break blocks, bite tanks; a worm's body is a wall for tanks
         var shapes = Tanks.shapes;
         for (let j = 0; j < worms.length; j++) {
             var w2 = worms[j];
             if (!w2.alive || !w2.mx) continue;
-            var h2 = w2.segs[0], wr2 = Snake.radius(w2), bite = w2.mx.st[0], boost = w2.boosting ? 2 : 1;
+            var h2 = w2.segs[0], wr2 = wormR[j], bite = w2.mx.st[0], boost = w2.boosting ? 2 : 1;
             for (let i = shapes.length - 1; i >= 0; i--) {
-                var sh = shapes[i], SH = TNK_SHAPES[sh.type];
-                if (Math.abs(sh.x - h2.x) > SH.r + wr2 || Math.hypot(sh.x - h2.x, sh.y - h2.y) > SH.r + wr2) continue;
+                var sh = shapes[i], SH = TNK_SHAPES[sh.type], rrS = SH.r + wr2;
+                var dxS = sh.x - h2.x, dyS = sh.y - h2.y;
+                if (dxS > rrS || dxS < -rrS || dyS > rrS || dyS < -rrS || dxS * dxS + dyS * dyS > rrS * rrS) continue;
                 sh.hp -= (0.5 + bite * 0.45) * boost; sh.hitT = 4;
                 if (sh.hp <= 0) {
-                    shapes.splice(i, 1); Tanks.addShape();
+                    mixSwapPop(shapes, i); Tanks.addShape();
                     this.wormXp(w2, SH.xp); w2.len += 2 + SH.xp * 0.1; S.shapeBroken++;
+                    this.burst(sh.x, sh.y, w2.color, "spark", w2.human !== undefined ? "CRACK!" : "", 28);
                     if (w2.human !== undefined && typeof SFX !== "undefined") SFX.play("pickup", h2.x, h2.y, 0.5);
                 }
             }
-            if (w2.mx.biteCd <= 0) for (let i = 0; i < tanks.length; i++) {
-                var k2 = tanks[i];
-                if (!k2.alive || Math.hypot(h2.x - k2.x, h2.y - k2.y) > Tanks.size(k2) + wr2 * 0.6) continue;
-                Tanks.hurt(k2, (8 + bite * 4) * (boost > 1 ? 1.5 : 1), { name: w2.name });
-                w2.len = Math.max(12, w2.len - (2 + k2.st[2]));          // biting a tank costs a little length (more against Body damage)
-                w2.mx.biteCd = 18; S.wormBite++; this.wormXp(w2, 4);
-                if (!k2.alive) { this.wormXp(w2, 40); this.note(w2.human !== undefined || k2.human !== undefined, w2.name + " bit " + k2.name + " to pieces", w2.color); }
-                break;
+            if (w2.mx.biteCd <= 0) {
+                for (let i = 0; i < tanks.length; i++) {
+                    var k2 = tanks[i];
+                    if (!k2.alive) continue;
+                    var rrT = tankS[i] + wr2 * 0.6, dxT = h2.x - k2.x, dyT = h2.y - k2.y;
+                    if (dxT > rrT || dxT < -rrT || dyT > rrT || dyT < -rrT || dxT * dxT + dyT * dyT > rrT * rrT) continue;
+                    Tanks.hurt(k2, (8 + bite * 4) * (boost > 1 ? 1.5 : 1), { name: w2.name });
+                    w2.len = Math.max(12, w2.len - (2 + k2.st[2]));          // biting a tank costs a little length (more against Body damage)
+                    w2.mx.biteCd = 18; S.wormBite++; this.wormXp(w2, 4);
+                    this.burst(k2.x, k2.y, w2.color, "spark", "BITE!", 34);
+                    if (!k2.alive) { this.wormXp(w2, 40); this.note(w2.human !== undefined || k2.human !== undefined, w2.name + " bit " + k2.name + " to pieces", w2.color); }
+                    break;
+                }
             }
         }
+        var sp0 = Snake.pellets, cp0 = Cells.pellets, viruses = Cells.viruses;
+        var doWormFood = (this.t & 1) === 1;
         for (let i = 0; i < tanks.length; i++) {
             var k = tanks[i];
             if (!k.alive) continue;
-            var ks = Tanks.size(k), km = k.mixMass;
-            var wall = Snake.hitBody(k.x, k.y, ks * 0.8, null);
-            if (wall && wall.alive) {
-                Tanks.hurt(k, 1.1, { name: wall.name }); S.wormWall++;
-                var wh = wall.segs[0], pd = Math.hypot(k.x - wh.x, k.y - wh.y) || 1; k.vx += (k.x - wh.x) / pd * 0.25; k.vy += (k.y - wh.y) / pd * 0.25;
-                if (!k.alive) { this.wormXp(wall, 40); this.note(wall.human !== undefined || k.human !== undefined, k.name + " drove into " + wall.name, wall.color); continue; }
+            var ks = tankS[i], km = k.mixMass, kx = k.x, ky = k.y;
+            if (kx * kx + ky * ky <= MIX_SNK_RING_SQ) {
+                var wall = Snake.hitBody(kx, ky, ks * 0.8, null);
+                if (wall && wall.alive) {
+                    Tanks.hurt(k, 1.1, { name: wall.name }); S.wormWall++;
+                    var wh = wall.segs[0], wdx = kx - wh.x, wdy = ky - wh.y, pd = Math.sqrt(wdx * wdx + wdy * wdy) || 1;
+                    k.vx += wdx / pd * 0.25; k.vy += wdy / pd * 0.25;
+                    if (!k.alive) { this.wormXp(wall, 40); this.note(wall.human !== undefined || k.human !== undefined, k.name + " drove into " + wall.name, wall.color); continue; }
+                }
             }
             // a virus breaks a tank apart like it pops a blob
-            if (km >= 45 && k.mixSplitCd <= 0) for (let v = Cells.viruses.length - 1; v >= 0; v--) {
-                var vi = Cells.viruses[v];
-                if (Math.hypot(vi.x - k.x, vi.y - k.y) < ks + 20) { if (this.splitTank(k, 0.5, "hit a virus")) { Cells.viruses.splice(v, 1); Cells.addVirus(); } break; }
+            if (km >= 45 && k.mixSplitCd <= 0) {
+                var rrV = ks + 20, rrV2 = rrV * rrV;
+                for (let v = viruses.length - 1; v >= 0; v--) {
+                    var vi = viruses[v], vdx = vi.x - kx, vdy = vi.y - ky;
+                    if (vdx * vdx + vdy * vdy < rrV2) {
+                        if (this.splitTank(k, 0.5, "hit a virus")) {
+                            mixSwapPop(viruses, v); Cells.addVirus();
+                            this.burst(kx, ky, "#22c55e", "ring", "VIRUS!", ks + 45);
+                            ks = tankS[i] = Tanks.size(k); km = k.mixMass;
+                        }
+                        break;
+                    }
+                }
             }
             // decay like a blob (same setting as Blob Arena)
-            if (cellsCfg.decay > 0 && k.mixMass > 40) k.mixMass -= k.mixMass * cellsCfg.decay * (cellsCfg.decayGrow ? 1 + k.mixMass / 800 : 1);
+            if (cellsCfg.decay > 0 && k.mixMass > 40) { k.mixMass -= k.mixMass * cellsCfg.decay * (cellsCfg.decayGrow ? 1 + k.mixMass / 800 : 1); km = k.mixMass; }
+            var ks2 = ks * ks;
             // collect some of the worms' food too (a third of its value, like blob food)
-            if (this.t % 2 === 1) { var sp0 = Snake.pellets; for (let q = sp0.length - 1; q >= 0; q--) { var g0 = sp0[q]; if (Math.abs(g0.x - k.x) < ks && Math.abs(g0.y - k.y) < ks && Math.hypot(g0.x - k.x, g0.y - k.y) < ks) { k.mixMass += g0.v * 0.35; Tanks.gainXp(k, 1); sp0.splice(q, 1); S.crossFood++; } } }
-            // eat food (and the inert lumps other tanks dropped)
-            if (this.t % 2 === 0) { var cp0 = Cells.pellets; for (let q = cp0.length - 1; q >= 0; q--) { var f0 = cp0[q]; if (f0.from === k && this.t - f0.born < 180) continue; if (Math.abs(f0.x - k.x) < ks && Math.abs(f0.y - k.y) < ks && Math.hypot(f0.x - k.x, f0.y - k.y) < ks) { k.mixMass += f0.m * (f0.lump ? 0.8 : 0.35); cp0.splice(q, 1); S.crossFood++; } } }
+            if (doWormFood) {
+                for (let q = sp0.length - 1; q >= 0; q--) {
+                    var g0 = sp0[q], gdx = g0.x - kx, gdy = g0.y - ky;
+                    if (gdx < ks && gdx > -ks && gdy < ks && gdy > -ks && gdx * gdx + gdy * gdy < ks2) {
+                        k.mixMass += g0.v * 0.35; Tanks.gainXp(k, 1); mixSwapPop(sp0, q); S.crossFood++;
+                    }
+                }
+            } else {
+                // eat food (and the inert lumps other tanks dropped)
+                for (let q = cp0.length - 1; q >= 0; q--) {
+                    var f0 = cp0[q];
+                    if (f0.from === k && this.t - f0.born < 180) continue;
+                    var fdx = f0.x - kx, fdy = f0.y - ky;
+                    if (fdx < ks && fdx > -ks && fdy < ks && fdy > -ks && fdx * fdx + fdy * fdy < ks2) {
+                        k.mixMass += f0.m * (f0.lump ? 0.8 : 0.35); mixSwapPop(cp0, q); S.crossFood++;
+                    }
+                }
+            }
+            km = k.mixMass;
             // blobs and tanks eat each other by the blob rule: 25% bigger and covering it
             for (let j = 0; j < blobs.length; j++) {
                 var b2 = blobs[j];
                 if (b2.dead || !k.alive) continue;
-                var r2 = Cells.rad(b2.m), d2 = Math.hypot(b2.x - k.x, b2.y - k.y);
-                if (d2 > r2 + ks) continue;
-                if (b2.m > km * 1.25 && d2 < r2 - ks * 0.4 && !(k.inv > 0) && !arenaProtected(k)) {
-                    b2.m += km; k.mixEaten = true; k.hp = 0; Tanks.hurt(k, 1, { name: b2.pl.name }); S.blobAteTank++;
+                var r2 = blobR[j], bdx = b2.x - kx, bdy = b2.y - ky, rrB = r2 + ks;
+                if (bdx > rrB || bdx < -rrB || bdy > rrB || bdy < -rrB) continue;
+                var d2sq = bdx * bdx + bdy * bdy;
+                if (d2sq > rrB * rrB) continue;
+                var limA = r2 - ks * 0.4;
+                if (b2.m > km * 1.25 && limA > 0 && d2sq < limA * limA && !(k.inv > 0) && !arenaProtected(k)) {
+                    b2.m += km; blobR[j] = Cells.rad(b2.m); k.mixEaten = true; k.hp = 0; Tanks.hurt(k, 1, { name: b2.pl.name }); S.blobAteTank++;
+                    this.burst(kx, ky, b2.pl.color, "ring", "ABSORBED!", r2 + 20);
                     this.note(b2.pl.human !== undefined || k.human !== undefined, b2.pl.name + " absorbed " + k.name, b2.pl.color);
-                } else if (km > b2.m * 1.25 && d2 < ks - r2 * 0.4 && !Cells.protectedNow(b2.pl)) {
-                    k.mixMass += b2.m; km = k.mixMass; Tanks.gainXp(k, 10 + Math.round(b2.m * 0.3)); S.tankAteBlob++;
-                    this.note(b2.pl.human !== undefined || k.human !== undefined, k.name + " ate " + b2.pl.name, k.color);
-                    blobGone(b2, k.name);
+                } else {
+                    var limT = ks - r2 * 0.4;
+                    if (km > b2.m * 1.25 && limT > 0 && d2sq < limT * limT && !Cells.protectedNow(b2.pl)) {
+                        k.mixMass += b2.m; km = k.mixMass; ks = tankS[i] = Tanks.size(k);
+                        Tanks.gainXp(k, 10 + Math.round(b2.m * 0.3)); S.tankAteBlob++;
+                        this.burst(b2.x, b2.y, k.color, "ring", "ATE BLOB!", ks + 20);
+                        this.note(b2.pl.human !== undefined || k.human !== undefined, k.name + " ate " + b2.pl.name, k.color);
+                        this._blobGone(blobs, b2, k.name); anyDead = true;
+                    }
                 }
             }
             for (let j = 0; j < tanks.length && k.alive; j++) {
                 var o = tanks[j];
                 if (o === k || !o.alive || o.inv > 0 || arenaProtected(o) || !(km > o.mixMass * 1.25)) continue;
-                if (Math.hypot(o.x - k.x, o.y - k.y) < ks - Tanks.size(o) * 0.4) {
-                    k.mixMass += o.mixMass; km = k.mixMass; o.mixEaten = true; o.hp = 0; Tanks.hurt(o, 1, k); S.tankAteTank++;
+                var limO = ks - tankS[j] * 0.4;
+                if (limO <= 0) continue;
+                var odx = o.x - kx, ody = o.y - ky;
+                if (odx * odx + ody * ody < limO * limO) {
+                    k.mixMass += o.mixMass; km = k.mixMass; ks = tankS[i] = Tanks.size(k);
+                    o.mixEaten = true; o.hp = 0; Tanks.hurt(o, 1, k); S.tankAteTank++;
+                    this.burst(o.x, o.y, k.color, "ring", "CRUSHED!", ks + 20);
                     this.note(k.human !== undefined || o.human !== undefined, k.name + " ate " + o.name, k.color);
                 }
             }
@@ -269,69 +367,103 @@ var Mix = {
         for (let i = 0, n0 = blobs.length; i < n0; i++) {
             var b4 = blobs[i];
             if (b4.dead || b4.popCd > 0 || Cells.protectedNow(b4.pl)) { if (b4.popCd > 0) b4.popCd--; continue; }
-            var r4 = Cells.rad(b4.m);
+            if (b4.x * b4.x + b4.y * b4.y > MIX_SNK_RING_SQ) continue;
+            var r4 = blobR[i];
             var w4 = Snake.hitBody(b4.x, b4.y, r4 * 0.8, null);
             if (!w4 || !w4.alive) continue;
             S.blobPopped++;
             if (b4.m < 30) {                                                   // too small to split: the worm takes it whole
                 w4.len += b4.m * 0.4; this.wormXp(w4, b4.m * 0.5);
+                this.burst(b4.x, b4.y, w4.color, "spark", "", 28);
                 this.note(b4.pl.human !== undefined || w4.human !== undefined, w4.name + " absorbed " + b4.pl.name, w4.color);
-                blobGone(b4, w4.name); continue;
+                this._blobGone(blobs, b4, w4.name); anyDead = true; continue;
             }
             var lost = b4.m * 0.25, left = b4.m - lost;
             w4.len += lost * 0.3; this.wormXp(w4, lost * 0.4);
-            if (b4.pl.chain) { b4.m = left; b4.popCd = 150; continue; }
+            this.burst(b4.x, b4.y, "#a78bfa", "ring", "POP!", r4 + 35);
+            if (b4.pl.chain) { b4.m = left; blobR[i] = Cells.rad(left); b4.popCd = 150; continue; }
             var pieces = Math.max(0, Math.min(CEL.MAXCELLS - Cells.mine(b4.pl).length, 5)), each = left / (pieces + 1);
-            for (let q = 0; q < pieces; q++) { var pa = q / pieces * Math.PI * 2; blobs.push({ pl: b4.pl, x: b4.x, y: b4.y, m: each, vx: Math.cos(pa) * 16, vy: Math.sin(pa) * 16, mergeT: 600, popCd: 150 }); }
-            b4.m = each; b4.mergeT = 600; b4.popCd = 150;
-            var hd = w4.segs[0], away = Math.hypot(b4.x - hd.x, b4.y - hd.y) || 1; b4.vx += (b4.x - hd.x) / away * 10; b4.vy += (b4.y - hd.y) / away * 10;
+            for (let q = 0; q < pieces; q++) {
+                var pa = q / pieces * Math.PI * 2;
+                blobs.push({ pl: b4.pl, x: b4.x, y: b4.y, m: each, vx: Math.cos(pa) * 16, vy: Math.sin(pa) * 16, mergeT: 600, popCd: 150 });
+                blobR[blobs.length - 1] = Cells.rad(each);
+            }
+            b4.m = each; blobR[i] = Cells.rad(each); b4.mergeT = 600; b4.popCd = 150;
+            var hd = w4.segs[0], adx = b4.x - hd.x, ady = b4.y - hd.y, away = Math.sqrt(adx * adx + ady * ady) || 1;
+            b4.vx += adx / away * 10; b4.vy += ady / away * 10;
             this.note(b4.pl.human !== undefined || w4.human !== undefined, b4.pl.name + " popped on " + w4.name, w4.color);
             if (b4.pl.human !== undefined) screenShake = 6;
         }
         // ---- shared power-ups: tanks and worms pick up the same pickups blobs do
         //   speed = 1.5x movement · shield = can't be hurt or eaten · magnet = pulls food in · mass = a lump of size
         var pus = Cells.pickups || [];
-        var takers = [];
-        for (let i = 0; i < tanks.length; i++) if (tanks[i].alive) takers.push({ ref: tanks[i], x: tanks[i].x, y: tanks[i].y, r: Tanks.size(tanks[i]), tank: true });
-        for (let j = 0; j < worms.length; j++) if (worms[j].alive) takers.push({ ref: worms[j], x: worms[j].segs[0].x, y: worms[j].segs[0].y, r: Snake.radius(worms[j]), tank: false });
+        var takers = this._takers; takers.length = 0;
+        for (let i = 0; i < tanks.length; i++) if (tanks[i].alive) takers.push({ ref: tanks[i], x: tanks[i].x, y: tanks[i].y, r: tankS[i], tank: true });
+        for (let j = 0; j < worms.length; j++) if (worms[j].alive) takers.push({ ref: worms[j], x: worms[j].segs[0].x, y: worms[j].segs[0].y, r: wormR[j], tank: false });
         for (let q = 0; q < takers.length; q++) {
             var T = takers[q], R = T.ref, fx = R.mixFx || (R.mixFx = { speed: 0, magnet: 0 });
             if (fx.speed > 0) fx.speed--;
             if (fx.magnet > 0) {
                 fx.magnet--;
-                var lists = T.tank ? [Cells.pellets] : [Cells.pellets, Snake.pellets];
-                for (let L = 0; L < lists.length; L++) for (let z = 0; z < lists[L].length; z++) { var mp = lists[L][z], mdx = T.x - mp.x, mdy = T.y - mp.y; if (Math.abs(mdx) < 380 && Math.abs(mdy) < 380) { var md = Math.hypot(mdx, mdy) || 1; if (md < 380) { mp.x += mdx / md * 7; mp.y += mdy / md * 7; } } }
+                var magSq = 380 * 380;
+                for (let z = 0; z < cp0.length; z++) {
+                    var mp = cp0[z], mdx = T.x - mp.x, mdy = T.y - mp.y;
+                    if (mdx < 380 && mdx > -380 && mdy < 380 && mdy > -380) {
+                        var mdsq = mdx * mdx + mdy * mdy;
+                        if (mdsq < magSq && mdsq > 1) { var md = Math.sqrt(mdsq); mp.x += mdx / md * 7; mp.y += mdy / md * 7; }
+                    }
+                }
+                if (!T.tank) {
+                    for (let z = 0; z < sp0.length; z++) {
+                        var mp2 = sp0[z], mdx2 = T.x - mp2.x, mdy2 = T.y - mp2.y;
+                        if (mdx2 < 380 && mdx2 > -380 && mdy2 < 380 && mdy2 > -380) {
+                            var mdsq2 = mdx2 * mdx2 + mdy2 * mdy2;
+                            if (mdsq2 < magSq && mdsq2 > 1) { var md2 = Math.sqrt(mdsq2); mp2.x += mdx2 / md2 * 7; mp2.y += mdy2 / md2 * 7; }
+                        }
+                    }
+                }
             }
+            var puR = T.r + 26, puR2 = puR * puR;
             for (let u = pus.length - 1; u >= 0; u--) {
-                var pu = pus[u];
-                if (Math.hypot(pu.x - T.x, pu.y - T.y) > T.r + 26) continue;
+                var pu = pus[u], pudx = pu.x - T.x, pudy = pu.y - T.y;
+                if (pudx * pudx + pudy * pudy > puR2) continue;
                 var PW = CELL_POWERS[pu.kind];
                 if (pu.kind === "speed") fx.speed = PW.t;
                 else if (pu.kind === "magnet") fx.magnet = PW.t;
                 else if (pu.kind === "shield") { if (T.tank) R.inv = Math.max(R.inv || 0, PW.t); else R.safeT = Math.max(R.safeT || 0, PW.t); }
                 else if (T.tank) R.mixMass += 30; else R.len += 30;
-                pus.splice(u, 1); S.pickups++;
+                mixSwapPop(pus, u); S.pickups++;
+                this.burst(T.x, T.y, PW.col, "ring", PW.icon, T.r + 36);
                 if (R.human !== undefined) { showBanner(PW.icon + " " + (pu.kind === "mass" ? (T.tank ? "+30 MASS" : "+30 LENGTH") : PW.name), "", PW.col); if (typeof SFX !== "undefined") SFX.play("pickup", T.x, T.y); }
             }
         }
         // ---- food crosses over (every other tick is plenty)
-        if (this.t % 2 === 0) {
-            var cp = Cells.pellets, sp = Snake.pellets;
+        if ((this.t & 1) === 0) {
             for (let j = 0; j < worms.length; j++) {
                 var w5 = worms[j];
                 if (!w5.alive) continue;
-                var h5 = w5.segs[0], rr = Snake.radius(w5) + 8;
-                for (let i = cp.length - 1; i >= 0; i--) { var f = cp[i]; if (Math.abs(f.x - h5.x) < rr && Math.abs(f.y - h5.y) < rr) { w5.len += f.m * 0.6; cp.splice(i, 1); S.crossFood++; } }
+                var h5 = w5.segs[0], rr5 = wormR[j] + 8;
+                for (let i = cp0.length - 1; i >= 0; i--) {
+                    var f = cp0[i], fdx5 = f.x - h5.x, fdy5 = f.y - h5.y;
+                    if (fdx5 < rr5 && fdx5 > -rr5 && fdy5 < rr5 && fdy5 > -rr5) { w5.len += f.m * 0.6; mixSwapPop(cp0, i); S.crossFood++; }
+                }
             }
             for (let i = 0; i < blobs.length; i++) {
                 var b5 = blobs[i];
                 if (b5.dead) continue;
-                var r5 = Cells.rad(b5.m);
-                for (let j = sp.length - 1; j >= 0; j--) { var g = sp[j]; if (Math.abs(g.x - b5.x) < r5 && Math.abs(g.y - b5.y) < r5 && Math.hypot(g.x - b5.x, g.y - b5.y) < r5) { b5.m += g.v; sp.splice(j, 1); S.crossFood++; } }
+                var r5 = blobR[i], r5sq = r5 * r5;
+                for (let j = sp0.length - 1; j >= 0; j--) {
+                    var g = sp0[j], gdx5 = g.x - b5.x, gdy5 = g.y - b5.y;
+                    if (gdx5 < r5 && gdx5 > -r5 && gdy5 < r5 && gdy5 > -r5 && gdx5 * gdx5 + gdy5 * gdy5 < r5sq) { b5.m += g.v; mixSwapPop(sp0, j); S.crossFood++; }
+                }
             }
-            while (sp.length < SNK.PELLETS) Snake.addPellet();
+            while (sp0.length < SNK.PELLETS) Snake.addPellet();
         }
-        if (blobs.some(function(q) { return q.dead; })) Cells.blobs = blobs.filter(function(q) { return !q.dead; });
+        if (anyDead) {
+            var wIdx = 0;
+            for (let i = 0; i < blobs.length; i++) if (!blobs[i].dead) blobs[wIdx++] = blobs[i];
+            blobs.length = wIdx;
+        }
     },
 
     // ------------------------------------------------------------ one camera for all three
@@ -373,6 +505,81 @@ var Mix = {
         this.draw();
     },
 
+    drawFx: function(Z) {
+        var fx = this.fx;
+        for (let i = fx.length - 1; i >= 0; i--) {
+            var p = fx[i];
+            p.t++;
+            if (p.t >= p.life) { mixSwapPop(fx, i); continue; }
+            var prog = p.t / p.life, alpha = 1 - prog;
+            var s = Tanks.toScreen(p.x, p.y);
+            if (s[0] < -120 || s[0] > cssW + 120 || s[1] < -120 || s[1] > cssH + 120) continue;
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            if (p.kind === "ring") {
+                ctx.strokeStyle = p.col;
+                ctx.lineWidth = Math.max(1.5, (3.5 - prog * 2.5) * Z);
+                ctx.beginPath();
+                ctx.arc(s[0], s[1], Math.max(4, (12 + p.r * prog) * Z), 0, 7);
+                ctx.stroke();
+            } else {
+                ctx.fillStyle = p.col;
+                var sp = (6 + p.r * prog) * Z, sz = Math.max(2, 4 * Z * alpha);
+                for (let k = 0; k < 4; k++) {
+                    var a = k * 1.5708 + prog * 0.9;
+                    ctx.fillRect(s[0] + Math.cos(a) * sp - sz * 0.5, s[1] + Math.sin(a) * sp - sz * 0.5, sz, sz);
+                }
+            }
+            if (p.text) {
+                uiText(p.text, s[0], s[1] - (10 + prog * 24) * Math.max(0.7, Z), 11, p.col, "center", "900");
+            }
+            ctx.restore();
+        }
+    },
+
+    drawRadar: function(m) {
+        var size = 108, rx = cssW - size - 16, ry = cssH - size - 44;
+        if (rx < 360 || ry < 160) return;
+        var half = size * 0.5, cx = rx + half, cy = ry + half, scale = (size - 10) / 6000;
+        ctx.save();
+        ctx.fillStyle = "rgba(10,16,30,0.72)";
+        ctx.strokeStyle = "rgba(253,224,71,0.35)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.roundRect(rx, ry, size, size, 10); ctx.fill(); ctx.stroke();
+        // nested arenas: Tank square (6000), Blob square (5200), Worm ring (2400)
+        var bw = 5200 * scale;
+        ctx.strokeStyle = "rgba(167,139,250,0.45)"; ctx.lineWidth = 1;
+        ctx.strokeRect(cx - bw * 0.5, cy - bw * 0.5, bw, bw);
+        ctx.strokeStyle = "rgba(244,114,182,0.5)";
+        ctx.beginPath(); ctx.arc(cx, cy, 2400 * scale, 0, 7); ctx.stroke();
+        // entity dots
+        ctx.fillStyle = "#60a5fa";
+        for (let i = 0; i < Tanks.tanks.length; i++) {
+            var k = Tanks.tanks[i]; if (!k.alive) continue;
+            ctx.fillRect(cx + k.x * scale - 1.5, cy + k.y * scale - 1.5, 3, 3);
+        }
+        ctx.fillStyle = "#c084fc";
+        for (let i = 0; i < Cells.blobs.length; i++) {
+            var b = Cells.blobs[i]; if (b.dead) continue;
+            ctx.fillRect(cx + b.x * scale - 1.5, cy + b.y * scale - 1.5, 3, 3);
+        }
+        ctx.fillStyle = "#f472b6";
+        for (let i = 0; i < Snake.worms.length; i++) {
+            var w = Snake.worms[i]; if (!w.alive) continue;
+            ctx.fillRect(cx + w.segs[0].x * scale - 1.5, cy + w.segs[0].y * scale - 1.5, 3, 3);
+        }
+        if (m && m.alive) {
+            var px = cx + m.x * scale, py = cy + m.y * scale;
+            var pulse = 4 + Math.sin(this.t * 0.18) * 1.8;
+            ctx.strokeStyle = "#fde047"; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(px, py, pulse, 0, 7); ctx.stroke();
+            ctx.fillStyle = "#fde047";
+            ctx.beginPath(); ctx.arc(px, py, 2.5, 0, 7); ctx.fill();
+        }
+        uiText("3-IN-1 RADAR", cx, ry + size - 5, 9, "rgba(226,232,240,0.7)", "center", "800");
+        ctx.restore();
+    },
+
     draw: function() {
         this.updateCam();
         ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
@@ -380,28 +587,75 @@ var Mix = {
         Cells.render();      // the blob zone, food, blobs, spikes
         Snake.render();      // the worm ring, food, worms
         // a dashed ring shows a tank or worm holding a power-up: blue = shield, yellow = speed, pink = magnet
-        var Z = this.cam.z, self = this;
-        var ring = function(x, y, r, col) { var s2 = Tanks.toScreen(x, y); ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, 4 * Z); ctx.setLineDash([10 * Z + 4, 8 * Z + 3]); ctx.lineDashOffset = -self.t * 0.6; ctx.beginPath(); ctx.arc(s2[0], s2[1], r * Z + 6, 0, 7); ctx.stroke(); ctx.setLineDash([]); };
-        Tanks.tanks.forEach(function(k) { if (!k.alive) return; var f = k.mixFx || {}, col = k.inv > 130 ? "#38bdf8" : (f.speed > 0 ? "#facc15" : (f.magnet > 0 ? "#f472b6" : null)); if (col) ring(k.x, k.y, Tanks.size(k) + 6, col); });
-        Snake.worms.forEach(function(w) { if (!w.alive) return; var f = w.mixFx || {}, col = w.safeT > 130 ? "#38bdf8" : (f.speed > 0 ? "#facc15" : (f.magnet > 0 ? "#f472b6" : null)); if (col) ring(w.segs[0].x, w.segs[0].y, Snake.radius(w) + 8, col); });
+        var Z = this.cam.z;
+        ctx.lineWidth = Math.max(2, 4 * Z);
+        ctx.setLineDash([10 * Z + 4, 8 * Z + 3]);
+        ctx.lineDashOffset = -this.t * 0.6;
+        for (let i = 0; i < Tanks.tanks.length; i++) {
+            var k = Tanks.tanks[i];
+            if (!k.alive) continue;
+            var fk = k.mixFx, colK = k.inv > 130 ? "#38bdf8" : (fk && fk.speed > 0 ? "#facc15" : (fk && fk.magnet > 0 ? "#f472b6" : null));
+            if (colK) {
+                var sk = Tanks.toScreen(k.x, k.y);
+                ctx.strokeStyle = colK; ctx.beginPath(); ctx.arc(sk[0], sk[1], (Tanks.size(k) + 6) * Z + 6, 0, 7); ctx.stroke();
+            }
+        }
+        for (let i = 0; i < Snake.worms.length; i++) {
+            var w = Snake.worms[i];
+            if (!w.alive) continue;
+            var fw = w.mixFx, colW = w.safeT > 130 ? "#38bdf8" : (fw && fw.speed > 0 ? "#facc15" : (fw && fw.magnet > 0 ? "#f472b6" : null));
+            if (colW) {
+                var sw = Tanks.toScreen(w.segs[0].x, w.segs[0].y);
+                ctx.strokeStyle = colW; ctx.beginPath(); ctx.arc(sw[0], sw[1], (Snake.radius(w) + 8) * Z + 6, 0, 7); ctx.stroke();
+            }
+        }
+        ctx.setLineDash([]);
+        this.drawFx(Z);
+
         var m = this.me();
         if (m && m.kind === "tank") Tanks.hud();
         else if (m && m.kind === "blob") Cells.hud();
         else if (m) Snake.hud();
-        // what this mode adds to the screen: who you are, how to switch, and the cross-game feed
-        var name = MIX_BODIES.find(function(b) { return b[0] === mixCfg.body; })[1];
+
+        // what this mode adds to the screen: who you are, clickable body pills, and the cross-game feed
+        var name = MIX_BODIES[0][1];
+        for (let i = 0; i < MIX_BODIES.length; i++) if (MIX_BODIES[i][0] === mixCfg.body) { name = MIX_BODIES[i][1]; break; }
         var extra = "";
         if (m && m.alive && m.kind === "tank") extra = " · mass " + Math.round(this.tankMass(m.ref));
+        else if (m && m.alive && mixCfg.body === "chain" && m.ref.chainList) extra = " · " + m.ref.chainList.length + " bubbles";
         if (m && m.alive && m.kind === "worm" && m.ref.mx) { var X = m.ref.mx; extra = " · Lv " + X.lvl + (X.pts ? " · " + X.pts + " pt: 1 Bite " + X.st[0] + " · 2 Armor " + X.st[1] + " · 3 Appetite " + X.st[2] : " (B" + X.st[0] + " A" + X.st[1] + " P" + X.st[2] + ")"); }
         uiPanel(14, 76, Math.max(330, 60 + (name.length + extra.length + 34) * 6.4), 34, "#fde047", 0.8);
         uiText("ARENA MIX · you: " + name + " · Q: switch body" + extra, 26, 98, 12, "#fde68a", "left", "800");
+
+        // clickable quick-switch body pills
+        this._pills.length = 0;
+        var px = 14, py = 114;
+        ctx.save();
+        for (let i = 0; i < MIX_BODIES.length; i++) {
+            var bd = MIX_BODIES[i], active = bd[0] === mixCfg.body;
+            var lbl = bd[0] === "chain" ? "📿 Bubble" : bd[1];
+            var pw = lbl.length * 7.2 + 18;
+            ctx.fillStyle = active ? "rgba(253,224,71,0.24)" : "rgba(15,23,42,0.72)";
+            ctx.strokeStyle = active ? "#fde047" : "rgba(148,163,184,0.35)";
+            ctx.lineWidth = active ? 1.5 : 1;
+            ctx.beginPath(); ctx.roundRect(px, py, pw, 22, 6); ctx.fill(); ctx.stroke();
+            uiText(lbl, px + pw * 0.5, py + 15, 11, active ? "#fef08a" : "#cbd5e1", "center", active ? "800" : "700");
+            this._pills.push({ id: bd[0], x: px, y: py, w: pw, h: 22 });
+            px += pw + 6;
+        }
+        ctx.restore();
+
+        var lw = 0;
         for (let i = 0; i < this.log.length; i++) {
             var L = this.log[i]; L.t--;
+            if (L.t <= 0) continue;
             ctx.globalAlpha = Math.min(1, L.t / 60);
-            uiText(L.text, 26, 132 + i * 18, 12, L.col, "left", "800");
+            uiText(L.text, 26, 156 + lw * 18, 12, L.col, "left", "800");
             ctx.globalAlpha = 1;
+            this.log[lw++] = L;
         }
-        this.log = this.log.filter(function(L) { return L.t > 0; });
+        this.log.length = lw;
+        this.drawRadar(m);
         uiText("Bullets shrink blobs · tanks are blobs with a gun (bigger eats smaller) · blobs pop on worms · worms break blocks, bite tanks and level up", cssW / 2, cssH - 28, 11, "rgba(220,230,240,0.75)", "center", "700");
     },
 
@@ -444,6 +698,15 @@ GameModes.register({
         return false;
     },
     onClick: function(wx, wy, button) {
+        if (button === 0 && typeof mouseX === "number" && typeof mouseY === "number") {
+            for (let i = 0; i < Mix._pills.length; i++) {
+                var p = Mix._pills[i];
+                if (mouseX >= p.x && mouseX <= p.x + p.w && mouseY >= p.y && mouseY <= p.y + p.h) {
+                    if (p.id !== mixCfg.body) Mix.setBody(p.id);
+                    return true;
+                }
+            }
+        }
         if (mixCfg.body === "tank") { var tk = GameModes.get("tanks"); if (tk && tk.onClick) return tk.onClick(wx, wy, button); }
         return true;
     },
