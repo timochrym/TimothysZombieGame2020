@@ -15,6 +15,7 @@ import review_card
 import review_health
 import review_media
 import review_theme
+import review_workspace
 import review_next
 import review_coverage
 import review_digest
@@ -422,12 +423,13 @@ def _json_for_script(data):
 
 def page(model, live=None):
     data = dict(model, scale=SCALE, live=live)
-    tabs = review_theme.tabs([('now', 'Now'), ('projects', 'Projects'), ('done', 'Answered'), ('digest', 'Digest')])
+    tabs = review_theme.tabs([('now', 'Now'), ('projects', 'Projects'), ('done', 'Answered'), ('digest', 'Digest')] + review_workspace.PANES)
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             '<title>Updater \u00b7 Review portfolio</title><style>%s</style></head><body>%s<main class="wide"><div id="lane" class="lane"></div>%s'
             '<div class="pane" data-pane="now" id="pane-now"></div><div class="pane" data-pane="projects" id="pane-projects" hidden></div>'
-            '<div class="pane" data-pane="done" id="pane-done" hidden></div><div class="pane" data-pane="digest" id="pane-digest" hidden></div><div class="toast" id="toast" role="status" hidden></div>'
+            '<div class="pane" data-pane="done" id="pane-done" hidden></div><div class="pane" data-pane="digest" id="pane-digest" hidden></div>'
+            + ''.join('<div class="pane" data-pane="%s" id="pane-%s" hidden></div>' % (k, k) for k, _ in review_workspace.PANES) + '<div class="toast" id="toast" role="status" hidden></div>'
             '<p class="sub" style="margin-top:28px">Updated %s</p></main>'
             '<script id="data" type="application/json">%s</script><script>%s</script></body></html>') % (
-        CSS, review_theme.bar('test queue for every project'), tabs, html.escape(model['generated']), _json_for_script(data),
-        review_theme.JS + review_card.js() + JS)
+        CSS + review_workspace.CSS, review_theme.bar('test queue for every project'), tabs, html.escape(model['generated']), _json_for_script(data),
+        review_theme.JS + review_card.js() + JS + review_workspace.JS)

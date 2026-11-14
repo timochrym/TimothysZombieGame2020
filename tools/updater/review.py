@@ -9,6 +9,8 @@
     python review.py graph [--workspace FOLDER] [--out FILE.md]         a generated map of how the projects connect (Mermaid)
     python review.py pr-body CHECKLIST                                   a pull request description: claims next to evidence
     python review.py branches [--script FILE]                            which branches are finished (never deletes; --script writes the commands)
+    python review.py tasks [add TITLE | rank ID top|up|down|later|next | start|wait|done ID] [--all]   the task board and your ranking (agents read your order first)
+    python review.py history [--days 30] [--all] [-q TEXT]               every change by day, with who wrote it and whether a review covers it
     python review.py coverage [--days 30] [--fail-under N]                              how much recent work any checklist covers, by kind of writer
     python review.py stats [--workspace FOLDER]                          how strong is the evidence agents bring, per project
     python review.py digest [--only-if-waiting] [--subject] [--json]     a short text of what needs you, for a scheduler to send anywhere
@@ -28,6 +30,8 @@ import sys
 import time
 
 import review_answers as ra
+import review_history as rhi
+import review_tasks as rtk
 import review_branches as rbr
 import review_digest as rd
 import review_brief as rb
@@ -168,7 +172,56 @@ def cmd_answer(args, me, projects, loc):
 
 def cmd_next(args, me, projects, loc):
     folders = checklist_folders(me, loc)
-    print(rn.text(me, rn.orders_for(folders, limit=50 if args.all else 3)))
+    print(rn.text(me, rn.orders_for(folders, limit=50 if args.all else 3), rtk.owner_order(me, projects)))
+    return 0
+
+
+def _pick(projects, me, everything):
+    return projects if everything else [me]
+
+
+def cmd_tasks(args, me, projects, loc):
+    """tasks | tasks add TITLE | tasks rank ID WHERE | tasks start|wait|done ID"""
+    words = args.words
+    try:
+        if words and words[0] == 'add':
+            print('Added #%s' % rtk.add_task(me, projects, ' '.join(words[1:])))
+            return 0
+        if words and words[0] == 'rank' and len(words) == 3:
+            rtk.move(me, projects, words[1], words[2])
+            print('Ranked #%s: %s' % (words[1], words[2]))
+            return 0
+        if words and words[0] in ('start', 'wait', 'done', 'todo') and len(words) == 2:
+            rtk.set_status(me, projects, words[1], {'start': 'doing', 'wait': 'waiting'}.get(words[0], words[0]))
+            print('#%s: %s' % (words[1], words[0]))
+            return 0
+    except ValueError as err:
+        raise CliError(str(err))
+    if words:
+        raise CliError('Use: tasks | tasks add TITLE | tasks rank ID top|up|down|later|next | tasks start|wait|done|todo ID')
+    for p in _pick(projects, me, args.all):
+        b = rtk.board(p, projects)
+        print('%s: %d up next, %d doing, %d waiting on you, %d later' % (p['name'], len(b['next']), len(b['doing']), len(b['waiting']), len(b['later'])))
+        for key, label in (('next', 'Up next'), ('doing', 'Doing'), ('waiting', 'Waiting on you'), ('later', 'Later')):
+            for n, t in enumerate(b[key][:10 if key == 'next' else 6], 1):
+                print('  %-14s %s #%s  %s%s' % (label if n == 1 else '', '%d.' % n if key == 'next' else '  ', t['id'], t['title'], '  (%s)' % t['source']))
+    return 0
+
+
+def cmd_history(args, me, projects, loc):
+    rows = []
+    for p in _pick(projects, me, args.all):
+        rows += rhi.entries(p, projects, args.days, None, args.q or '')
+    rows.sort(key=lambda r: r['time'], reverse=True)
+    for day in rhi.by_day(rows[:rhi.TOTAL]):
+        print('\n%s  (%d)' % (day['date'], len(day['entries'])))
+        for e in day['entries']:
+            if e['type'] == 'review':
+                print('  review    %-14s %s  [%d of %d answered]' % (e['project'][:14], e['title'][:80], e['answered'], e['total']))
+            else:
+                print('  %s  %-8s %-14s %s%s' % (time.strftime('%H:%M', time.localtime(e['time'])), e['who'], e['project'][:14], e['subject'][:90], '  [reviewed]' if e['covered'] else ''))
+    s = rhi.summary(rows)
+    print('\n%d change(s), %d review(s); %d inside a review. By writer: %s' % (s['commits'], s['reviews'], s['covered'], ', '.join('%d %s' % (n, k) for k, n in s['by_writer'].items()) or 'none'))
     return 0
 
 
@@ -365,6 +418,8 @@ def main(argv=None):
     b.add_argument('--timeout', type=int, default=600); b.add_argument('--no-html', action='store_true')
     a = sub.add_parser('answer'); a.add_argument('checklist'); a.add_argument('--line', required=True)
     x = sub.add_parser('next'); x.add_argument('--all', action='store_true')
+    tk = sub.add_parser('tasks'); tk.add_argument('words', nargs='*'); tk.add_argument('--all', action='store_true')
+    hi = sub.add_parser('history'); hi.add_argument('--days', type=int, default=30); hi.add_argument('--all', action='store_true'); hi.add_argument('-q')
     r = sub.add_parser('ready'); r.add_argument('checklist', nargs='?'); r.add_argument('--latest', action='store_true'); r.add_argument('--run', action='store_true'); r.add_argument('--strict', action='store_true'); r.add_argument('--timeout', type=int, default=600)
     br = sub.add_parser('branches'); br.add_argument('--script')
     ic = sub.add_parser('import-cards'); ic.add_argument('--source', default='notes/debrief'); ic.add_argument('--status', default='open')
@@ -380,7 +435,7 @@ def main(argv=None):
     try:
         me, projects, loc = context(args)
         return {'new': cmd_new, 'brief': cmd_brief, 'answer': cmd_answer, 'next': cmd_next, 'ready': cmd_ready,
-                 'branches': cmd_branches, 'import-cards': cmd_import_cards, 'coverage': cmd_coverage, 'stats': cmd_stats, 'digest': cmd_digest, 'health': cmd_health, 'graph': cmd_graph, 'pr-body': cmd_pr_body, 'status': cmd_status, 'portfolio': cmd_portfolio}[args.cmd](args, me, projects, loc)
+                 'branches': cmd_branches, 'import-cards': cmd_import_cards, 'tasks': cmd_tasks, 'history': cmd_history, 'coverage': cmd_coverage, 'stats': cmd_stats, 'digest': cmd_digest, 'health': cmd_health, 'graph': cmd_graph, 'pr-body': cmd_pr_body, 'status': cmd_status, 'portfolio': cmd_portfolio}[args.cmd](args, me, projects, loc)
     except (CliError, rb.BriefError, ra.AnswerError, OSError) as err:
         print('Error: %s' % err, file=sys.stderr)
         return 2

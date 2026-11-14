@@ -7,6 +7,7 @@ if one of them disagrees with this file, the project's own rule wins.
 ## Start
 1. Read `UPDATER.md`. Its `goal`, `output` and `done` say what **Zombie Game** is for and when work is finished.
 2. Run `python tools/updater/review.py next`. It lists what the owner asked for, decided and has not answered yet in earlier reviews.
+   It also starts with the owner's task order: take the first task first. Add follow-ups you find with `python tools/updater/review.py tasks add "..."`; never reorder the owner's list.
    Do the asked-for changes first. Follow the decisions. Leave accepted work alone. Never guess an unanswered item.
 3. The default branch is `main`. Work on your session branch. Do not push to `main` unless the owner has said you may.
 4. Use the git name and email already set on this computer (UPDATER.md has no `commit_name` and `commit_email` yet).

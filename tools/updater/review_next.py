@@ -74,7 +74,7 @@ def orders_for(folders, limit=3):
     return sorted(found, key=lambda o: (o['date'], o['name']), reverse=True)[:limit]
 
 
-def text(project, orders):
+def text(project, orders, order=None):
     meta = project['meta']
     out = ['# Next work for %s' % project['name'], '']
     if meta.get('goal'):
@@ -82,6 +82,8 @@ def text(project, orders):
     if meta.get('done'):
         out.append('Done when: %s' % meta['done'])
     out += ['Read AGENT-RULES.md first. Before you finish, write a new review checklist and check it.', '']
+    if order:
+        out += ["The owner's order (take the first one first; ranked in the Updater, `review.py tasks`):"] + ['%d. %s' % (i, t) for i, t in enumerate(order, 1)] + ['']
     if not orders:
         return '\n'.join(out + ['The owner has asked for nothing: no open changes, no unanswered claims or questions.', ''])
     for o in orders:
