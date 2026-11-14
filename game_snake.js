@@ -155,7 +155,18 @@ var Snake = {
         if (!w.alive || arenaProtected(w)) return;
         w.alive = false; w.deadT = 0;
         var col = w.color;
-        for (let i = 0; i < w.segs.length; i += 2) this.addPellet(w.segs[i].x + (Math.random() - 0.5) * 20, w.segs[i].y + (Math.random() - 0.5) * 20, 2 + ((w.len / 60) | 0), col);
+        var nSeg = w.segs.length, maxDrops = 26;
+        var step = Math.max(2, Math.ceil(nSeg / maxDrops));
+        var val = Math.max(2, Math.round((2 + ((w.len / 60) | 0)) * (step / 2)));
+        for (let i = 0; i < nSeg; i += step) {
+            this.addPellet(w.segs[i].x + (Math.random() - 0.5) * 20, w.segs[i].y + (Math.random() - 0.5) * 20, val, col);
+        }
+        // Combine excess small pellets into bigger earning globs to prevent lag spikes
+        var cap = SNK.FOOD + 180;
+        while (this.pellets.length > cap) {
+            var a = this.pellets[0], b = this.pellets.pop();
+            a.v += b.v;
+        }
         if (by) { by.kills++; }
         if (w.human !== undefined) {
             w.deathMsg = by ? "Eaten by " + by.name : "You hit the wall";
@@ -255,10 +266,12 @@ var Snake = {
         // pellets
         for (let i = 0; i < this.pellets.length; i++) {
             var pl = this.pellets[i], ps = this.toScreen(pl.x, pl.y);
-            if (ps[0] < -20 || ps[1] < -20 || ps[0] > cssW + 20 || ps[1] > cssH + 20) continue;
-            var pr = (3 + pl.v * 1.4) * Z * (1 + Math.sin(this.t * 0.1 + pl.ph) * 0.15);
-            ctx.globalAlpha = 0.35; ctx.fillStyle = pl.col; ctx.beginPath(); ctx.arc(ps[0], ps[1], pr * 2.2, 0, 7); ctx.fill();
+            if (ps[0] < -30 || ps[1] < -30 || ps[0] > cssW + 30 || ps[1] > cssH + 30) continue;
+            var baseR = pl.v >= 4 ? Math.min(18, 3.2 + Math.sqrt(pl.v) * 1.65) : (3 + pl.v * 1.4);
+            var pr = baseR * Z * (1 + Math.sin(this.t * 0.1 + pl.ph) * 0.12);
+            ctx.globalAlpha = 0.35; ctx.fillStyle = pl.col; ctx.beginPath(); ctx.arc(ps[0], ps[1], pr * 2.1, 0, 7); ctx.fill();
             ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(ps[0], ps[1], pr, 0, 7); ctx.fill();
+            if (pl.v >= 6) { ctx.fillStyle = "rgba(255,255,255,0.65)"; ctx.beginPath(); ctx.arc(ps[0], ps[1], pr * 0.42, 0, 7); ctx.fill(); }
         }
         // worms: tail first, little ones on top
         var order = this.worms.filter(function(w) { return w.alive; }).sort(function(a, b) { return b.len - a.len; });

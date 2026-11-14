@@ -467,7 +467,7 @@ var Mix = {
             w4.len += lost * 0.3; this.wormXp(w4, lost * 0.4);
             this.burst(b4.x, b4.y, "#a78bfa", "ring", "POP!", r4 + 35);
             if (b4.pl.chain) { b4.m = left; blobR[i] = Cells.rad(left); b4.popCd = 150; continue; }
-            var pieces = Math.max(0, Math.min(CEL.MAXCELLS - Cells.mine(b4.pl).length, 5)), each = left / (pieces + 1);
+            var pieces = Math.max(0, Math.min(CEL.MAXCELLS - Cells.mine(b4.pl).length, 4)), each = left / (pieces + 1);
             for (let q = 0; q < pieces; q++) {
                 var pa = q / pieces * Math.PI * 2;
                 blobs.push({ pl: b4.pl, x: b4.x, y: b4.y, m: each, vx: Math.cos(pa) * 16, vy: Math.sin(pa) * 16, mergeT: 600, popCd: 150 });

@@ -364,12 +364,13 @@ var Cells = {
                 var bdx = bb.x - vi.x, bdy = bb.y - vi.y;
                 if (bdx * bdx + bdy * bdy < hitR * hitR) {
                     bb.pl.compact = false; bb.pl.chainMoving = false;
-                    var pieces = Math.max(0, Math.min(CEL.MAXCELLS - this.mine(bb.pl).length, 9));
+                    var pieces = Math.max(0, Math.min(CEL.MAXCELLS - this.mine(bb.pl).length, 5));
                     var lost = bb.m * 0.25;
                     bb.m = Math.max(20, bb.m - lost);
-                    for (let s = 0; s < 4; s++) {
+                    var globM = Math.max(6, Math.round(lost * 0.12));
+                    for (let s = 0; s < 2; s++) {
                         var sa = Math.random() * Math.PI * 2;
-                        this.pellets.push({ x: bb.x, y: bb.y, m: 3, col: "#4ade80", vx: Math.cos(sa) * 18, vy: Math.sin(sa) * 18 });
+                        this.pellets.push({ x: bb.x, y: bb.y, m: globM * 0.5, col: "#4ade80", vx: Math.cos(sa) * 16, vy: Math.sin(sa) * 16 });
                     }
                     var each = bb.m / (pieces + 1);
                     for (let k = 0; k < pieces; k++) { var a = k / pieces * Math.PI * 2; B.push({ pl: bb.pl, x: bb.x, y: bb.y, m: each, vx: Math.cos(a) * 18, vy: Math.sin(a) * 18, mergeT: 600 }); }
@@ -386,7 +387,17 @@ var Cells = {
             }
         }
         this.blobs = B.filter(function(q) { return !q.dead; });
-        if (this.pellets.length > cellsCfg.food + 200) this.pellets.length = cellsCfg.food;
+        // Combine excess pellets into bigger earning globs instead of discarding value or lagging
+        var foodCap = cellsCfg.food + 120;
+        if (this.pellets.length > foodCap) {
+            var targetLen = cellsCfg.food + 40;
+            var idx = 0;
+            while (this.pellets.length > targetLen && idx < this.pellets.length - 1) {
+                var extra = this.pellets.pop();
+                this.pellets[idx].m += extra.m;
+                idx = (idx + 1) % Math.max(1, this.pellets.length);
+            }
+        }
         while (this.pellets.length < cellsCfg.food) this.addPellet();
         if (this.t % 30 === 0) this.syncBots();
         // power-up timers, magnet pull, pickups
