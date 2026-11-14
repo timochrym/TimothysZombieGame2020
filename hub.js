@@ -25,6 +25,7 @@ var HUB_ICONS = {
     words: { s: ["..........", ".yyyyyyyy.", ".y......y.", ".y.ww.w.y.", ".y......y.", ".y.w.ww.y.", ".y......y.", ".yyyyyyyy.", "....yy....", "...yyyy..."], p: { y: "#fde047", w: "#f8fafc" } },
     party: { s: ["..........", ".wwww.....", ".w..w.yy..", ".w.bw.yy..", ".wwww.....", "....r.....", "..r...b...", ".b..y...r.", "..........", ".........."], p: { w: "#f8fafc", b: "#3b82f6", r: "#ef4444", y: "#fde047" } },
     property: { s: ["..........", "....rr....", "...rrrr...", "..rrrrrr..", ".rrrrrrrr.", "..wwwwww..", "..wwddww..", "..wwddww..", "..wwddww..", "gggggggggg"], p: { r: "#ef4444", w: "#f8fafc", d: "#92400e", g: "#16a34a" } },
+    sandbox: { s: ["....cc....", "....cc....", "..c.ww.c..", "...wwww...", "ccwwwwwwcc", "...wwww...", "..c.ww.c..", "....cc....", "....cc....", ".bbbbbbbb."], p: { c: "#38bdf8", w: "#e0f2fe", b: "#1e293b" } },
     race: { s: ["pkwkwkwk..", "pwkwkwkw..", "pkwkwkwk..", "pwkwkwkw..", "p.........", "p.........", "p.........", "p.........", "p.........", "pp........"], p: { p: "#e5e7eb", k: "#111827", w: "#f8fafc" } }
 };
 
@@ -45,7 +46,7 @@ var Hub = {
         var games = this.games();
         var last = null;
         try { last = localStorage.getItem("timsArcadeLastGame"); } catch (e) {}
-        var cur = boot ? (last || "survival") : (GameModes.current ? GameModes.current.id : "survival");
+        var cur = boot ? (last || "sandbox") : (GameModes.current ? GameModes.current.id : "sandbox");
         this.idx = Math.max(0, games.findIndex(function(g) { return g.id === cur; }));
         for (let i = 0; i < PlayerInput.length; i++) PlayerInput[i].shoot = PlayerInput[i].jet = PlayerInput[i].interact = false;
         mouseDown = false;
@@ -164,6 +165,12 @@ var Hub = {
             if (ic) {
                 var px = Math.min(7, (ch - 110) / 10);
                 PixelArt.draw(ic.s, cx + cw / 2 - 5 * px, cy + 18 + bob, px, ic.p);
+            }
+            if (m.firstInHub) {
+                ctx.fillStyle = m.color || "#38bdf8";
+                uiRoundRect(cx + cw - 76, cy + 10 + bob, 66, 18, 6);
+                ctx.fill();
+                uiText("#1 · NEW", cx + cw - 43, cy + 23 + bob, 10, "#0b1020", "center", "900");
             }
             uiText(m.title, cx + cw / 2, cy + ch - 62 + bob, 18, sel ? (m.color || "#fff") : "#e2e8f0", "center", "900");
             if (m.flags && m.flags.ownScreen && !m.screenDraw && typeof Net !== "undefined" && Net.role === "host") uiText("local only (no LAN yet)", cx + cw / 2, cy + 16 + bob, 11, "#fca5a5", "center", "800");

@@ -47,9 +47,14 @@ var GameModes = {
 
     register: function(mode) {
         mode.flags = mode.flags || {};
-        this.list.push(mode);
+        if (mode.firstInHub) {
+            this.list.unshift(mode);
+            this.current = mode;
+        } else {
+            this.list.push(mode);
+            if (!this.current) this.current = mode;
+        }
         this.byId[mode.id] = mode;
-        if (!this.current) this.current = mode;
         return mode;
     },
 

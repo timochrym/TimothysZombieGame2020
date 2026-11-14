@@ -1046,10 +1046,15 @@ function frame() {
     GameModes.call("preUpdate");
 
     var netHosting = typeof Net !== "undefined" && Net.role === "host";
+    var possessed = typeof EntityTakeover !== "undefined" ? EntityTakeover.target : null;
     for (let i = 0; i < characters.length; i++) {
         if (!characters[i].dead) {
-            Components.moveTypeFinder(characters[i]);
-            Components.shootLazer(characters[i]);
+            if (possessed && possessed !== characters[i] && characters[i] === redGuy) {
+                characters[i].leftPressed = characters[i].rightPressed = characters[i].upPressed = characters[i].downPressed = false;
+            } else {
+                Components.moveTypeFinder(characters[i]);
+                Components.shootLazer(characters[i]);
+            }
             if (netHosting) Net.evOwner = characters[i].netPid || 0;     // joiners already played their own hero's movement effects
             characters[i].move();
             if (netHosting) Net.evOwner = 0;
@@ -1060,8 +1065,12 @@ function frame() {
         if (zombies[i].dead) {
             zombies.splice(i, 1);
         } else {
-            Components.moveTypeFinder(zombies[i]);
-            Components.shootLazer(zombies[i]);
+            if (zombies[i]._possessed && typeof EntityTakeover !== "undefined") {
+                EntityTakeover.drive(zombies[i]);
+            } else {
+                Components.moveTypeFinder(zombies[i]);
+                Components.shootLazer(zombies[i]);
+            }
             zombies[i].move();
         }
     }
@@ -1186,6 +1195,7 @@ function openPause(fromGameOver) {
     pauseLevelIdx = Math.max(0, pauseLevelKeys.indexOf(LevelManager.currentLevelKey));
     paused = true;
     for (let i = 0; i < PlayerInput.length; i++) PlayerInput[i].shoot = PlayerInput[i].jet = PlayerInput[i].interact = false;
+    if (typeof SandboxUI !== "undefined" && SandboxUI.isSandbox()) SandboxUI.openPause();
 }
 
 function closePause() {
@@ -1193,6 +1203,7 @@ function closePause() {
     pauseSub = null;
     pauseSnap = null;
     pauseConfirm = false;
+    if (typeof SandboxUI !== "undefined") SandboxUI.closePause();
 }
 
 function togglePause() {
