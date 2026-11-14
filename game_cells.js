@@ -16,7 +16,7 @@ var cellsSave = { best: 0 };
 // so the loss in absolute terms grows with size by itself.
 var CELL_DECAY_CLASSIC = 0.0000333;
 var CELL_DECAY = [[0, "Off"], [CELL_DECAY_CLASSIC, "Classic (0.2% a second)"], [0.00015, "Quick (0.9% a second)"], [0.0004, "Fast"], [0.001, "Very fast"], [0.0025, "Brutal"]];
-var cellsCfg = { bots: 14, food: 2000, decay: CELL_DECAY_CLASSIC, decayGrow: false, shield: 3, startMass: 20, powerups: true, chain: false };
+var cellsCfg = { bots: 14, food: 2000, decay: CELL_DECAY_CLASSIC, decayGrow: false, shield: 3, startMass: 20, powerups: true, chain: false, maxCells: 0 };
 try { var _cc = JSON.parse(localStorage.getItem("timsBlobArenaCfg") || "null"); if (_cc) for (var _ck in cellsCfg) if (typeof _cc[_ck] === typeof cellsCfg[_ck]) cellsCfg[_ck] = _cc[_ck]; if (_cc && !_cc.decayV2) cellsCfg.decay = CELL_DECAY_CLASSIC; } catch (e) {}      // the old default (0.9% a second) moves to Classic once
 function saveCellsCfg() { try { cellsCfg.decayV2 = true; localStorage.setItem("timsBlobArenaCfg", JSON.stringify(cellsCfg)); } catch (e) {} }
 // Pickups borrowed from the main games' power-ups: run fast, can't be eaten, pull food in, or a lump of mass.
@@ -279,8 +279,8 @@ var Cells = {
         this.die(pl, by || null);
     },
     split: function(pl, me) {
-        var n = me.length;
-        for (let i = 0; i < me.length && n < CEL.MAXCELLS; i++) {
+        var n = me.length, cap = (cellsCfg.maxCells > 0) ? cellsCfg.maxCells : Infinity;
+        for (let i = 0; i < me.length && n < cap; i++) {
             var b = me[i];
             if (b.m < 36) continue;
             var dx = pl.aimX - b.x, dy = pl.aimY - b.y, L = Math.hypot(dx, dy) || 1;
@@ -504,12 +504,14 @@ var Cells = {
                 var bdx = bb.x - vi.x, bdy = bb.y - vi.y;
                 if (bdx * bdx + bdy * bdy < hitR * hitR) {
                     if (isSnakeHeadBoost) {
+                        if (bb.m > 20) { bb.m = Math.max(12, bb.m - Math.max(8, bb.m * 0.15)); bRads[i] = this.rad(bb.m); }
                         this.popVirus(v);
                         if (bb.pl.human !== undefined) { showBanner("SPIKE POP!", "points popped open!", "#4ade80"); screenShake = 5; }
                         break;
                     }
                     bb.pl.compact = false; bb.pl.chainMoving = false;
-                    var pieces = Math.max(0, Math.min(CEL.MAXCELLS - this.mine(bb.pl).length, 5));
+                    var cap = (cellsCfg.maxCells > 0) ? cellsCfg.maxCells : Infinity;
+                    var pieces = Math.max(0, Math.min(cap - this.mine(bb.pl).length, 5));
                     var lost = bb.m * 0.25;
                     bb.m = Math.max(20, bb.m - lost);
                     var globM = Math.max(6, Math.round(lost * 0.12));

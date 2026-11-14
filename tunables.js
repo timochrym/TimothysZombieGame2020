@@ -91,7 +91,8 @@ GAME_TUNABLES.cells = [
     { label: "Spawn shield (seconds)", type: "range", min: 0, max: 8, step: 1, get: function() { return cellsCfg.shield; }, set: function(v) { cellsCfg.shield = v; saveCellsCfg(); } },
     { label: "Power-up pickups", type: "toggle", get: function() { return cellsCfg.powerups; }, set: function(v) { cellsCfg.powerups = !!v; saveCellsCfg(); }, note: "speed, shield, magnet, mass" },
     { label: "Humans are bubble worms", type: "toggle", get: function() { return cellsCfg.chain; }, set: function(v) { cellsCfg.chain = !!v; saveCellsCfg(); Cells.players.filter(arenaHuman).forEach(function(p) { p.chain = !!v; if (!v) Cells.mine(p).forEach(function(b) { b.lead = null; b.mergeT = 300; }); }); }, note: "a chain of bubbles that follows its head" },
-    { label: "Humans start at mass", type: "range", min: 20, max: 1000, step: 20, get: function() { return cellsCfg.startMass; }, set: function(v) { cellsCfg.startMass = v; saveCellsCfg(); }, note: "next spawn" }
+    { label: "Humans start at mass", type: "range", min: 20, max: 1000, step: 20, get: function() { return cellsCfg.startMass; }, set: function(v) { cellsCfg.startMass = v; saveCellsCfg(); }, note: "next spawn" },
+    { label: "Max bubbles per player (0 = unlimited)", type: "range", min: 0, max: 64, step: 1, get: function() { return cellsCfg.maxCells || 0; }, set: function(v) { cellsCfg.maxCells = v; saveCellsCfg(); }, note: "0 = no limit" }
 ].concat(arenaRows(), [
     // ---- cheats ----
     { label: "Set human size now", type: "range", min: 20, max: 20000, step: 20, get: function() { var p = Cells.players.find(arenaHuman); return p ? Math.round(Cells.mass(p)) : 20; }, set: function(v) { Cells.players.filter(arenaHuman).forEach(function(p) { var bs = Cells.mine(p); bs.forEach(function(b) { b.m = v / bs.length; }); }); } }

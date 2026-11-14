@@ -160,7 +160,13 @@ function mouseDownHandler(e) {
     if (typeof SFX !== "undefined") SFX.unlock();
     if (typeof Net !== "undefined" && Net.role === "client") {
         useMouseAim = true;
-        if (e.button === 0) mouseDown = true;
+        if (e.button === 0) {
+            mouseDown = true;
+            if (GameModes.has("onClick")) {
+                var cwp0 = Components.getMouseWorldPos();
+                GameModes.call("onClick", cwp0[0], cwp0[1], e.button);
+            }
+        }
         else if (e.button === 2) { rightMouseDown = true; Net.localGrab++; }
         return;
     }

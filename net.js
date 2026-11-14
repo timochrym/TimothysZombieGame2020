@@ -320,6 +320,130 @@ var Net = {
         if (!p || !m) return;
         if (m.full) { this.fullNext = true; return; }
         if (m.t === "in") p.inp = m;
+        else if (m.t === "sb" && m.act) this.hostExecSandbox(pid, m.act);
+    },
+
+    findByNid: function(nid) {
+        if (!nid) return null;
+        var lists = [staticObjects, movingObjects, characters, zombies, powerUps,
+            typeof Gadgets !== "undefined" ? Gadgets.list : [],
+            typeof Ragdolls !== "undefined" ? Ragdolls.list : []];
+        for (let l = 0; l < lists.length; l++) {
+            var arr = lists[l];
+            for (let i = 0; i < arr.length; i++) if (arr[i] && arr[i]._nid === nid) return arr[i];
+        }
+        return null;
+    },
+
+    hostExecSandbox: function(pid, act) {
+        if (this.role !== "host" || !act || !act.k) return;
+        var p = this.peers[pid];
+        var ref = (p && p.ch && !p.ch.dead) ? p.ch : (redGuy || { x: 0, y: 120 });
+        var k = act.k;
+        try {
+            if (k === "addBox" && typeof GameObject !== "undefined") {
+                GameObject.addBox(act.x, act.y, act.w, act.h, act.col || "#4d7c36", act.opts || {});
+                if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            } else if (k === "spawn" && typeof UniversalSpawner !== "undefined") {
+                UniversalSpawner.spawnById(act.id, act.x, act.y);
+            } else if (k === "delObj") {
+                var o = this.findByNid(act.nid);
+                if (o && o !== redGuy && !o.isPlayer) {
+                    o.dead = true;
+                    if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                }
+            } else if (k === "moveObj") {
+                var o2 = this.findByNid(act.nid);
+                if (o2) {
+                    if (act.x !== undefined) o2.x = act.x;
+                    if (act.y !== undefined) o2.y = act.y;
+                    if (act.w !== undefined) o2.w = Math.max(10, act.w);
+                    if (act.h !== undefined) o2.h = Math.max(10, act.h);
+                    if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                }
+            } else if (k === "dupObj" && typeof GameObject !== "undefined") {
+                var o3 = this.findByNid(act.nid);
+                if (o3) {
+                    GameObject.addBox(o3.x + 50, o3.y + 30, o3.w || o3.s1 || 80, o3.h || o3.s2 || 80, o3.color || "#64748b", { name: o3.name, texture: o3.texture, kind: o3.kind });
+                    if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                }
+            } else if (k === "spawnZombie" && typeof spawnZombie === "function") {
+                spawnZombie(act.pick || null, act.x !== undefined ? act.x : ref.x + 120, act.y !== undefined ? act.y : ref.y + 120);
+            } else if (k === "fling") {
+                var o4 = this.findByNid(act.nid);
+                if (o4) { o4.yspeed = 26; o4.xspeed = (Math.random() - 0.5) * 18; }
+            } else if (k === "healEnt") {
+                var o5 = this.findByNid(act.nid);
+                if (o5 && o5.maxHealth) o5.health = o5.maxHealth;
+            } else if (k === "freezeEnt") {
+                var o6 = this.findByNid(act.nid);
+                if (o6) { o6._sbFrozen = !o6._sbFrozen; if (o6._sbFrozen) { o6._sbPinX = o6.x; o6._sbPinY = o6.y; } }
+            } else if (k === "editEnt") {
+                var o7 = this.findByNid(act.nid);
+                if (o7 && act.props) for (var pk in act.props) o7[pk] = act.props[pk];
+            } else if (k === "clearWorld") {
+                for (let i = 0; i < staticObjects.length; i++) staticObjects[i].dead = true;
+                for (let i = 0; i < movingObjects.length; i++) movingObjects[i].dead = true;
+                for (let i = 0; i < zombies.length; i++) zombies[i].dead = true;
+                if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            } else if (k === "horde" && typeof spawnZombie === "function") {
+                for (let i = 0; i < 6; i++) spawnZombie(null, ref.x + (i % 2 ? 1 : -1) * (400 + i * 70), ref.y + 180);
+            } else if (k === "floor" && typeof sandboxCfg !== "undefined") {
+                sandboxCfg.showFloor = !!act.v; if (typeof saveSandboxCfg === "function") saveSandboxCfg();
+                if (typeof SandboxFloor !== "undefined") SandboxFloor.sync();
+            } else if (k === "noclip" && typeof sandboxCfg !== "undefined") {
+                sandboxCfg.noclip = !!act.v; if (typeof saveSandboxCfg === "function") saveSandboxCfg();
+            } else if (k === "god") {
+                var gv = !!act.v;
+                if (typeof godMode !== "undefined") godMode = gv;
+                if (typeof arenaCheats !== "undefined") arenaCheats.god = gv;
+                if (typeof sandboxCfg !== "undefined") sandboxCfg.invincible = gv;
+                if (typeof creativeCfg !== "undefined") creativeCfg.invincible = gv;
+            } else if (k === "ammo" && typeof settings !== "undefined") {
+                settings.ammo = act.v ? "unlimited" : "limited";
+                if (typeof saveSettings === "function") saveSettings();
+            } else if (k === "grav" && typeof devOpts !== "undefined") {
+                devOpts.gravityMult = Number(act.v);
+            } else if (k === "ts" && typeof devOpts !== "undefined") {
+                devOpts.timeScale = Number(act.v);
+            } else if (k === "pause") {
+                if (act.v) { if (typeof paused !== "undefined" && !paused && typeof openPause === "function") openPause(false); }
+                else { if (typeof paused !== "undefined" && paused && typeof closePause === "function") closePause(); }
+            } else if (k === "healAll" && typeof DevActions !== "undefined") {
+                DevActions.healAll();
+            } else if (k === "clearEnemies" && typeof DevActions !== "undefined") {
+                DevActions.clearEnemies();
+            } else if (k === "restart") {
+                if (GameModes.has("onRestart")) GameModes.call("onRestart");
+                else if (typeof resetGame === "function") resetGame();
+            } else if (k === "launch" && act.id) {
+                if (typeof paused !== "undefined" && paused && typeof closePause === "function") closePause();
+                GameModes.launch(act.id);
+            } else if (k === "resetBlank" && typeof LevelManager !== "undefined") {
+                if (typeof paused !== "undefined" && paused && typeof closePause === "function") closePause();
+                LevelManager.selectLevel("sandbox_blank");
+            } else if (k === "tune" && typeof GameTuning !== "undefined") {
+                var rows = GameTuning.rows();
+                if (rows[act.idx] && rows[act.idx].set) rows[act.idx].set(act.val);
+            } else if (k === "admin") {
+                if (act.cmd === "spawnBoss" && typeof spawnZombie === "function") {
+                    spawnZombie("BOSS_KING", ref.x + 240, ref.y + 120);
+                } else if (act.cmd === "respawnAll") {
+                    for (let i = 0; i < characters.length; i++) {
+                        var ch = characters[i];
+                        ch.dead = false; ch.health = ch.maxHealth; ch.invulnTimer = 90;
+                    }
+                    for (var pk2 in this.peers) if (!this.peers[pk2].ch || this.peers[pk2].ch.dead) this.spawnRemoteHero(this.peers[pk2]);
+                } else if (act.cmd === "respawnPeer") {
+                    var tp = this.peers[act.pid];
+                    if (tp) {
+                        if (tp.ch) { tp.ch.dead = false; tp.ch.health = tp.ch.maxHealth; tp.ch.x = ref.x; tp.ch.y = ref.y + 60; tp.ch.invulnTimer = 90; }
+                        else this.spawnRemoteHero(tp);
+                    }
+                }
+            }
+        } catch (e) { console.warn("net sb exec", e); }
+        this.fullNext = true;
     },
 
     // per-tick input for a remote hero (called from Components.moveTypeFinder)
@@ -658,7 +782,7 @@ var Net = {
             d: (WASDdownPressed || ULDRdownPressed || (padOn && pad.down)) ? 1 : 0,
             l: (WASDleftPressed || ULDRleftPressed || (padOn && pad.left)) ? 1 : 0,
             r: (WASDrightPressed || ULDRrightPressed || (padOn && pad.right)) ? 1 : 0,
-            sh: (inp.kbShoot || inp.shoot || (mouseDown && !this.menuOpen) || (padOn && pad.shoot)) ? 1 : 0,
+            sh: (inp.kbShoot || inp.shoot || (mouseDown && !this.menuOpen && !(typeof SandboxUI !== "undefined" && SandboxUI.pauseOpen)) || (padOn && pad.shoot)) ? 1 : 0,
             jt: (inp.kbJet || inp.jet || (padOn && pad.jet)) ? 1 : 0,
             it: (inp.kbInteract || inp.interact || (padOn && pad.interact)) ? 1 : 0,
             da: this.localDash, gr: this.localGrab, rl: this.localReload,
@@ -866,7 +990,7 @@ var Net = {
 
     drawClientBadge: function(me) {
         var age = performance.now() - this.lastSnapAt;
-        var txt = "📡 LAN · " + (me ? (me.playerLabel || "you") : "spectating") + (age > 1000 ? " · host not responding…" : "") + "   Esc: menu";
+        var txt = "📡 LAN · " + (me ? (me.playerLabel || "you") : "spectating") + (age > 1000 ? " · host not responding…" : "") + "   Esc: menu · F2: side menu";
         ctx.save();
         ctx.font = "700 13px " + UI_FONT;
         var wdt = ctx.measureText(txt).width + 24;
@@ -897,12 +1021,29 @@ var Net = {
         ctx.fillText("Enter / L — leave this LAN game", cssW / 2, cssH / 2);
         ctx.fillText("Esc — back to the game", cssW / 2, cssH / 2 + 30);
         ctx.fillStyle = "#94a3b8";
-        ctx.fillText("Only the host can change games or levels.", cssW / 2, cssH / 2 + 70);
+        ctx.fillText("Waiting for host to pick a game…", cssW / 2, cssH / 2 + 70);
         ctx.restore();
     },
 
-    // keyboard on a client: Esc menu; everything else is just sent as input
+    // keyboard on a client: Esc opens the full SandboxUI menu when in-game (or LAN menu in hub)
     clientKey: function(e) {
+        if (this.inGame && !this.hostInHub && typeof SandboxUI !== "undefined") {
+            if (e.code === "Escape") {
+                if (!e.repeat) {
+                    if (SandboxUI.spawnerOpen) SandboxUI.spawnerOpen = false;
+                    else SandboxUI.pauseOpen = !SandboxUI.pauseOpen;
+                    SandboxUI.render();
+                }
+                e.preventDefault();
+                return true;
+            }
+            if (SandboxUI.pauseOpen) {
+                if (e.code === "KeyL" && !e.repeat) { SandboxUI.pauseOpen = false; SandboxUI.render(); this.disconnect(); }
+                e.preventDefault();
+                return true;
+            }
+            return false;
+        }
         if (e.code === "Escape") { if (!e.repeat) this.menuOpen = !this.menuOpen; e.preventDefault(); return true; }
         if (this.menuOpen) {
             if (e.code === "Enter" || e.code === "KeyL") { this.menuOpen = false; this.disconnect(); }

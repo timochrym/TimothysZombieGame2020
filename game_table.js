@@ -124,25 +124,24 @@ var Flick = {
         if (this.phase === "goal") { if (--this.goalT <= 0) this.kickoff(this.nextKick); return; }
         if (this.phase !== "aim") return;
         if (!this.human(this.turn)) { if (++this.cpuT > 50) this.cpu(); return; }
-        // mouse: press on your disc, drag back, release (not for the LAN player's turn: they use their keys)
+        // mouse: press on your disc, drag back, release (works for host and LAN player)
         var lanTurn = this.turn === 1 && Table.lanPid();
-        var m = this.toWorld(mouseX, mouseY);
-        if (lanTurn) { this.drag = null; }
-        else {
-        if (mouseDown && !this.drag) {
+        var lx = lanTurn ? Net.peerX(Table.lanPid()) : null;
+        var m = lanTurn ? [lx.wx || 0, lx.wy || 0] : this.toWorld(mouseX, mouseY);
+        var md = lanTurn ? !!lx.md : mouseDown;
+        if (md && !this.drag) {
             for (let i = 0; i < this.discs.length; i++) { var d = this.discs[i]; if (d.t === this.turn && Math.hypot(d.x - m[0], d.y - m[1]) < d.r + 8) { this.drag = { i: i }; this.sel = i; } }
-            if (!this.drag) this.mouseLock = true;
+            if (!this.drag && !lanTurn) this.mouseLock = true;
         }
-        if (!mouseDown) {
+        if (!md) {
             if (this.drag) {
                 var dd = this.discs[this.drag.i], px = dd.x - m[0], py = dd.y - m[1], pl = Math.hypot(px, py);
                 if (pl > 14) { this.shoot(dd, Math.atan2(py, px), Math.min(1, pl / 220)); return; }
                 this.drag = null;
             }
-            this.mouseLock = false;
+            if (!lanTurn) this.mouseLock = false;
         }
         if (this.drag) { var d2 = this.discs[this.drag.i], qx = d2.x - m[0], qy = d2.y - m[1]; this.aimA = Math.atan2(qy, qx); this.aimP = Math.min(1, Math.hypot(qx, qy) / 220); }
-        }
         // keyboard / pad aiming
         var team = this.turn, mine = this.discs.filter(function(q) { return q.t === team; });
         if (this.sel < 0 || this.discs[this.sel].t !== team) this.sel = this.discs.indexOf(mine[0]);
@@ -284,7 +283,13 @@ var Four = {
         if (Four.mouseMoved && mc >= 0 && mc < this.C && !(this.turn === 1 && Table.lanPid())) this.col = mc;
         var p = this.turn === 0 || tableCfg.vs !== "p2" || !multiplayer ? 0 : 1;
         var L = p ? ULDRleftPressed : WASDleftPressed, R = p ? ULDRrightPressed : WASDrightPressed, F = p ? !!PlayerInput[1].kbShoot : SpacePressed;
-        if (this.turn === 1 && Table.lanPid()) { var nb = Net.peerButtons(Table.lanPid()); L = nb.left; R = nb.right; F = nb.go; }
+        if (this.turn === 1 && Table.lanPid()) {
+            var nb = Net.peerButtons(Table.lanPid()), lx = Net.peerX(Table.lanPid());
+            L = nb.left; R = nb.right; F = nb.go;
+            if (lx.mv && lx.wx >= 0 && lx.wx < this.C) this.col = lx.wx;
+            if (lx.md && !this.lanMd && lx.wx >= 0 && lx.wx < this.C) { this.col = lx.wx; this.play(this.col); }
+            this.lanMd = !!lx.md;
+        }
         var pad = (typeof Pads !== "undefined") ? Pads.state[p] : null;
         if (pad && pad.active) { L = L || pad.left; R = R || pad.right; F = F || pad.shoot; }
         if (L && !this.pL) this.col = Math.max(0, this.col - 1); if (R && !this.pR) this.col = Math.min(this.C - 1, this.col + 1);
@@ -344,7 +349,11 @@ var Hockey = {
             var kx = (WASDrightPressed ? 1 : 0) - (WASDleftPressed ? 1 : 0), ky = (WASDdownPressed ? 1 : 0) - (WASDupPressed ? 1 : 0);
             return [M.x + kx * 14, M.y + ky * 14];
         }
-        if (lan) { var nb = Net.peerButtons(Table.lanPid()); return [M.x + ((nb.right ? 1 : 0) - (nb.left ? 1 : 0)) * 14, M.y + ((nb.down ? 1 : 0) - (nb.up ? 1 : 0)) * 14]; }
+        if (lan) {
+            var lx = Net.peerX(Table.lanPid()), nb = Net.peerButtons(Table.lanPid());
+            if (lx.mv || lx.md) return [lx.wx || 0, lx.wy || 0];
+            return [M.x + ((nb.right ? 1 : 0) - (nb.left ? 1 : 0)) * 14, M.y + ((nb.down ? 1 : 0) - (nb.up ? 1 : 0)) * 14];
+        }
         if (tableCfg.vs === "p2") return [M.x + ((ULDRrightPressed ? 1 : 0) - (ULDRleftPressed ? 1 : 0)) * 14, M.y + ((ULDRdownPressed ? 1 : 0) - (ULDRupPressed ? 1 : 0)) * 14];
         // CPU: guard the goal mouth, strike when the puck is on its half and coming / slow
         var lvl = tableCfg.level, home = [W - 90, Math.max(-this.GOAL / 2, Math.min(this.GOAL / 2, pk.y * 0.7))];
@@ -513,6 +522,13 @@ var Arty = {
         if (L) me.ang = Math.min(178, me.ang + 1); if (R) me.ang = Math.max(2, me.ang - 1);
         if (U) me.pow = Math.min(100, me.pow + 0.6); if (D) me.pow = Math.max(10, me.pow - 0.6);
         // mouse: hold to aim (angle and power follow the pointer), release to fire
+        var lxA = lan ? Net.peerX(Table.lanPid()) : null;
+        if (lan && lxA.md) {
+            var mzL = this.muzzle(this.turn);
+            me.ang = Math.max(2, Math.min(178, Math.round(Math.atan2((lxA.wy || 0) - mzL[1], (lxA.wx || 0) - mzL[0]) * 180 / Math.PI)));
+            me.pow = Math.max(10, Math.min(100, Math.round(Math.hypot((lxA.wx || 0) - mzL[0], (lxA.wy || 0) - mzL[1]) / 5)));
+            this.lanMouseAim = true;
+        } else if (lan && this.lanMouseAim && !lxA.md) { this.lanMouseAim = false; this.fire(); }
         if (!lan && p === 0 && mouseDown) {
             var mz = this.muzzle(this.turn), g = this.geo(), wx = (mouseX - g.x0) / g.s, wy = (g.base - mouseY) / g.s;
             me.ang = Math.max(2, Math.min(178, Math.round(Math.atan2(wy - mz[1], wx - mz[0]) * 180 / Math.PI)));
@@ -666,12 +682,13 @@ var Pool = {
         if (this.phase !== "aim") return;
         if (!this.human(this.turn)) { if (++this.cpuT > 50) this.cpu(); return; }
         if (typeof Net !== "undefined" && Net.role === "client") return;
-        var lanTurn = this.turn === 1 && Table.lanPid(), m = this.toWorld(mouseX, mouseY);
-        if (!lanTurn) {
-            if (mouseDown && !this.drag && Math.hypot(this.cue.x - m[0], this.cue.y - m[1]) < this.R + 30) this.drag = true;
-            if (this.drag) { var qx = this.cue.x - m[0], qy = this.cue.y - m[1]; this.aimA = Math.atan2(qy, qx); this.aimP = Math.min(1, Math.hypot(qx, qy) / 260); }
-            if (!mouseDown && this.drag) { if (this.aimP > 0.05) { this.shoot(this.aimA, this.aimP); return; } this.drag = false; }
-        }
+        var lanTurn = this.turn === 1 && Table.lanPid();
+        var lx = lanTurn ? Net.peerX(Table.lanPid()) : null;
+        var m = lanTurn ? [lx.wx || 0, lx.wy || 0] : this.toWorld(mouseX, mouseY);
+        var md = lanTurn ? !!lx.md : mouseDown;
+        if (md && !this.drag && Math.hypot(this.cue.x - m[0], this.cue.y - m[1]) < this.R + 30) this.drag = true;
+        if (this.drag) { var qx = this.cue.x - m[0], qy = this.cue.y - m[1]; this.aimA = Math.atan2(qy, qx); this.aimP = Math.min(1, Math.hypot(qx, qy) / 260); }
+        if (!md && this.drag) { if (this.aimP > 0.05) { this.shoot(this.aimA, this.aimP); return; } this.drag = false; }
         var ks = Flick.keys(this.turn);
         if (ks.left) this.aimA -= 0.025; if (ks.right) this.aimA += 0.025;
         if (ks.up) this.aimP = Math.min(1, this.aimP + 0.012); if (ks.down) this.aimP = Math.max(0.05, this.aimP - 0.012);
@@ -753,8 +770,8 @@ var Darts = {
             return;
         }
         if (typeof Net !== "undefined" && Net.role === "client") return;
-        var lan = this.turn === 1 && Table.lanPid(), inp = lan ? ((Net.peers[lan] && Net.peers[lan].inp) || {}) : null;
-        var hold = lan ? !!(inp.sh || inp.jt) : (this.turn === 0 || tableCfg.vs !== "p2" ? (SpacePressed || mouseDown) : !!PlayerInput[1].kbShoot);
+        var lan = this.turn === 1 && Table.lanPid(), inp = lan ? ((Net.peers[lan] && Net.peers[lan].inp) || {}) : null, lx = lan ? Net.peerX(lan) : null;
+        var hold = lan ? !!(inp.sh || inp.jt || (lx && lx.md)) : (this.turn === 0 || tableCfg.vs !== "p2" ? (SpacePressed || mouseDown) : !!PlayerInput[1].kbShoot);
         // hold to steady (up to ~1 s), release to throw; holding too long makes your hand shake
         if (hold) { this.held = (this.held || 0) + 1; if (this.held < 60) this.steady = 1; else { this.steady = 0; this.tired = Math.min(1, (this.held - 60) / 60); } }
         else if (this.held) { this.held = 0; var a2 = this.aim(); this.throwAt(a2[0], a2[1]); }
@@ -848,6 +865,13 @@ var WordHunt = {
         if (mouseDown && !this.drag && c) this.drag = { a: c, b: c };
         if (this.drag && c) this.drag.b = c;
         if (!mouseDown && this.drag) { if (!this.claim(0, this.drag.a, this.drag.b) && (this.drag.a[0] !== this.drag.b[0] || this.drag.a[1] !== this.drag.b[1])) { this.msg = "Not a hidden word"; this.msgT = 40; } this.drag = null; }
+        // mouse (BLUE over LAN): drag from the first letter to the last
+        if (Table.lanPid()) {
+            var lx = Net.peerX(Table.lanPid()), lc = (lx.wx >= 0 && lx.wy >= 0) ? [lx.wx, lx.wy] : null;
+            if (lx.md && !this.lanDrag && lc) this.lanDrag = { a: lc, b: lc };
+            if (this.lanDrag && lc) this.lanDrag.b = lc;
+            if (!lx.md && this.lanDrag) { if (!this.claim(1, this.lanDrag.a, this.lanDrag.b) && (this.lanDrag.a[0] !== this.lanDrag.b[0] || this.lanDrag.a[1] !== this.lanDrag.b[1])) { this.msg = "Not a hidden word"; this.msgT = 40; } this.lanDrag = null; }
+        }
         // keyboard cursors: RED always, BLUE in pass-and-play or over LAN
         for (let t = 0; t < 2; t++) {
             if (t === 1 && tableCfg.vs === "cpu" && !Table.lanPid()) continue;
@@ -889,10 +913,10 @@ var Table = {
     lanPid: function() { if (typeof Net === "undefined" || Net.role !== "host") return null; for (var k in Net.peers) return Net.peers[k].pid; return null; },
     netState: function() {
         return { g: tableCfg.game, vs: tableCfg.vs, lan: !!Table.lanPid(), lanName: Table.lanPid() ? Net.peers[Table.lanPid()].name : "",
-            f: { d: Flick.discs.map(function(q) { return [Math.round(q.x), Math.round(q.y), q.t]; }), b: [Math.round(Flick.ball.x), Math.round(Flick.ball.y)], turn: Flick.turn, phase: Flick.phase, score: Flick.score, sel: Flick.sel, aimA: Flick.aimA, aimP: Flick.aimP, msg: Flick.msg, msgT: Flick.msgT, win: Flick.winner },
+            f: { d: Flick.discs.map(function(q) { return [Math.round(q.x), Math.round(q.y), q.t]; }), b: [Math.round(Flick.ball.x), Math.round(Flick.ball.y)], turn: Flick.turn, phase: Flick.phase, score: Flick.score, sel: Flick.sel, drag: Flick.drag ? Flick.drag.i : -1, aimA: Flick.aimA, aimP: Flick.aimP, msg: Flick.msg, msgT: Flick.msgT, win: Flick.winner },
             q: { g: Four.g, turn: Four.turn, over: Four.over, win: Four.win, line: Four.line, col: Four.col },
             a: Arty.h ? { h: Arty.h.map(Math.round), k: Arty.tank.map(function(T) { return [T.x, T.hp, Math.round(T.ang), Math.round(T.pow), T.hit || 0, T.lastDmg || 0]; }), t: Arty.turn, s: Arty.shell ? [Math.round(Arty.shell.x), Math.round(Arty.shell.y)] : null, w: Arty.wind, o: Arty.over, win: Arty.win, b: Arty.boom ? [Arty.boom.x, Arty.boom.y, Arty.boom.t] : null } : null,
-            p: Pool.balls ? { b: Pool.all().map(function(b) { return [Math.round(b.x), Math.round(b.y), b.gone ? 1 : 0]; }), s: Pool.score, t: Pool.turn, ph: Pool.phase, a: Pool.aimA, pw: Pool.aimP, m: Pool.msg, mt: Pool.msgT, w: Pool.win } : null,
+            p: Pool.balls ? { b: Pool.all().map(function(b) { return [Math.round(b.x), Math.round(b.y), b.gone ? 1 : 0]; }), s: Pool.score, t: Pool.turn, ph: Pool.phase, drag: Pool.drag ? 1 : 0, a: Pool.aimA, pw: Pool.aimP, m: Pool.msg, mt: Pool.msgT, w: Pool.win } : null,
             d: Darts.score ? { s: Darts.score, t: Darts.turn, r: Darts.round, n: Darts.dart, h: Darts.hits.map(function(q) { return [Math.round(q[0]), Math.round(q[1]), q[2]]; }), tt: Darts.t, st: Darts.steady, ti: Darts.tired, o: Darts.over, w: Darts.win, f: Darts.flash, wa: Darts.wait } : null,
             wh: WordHunt.g && tableCfg.game === "hunt" ? { g: WordHunt.g.map(function(r) { return r.join(""); }), w: WordHunt.words, s: WordHunt.score, c: WordHunt.cur, mk: WordHunt.mark, o: WordHunt.over, wi: WordHunt.win, m: WordHunt.msg, mt: WordHunt.msgT } : null,
             h: { m: Hockey.m.map(function(M) { return [Math.round(M.x), Math.round(M.y)]; }), p: [Math.round(Hockey.puck.x), Math.round(Hockey.puck.y)], s: Hockey.score, ph: Hockey.phase, w: Hockey.winner, msg: Hockey.msg, mt: Hockey.msgT } };
@@ -902,10 +926,10 @@ var Table = {
         var F = m.f;
         if (!Flick.discs.length) Flick.kickoff(0);
         F.d.forEach(function(a, i) { if (Flick.discs[i]) { Flick.discs[i].x = a[0]; Flick.discs[i].y = a[1]; Flick.discs[i].t = a[2]; } });
-        Flick.ball.x = F.b[0]; Flick.ball.y = F.b[1]; Flick.turn = F.turn; Flick.phase = F.phase; Flick.score = F.score; Flick.sel = F.sel; Flick.aimA = F.aimA; Flick.aimP = F.aimP; Flick.msg = F.msg; Flick.msgT = F.msgT; Flick.winner = F.win;
+        Flick.ball.x = F.b[0]; Flick.ball.y = F.b[1]; Flick.turn = F.turn; Flick.phase = F.phase; Flick.score = F.score; Flick.sel = F.sel; Flick.drag = (F.drag >= 0) ? { i: F.drag } : null; Flick.aimA = F.aimA; Flick.aimP = F.aimP; Flick.msg = F.msg; Flick.msgT = F.msgT; Flick.winner = F.win;
         if (m.h) { if (!Hockey.puck) Hockey.reset(); m.h.m.forEach(function(a, i) { Hockey.m[i].x = a[0]; Hockey.m[i].y = a[1]; }); Hockey.puck.x = m.h.p[0]; Hockey.puck.y = m.h.p[1]; Hockey.score = m.h.s; Hockey.phase = m.h.ph; Hockey.winner = m.h.w; Hockey.msg = m.h.msg; Hockey.msgT = m.h.mt; }
         if (m.a) { var A = m.a; if (!Arty.h) Arty.reset(0); Arty.h = A.h; A.k.forEach(function(k, i) { var T = Arty.tank[i]; T.x = k[0]; T.hp = k[1]; T.ang = k[2]; T.pow = k[3]; T.hit = k[4]; T.lastDmg = k[5]; }); Arty.turn = A.t; Arty.shell = A.s ? { x: A.s[0], y: A.s[1] } : null; Arty.wind = A.w; Arty.over = A.o; Arty.win = A.win; Arty.boom = A.b ? { x: A.b[0], y: A.b[1], t: A.b[2] } : null; if (Arty.shell) Arty.trail.push([Arty.shell.x, Arty.shell.y]); else Arty.trail = Arty.trail.slice(-200); }
-        if (m.p) { if (!Pool.balls) Pool.reset(0); var PB = Pool.all(); m.p.b.forEach(function(q, i) { if (PB[i]) { PB[i].x = q[0]; PB[i].y = q[1]; PB[i].gone = !!q[2]; } }); Pool.score = m.p.s; Pool.turn = m.p.t; Pool.phase = m.p.ph; Pool.aimA = m.p.a; Pool.aimP = m.p.pw; Pool.msg = m.p.m; Pool.msgT = m.p.mt; Pool.win = m.p.w; }
+        if (m.p) { if (!Pool.balls) Pool.reset(0); var PB = Pool.all(); m.p.b.forEach(function(q, i) { if (PB[i]) { PB[i].x = q[0]; PB[i].y = q[1]; PB[i].gone = !!q[2]; } }); Pool.score = m.p.s; Pool.turn = m.p.t; Pool.phase = m.p.ph; Pool.drag = !!m.p.drag; Pool.aimA = m.p.a; Pool.aimP = m.p.pw; Pool.msg = m.p.m; Pool.msgT = m.p.mt; Pool.win = m.p.w; }
         if (m.d) { if (!Darts.score) Darts.reset(0); var D = m.d; Darts.score = D.s; Darts.turn = D.t; Darts.round = D.r; Darts.dart = D.n; Darts.hits = D.h; Darts.t = D.tt; Darts.steady = D.st; Darts.tired = D.ti; Darts.over = D.o; Darts.win = D.w; Darts.flash = D.f; Darts.wait = D.wa; }
         if (m.wh) { var H2 = m.wh; WordHunt.g = H2.g.map(function(r) { return r.split(""); }); WordHunt.words = H2.w; WordHunt.score = H2.s; WordHunt.cur = H2.c; WordHunt.mark = H2.mk; WordHunt.over = H2.o; WordHunt.win = H2.wi; WordHunt.msg = H2.m; WordHunt.msgT = H2.mt; WordHunt.drag = null; }
         var Q = m.q; Four.g = Q.g; Four.turn = Q.turn; Four.over = Q.over; Four.win = Q.win; Four.line = Q.line; Four.col = Q.col; Four.drop = null;
@@ -952,7 +976,20 @@ GameModes.register({
         if (tableCfg.game === "four") Four.draw(); else if (tableCfg.game === "hockey") Hockey.draw(); else if (tableCfg.game === "arty") Arty.draw(); else if (tableCfg.game === "pool") Pool.draw(); else if (tableCfg.game === "darts") Darts.draw(); else if (tableCfg.game === "hunt") WordHunt.draw(); else Flick.draw();
         uiPanel(14, 10, 300, 48, "#22c55e");
         uiText("TABLE GAMES  ·  you are BLUE", 28, 36, 16, "#86efac", "left", "900");
-        uiText("Four in a Row: ←/→ + Space   ·   Flick: ←/→ aim, ↑/↓ power, E next disc, Space shoot", 28, 52, 10, "#cbd5e1", "left", "700");
+        uiText("Click & drag with mouse  ·  or ←/→ aim, ↑/↓ power, Space shoot", 28, 52, 10, "#cbd5e1", "left", "700");
+    },
+    netInput: function() {
+        var g = tableCfg.game, md = mouseDown ? 1 : 0, wx = 0, wy = 0, mv = 0;
+        var lm = Table._lastCliM || [mouseX, mouseY];
+        mv = Math.hypot(mouseX - lm[0], mouseY - lm[1]) > 2 ? 1 : 0;
+        Table._lastCliM = [mouseX, mouseY];
+        if (g === "flick") { var w = Flick.toWorld(mouseX, mouseY); wx = Math.round(w[0]); wy = Math.round(w[1]); }
+        else if (g === "pool") { var w2 = Pool.toWorld(mouseX, mouseY); wx = Math.round(w2[0]); wy = Math.round(w2[1]); }
+        else if (g === "hockey") { var w3 = Hockey.toWorld(mouseX, mouseY); wx = Math.round(w3[0]); wy = Math.round(w3[1]); }
+        else if (g === "arty") { var ag = Arty.geo(); wx = Math.round((mouseX - ag.x0) / ag.s); wy = Math.round((ag.base - mouseY) / ag.s); }
+        else if (g === "four") { var fg = Four.geo(); wx = Math.floor((mouseX - fg.x0) / fg.cs); }
+        else if (g === "hunt") { var hc = WordHunt.cellAt(mouseX, mouseY); if (hc) { wx = hc[0]; wy = hc[1]; } else { wx = -1; wy = -1; } }
+        return { g: g, wx: wx, wy: wy, md: md, mv: mv };
     },
     netState: function() { return Table.netState(); },
     applyNetState: function(m) { Table.apply(m); },

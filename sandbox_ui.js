@@ -44,6 +44,14 @@ var SandboxUI = {
         return this.isActive() && GameModes.current.id === "sandbox";
     },
 
+    sendNet: function(act) {
+        if (typeof Net !== "undefined" && Net.role === "client") {
+            Net.send({ t: "sb", act: act });
+            return true;
+        }
+        return false;
+    },
+
     init: function() {
         if (this._root) return;
         var style = document.createElement("style");
@@ -160,7 +168,9 @@ var SandboxUI = {
                     return;
                 }
                 if (self.tool === "spawn" && self.selectedCatalogId && typeof UniversalSpawner !== "undefined") {
-                    UniversalSpawner.spawnById(self.selectedCatalogId, wpos.x, wpos.y);
+                    if (!self.sendNet({ k: "spawn", id: self.selectedCatalogId, x: wpos.x, y: wpos.y })) {
+                        UniversalSpawner.spawnById(self.selectedCatalogId, wpos.x, wpos.y);
+                    }
                     self.render();
                     return;
                 }
@@ -176,7 +186,9 @@ var SandboxUI = {
                         return;
                     }
                     if (self.tool === "delete") {
-                        if (hitEnt.ent !== redGuy) hitEnt.ent.dead = true;
+                        if (hitEnt.ent !== redGuy) {
+                            if (!self.sendNet({ k: "delObj", nid: hitEnt.ent._nid })) hitEnt.ent.dead = true;
+                        }
                         self.selectedEnt = null;
                         self.piePos = null;
                         self.render();
@@ -200,8 +212,10 @@ var SandboxUI = {
                 }
                 if (hitObj) {
                     if (self.tool === "delete") {
-                        hitObj.dead = true;
-                        if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                        if (!self.sendNet({ k: "delObj", nid: hitObj._nid })) {
+                            hitObj.dead = true;
+                            if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                        }
                         self.selectedObj = null;
                     } else {
                         self.selectedObj = hitObj;
@@ -268,13 +282,17 @@ var SandboxUI = {
                             ? { name: "Wall", texture: "castle_stone", kind: "wall" }
                             : { name: "Floor", texture: "grass_dirt", kind: "block" });
                     var col = self.tool === "drawPlat" ? "#8b6b4a" : (self.tool === "drawWall" ? "#475569" : "#4d7c36");
-                    self.selectedObj = GameObject.addBox(cx, cy, bw, bh, col, opts);
-                    if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                    if (!self.sendNet({ k: "addBox", x: cx, y: cy, w: bw, h: bh, col: col, opts: opts })) {
+                        self.selectedObj = GameObject.addBox(cx, cy, bw, bh, col, opts);
+                        if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                    }
                     self.dragDraw = null;
                     self.render();
                 }
                 if (self.dragMove) {
-                    if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                    if (self.dragMove.obj && !self.sendNet({ k: "moveObj", nid: self.dragMove.obj._nid, x: self.dragMove.obj.x, y: self.dragMove.obj.y })) {
+                        if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                    }
                     self.dragMove = null;
                     self.render();
                 }
@@ -380,13 +398,16 @@ var SandboxUI = {
         el.querySelectorAll("[data-rfling]").forEach(function(b) {
             b.onclick = function() {
                 var item = list[Number(b.dataset.rfling)];
-                if (item && item.ent) item.ent.yspeed = 26;
+                if (item && item.ent && !SandboxUI.sendNet({ k: "fling", nid: item.ent._nid })) item.ent.yspeed = 26;
             };
         });
         el.querySelectorAll("[data-rdel]").forEach(function(b) {
             b.onclick = function() {
                 var item = list[Number(b.dataset.rdel)];
-                if (item && item.ent && item.ent !== redGuy) { item.ent.dead = true; SandboxUI.render(); }
+                if (item && item.ent && item.ent !== redGuy) {
+                    if (!SandboxUI.sendNet({ k: "delObj", nid: item.ent._nid })) item.ent.dead = true;
+                    SandboxUI.render();
+                }
             };
         });
     },
@@ -497,19 +518,21 @@ var SandboxUI = {
         var ts = typeof devOpts !== "undefined" ? (devOpts.timeScale || 1) : 1;
         var isPaused = typeof paused !== "undefined" && paused;
         var tabs = [
-            ["controls", "🎛 Controls"],
-            ["inspect", "🔍 Inspect"],
-            ["tools", "🛠 Tools"],
-            ["games", "🕹 Games"]
+            ["controls", "🎛 Ctrl"],
+            ["inspect", "🔍 Insp"],
+            ["tools", "🛠 Tool"],
+            ["games", "🕹 Game"],
+            ["admin", "👑 Admin"]
         ];
 
         var body = "";
         if (this.sideTab === "controls") body = this.renderSideControlsHTML(m);
         else if (this.sideTab === "inspect") body = this.renderSideInspectHTML();
         else if (this.sideTab === "tools") body = this.renderSideToolsHTML(sb);
+        else if (this.sideTab === "admin") body = this.renderAdminHTML();
         else body = this.renderSideGamesHTML(m);
 
-        return '<div class="sb-pe sb-glass" style="position:fixed;top:' + topY + 'px;left:12px;bottom:16px;width:282px;max-width:86vw;border-radius:14px;display:flex;flex-direction:column;overflow:hidden">' +
+        return '<div class="sb-pe sb-glass" style="position:fixed;top:' + topY + 'px;left:12px;bottom:16px;width:296px;max-width:88vw;border-radius:14px;display:flex;flex-direction:column;overflow:hidden">' +
             // Header
             '<div style="padding:10px 10px 8px;border-bottom:1px solid rgba(148,163,184,0.18);background:rgba(15,23,42,0.65)">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">' +
@@ -525,14 +548,56 @@ var SandboxUI = {
             }).join("") +
             '</div>' +
             // Tabs
-            '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:8px">' +
+            '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:8px">' +
             tabs.map(function(t) {
-                return '<button class="sb-btn ' + (self.sideTab === t[0] ? 'active' : '') + '" style="padding:5px 2px;font-size:11px" data-stab="' + t[0] + '">' + t[1] + '</button>';
+                return '<button class="sb-btn ' + (self.sideTab === t[0] ? 'active' : '') + '" style="padding:5px 2px;font-size:10px" data-stab="' + t[0] + '">' + t[1] + '</button>';
             }).join("") +
             '</div></div>' +
             // Scrollable Content
             '<div class="sb-scroll" style="flex:1;overflow-y:auto;padding:10px">' + body + '</div>' +
             '</div>';
+    },
+
+    renderAdminHTML: function() {
+        var isGod = !!(typeof godMode !== "undefined" && godMode) || !!(typeof arenaCheats !== "undefined" && arenaCheats.god) || !!(typeof sandboxCfg !== "undefined" && sandboxCfg.invincible);
+        var unlimAmmo = typeof settings !== "undefined" && settings.ammo === "unlimited";
+        var grav = typeof devOpts !== "undefined" ? (devOpts.gravityMult || 1) : 1;
+        var isClient = typeof Net !== "undefined" && Net.role === "client";
+        var isHost = typeof Net !== "undefined" && Net.role === "host";
+        var html = '<div class="sb-sec">👑 Admin Commands</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px">' +
+            '<button class="sb-btn" id="sb-adm-boss">👑 Spawn Boss</button>' +
+            '<button class="sb-btn" id="sb-adm-horde">🧟 Summon Horde</button>' +
+            '<button class="sb-btn" id="sb-adm-heal">❤ Heal All</button>' +
+            '<button class="sb-btn" id="sb-adm-respawn">🔄 Respawn All</button>' +
+            '<button class="sb-btn" id="sb-adm-clearfoe">🧹 Clear Foes</button>' +
+            '<button class="sb-btn" style="color:#f87171" id="sb-adm-clearworld">💥 Clear World</button>' +
+            '</div>' +
+            '<div class="sb-sec">Global Rules</div><div class="sb-card">' +
+            '<label class="sb-row" style="cursor:pointer"><span>🛡 God Mode (All)</span><input type="checkbox" id="sb-adm-god" ' + (isGod ? 'checked' : '') + '></label>' +
+            '<label class="sb-row" style="cursor:pointer"><span>∞ Unlimited Ammo</span><input type="checkbox" id="sb-adm-ammo" ' + (unlimAmmo ? 'checked' : '') + '></label>' +
+            '<div style="margin-bottom:2px"><div class="sb-row" style="margin-bottom:2px"><span>🌍 Gravity</span><strong>' + grav.toFixed(1) + 'x</strong></div>' +
+            '<input type="range" id="sb-adm-grav" min="0" max="2.5" step="0.1" value="' + grav + '" style="width:100%"></div>' +
+            '</div>';
+        if (isHost || isClient) {
+            var plist = isHost ? Net.peerList() : (Net.lobbyPlayers || []);
+            html += '<div class="sb-sec">📡 LAN Players (' + (plist.length + (isHost ? 1 : 0)) + ')</div><div class="sb-card">';
+            if (isHost) html += '<div class="sb-row"><span><strong>You (Host)</strong></span><span style="color:#4ade80">Host</span></div>';
+            if (plist.length) {
+                html += plist.map(function(p) {
+                    return '<div class="sb-row"><span>' + (p.name || 'Player') + '</span>' +
+                        (p.pid !== undefined ? '<button class="sb-btn" style="padding:2px 6px;font-size:10px" data-admresp="' + p.pid + '">Respawn</button>' : '') +
+                        '</div>';
+                }).join("");
+            } else if (!isHost) {
+                html += '<div style="color:#94a3b8;font-size:11px">Connected to ' + (Net.hostName || 'Host') + '</div>';
+            }
+            if (isClient) {
+                html += '<button class="sb-btn" style="width:100%;margin-top:6px;color:#f87171" id="sb-adm-leave">📡 Leave LAN Game</button>';
+            }
+            html += '</div>';
+        }
+        return html;
     },
 
     renderSideControlsHTML: function(m) {
@@ -867,7 +932,8 @@ var SandboxUI = {
 
     renderPauseHTML: function() {
         var self = this;
-        var tabs = [["creative", "Creative Rules"], ["cheats", "Cheats & Physics"], ["entities", "Entity Controls"], ["arcade", "Switch Game"]];
+        var isClient = typeof Net !== "undefined" && Net.role === "client";
+        var tabs = [["creative", "Creative Rules"], ["cheats", "Cheats & Physics"], ["entities", "Entity Controls"], ["arcade", "Switch Game"], ["admin", "👑 Admin"]];
         var body = "";
         if (this.pauseTab === "creative") {
             body = '<label style="display:flex;justify-content:space-between;padding:8px;background:rgba(15,23,42,0.6);border-radius:8px;margin-bottom:6px"><span>Floor Grid</span><input type="checkbox" id="sb-p-floor" ' + (sandboxCfg.showFloor ? "checked" : "") + '></label>' +
@@ -881,21 +947,25 @@ var SandboxUI = {
         } else if (this.pauseTab === "entities") {
             body = '<button class="sb-btn" style="width:100%;margin-bottom:6px" id="sb-p-eject">↩ Eject to Hero</button>' +
                 '<button class="sb-btn" style="width:100%" id="sb-p-roster">👥 Open Entity Roster</button>';
+        } else if (this.pauseTab === "admin") {
+            body = this.renderAdminHTML();
         } else {
-            body = '<button class="sb-btn active" style="width:100%;margin-bottom:8px" id="sb-p-hub">🕹 Open Arcade Hub</button>' +
-                '<button class="sb-btn" style="width:100%" id="sb-p-reset">✨ Reset Blank World</button>';
+            body = '<button class="sb-btn active" style="width:100%;margin-bottom:8px" id="sb-p-hub">🕹 ' + (isClient ? 'Open Games List' : 'Open Arcade Hub') + '</button>' +
+                '<button class="sb-btn" style="width:100%;margin-bottom:8px" id="sb-p-reset">✨ Reset Blank World</button>' +
+                (isClient ? '<button class="sb-btn" style="width:100%;color:#f87171" id="sb-p-leave">📡 Leave LAN Game</button>' : '');
         }
 
         return '<div class="sb-pe" style="position:fixed;inset:0;background:rgba(2,6,23,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center">' +
-            '<div class="sb-glass" style="width:520px;max-width:94vw;min-height:300px;border-radius:16px;display:grid;grid-template-columns:160px 1fr;overflow:hidden">' +
+            '<div class="sb-glass" style="width:560px;max-width:94vw;min-height:330px;max-height:85vh;border-radius:16px;display:grid;grid-template-columns:165px 1fr;overflow:hidden">' +
             '<div style="background:rgba(15,23,42,0.9);padding:12px;border-right:1px solid rgba(148,163,184,0.2);display:flex;flex-direction:column;gap:4px">' +
             '<div style="font-weight:900;color:#38bdf8;margin-bottom:6px">PAUSED</div>' +
             tabs.map(function(t) {
                 return '<button class="sb-btn ' + (self.pauseTab === t[0] ? 'active' : '') + '" style="text-align:left" data-ptab="' + t[0] + '">' + t[1] + '</button>';
             }).join("") +
-            '<button class="sb-btn" style="margin-top:auto" id="sb-p-resume">▶ Resume</button>' +
+            (isClient ? '<button class="sb-btn" style="margin-top:auto;color:#f87171" id="sb-p-leave2">📡 Leave LAN</button>' : '') +
+            '<button class="sb-btn" style="' + (isClient ? 'margin-top:4px' : 'margin-top:auto') + '" id="sb-p-resume">▶ Resume</button>' +
             '</div>' +
-            '<div style="padding:16px">' + body + '</div>' +
+            '<div class="sb-scroll" style="padding:16px;overflow-y:auto">' + body + '</div>' +
             '</div></div>';
     },
 
@@ -908,11 +978,14 @@ var SandboxUI = {
         if (el("sb-top-roster")) el("sb-top-roster").onclick = function() { self.rosterOpen = !self.rosterOpen; self.render(); };
         if (el("sb-top-floor")) el("sb-top-floor").onclick = function() {
             sandboxCfg.showFloor = !sandboxCfg.showFloor; saveSandboxCfg();
-            if (typeof SandboxFloor !== "undefined") SandboxFloor.sync();
+            if (!self.sendNet({ k: "floor", v: sandboxCfg.showFloor }) && typeof SandboxFloor !== "undefined") SandboxFloor.sync();
             self.render();
         };
         if (el("sb-top-eject")) el("sb-top-eject").onclick = function() { EntityTakeover.release(false); self.render(); };
-        if (el("sb-top-pause")) el("sb-top-pause").onclick = function() { togglePause(); };
+        if (el("sb-top-pause")) el("sb-top-pause").onclick = function() {
+            if (typeof Net !== "undefined" && Net.role === "client") { self.pauseOpen = !self.pauseOpen; self.render(); }
+            else togglePause();
+        };
 
         // Universal Side Handle & Drawer
         if (el("sb-side-open")) el("sb-side-open").onclick = function() { self.sideOpen = true; self.render(); };
@@ -925,7 +998,12 @@ var SandboxUI = {
         if (el("sb-quick-play")) el("sb-quick-play").onclick = function() { self.tool = "play"; self.render(); };
 
         // Time Scale & Pause/Step
-        if (el("sb-tm-pause")) el("sb-tm-pause").onclick = function() { if (typeof togglePause === "function") togglePause(); self.render(); };
+        if (el("sb-tm-pause")) el("sb-tm-pause").onclick = function() {
+            if (!self.sendNet({ k: "pause", v: !(typeof paused !== "undefined" && paused) })) {
+                if (typeof togglePause === "function") togglePause();
+            }
+            self.render();
+        };
         if (el("sb-tm-step")) el("sb-tm-step").onclick = function() {
             if (typeof paused !== "undefined" && !paused && typeof openPause === "function") openPause(false);
             if (typeof frame === "function") frame();
@@ -933,7 +1011,11 @@ var SandboxUI = {
             self.render();
         };
         this._root.querySelectorAll("[data-ts]").forEach(function(b) {
-            b.onclick = function() { devOpts.timeScale = Number(b.dataset.ts); self.render(); };
+            b.onclick = function() {
+                devOpts.timeScale = Number(b.dataset.ts);
+                self.sendNet({ k: "ts", v: devOpts.timeScale });
+                self.render();
+            };
         });
         this._root.querySelectorAll("[data-stab]").forEach(function(b) {
             b.onclick = function() { self.sideTab = b.dataset.stab; self.render(); };
@@ -942,12 +1024,13 @@ var SandboxUI = {
         // Controls Tab: Game Tunables
         var gRows = (typeof GameTuning !== "undefined") ? GameTuning.rows() : [];
         this._root.querySelectorAll("[data-gtune]").forEach(function(inp) {
-            var r = gRows[Number(inp.dataset.gtune)];
+            var idx = Number(inp.dataset.gtune);
+            var r = gRows[idx];
             if (!r || !r.set) return;
             var handler = function() {
-                if (r.type === "toggle") r.set(inp.checked);
-                else if (r.type === "choice") r.set(isNaN(Number(inp.value)) ? inp.value : Number(inp.value));
-                else r.set(Number(inp.value));
+                var val = r.type === "toggle" ? inp.checked : (r.type === "choice" ? (isNaN(Number(inp.value)) ? inp.value : Number(inp.value)) : Number(inp.value));
+                r.set(val);
+                self.sendNet({ k: "tune", idx: idx, val: val });
                 if (inp.type === "range" && inp.previousElementSibling) {
                     var strong = inp.previousElementSibling.querySelector("strong");
                     if (strong) strong.textContent = r.get();
@@ -964,13 +1047,16 @@ var SandboxUI = {
             if (typeof arenaCheats !== "undefined") arenaCheats.god = v;
             if (typeof sandboxCfg !== "undefined") sandboxCfg.invincible = v;
             if (typeof creativeCfg !== "undefined") creativeCfg.invincible = v;
+            self.sendNet({ k: "god", v: v });
         };
         if (el("sb-u-ammo")) el("sb-u-ammo").onchange = function(e) {
             if (typeof settings !== "undefined") { settings.ammo = e.target.checked ? "unlimited" : "limited"; if (typeof saveSettings === "function") saveSettings(); }
+            self.sendNet({ k: "ammo", v: e.target.checked });
         };
         if (el("sb-u-hb")) el("sb-u-hb").onchange = function(e) { devOpts.showHitboxes = e.target.checked; };
         if (el("sb-u-grav")) el("sb-u-grav").oninput = function(e) {
             devOpts.gravityMult = Number(e.target.value);
+            self.sendNet({ k: "grav", v: devOpts.gravityMult });
             var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong");
             if (st) st.textContent = devOpts.gravityMult.toFixed(1) + "x";
         };
@@ -979,14 +1065,19 @@ var SandboxUI = {
             var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong");
             if (st) st.textContent = userZoom.toFixed(2) + "x";
         };
-        if (el("sb-act-heal") && typeof DevActions !== "undefined") el("sb-act-heal").onclick = function() { DevActions.healAll(); };
-        if (el("sb-act-clear") && typeof DevActions !== "undefined") el("sb-act-clear").onclick = function() { DevActions.clearEnemies(); };
+        if (el("sb-act-heal") && typeof DevActions !== "undefined") el("sb-act-heal").onclick = function() { if (!self.sendNet({ k: "healAll" })) DevActions.healAll(); };
+        if (el("sb-act-clear") && typeof DevActions !== "undefined") el("sb-act-clear").onclick = function() { if (!self.sendNet({ k: "clearEnemies" })) DevActions.clearEnemies(); };
         if (el("sb-act-restart")) el("sb-act-restart").onclick = function() {
-            if (GameModes.has("onRestart")) GameModes.call("onRestart");
-            else if (typeof resetGame === "function") resetGame();
+            if (!self.sendNet({ k: "restart" })) {
+                if (GameModes.has("onRestart")) GameModes.call("onRestart");
+                else if (typeof resetGame === "function") resetGame();
+            }
             self.render();
         };
-        if (el("sb-act-hub")) el("sb-act-hub").onclick = function() { if (typeof Hub !== "undefined") Hub.openHub(false); };
+        if (el("sb-act-hub")) el("sb-act-hub").onclick = function() {
+            if (typeof Net !== "undefined" && Net.role === "client") { self.sideOpen = true; self.sideTab = "games"; self.render(); }
+            else if (typeof Hub !== "undefined") Hub.openHub(false);
+        };
 
         // Inspect Tab
         if (el("sb-insp-pick")) el("sb-insp-pick").onclick = function() {
@@ -1131,6 +1222,11 @@ var SandboxUI = {
         }
         this._root.querySelectorAll("[data-gmlaunch]").forEach(function(b) {
             b.onclick = function() {
+                if (self.sendNet({ k: "launch", id: b.dataset.gmlaunch })) {
+                    self.pauseOpen = false;
+                    self.render();
+                    return;
+                }
                 if (typeof paused !== "undefined" && paused && typeof closePause === "function") closePause();
                 GameModes.launch(b.dataset.gmlaunch);
                 self.render();
@@ -1140,14 +1236,19 @@ var SandboxUI = {
         // Sandbox Right Inspector
         if (el("sb-insp-close")) el("sb-insp-close").onclick = function() { self.selectedObj = null; self.render(); };
         if (el("sb-insp-del") && self.selectedObj) el("sb-insp-del").onclick = function() {
-            self.selectedObj.dead = true; self.selectedObj = null;
-            if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            if (!self.sendNet({ k: "delObj", nid: self.selectedObj._nid })) {
+                self.selectedObj.dead = true;
+                if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            }
+            self.selectedObj = null;
             self.render();
         };
         if (el("sb-insp-dup") && self.selectedObj) el("sb-insp-dup").onclick = function() {
             var o = self.selectedObj;
-            GameObject.addBox(o.x + 50, o.y + 30, o.w || o.s1 || 80, o.h || o.s2 || 80, o.color || "#64748b", { name: o.name, texture: o.texture, kind: o.kind });
-            if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            if (!self.sendNet({ k: "dupObj", nid: o._nid })) {
+                GameObject.addBox(o.x + 50, o.y + 30, o.w || o.s1 || 80, o.h || o.s2 || 80, o.color || "#64748b", { name: o.name, texture: o.texture, kind: o.kind });
+                if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            }
             self.render();
         };
         ["ix", "iy", "iw", "ih"].forEach(function(k) {
@@ -1155,11 +1256,14 @@ var SandboxUI = {
             if (inp && self.selectedObj) inp.onchange = function() {
                 var val = Number(inp.value);
                 if (!isNaN(val)) {
-                    if (k === "ix") self.selectedObj.x = val;
-                    if (k === "iy") self.selectedObj.y = val;
-                    if (k === "iw") self.selectedObj.w = Math.max(10, val);
-                    if (k === "ih") self.selectedObj.h = Math.max(10, val);
-                    if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                    var prop = k.slice(1);
+                    if (prop === "w" || prop === "h") val = Math.max(10, val);
+                    self.selectedObj[prop] = val;
+                    var msg = { k: "moveObj", nid: self.selectedObj._nid };
+                    msg[prop] = val;
+                    if (!self.sendNet(msg)) {
+                        if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                    }
                 }
             };
         });
@@ -1169,20 +1273,30 @@ var SandboxUI = {
             var types = ["NORMAL", "LEAPER", "TANK", "KNIGHT", "MAGE", "BOSS_KING"];
             var pick = types[Math.floor(Math.random() * types.length)];
             var ref = redGuy || { x: 0, y: 120 };
-            if (typeof spawnZombie === "function") spawnZombie(pick, ref.x + (Math.random() - 0.5) * 300, ref.y + 120);
+            var sx = ref.x + (Math.random() - 0.5) * 300, sy = ref.y + 120;
+            if (!self.sendNet({ k: "spawnZombie", pick: pick, x: sx, y: sy })) {
+                if (typeof spawnZombie === "function") spawnZombie(pick, sx, sy);
+            }
             self.render();
         };
 
         // Pie Ring
         if (el("sb-pie-pos")) el("sb-pie-pos").onclick = function() { EntityTakeover.possess(self.selectedEnt.ent); self.piePos = null; self.render(); };
-        if (el("sb-pie-fling")) el("sb-pie-fling").onclick = function() { self.selectedEnt.ent.yspeed = 26; self.piePos = null; self.render(); };
+        if (el("sb-pie-fling")) el("sb-pie-fling").onclick = function() {
+            if (!self.sendNet({ k: "fling", nid: self.selectedEnt.ent._nid })) self.selectedEnt.ent.yspeed = 26;
+            self.piePos = null; self.render();
+        };
         if (el("sb-pie-clone")) el("sb-pie-clone").onclick = function() {
             var e = self.selectedEnt.ent;
-            if (typeof spawnZombie === "function") spawnZombie(e.power || "NORMAL", e.x + 60, e.y + 30);
+            if (!self.sendNet({ k: "spawnZombie", pick: e.power || "NORMAL", x: e.x + 60, y: e.y + 30 })) {
+                if (typeof spawnZombie === "function") spawnZombie(e.power || "NORMAL", e.x + 60, e.y + 30);
+            }
             self.piePos = null; self.render();
         };
         if (el("sb-pie-del")) el("sb-pie-del").onclick = function() {
-            if (self.selectedEnt.ent !== redGuy) self.selectedEnt.ent.dead = true;
+            if (self.selectedEnt.ent !== redGuy) {
+                if (!self.sendNet({ k: "delObj", nid: self.selectedEnt.ent._nid })) self.selectedEnt.ent.dead = true;
+            }
             self.piePos = null; self.selectedEnt = null; self.render();
         };
 
@@ -1205,7 +1319,9 @@ var SandboxUI = {
                 self.selectedCatalogId = b.dataset.spitem;
                 self.tool = "spawn";
                 var ref = (typeof GrappleHook !== "undefined" ? GrappleHook.activeTarget() : null) || { x: 0, y: 120 };
-                UniversalSpawner.spawnById(self.selectedCatalogId, ref.x + 120, ref.y + 40);
+                if (!self.sendNet({ k: "spawn", id: self.selectedCatalogId, x: ref.x + 120, y: ref.y + 40 })) {
+                    UniversalSpawner.spawnById(self.selectedCatalogId, ref.x + 120, ref.y + 40);
+                }
                 self.spawnerOpen = false;
                 self.render();
             };
@@ -1225,7 +1341,9 @@ var SandboxUI = {
         };
         if (el("sb-ctx-spawn")) el("sb-ctx-spawn").onclick = function() {
             var id = self.selectedCatalogId || (UniversalSpawner.getCatalog()[0] && UniversalSpawner.getCatalog()[0].id);
-            if (id) UniversalSpawner.spawnById(id, self.ctxMenu.wx, self.ctxMenu.wy);
+            if (id && !self.sendNet({ k: "spawn", id: id, x: self.ctxMenu.wx, y: self.ctxMenu.wy })) {
+                UniversalSpawner.spawnById(id, self.ctxMenu.wx, self.ctxMenu.wy);
+            }
             self.ctxMenu = null; self.render();
         };
         if (el("sb-ctx-grapple")) el("sb-ctx-grapple").onclick = function() {
@@ -1234,14 +1352,16 @@ var SandboxUI = {
         };
         if (el("sb-ctx-floor")) el("sb-ctx-floor").onclick = function() {
             sandboxCfg.showFloor = !sandboxCfg.showFloor; saveSandboxCfg();
-            if (typeof SandboxFloor !== "undefined") SandboxFloor.sync();
+            if (!self.sendNet({ k: "floor", v: sandboxCfg.showFloor }) && typeof SandboxFloor !== "undefined") SandboxFloor.sync();
             self.ctxMenu = null; self.render();
         };
         if (el("sb-ctx-clear")) el("sb-ctx-clear").onclick = function() {
-            for (var i = 0; i < staticObjects.length; i++) staticObjects[i].dead = true;
-            for (var j = 0; j < movingObjects.length; j++) movingObjects[j].dead = true;
-            for (var z = 0; z < zombies.length; z++) zombies[z].dead = true;
-            if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            if (!self.sendNet({ k: "clearWorld" })) {
+                for (var i = 0; i < staticObjects.length; i++) staticObjects[i].dead = true;
+                for (var j = 0; j < movingObjects.length; j++) movingObjects[j].dead = true;
+                for (var z = 0; z < zombies.length; z++) zombies[z].dead = true;
+                if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            }
             self.ctxMenu = null; self.render();
         };
 
@@ -1249,29 +1369,121 @@ var SandboxUI = {
         this._root.querySelectorAll("[data-ptab]").forEach(function(b) {
             b.onclick = function() { self.pauseTab = b.dataset.ptab; self.render(); };
         });
-        if (el("sb-p-resume")) el("sb-p-resume").onclick = function() { closePause(); };
+        if (el("sb-p-resume")) el("sb-p-resume").onclick = function() {
+            if (typeof Net !== "undefined" && Net.role === "client") { self.pauseOpen = false; self.render(); }
+            else closePause();
+        };
         if (el("sb-p-floor")) el("sb-p-floor").onchange = function(e) {
             sandboxCfg.showFloor = e.target.checked; saveSandboxCfg();
-            if (typeof SandboxFloor !== "undefined") SandboxFloor.sync();
+            if (!self.sendNet({ k: "floor", v: sandboxCfg.showFloor }) && typeof SandboxFloor !== "undefined") SandboxFloor.sync();
         };
-        if (el("sb-p-noclip")) el("sb-p-noclip").onchange = function(e) { sandboxCfg.noclip = e.target.checked; saveSandboxCfg(); };
-        if (el("sb-p-inv")) el("sb-p-inv").onchange = function(e) { sandboxCfg.invincible = e.target.checked; saveSandboxCfg(); };
-        if (el("sb-p-grav")) el("sb-p-grav").oninput = function(e) { devOpts.gravityMult = Number(e.target.value); self.render(); };
+        if (el("sb-p-noclip")) el("sb-p-noclip").onchange = function(e) {
+            sandboxCfg.noclip = e.target.checked; saveSandboxCfg();
+            self.sendNet({ k: "noclip", v: sandboxCfg.noclip });
+        };
+        if (el("sb-p-inv")) el("sb-p-inv").onchange = function(e) {
+            sandboxCfg.invincible = e.target.checked; saveSandboxCfg();
+            self.sendNet({ k: "god", v: sandboxCfg.invincible });
+        };
+        if (el("sb-p-grav")) el("sb-p-grav").oninput = function(e) {
+            devOpts.gravityMult = Number(e.target.value);
+            self.sendNet({ k: "grav", v: devOpts.gravityMult });
+            self.render();
+        };
         if (el("sb-p-clear")) el("sb-p-clear").onclick = function() {
-            for (var i = 0; i < staticObjects.length; i++) staticObjects[i].dead = true;
-            for (var z = 0; z < zombies.length; z++) zombies[z].dead = true;
-            if (typeof rebuildAllObjects === "function") rebuildAllObjects();
-            closePause();
+            if (!self.sendNet({ k: "clearWorld" })) {
+                for (var i = 0; i < staticObjects.length; i++) staticObjects[i].dead = true;
+                for (var z = 0; z < zombies.length; z++) zombies[z].dead = true;
+                if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            }
+            if (typeof Net !== "undefined" && Net.role === "client") { self.pauseOpen = false; self.render(); } else closePause();
         };
         if (el("sb-p-horde")) el("sb-p-horde").onclick = function() {
-            var ref = redGuy || { x: 0, y: 120 };
-            for (var i = 0; i < 6; i++) spawnZombie(null, ref.x + (i % 2 ? 1 : -1) * (400 + i * 70), ref.y + 180);
-            closePause();
+            if (!self.sendNet({ k: "horde" })) {
+                var ref = redGuy || { x: 0, y: 120 };
+                for (var i = 0; i < 6; i++) spawnZombie(null, ref.x + (i % 2 ? 1 : -1) * (400 + i * 70), ref.y + 180);
+            }
+            if (typeof Net !== "undefined" && Net.role === "client") { self.pauseOpen = false; self.render(); } else closePause();
         };
         if (el("sb-p-eject")) el("sb-p-eject").onclick = function() { EntityTakeover.release(false); closePause(); };
-        if (el("sb-p-roster")) el("sb-p-roster").onclick = function() { closePause(); self.rosterOpen = true; self.render(); };
-        if (el("sb-p-hub")) el("sb-p-hub").onclick = function() { closePause(); Hub.openHub(false); };
-        if (el("sb-p-reset")) el("sb-p-reset").onclick = function() { closePause(); LevelManager.selectLevel("sandbox_blank"); };
+        if (el("sb-p-roster")) el("sb-p-roster").onclick = function() {
+            if (typeof Net !== "undefined" && Net.role === "client") self.pauseOpen = false; else closePause();
+            self.rosterOpen = true; self.render();
+        };
+        if (el("sb-p-hub")) el("sb-p-hub").onclick = function() {
+            if (typeof Net !== "undefined" && Net.role === "client") {
+                self.pauseOpen = false; self.sideOpen = true; self.sideTab = "games"; self.render();
+            } else { closePause(); Hub.openHub(false); }
+        };
+        if (el("sb-p-reset")) el("sb-p-reset").onclick = function() {
+            if (self.sendNet({ k: "resetBlank" })) { self.pauseOpen = false; self.render(); return; }
+            closePause(); LevelManager.selectLevel("sandbox_blank");
+        };
+        if (el("sb-p-leave")) el("sb-p-leave").onclick = function() { self.pauseOpen = false; self.render(); if (typeof Net !== "undefined") Net.disconnect(); };
+        if (el("sb-p-leave2")) el("sb-p-leave2").onclick = function() { self.pauseOpen = false; self.render(); if (typeof Net !== "undefined") Net.disconnect(); };
+
+        // Admin Tab (Side Drawer & Pause Menu)
+        if (el("sb-adm-boss")) el("sb-adm-boss").onclick = function() {
+            if (!self.sendNet({ k: "admin", cmd: "spawnBoss" }) && typeof spawnZombie === "function") {
+                var ref = redGuy || { x: 0, y: 120 }; spawnZombie("BOSS_KING", ref.x + 240, ref.y + 120);
+            }
+        };
+        if (el("sb-adm-horde")) el("sb-adm-horde").onclick = function() {
+            if (!self.sendNet({ k: "horde" }) && typeof spawnZombie === "function") {
+                var ref = redGuy || { x: 0, y: 120 };
+                for (var i = 0; i < 6; i++) spawnZombie(null, ref.x + (i % 2 ? 1 : -1) * (400 + i * 70), ref.y + 180);
+            }
+        };
+        if (el("sb-adm-heal")) el("sb-adm-heal").onclick = function() {
+            if (!self.sendNet({ k: "healAll" }) && typeof DevActions !== "undefined") DevActions.healAll();
+        };
+        if (el("sb-adm-respawn")) el("sb-adm-respawn").onclick = function() {
+            if (!self.sendNet({ k: "admin", cmd: "respawnAll" })) {
+                for (var i = 0; i < characters.length; i++) { characters[i].dead = false; characters[i].health = characters[i].maxHealth; characters[i].invulnTimer = 90; }
+                if (typeof Net !== "undefined" && Net.role === "host") for (var pk in Net.peers) if (!Net.peers[pk].ch || Net.peers[pk].ch.dead) Net.spawnRemoteHero(Net.peers[pk]);
+            }
+        };
+        if (el("sb-adm-clearfoe")) el("sb-adm-clearfoe").onclick = function() {
+            if (!self.sendNet({ k: "clearEnemies" }) && typeof DevActions !== "undefined") DevActions.clearEnemies();
+        };
+        if (el("sb-adm-clearworld")) el("sb-adm-clearworld").onclick = function() {
+            if (!self.sendNet({ k: "clearWorld" })) {
+                for (var i = 0; i < staticObjects.length; i++) staticObjects[i].dead = true;
+                for (var j = 0; j < movingObjects.length; j++) movingObjects[j].dead = true;
+                for (var z = 0; z < zombies.length; z++) zombies[z].dead = true;
+                if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            }
+        };
+        if (el("sb-adm-god")) el("sb-adm-god").onchange = function(e) {
+            var v = e.target.checked;
+            if (typeof godMode !== "undefined") godMode = v;
+            if (typeof arenaCheats !== "undefined") arenaCheats.god = v;
+            if (typeof sandboxCfg !== "undefined") sandboxCfg.invincible = v;
+            if (typeof creativeCfg !== "undefined") creativeCfg.invincible = v;
+            self.sendNet({ k: "god", v: v });
+        };
+        if (el("sb-adm-ammo")) el("sb-adm-ammo").onchange = function(e) {
+            if (typeof settings !== "undefined") { settings.ammo = e.target.checked ? "unlimited" : "limited"; if (typeof saveSettings === "function") saveSettings(); }
+            self.sendNet({ k: "ammo", v: e.target.checked });
+        };
+        if (el("sb-adm-grav")) el("sb-adm-grav").oninput = function(e) {
+            devOpts.gravityMult = Number(e.target.value);
+            self.sendNet({ k: "grav", v: devOpts.gravityMult });
+            var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong");
+            if (st) st.textContent = devOpts.gravityMult.toFixed(1) + "x";
+        };
+        this._root.querySelectorAll("[data-admresp]").forEach(function(b) {
+            b.onclick = function() {
+                var pid = Number(b.dataset.admresp);
+                if (!self.sendNet({ k: "admin", cmd: "respawnPeer", pid: pid }) && typeof Net !== "undefined" && Net.role === "host") {
+                    Net.hostExecSandbox(pid, { k: "admin", cmd: "respawnPeer", pid: pid });
+                }
+            };
+        });
+        if (el("sb-adm-leave")) el("sb-adm-leave").onclick = function() {
+            self.pauseOpen = false; self.sideOpen = false; self.render();
+            if (typeof Net !== "undefined") Net.disconnect();
+        };
     }
 };
 
