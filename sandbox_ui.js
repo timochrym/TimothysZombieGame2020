@@ -322,7 +322,7 @@ var SandboxUI = {
         // 3. Pro Studio Dock (L1): Right Property Inspector (when object selected & roster closed)
         if (this.selectedObj && !this.selectedObj.dead && !this.rosterOpen) {
             var o = this.selectedObj;
-            html += '<div class="sb-pe sb-glass" style="position:fixed;top:68px;right:12px;width:230px;border-radius:12px;padding:12px">' +
+            html += '<div class="sb-pe sb-glass" style="position:fixed;top:88px;right:12px;width:230px;border-radius:12px;padding:12px">' +
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
                 '<strong style="color:#38bdf8">INSPECTOR</strong>' +
                 '<button class="sb-btn" style="padding:2px 6px" id="sb-insp-close">✕</button></div>' +
@@ -341,7 +341,7 @@ var SandboxUI = {
 
         // 4. L2 Live Entity Roster Drawer (Right Side)
         if (this.rosterOpen) {
-            html += '<div class="sb-pe sb-glass" style="position:fixed;top:68px;right:12px;bottom:40px;width:260px;border-radius:12px;padding:12px;display:flex;flex-direction:column">' +
+            html += '<div class="sb-pe sb-glass" style="position:fixed;top:88px;right:12px;bottom:40px;width:260px;border-radius:12px;padding:12px;display:flex;flex-direction:column">' +
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
                 '<strong style="color:#38bdf8">ENTITY ROSTER</strong>' +
                 '<button class="sb-btn active" style="padding:3px 8px" id="sb-roster-add">+ Enemy</button></div>' +

@@ -1376,6 +1376,7 @@ function drawPauseMenu() {
     ctx.drawImage(pauseSnap, 0, 0, cssW, cssH);
     ctx.fillStyle = "rgba(4, 8, 14, 0.72)";
     ctx.fillRect(0, 0, w, h);
+    if (typeof SandboxUI !== "undefined" && SandboxUI.pauseOpen) return;
 
     var items = pauseItems();
     if (pauseIndex >= items.length) pauseIndex = 0;
