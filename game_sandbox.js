@@ -218,13 +218,12 @@ var EntityTakeover = {
     drive: function(ent) {
         if (!ent || ent.dead) { this.release(true); return; }
         var inp = (typeof PlayerInput !== "undefined" && PlayerInput[0]) ? PlayerInput[0] : {};
-        ent.leftPressed = !!inp.left;
-        ent.rightPressed = !!inp.right;
-        ent.upPressed = !!inp.up;
-        ent.downPressed = !!inp.down;
+        ent.leftPressed = !!(inp.left || (typeof WASDleftPressed !== "undefined" && WASDleftPressed) || (typeof ULDRleftPressed !== "undefined" && ULDRleftPressed));
+        ent.rightPressed = !!(inp.right || (typeof WASDrightPressed !== "undefined" && WASDrightPressed) || (typeof ULDRrightPressed !== "undefined" && ULDRrightPressed));
+        ent.upPressed = !!(inp.up || (typeof WASDupPressed !== "undefined" && WASDupPressed) || (typeof ULDRupPressed !== "undefined" && ULDRupPressed));
+        ent.downPressed = !!(inp.down || (typeof WASDdownPressed !== "undefined" && WASDdownPressed) || (typeof ULDRdownPressed !== "undefined" && ULDRdownPressed));
         if (ent.leftPressed) ent.facing = -1;
         else if (ent.rightPressed) ent.facing = 1;
-        // Allow possessed zombies/entities to fly in creative/sandbox if up+down or double-tap
         if (inp.shoot && typeof ent.shoot === "function") ent.shoot();
     },
 
