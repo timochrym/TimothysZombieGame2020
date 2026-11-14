@@ -65,10 +65,14 @@ var SandboxUI = {
                 if (e.code === "Escape") { self.spawnerOpen = false; self.render(); e.target.blur(); }
                 return;
             }
-            if (e.code === "Space" || e.code === "KeyB") {
+            if (e.code === "KeyB" || e.code === "Slash" || ((e.ctrlKey || e.metaKey) && e.code === "KeyK")) {
                 e.preventDefault();
                 self.spawnerOpen = !self.spawnerOpen;
                 self.ctxMenu = null;
+                self.render();
+            } else if (e.code === "Escape" && self.spawnerOpen) {
+                e.preventDefault();
+                self.spawnerOpen = false;
                 self.render();
             } else if (e.code === "Tab") {
                 e.preventDefault();
@@ -81,6 +85,7 @@ var SandboxUI = {
             cv.addEventListener("mousedown", function(e) {
                 if (!self.isSandbox()) return;
                 self.ctxMenu = null;
+                if (self.spawnerOpen) { self.spawnerOpen = false; self.render(); }
                 if (e.button === 2) return; // handled in contextmenu
 
                 var rect = cv.getBoundingClientRect();

@@ -8,7 +8,7 @@
 //     - Toggleable Floor Grid (starts empty) & Void Rescue
 // ============================================================================
 var sandboxCfg = {
-    showFloor: false,
+    showFloor: true,
     noclip: false,
     invincible: true,
     simPaused: false
@@ -458,7 +458,7 @@ GameModes.register({
     },
 
     drawHUD: function() {
-        uiText("B / Space: Universal Spawner  ·  G: Grappling Hook  ·  Tab: Entity Roster  ·  Right-Click: Context Menu  ·  Esc: Menu",
+        uiText("B or /: Universal Spawner  ·  G: Grappling Hook  ·  Tab: Entity Roster  ·  Right-Click: Context Menu  ·  Esc: Menu",
             cssW / 2, cssH - 14, 12, "rgba(226,232,240,0.75)", "center", "700");
     }
 });
