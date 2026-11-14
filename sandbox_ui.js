@@ -16,11 +16,13 @@ var SandboxUI = {
     pauseOpen: false,
     pauseTab: "creative",
 
-    tool: "select", // select | spawn | possess | grapple | delete
+    tool: "select", // select | drawFloor | drawPlat | drawWall | spawn | possess | grapple | delete
     selectedObj: null,
     selectedEnt: null,
     piePos: null,
     ctxMenu: null,
+    dragDraw: null, // { x1, y1, x2, y2, wx1, wy1 }
+    dragMove: null, // { obj, ox, oy }
     _root: null,
     _lastMode: null,
 
@@ -92,6 +94,11 @@ var SandboxUI = {
                 var sx = e.clientX - rect.left, sy = e.clientY - rect.top;
                 var wpos = typeof screenToWorld === "function" ? screenToWorld(sx, sy) : { x: 0, y: 0 };
 
+                if (self.tool === "drawFloor" || self.tool === "drawPlat" || self.tool === "drawWall") {
+                    self.dragDraw = { x1: e.clientX, y1: e.clientY, x2: e.clientX, y2: e.clientY, wx1: wpos.x, wy1: wpos.y };
+                    self.render();
+                    return;
+                }
                 if (self.tool === "grapple") {
                     GrappleHook.fire(GrappleHook.activeTarget(), wpos.x, wpos.y);
                     return;
@@ -126,7 +133,7 @@ var SandboxUI = {
                     return;
                 }
 
-                // Check static/moving object hit for Pro Studio Inspector or Delete
+                // Check static/moving object hit for Pro Studio Inspector, Drag-Move, or Delete
                 var allObjs = [].concat(staticObjects || [], movingObjects || []);
                 var hitObj = null;
                 for (var i = allObjs.length - 1; i >= 0; i--) {
@@ -144,6 +151,7 @@ var SandboxUI = {
                         self.selectedObj = hitObj;
                         self.selectedEnt = null;
                         self.piePos = null;
+                        self.dragMove = { obj: hitObj, ox: hitObj.x - wpos.x, oy: hitObj.y - wpos.y };
                     }
                     self.render();
                     return;
@@ -151,6 +159,55 @@ var SandboxUI = {
 
                 self.piePos = null;
                 self.render();
+            });
+
+            window.addEventListener("mousemove", function(e) {
+                if (!self.isSandbox()) return;
+                if (self.dragDraw) {
+                    self.dragDraw.x2 = e.clientX;
+                    self.dragDraw.y2 = e.clientY;
+                    var box = document.getElementById("sb-drag-preview");
+                    if (box) {
+                        var l = Math.min(self.dragDraw.x1, self.dragDraw.x2), t = Math.min(self.dragDraw.y1, self.dragDraw.y2);
+                        var w = Math.max(8, Math.abs(self.dragDraw.x2 - self.dragDraw.x1));
+                        var h = Math.max(8, Math.abs(self.dragDraw.y2 - self.dragDraw.y1));
+                        box.style.left = l + "px"; box.style.top = t + "px"; box.style.width = w + "px"; box.style.height = h + "px";
+                    }
+                } else if (self.dragMove && self.dragMove.obj) {
+                    var rect = cv.getBoundingClientRect();
+                    var wpos = typeof screenToWorld === "function" ? screenToWorld(e.clientX - rect.left, e.clientY - rect.top) : { x: 0, y: 0 };
+                    self.dragMove.obj.x = Math.round((wpos.x + self.dragMove.ox) / 20) * 20;
+                    self.dragMove.obj.y = Math.round((wpos.y + self.dragMove.oy) / 20) * 20;
+                    if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                }
+            });
+
+            window.addEventListener("mouseup", function(e) {
+                if (!self.isSandbox()) return;
+                if (self.dragDraw) {
+                    var rect = cv.getBoundingClientRect();
+                    var wpos2 = typeof screenToWorld === "function" ? screenToWorld(e.clientX - rect.left, e.clientY - rect.top) : { x: 0, y: 0 };
+                    var cx = (self.dragDraw.wx1 + wpos2.x) / 2, cy = (self.dragDraw.wy1 + wpos2.y) / 2;
+                    var bw = Math.max(80, Math.round(Math.abs(wpos2.x - self.dragDraw.wx1) / 20) * 20);
+                    var bh = Math.max(self.tool === "drawPlat" ? 36 : 60, Math.round(Math.abs(wpos2.y - self.dragDraw.wy1) / 20) * 20);
+                    if (Math.abs(wpos2.x - self.dragDraw.wx1) < 20 && Math.abs(wpos2.y - self.dragDraw.wy1) < 20) {
+                        // Quick single click defaults to a nice wide floor / platform / tall wall
+                        if (self.tool === "drawFloor") { bw = 480; bh = 80; }
+                        else if (self.tool === "drawPlat") { bw = 360; bh = 36; }
+                        else { bw = 80; bh = 360; }
+                    }
+                    var opts = self.tool === "drawPlat"
+                        ? { name: "Platform", texture: "dojo_wood", kind: "platform" }
+                        : (self.tool === "drawWall"
+                            ? { name: "Wall", texture: "castle_stone", kind: "wall" }
+                            : { name: "Floor", texture: "grass_dirt", kind: "block" });
+                    var col = self.tool === "drawPlat" ? "#8b6b4a" : (self.tool === "drawWall" ? "#475569" : "#4d7c36");
+                    self.selectedObj = GameObject.addBox(cx, cy, bw, bh, col, opts);
+                    if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                    self.dragDraw = null;
+                    self.render();
+                }
+                if (self.dragMove) { self.dragMove = null; self.render(); }
             });
 
             cv.addEventListener("contextmenu", function(e) {
@@ -235,12 +292,27 @@ var SandboxUI = {
             '</div>';
 
         // 2. Pro Studio Dock (L1): Left Tool Rail
-        var tools = [["select", "✋ Select"], ["spawn", "➕ Spawn"], ["possess", "⚡ Possess"], ["grapple", "🪝 Grapple"], ["delete", "🗑 Delete"]];
+        var tools = [
+            ["select", "✋ Select / Move"],
+            ["drawFloor", "🧱 Draw Floor"],
+            ["drawPlat", "➖ Draw Platform"],
+            ["drawWall", "🏰 Draw Wall"],
+            ["spawn", "➕ Spawn"],
+            ["possess", "⚡ Possess"],
+            ["grapple", "🪝 Grapple"],
+            ["delete", "🗑 Delete"]
+        ];
         html += '<div class="sb-pe sb-glass" style="position:fixed;top:68px;left:12px;border-radius:12px;padding:6px;display:flex;flex-direction:column;gap:4px">' +
             tools.map(function(t) {
-                return '<button class="sb-btn ' + (SandboxUI.tool === t[0] ? 'active' : '') + '" data-sbtool="' + t[0] + '">' + t[1] + '</button>';
+                return '<button class="sb-btn ' + (SandboxUI.tool === t[0] ? 'active' : '') + '" style="text-align:left" data-sbtool="' + t[0] + '">' + t[1] + '</button>';
             }).join("") +
             '</div>';
+
+        if (this.dragDraw) {
+            var dl = Math.min(this.dragDraw.x1, this.dragDraw.x2), dt = Math.min(this.dragDraw.y1, this.dragDraw.y2);
+            var dw = Math.max(8, Math.abs(this.dragDraw.x2 - this.dragDraw.x1)), dh = Math.max(8, Math.abs(this.dragDraw.y2 - this.dragDraw.y1));
+            html += '<div id="sb-drag-preview" style="position:fixed;left:' + dl + 'px;top:' + dt + 'px;width:' + dw + 'px;height:' + dh + 'px;border:2px dashed #38bdf8;background:rgba(56,189,248,0.2);border-radius:4px"></div>';
+        }
 
         // 3. Pro Studio Dock (L1): Right Property Inspector (when object selected & roster closed)
         if (this.selectedObj && !this.selectedObj.dead && !this.rosterOpen) {
