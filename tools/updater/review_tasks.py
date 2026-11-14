@@ -128,13 +128,24 @@ def load_priority(project, projects):
 
 
 def save_priority(project, projects, order, later):
+    """Write the order and the parked list, keeping every other key the file already has (Tasks & Goals keeps `ratings` there, and `by`)."""
     path = priority_path(project, projects)
     if not path:
         raise ValueError('There is no review folder for this project on this computer, so the order cannot be saved.')
+    try:
+        with open(path, encoding='utf-8') as fh:
+            data = json.load(fh)
+        if not isinstance(data, dict):
+            raise ValueError('not an object')
+    except (OSError, ValueError):
+        data = {}
+    data['order'], data['later'] = order, later
+    data['updated'] = time.strftime('%Y-%m-%dT%H:%M:%S')
+    data.setdefault('by', 'updater')
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + '.tmp'
     with open(tmp, 'w', encoding='utf-8', newline='\n') as fh:
-        json.dump({'order': order, 'later': later, 'updated': time.strftime('%Y-%m-%dT%H:%M:%S'), 'by': 'updater'}, fh, indent=2)
+        json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write('\n')
     os.replace(tmp, path)
 
