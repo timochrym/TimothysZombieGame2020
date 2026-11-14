@@ -634,7 +634,7 @@ var Mix = {
             var lost = b4.m * 0.15, left = b4.m - lost;
             w4.len += lost * 0.18; this.wormXp(w4, lost * 0.25);
             this.burst(b4.x, b4.y, "#a78bfa", "ring", "POP!", r4 + 35);
-            if (b4.pl.chain && !b4.pl.compact && b4.pl.chainList && b4 === b4.pl.chainList[0]) {
+            if (b4.pl.chain && !b4.pl.compact && b4.pl.chainList && b4 === b4.pl.chainList[0] && !(b4.pl.snakeGrace > 0)) {
                 w4.len += b4.m * 0.35; this.wormXp(w4, b4.m * 0.4);
                 this.burst(b4.x, b4.y, w4.color, "ring", "SNAKE CUT!", r4 + 35);
                 this.note(b4.pl.human !== undefined || w4.human !== undefined, b4.pl.name + " bumped " + w4.name, w4.color);
@@ -666,6 +666,7 @@ var Mix = {
                 var sdx = hS.x - bS.x, sdy = hS.y - bS.y;
                 if (sdx * sdx + sdy * sdy < hitS * hitS) {
                     Snake.kill(wS, bS.pl);
+                    bS.m += 12; blobR[i] = Cells.rad(bS.m);
                     this.burst(hS.x, hS.y, bS.pl.color, "ring", "CUT OFF!", 48);
                     this.note(wS.human !== undefined || bS.pl.human !== undefined, wS.name + " crashed into " + bS.pl.name, bS.pl.color);
                     break;

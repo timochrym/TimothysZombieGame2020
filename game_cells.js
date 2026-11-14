@@ -52,8 +52,8 @@ var Cells = {
     },
     protectedNow: function(pl) { return arenaProtected(pl) || (pl.fx && pl.fx.shield > 0); },
     speed: function(m) { return 9 * Math.pow(m, -0.24); },
-    mass: function(pl) { var s = 0; for (let i = 0; i < this.blobs.length; i++) if (this.blobs[i].pl === pl) s += this.blobs[i].m; return s; },
-    mine: function(pl) { return this.blobs.filter(function(b) { return b.pl === pl; }); },
+    mass: function(pl) { var s = 0; for (let i = 0; i < this.blobs.length; i++) if (this.blobs[i].pl === pl && !this.blobs[i].dead) s += this.blobs[i].m; return s; },
+    mine: function(pl) { return this.blobs.filter(function(b) { return b.pl === pl && !b.dead; }); },
 
     reset: function() {
         this.players = []; this.blobs = []; this.pellets = []; this.viruses = []; this.t = 0;
@@ -228,8 +228,22 @@ var Cells = {
         for (let i = 0; i < list.length; i++) { list[i].lead = i ? list[i - 1] : null; list[i].mergeT = 9999; total += list[i].m; }
         if (pl.compact) {
             var core = list[0];
-            core.m = total; core.lead = null;
-            for (let i = 1; i < list.length; i++) list[i].dead = true;
+            core.lead = null;
+            if (list.length > 1) {
+                for (let i = 1; i < list.length; i++) {
+                    var seg = list[i], ld = seg.lead || core;
+                    seg.x += (ld.x - seg.x) * 0.42;
+                    seg.y += (ld.y - seg.y) * 0.42;
+                }
+                if (this.t % 3 === 0) {
+                    var tailC = list.pop();
+                    core.m += tailC.m;
+                    tailC.dead = true;
+                }
+                pl.chainList = list;
+                return;
+            }
+            core.m = total;
             pl.chainList = [core];
             // Boost in bubble form: low energy cost (0.1% mass every 8 ticks)
             var dx = pl.aimX - core.x, dy = pl.aimY - core.y, distance = Math.hypot(dx, dy);
@@ -666,17 +680,53 @@ var Cells = {
     drawBlob: function(b, Z) {
         var s = this.toScreen(b.x, b.y), r = this.rad(b.m) * Z;
         if (s[0] < -r || s[1] < -r || s[0] > cssW + r || s[1] > cssH + r) return;
+        if (b.pl.chain && b.lead && !b.lead.dead) {
+            var ls = this.toScreen(b.lead.x, b.lead.y), lr = this.rad(b.lead.m) * Z;
+            var bw = Math.max(3, Math.min(r, lr) * 1.15);
+            ctx.save();
+            ctx.lineCap = "round";
+            ctx.strokeStyle = Components.shade(b.pl.color, -45);
+            ctx.lineWidth = bw + Math.max(2, r * 0.14);
+            ctx.beginPath(); ctx.moveTo(s[0], s[1]); ctx.lineTo(ls[0], ls[1]); ctx.stroke();
+            ctx.strokeStyle = b.pl.color;
+            ctx.lineWidth = bw;
+            ctx.beginPath(); ctx.moveTo(s[0], s[1]); ctx.lineTo(ls[0], ls[1]); ctx.stroke();
+            ctx.restore();
+        }
         ctx.fillStyle = b.pl.color; ctx.strokeStyle = Components.shade(b.pl.color, -45); ctx.lineWidth = Math.max(2, r * 0.08);
         // wobbly outline
         ctx.beginPath();
         var n = 28;
         for (let k = 0; k <= n; k++) { var a = k / n * Math.PI * 2, w = 1 + Math.sin(a * 5 + this.t * 0.08 + b.x * 0.01) * 0.02; ctx.lineTo(s[0] + Math.cos(a) * r * w, s[1] + Math.sin(a) * r * w); }
         ctx.closePath(); ctx.fill(); ctx.stroke();
+        if (b.pl.chain && b.pl.snakeGrace > 0) {
+            ctx.save();
+            ctx.strokeStyle = (this.t % 12 < 6) ? "#38bdf8" : "#f8fafc";
+            ctx.globalAlpha = 0.55 + Math.sin(this.t * 0.28) * 0.3;
+            ctx.lineWidth = Math.max(2, 3.5 * Z);
+            ctx.setLineDash([6 * Z + 3, 5 * Z + 2]);
+            ctx.lineDashOffset = this.t * 0.8;
+            ctx.beginPath(); ctx.arc(s[0], s[1], r + 5 * Z + 2, 0, Math.PI * 2); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+        }
         var fxd = b.pl.fx;
         if (fxd && (fxd.shield > 0 || fxd.speed > 0 || fxd.magnet > 0)) {      // a ring shows what this blob has: blue = can't be eaten, yellow = fast, pink = magnet
             ctx.strokeStyle = fxd.shield > 0 ? "#38bdf8" : (fxd.speed > 0 ? "#facc15" : "#f472b6"); ctx.lineWidth = Math.max(2, 4 * Z);
             ctx.setLineDash([10 * Z + 4, 8 * Z + 3]); ctx.lineDashOffset = -this.t * 0.6;
             ctx.beginPath(); ctx.arc(s[0], s[1], r + 6 * Z + 3, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+        }
+        if (b.pl.chain && !b.pl.compact && b.pl.chainList && b === b.pl.chainList[0] && r > 8) {
+            var ang = Math.atan2((b.pl.aimY || b.y) - b.y, (b.pl.aimX || (b.x + 1)) - b.x);
+            var fx = Math.cos(ang), fy = Math.sin(ang), px = -fy, py = fx;
+            var ef = r * 0.42, es = r * 0.38, er = Math.max(2.5, r * 0.22), pr = Math.max(1.2, er * 0.52);
+            for (let side = -1; side <= 1; side += 2) {
+                var ex = s[0] + fx * ef + px * es * side, ey = s[1] + fy * ef + py * es * side;
+                ctx.fillStyle = "#ffffff";
+                ctx.beginPath(); ctx.arc(ex, ey, er, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "#0f172a";
+                ctx.beginPath(); ctx.arc(ex + fx * (er - pr) * 0.6, ey + fy * (er - pr) * 0.6, pr, 0, Math.PI * 2); ctx.fill();
+            }
         }
         if (r > 14) uiText(b.pl.name, s[0], s[1] + Math.min(18, r * 0.25) * 0.35, Math.max(10, Math.min(28, r * 0.35)), "#ffffff", "center", "900");
         if (r > 30) uiText(String(Math.round(b.m)), s[0], s[1] + Math.min(28, r * 0.35), Math.max(9, Math.min(16, r * 0.18)), "rgba(255,255,255,0.8)", "center", "800");
