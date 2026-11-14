@@ -1,11 +1,18 @@
 // ============================================================================
-// SANDBOX UI - Enhanced UIs for Blank Sandbox & Creative Mode:
-//   - Universal Object Spawner: Spotlight (default) + Tabbed Dock + Radial Wheel + Dual-Pane Browser
-//   - Entity Takeover: L2 Live Entity Roster Drawer + L3 Tactical Pie Ring
-//   - Editor: L1 Pro Studio Dock (Left Tool Rail + Right Inspector + Right-Click Context Menu)
-//   - Pause & Cheats: L1 Glassmorphic Split Card
+// UNIVERSAL SIDE MENU & SANDBOX UI
+//   Works across ALL 24 games:
+//   - Collapsible Universal Side Menu (Controls, Best-Ever Inspect, Tools, Games)
+//   - Universal Click-to-Inspect across standard worlds & ownScreen arenas
+//   - Blank Sandbox Pro Studio Dock, Spawner (Spotlight/Dock/Radial/Browser),
+//     Entity Takeover Roster, Tactical Pie Ring & Split Pause Menu
 // ============================================================================
 var SandboxUI = {
+    sideOpen: false,
+    sideTab: "controls", // controls | inspect | tools | games
+    gameSearch: "",
+    rawFilter: "",
+    rawOpen: false,
+
     spawnerOpen: false,
     spawnerMode: "spotlight", // spotlight | dock | radial | browser
     spawnerCat: "All",
@@ -16,7 +23,7 @@ var SandboxUI = {
     pauseOpen: false,
     pauseTab: "creative",
 
-    tool: "select", // select | play | drawFloor | drawPlat | drawWall | spawn | possess | grapple | delete
+    tool: "play", // play | inspect | select | drawFloor | drawPlat | drawWall | spawn | possess | grapple | delete
     selectedObj: null,
     selectedEnt: null,
     piePos: null,
@@ -25,9 +32,16 @@ var SandboxUI = {
     dragMove: null, // { obj, ox, oy }
     _root: null,
     _lastMode: null,
+    _lastModeId: null,
+
+    isActive: function() {
+        return typeof GameModes !== "undefined" && GameModes.current &&
+            (typeof Hub === "undefined" || !Hub.isOpen) &&
+            (typeof Studio === "undefined" || !Studio.isOpen);
+    },
 
     isSandbox: function() {
-        return typeof GameModes !== "undefined" && GameModes.current && GameModes.current.id === "sandbox" && (typeof Hub === "undefined" || !Hub.isOpen);
+        return this.isActive() && GameModes.current.id === "sandbox";
     },
 
     init: function() {
@@ -37,12 +51,15 @@ var SandboxUI = {
           #sb-ui-root { position: fixed; inset: 0; pointer-events: none; z-index: 900; font-family: system-ui, -apple-system, sans-serif; color: #e2e8f0; font-size: 13px; }
           #sb-ui-root * { box-sizing: border-box; }
           .sb-pe { pointer-events: auto; }
-          .sb-glass { background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(10px); border: 1px solid rgba(148, 163, 184, 0.25); box-shadow: 0 16px 40px rgba(0,0,0,0.5); }
-          .sb-btn { background: rgba(30, 41, 59, 0.9); color: #e2e8f0; border: 1px solid rgba(148,163,184,0.25); border-radius: 8px; padding: 6px 10px; cursor: pointer; font-weight: 600; font-size: 12px; transition: 0.12s; }
+          .sb-glass { background: rgba(15, 23, 42, 0.93); backdrop-filter: blur(12px); border: 1px solid rgba(148, 163, 184, 0.25); box-shadow: 0 16px 40px rgba(0,0,0,0.55); }
+          .sb-btn { background: rgba(30, 41, 59, 0.9); color: #e2e8f0; border: 1px solid rgba(148,163,184,0.25); border-radius: 8px; padding: 5px 9px; cursor: pointer; font-weight: 600; font-size: 12px; transition: 0.12s; }
           .sb-btn:hover { border-color: #38bdf8; color: #fff; }
           .sb-btn.active { background: #38bdf8; color: #0f172a; border-color: #38bdf8; font-weight: 800; }
-          .sb-input { background: rgba(15, 23, 42, 0.95); color: #f8fafc; border: 1px solid rgba(148,163,184,0.3); border-radius: 8px; padding: 7px 10px; outline: none; font-size: 12px; width: 100%; }
+          .sb-input { background: rgba(15, 23, 42, 0.95); color: #f8fafc; border: 1px solid rgba(148,163,184,0.3); border-radius: 8px; padding: 6px 9px; outline: none; font-size: 12px; width: 100%; }
           .sb-input:focus { border-color: #38bdf8; }
+          .sb-card { background: rgba(30, 41, 59, 0.55); border: 1px solid rgba(148,163,184,0.18); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }
+          .sb-sec { font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #38bdf8; margin: 8px 0 6px; }
+          .sb-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
           .sb-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
           .sb-scroll::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.35); border-radius: 999px; }
         `;
@@ -62,49 +79,75 @@ var SandboxUI = {
         var cv = document.getElementById("screen");
 
         window.addEventListener("keydown", function(e) {
-            if (!self.isSandbox()) return;
-            if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) {
+            if (!self.isActive()) return;
+            if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT")) {
                 if (e.code === "Escape") { self.spawnerOpen = false; self.render(); e.target.blur(); }
                 return;
             }
-            if (e.code === "KeyB" || e.code === "Slash" || ((e.ctrlKey || e.metaKey) && e.code === "KeyK")) {
+            // Universal side menu toggle: F2 or Backquote (when not playtesting from Level Studio)
+            if (e.code === "F2" || (e.code === "Backquote" && !(typeof Studio !== "undefined" && Studio.playtesting))) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
-                self.spawnerOpen = !self.spawnerOpen;
-                self.ctxMenu = null;
+                self.sideOpen = !self.sideOpen;
                 self.render();
-            } else if (e.code === "Escape" && self.spawnerOpen) {
-                e.preventDefault();
-                e.stopImmediatePropagation();
-                self.spawnerOpen = false;
-                self.render();
-            } else if (e.code === "Tab") {
-                e.preventDefault();
-                e.stopImmediatePropagation();
-                self.rosterOpen = !self.rosterOpen;
-                self.render();
+                return;
+            }
+            if (self.isSandbox()) {
+                if (e.code === "KeyB" || e.code === "Slash" || ((e.ctrlKey || e.metaKey) && e.code === "KeyK")) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    self.spawnerOpen = !self.spawnerOpen;
+                    self.ctxMenu = null;
+                    self.render();
+                } else if (e.code === "Escape" && self.spawnerOpen) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    self.spawnerOpen = false;
+                    self.render();
+                } else if (e.code === "Tab") {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    self.rosterOpen = !self.rosterOpen;
+                    self.render();
+                }
             }
         }, true);
 
         if (cv) {
             cv.addEventListener("mousedown", function(e) {
-                if (!self.isSandbox()) return;
+                if (!self.isActive()) return;
                 self.ctxMenu = null;
                 if (self.spawnerOpen) { self.spawnerOpen = false; self.render(); }
                 if (e.button === 2) return; // handled in contextmenu
 
-                // In Play / Shoot mode, let the game handle shooting normally without selecting/dragging floors
+                // In Play mode, let the game handle all clicks normally
                 if (self.tool === "play") {
                     if (self.piePos) { self.piePos = null; self.render(); }
                     return;
                 }
 
-                // Editor / Build / Possess / Grapple tools: don't fire weapon while building!
+                var rect = cv.getBoundingClientRect();
+                var sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+
+                // Universal Inspect Tool (works in ALL 24 games!)
+                if (self.tool === "inspect") {
+                    e.stopImmediatePropagation();
+                    if (typeof mouseDown !== "undefined") mouseDown = false;
+                    if (typeof PlayerInput !== "undefined" && PlayerInput[0]) PlayerInput[0].shoot = false;
+                    var hit = typeof UniversalInspect !== "undefined" ? UniversalInspect.findAt(sx, sy) : null;
+                    if (hit) {
+                        UniversalInspect.selected = hit;
+                        self.sideOpen = true;
+                        self.sideTab = "inspect";
+                        self.render();
+                    }
+                    return;
+                }
+
+                // Remaining editor/build tools
                 if (typeof mouseDown !== "undefined") mouseDown = false;
                 if (typeof PlayerInput !== "undefined" && PlayerInput[0]) PlayerInput[0].shoot = false;
 
-                var rect = cv.getBoundingClientRect();
-                var sx = e.clientX - rect.left, sy = e.clientY - rect.top;
                 var wpos = typeof sbScreenToWorld === "function" ? sbScreenToWorld(sx, sy) : { x: 0, y: 0 };
 
                 if (self.tool === "drawFloor" || self.tool === "drawPlat" || self.tool === "drawWall") {
@@ -112,11 +155,11 @@ var SandboxUI = {
                     self.render();
                     return;
                 }
-                if (self.tool === "grapple") {
+                if (self.tool === "grapple" && typeof GrappleHook !== "undefined") {
                     GrappleHook.fire(GrappleHook.activeTarget(), wpos.x, wpos.y);
                     return;
                 }
-                if (self.tool === "spawn" && self.selectedCatalogId) {
+                if (self.tool === "spawn" && self.selectedCatalogId && typeof UniversalSpawner !== "undefined") {
                     UniversalSpawner.spawnById(self.selectedCatalogId, wpos.x, wpos.y);
                     self.render();
                     return;
@@ -172,10 +215,22 @@ var SandboxUI = {
 
                 self.piePos = null;
                 self.render();
-            });
+            }, true);
 
             window.addEventListener("mousemove", function(e) {
-                if (!self.isSandbox()) return;
+                if (!self.isActive()) return;
+                if (self.tool === "inspect" && typeof UniversalInspect !== "undefined") {
+                    var rect = cv.getBoundingClientRect();
+                    var sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+                    if (sx >= 0 && sy >= 0 && sx <= rect.width && sy <= rect.height) {
+                        UniversalInspect.hovered = UniversalInspect.findAt(sx, sy);
+                    } else {
+                        UniversalInspect.hovered = null;
+                    }
+                } else if (typeof UniversalInspect !== "undefined") {
+                    UniversalInspect.hovered = null;
+                }
+
                 if (self.dragDraw) {
                     self.dragDraw.x2 = e.clientX;
                     self.dragDraw.y2 = e.clientY;
@@ -187,15 +242,15 @@ var SandboxUI = {
                         box.style.left = l + "px"; box.style.top = t + "px"; box.style.width = w + "px"; box.style.height = h + "px";
                     }
                 } else if (self.dragMove && self.dragMove.obj) {
-                    var rect = cv.getBoundingClientRect();
-                    var wpos = typeof sbScreenToWorld === "function" ? sbScreenToWorld(e.clientX - rect.left, e.clientY - rect.top) : { x: 0, y: 0 };
+                    var rect2 = cv.getBoundingClientRect();
+                    var wpos = typeof sbScreenToWorld === "function" ? sbScreenToWorld(e.clientX - rect2.left, e.clientY - rect2.top) : { x: 0, y: 0 };
                     self.dragMove.obj.x = Math.round((wpos.x + self.dragMove.ox) / 20) * 20;
                     self.dragMove.obj.y = Math.round((wpos.y + self.dragMove.oy) / 20) * 20;
                 }
             });
 
             window.addEventListener("mouseup", function(e) {
-                if (!self.isSandbox()) return;
+                if (!self.isActive()) return;
                 if (self.dragDraw) {
                     var rect = cv.getBoundingClientRect();
                     var wpos2 = typeof sbScreenToWorld === "function" ? sbScreenToWorld(e.clientX - rect.left, e.clientY - rect.top) : { x: 0, y: 0 };
@@ -237,21 +292,66 @@ var SandboxUI = {
             });
         }
 
-        // Poll mode transitions so UI auto-appears in sandbox and hides in other games
+        // Poll mode transitions & refresh live inspect telemetry
         setInterval(function() {
-            var active = self.isSandbox();
-            if (active !== self._lastMode) {
+            var active = self.isActive();
+            var modeId = (typeof GameModes !== "undefined" && GameModes.current) ? GameModes.current.id : null;
+            if (active !== self._lastMode || modeId !== self._lastModeId) {
                 self._lastMode = active;
-                if (!active) { self.spawnerOpen = false; self.rosterOpen = false; self.pauseOpen = false; self.ctxMenu = null; self.piePos = null; }
+                self._lastModeId = modeId;
+                if (!active) {
+                    self.spawnerOpen = false; self.rosterOpen = false; self.pauseOpen = false;
+                    self.ctxMenu = null; self.piePos = null;
+                } else {
+                    var sb = self.isSandbox();
+                    self.sideOpen = sb;
+                    self.tool = sb ? "select" : "play";
+                    if (typeof UniversalInspect !== "undefined") {
+                        UniversalInspect.selected = null;
+                        UniversalInspect.hovered = null;
+                        UniversalInspect.followTarget = null;
+                    }
+                }
                 self.render();
-            } else if (active && self.rosterOpen) {
-                self.renderRosterOnly();
+            } else if (active) {
+                if (self.rosterOpen) self.renderRosterOnly();
+                if (self.sideOpen && self.sideTab === "inspect") self.refreshInspectLive();
             }
-        }, 250);
+        }, 220);
     },
 
     openPause: function() { this.pauseOpen = true; this.spawnerOpen = false; this.ctxMenu = null; this.render(); },
     closePause: function() { this.pauseOpen = false; this.render(); },
+
+    refreshInspectLive: function() {
+        var box = document.getElementById("sb-insp-live");
+        if (!box || typeof UniversalInspect === "undefined") return;
+        var sel = UniversalInspect.selected;
+        if (sel && sel.isDead && sel.isDead()) {
+            UniversalInspect.selected = null;
+            this.render();
+            return;
+        }
+        if (!sel) {
+            var fpsEl = document.getElementById("sb-world-fps");
+            if (fpsEl && typeof measuredFPS !== "undefined") fpsEl.textContent = measuredFPS + " FPS";
+            return;
+        }
+        var p = sel.pos ? sel.pos() : { x: 0, y: 0 };
+        var v = sel.vel ? sel.vel() : { vx: 0, vy: 0 };
+        var hp = sel.hpInfo ? sel.hpInfo() : null;
+        var spd = Math.hypot(v.vx, v.vy);
+        var pct = hp && hp.max > 0 ? Math.max(0, Math.min(100, Math.round((hp.val / hp.max) * 100))) : 100;
+        box.innerHTML =
+            (hp ? '<div style="margin-bottom:6px"><div class="sb-row" style="margin-bottom:2px"><span>' + hp.label + '</span><strong>' + hp.val + ' / ' + hp.max + '</strong></div>' +
+                '<div style="height:6px;background:rgba(15,23,42,0.9);border-radius:999px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + (sel.color || '#38bdf8') + '"></div></div></div>' : '') +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;color:#cbd5e1">' +
+            '<div>Pos: <strong>' + Math.round(p.x) + ', ' + Math.round(p.y) + '</strong></div>' +
+            '<div>Vel: <strong>' + v.vx.toFixed(1) + ', ' + v.vy.toFixed(1) + '</strong></div>' +
+            '<div>Speed: <strong>' + spd.toFixed(1) + '</strong></div>' +
+            '<div>FPS: <strong>' + (typeof measuredFPS !== "undefined" ? measuredFPS : 60) + '</strong></div>' +
+            '</div>';
+    },
 
     renderRosterOnly: function() {
         var el = document.getElementById("sb-roster-list");
@@ -293,38 +393,35 @@ var SandboxUI = {
 
     render: function() {
         if (!this._root) return;
-        if (!this.isSandbox()) { this._root.innerHTML = ""; return; }
+        if (!this.isActive()) { this._root.innerHTML = ""; return; }
 
         var html = "";
-
-        // 1. Top-Left Compact Action Bar (never overlaps #top-right-bar)
+        var sb = this.isSandbox();
+        var m = GameModes.current;
         var posTarget = typeof EntityTakeover !== "undefined" ? EntityTakeover.target : null;
-        html += '<div class="sb-pe sb-glass" style="position:fixed;top:10px;left:12px;border-radius:12px;padding:5px 10px;display:flex;align-items:center;gap:6px">' +
-            '<span style="font-weight:900;color:#38bdf8;padding:0 4px">✨ BLANK SANDBOX</span>' +
-            '<button class="sb-btn ' + (this.spawnerOpen ? 'active' : '') + '" id="sb-top-spawn">🔍 Spawner [B]</button>' +
-            '<button class="sb-btn ' + (this.rosterOpen ? 'active' : '') + '" id="sb-top-roster">👥 Entities [Tab]</button>' +
-            '<button class="sb-btn ' + (sandboxCfg.showFloor ? 'active' : '') + '" id="sb-top-floor">▦ Floor</button>' +
-            (posTarget ? '<button class="sb-btn active" id="sb-top-eject">↩ Eject [F]</button>' : '') +
-            '<button class="sb-btn" id="sb-top-pause">⚙ Menu [Esc]</button>' +
-            '</div>';
 
-        // 2. Pro Studio Dock (L1): Left Tool Rail
-        var tools = [
-            ["play", "🎮 Play / Shoot"],
-            ["select", "✋ Select / Move"],
-            ["drawFloor", "🧱 Draw Floor"],
-            ["drawPlat", "➖ Draw Platform"],
-            ["drawWall", "🏰 Draw Wall"],
-            ["spawn", "➕ Spawn"],
-            ["possess", "⚡ Possess"],
-            ["grapple", "🪝 Grapple"],
-            ["delete", "🗑 Delete"]
-        ];
-        html += '<div class="sb-pe sb-glass" style="position:fixed;top:68px;left:12px;border-radius:12px;padding:6px;display:flex;flex-direction:column;gap:4px">' +
-            tools.map(function(t) {
-                return '<button class="sb-btn ' + (SandboxUI.tool === t[0] ? 'active' : '') + '" style="text-align:left" data-sbtool="' + t[0] + '">' + t[1] + '</button>';
-            }).join("") +
-            '</div>';
+        // 1. Sandbox Top-Left Quick Action Bar
+        if (sb) {
+            html += '<div class="sb-pe sb-glass" style="position:fixed;top:10px;left:12px;border-radius:12px;padding:5px 10px;display:flex;align-items:center;gap:6px">' +
+                '<span style="font-weight:900;color:#38bdf8;padding:0 4px">✨ BLANK SANDBOX</span>' +
+                '<button class="sb-btn ' + (this.spawnerOpen ? 'active' : '') + '" id="sb-top-spawn">🔍 Spawner [B]</button>' +
+                '<button class="sb-btn ' + (this.rosterOpen ? 'active' : '') + '" id="sb-top-roster">👥 Entities [Tab]</button>' +
+                '<button class="sb-btn ' + (sandboxCfg.showFloor ? 'active' : '') + '" id="sb-top-floor">▦ Floor</button>' +
+                (posTarget ? '<button class="sb-btn active" id="sb-top-eject">↩ Eject [F]</button>' : '') +
+                '<button class="sb-btn" id="sb-top-pause">⚙ Menu [Esc]</button>' +
+                '</div>';
+        }
+
+        // 2. Universal Side Menu Handle (when collapsed) OR Full Side Drawer (when open)
+        if (!this.sideOpen) {
+            html += '<div class="sb-pe sb-glass" style="position:fixed;top:' + (sb ? 62 : 12) + 'px;left:12px;border-radius:12px;padding:4px 6px;display:flex;align-items:center;gap:5px">' +
+                '<button class="sb-btn" id="sb-side-open" title="Open Universal Side Menu [F2 / `]">☰ Side Menu</button>' +
+                '<button class="sb-btn ' + (this.tool === 'inspect' ? 'active' : '') + '" id="sb-quick-inspect" title="Click anything to inspect">🔍 Inspect</button>' +
+                (this.tool !== "play" ? '<button class="sb-btn" id="sb-quick-play" title="Return to Play mode">🎮 Play</button>' : '') +
+                '</div>';
+        } else {
+            html += this.renderSideDrawerHTML(sb, m);
+        }
 
         if (this.dragDraw) {
             var dl = Math.min(this.dragDraw.x1, this.dragDraw.x2), dt = Math.min(this.dragDraw.y1, this.dragDraw.y2);
@@ -332,12 +429,12 @@ var SandboxUI = {
             html += '<div id="sb-drag-preview" style="position:fixed;left:' + dl + 'px;top:' + dt + 'px;width:' + dw + 'px;height:' + dh + 'px;border:2px dashed #38bdf8;background:rgba(56,189,248,0.2);border-radius:4px"></div>';
         }
 
-        // 3. Pro Studio Dock (L1): Right Property Inspector (when object selected & roster closed)
-        if (this.selectedObj && !this.selectedObj.dead && !this.rosterOpen) {
+        // 3. Sandbox Right Property Inspector (when object selected & roster closed)
+        if (sb && this.selectedObj && !this.selectedObj.dead && !this.rosterOpen) {
             var o = this.selectedObj;
             html += '<div class="sb-pe sb-glass" style="position:fixed;top:88px;right:12px;width:230px;border-radius:12px;padding:12px">' +
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-                '<strong style="color:#38bdf8">INSPECTOR</strong>' +
+                '<strong style="color:#38bdf8">OBJECT</strong>' +
                 '<button class="sb-btn" style="padding:2px 6px" id="sb-insp-close">✕</button></div>' +
                 '<div style="font-weight:700;margin-bottom:8px">' + (o.name || "Object") + '</div>' +
                 '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">' +
@@ -371,10 +468,8 @@ var SandboxUI = {
                 '</div>';
         }
 
-        // 6. Universal Object Spawner (Spotlight Default + All 4 Layouts Switchable)
-        if (this.spawnerOpen) {
-            html += this.renderSpawnerHTML();
-        }
+        // 6. Universal Object Spawner
+        if (this.spawnerOpen) html += this.renderSpawnerHTML();
 
         // 7. Right-Click Context Menu
         if (this.ctxMenu) {
@@ -388,13 +483,306 @@ var SandboxUI = {
         }
 
         // 8. L1 Glassmorphic Split Card Pause & Cheats Menu
-        if (this.pauseOpen) {
-            html += this.renderPauseHTML();
-        }
+        if (this.pauseOpen) html += this.renderPauseHTML();
 
         this._root.innerHTML = html;
         this.bindDynamicEvents();
         if (this.rosterOpen) this.renderRosterOnly();
+        if (this.sideOpen && this.sideTab === "inspect") this.refreshInspectLive();
+    },
+
+    renderSideDrawerHTML: function(sb, m) {
+        var self = this;
+        var topY = sb ? 62 : 12;
+        var ts = typeof devOpts !== "undefined" ? (devOpts.timeScale || 1) : 1;
+        var isPaused = typeof paused !== "undefined" && paused;
+        var tabs = [
+            ["controls", "🎛 Controls"],
+            ["inspect", "🔍 Inspect"],
+            ["tools", "🛠 Tools"],
+            ["games", "🕹 Games"]
+        ];
+
+        var body = "";
+        if (this.sideTab === "controls") body = this.renderSideControlsHTML(m);
+        else if (this.sideTab === "inspect") body = this.renderSideInspectHTML();
+        else if (this.sideTab === "tools") body = this.renderSideToolsHTML(sb);
+        else body = this.renderSideGamesHTML(m);
+
+        return '<div class="sb-pe sb-glass" style="position:fixed;top:' + topY + 'px;left:12px;bottom:16px;width:282px;max-width:86vw;border-radius:14px;display:flex;flex-direction:column;overflow:hidden">' +
+            // Header
+            '<div style="padding:10px 10px 8px;border-bottom:1px solid rgba(148,163,184,0.18);background:rgba(15,23,42,0.65)">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">' +
+            '<span style="font-weight:900;font-size:12px;color:' + (m && m.color ? m.color : '#38bdf8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (m ? m.title : 'UNIVERSAL MENU') + '</span>' +
+            '<button class="sb-btn" style="padding:2px 7px" id="sb-side-close" title="Collapse [F2 / `]">✕</button>' +
+            '</div>' +
+            // Time Scale & Pause/Step Bar
+            '<div style="display:flex;gap:3px;align-items:center">' +
+            '<button class="sb-btn ' + (isPaused ? 'active' : '') + '" style="padding:3px 7px" id="sb-tm-pause" title="Pause / Resume">' + (isPaused ? '▶' : '⏸') + '</button>' +
+            '<button class="sb-btn" style="padding:3px 7px" id="sb-tm-step" title="Step +1 Frame">⏭</button>' +
+            [0.25, 0.5, 1, 2, 4].map(function(v) {
+                return '<button class="sb-btn ' + (Math.abs(ts - v) < 0.05 ? 'active' : '') + '" style="flex:1;padding:3px 2px;font-size:11px" data-ts="' + v + '">' + v + 'x</button>';
+            }).join("") +
+            '</div>' +
+            // Tabs
+            '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:8px">' +
+            tabs.map(function(t) {
+                return '<button class="sb-btn ' + (self.sideTab === t[0] ? 'active' : '') + '" style="padding:5px 2px;font-size:11px" data-stab="' + t[0] + '">' + t[1] + '</button>';
+            }).join("") +
+            '</div></div>' +
+            // Scrollable Content
+            '<div class="sb-scroll" style="flex:1;overflow-y:auto;padding:10px">' + body + '</div>' +
+            '</div>';
+    },
+
+    renderSideControlsHTML: function(m) {
+        var rows = (typeof GameTuning !== "undefined") ? GameTuning.rows() : [];
+        var html = "";
+
+        if (rows.length) {
+            html += '<div class="sb-sec">Game Controls · ' + (m ? m.title : '') + '</div><div class="sb-card">';
+            html += rows.map(function(r, idx) {
+                var val = r.get ? r.get() : "";
+                if (r.type === "toggle") {
+                    return '<label class="sb-row" style="cursor:pointer"><span>' + r.label + '</span><input type="checkbox" data-gtune="' + idx + '" ' + (val ? 'checked' : '') + '></label>';
+                }
+                if (r.type === "choice") {
+                    return '<div style="margin-bottom:7px"><div style="font-size:11px;color:#94a3b8;margin-bottom:2px">' + r.label + '</div>' +
+                        '<select class="sb-input" data-gtune="' + idx + '">' +
+                        (r.options || []).map(function(o) { return '<option value="' + o[0] + '" ' + (String(o[0]) === String(val) ? 'selected' : '') + '>' + o[1] + '</option>'; }).join("") +
+                        '</select></div>';
+                }
+                return '<div style="margin-bottom:7px"><div class="sb-row" style="margin-bottom:2px"><span>' + r.label + '</span><strong>' + val + '</strong></div>' +
+                    '<input type="range" style="width:100%" data-gtune="' + idx + '" min="' + r.min + '" max="' + r.max + '" step="' + (r.step || 1) + '" value="' + val + '"></div>';
+            }).join("");
+            html += '</div>';
+        }
+
+        // Universal Physics & Cheats
+        var isGod = !!(typeof godMode !== "undefined" && godMode) || !!(typeof arenaCheats !== "undefined" && arenaCheats.god);
+        var unlimAmmo = typeof settings !== "undefined" && settings.ammo === "unlimited";
+        var grav = typeof devOpts !== "undefined" ? (devOpts.gravityMult || 1) : 1;
+        var uz = typeof userZoom !== "undefined" ? userZoom : 1;
+        var hb = typeof devOpts !== "undefined" && !!devOpts.showHitboxes;
+
+        html += '<div class="sb-sec">Universal Physics & Cheats</div><div class="sb-card">' +
+            '<label class="sb-row" style="cursor:pointer"><span>🛡 God Mode (Invincible)</span><input type="checkbox" id="sb-u-god" ' + (isGod ? 'checked' : '') + '></label>' +
+            '<label class="sb-row" style="cursor:pointer"><span>∞ Unlimited Ammo</span><input type="checkbox" id="sb-u-ammo" ' + (unlimAmmo ? 'checked' : '') + '></label>' +
+            '<label class="sb-row" style="cursor:pointer"><span>🟩 Show Hitboxes</span><input type="checkbox" id="sb-u-hb" ' + (hb ? 'checked' : '') + '></label>' +
+            '<div style="margin-bottom:6px"><div class="sb-row" style="margin-bottom:2px"><span>🌍 Gravity</span><strong>' + grav.toFixed(1) + 'x</strong></div>' +
+            '<input type="range" id="sb-u-grav" min="0" max="2.5" step="0.1" value="' + grav + '" style="width:100%"></div>' +
+            '<div><div class="sb-row" style="margin-bottom:2px"><span>🔎 Camera Zoom</span><strong>' + uz.toFixed(2) + 'x</strong></div>' +
+            '<input type="range" id="sb-u-zoom" min="0.4" max="2.2" step="0.05" value="' + uz + '" style="width:100%"></div>' +
+            '</div>';
+
+        html += '<div class="sb-sec">Quick Actions</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
+            '<button class="sb-btn" id="sb-act-heal">❤ Heal All</button>' +
+            '<button class="sb-btn" id="sb-act-clear">🧹 Clear Foes</button>' +
+            '<button class="sb-btn" id="sb-act-restart">🔄 Restart</button>' +
+            '<button class="sb-btn active" id="sb-act-hub">🕹 Arcade Hub</button>' +
+            '</div>';
+        return html;
+    },
+
+    renderSideInspectHTML: function() {
+        var ui = typeof UniversalInspect !== "undefined" ? UniversalInspect : null;
+        var sel = ui ? ui.selected : null;
+        var html = '<div style="display:flex;gap:5px;margin-bottom:8px">' +
+            '<button class="sb-btn ' + (this.tool === 'inspect' ? 'active' : '') + '" style="flex:1" id="sb-insp-pick">🎯 Click to Inspect</button>' +
+            (sel ? '<button class="sb-btn" id="sb-insp-clear" title="Clear Selection">✕</button>' : '') +
+            '</div>';
+
+        // Quick target chips for the active game
+        html += this.renderQuickTargetsHTML();
+
+        if (!sel) {
+            html += '<div class="sb-card" style="text-align:center;color:#94a3b8;padding:14px 10px">' +
+                '<div style="font-size:20px;margin-bottom:4px">🔍</div>' +
+                '<div style="font-weight:700;color:#e2e8f0;margin-bottom:4px">Universal Inspector</div>' +
+                'Click <strong>🎯 Click to Inspect</strong> and tap any player, zombie, ball, tank, blob, worm, virus, block, or tile!' +
+                '</div>';
+        } else {
+            var o = sel.obj;
+            var isFollowing = ui.followTarget && ui.followTarget.obj === o;
+            var isFrozen = !!(o && o._sbFrozen);
+            var isInv = !!(o && (o._sbInv || o.invulnTimer > 9999));
+
+            html += '<div class="sb-card" style="border-color:' + (sel.color || '#38bdf8') + '">' +
+                '<div style="display:flex;justify-content:space-between;align-items:start;gap:6px;margin-bottom:6px">' +
+                '<div><div style="font-weight:800;font-size:13px">' + sel.icon + ' ' + sel.title + '</div>' +
+                '<div style="font-size:11px;color:#94a3b8">' + sel.sub + '</div></div>' +
+                '<span style="font-size:10px;padding:2px 6px;border-radius:999px;background:rgba(56,189,248,0.2);color:#38bdf8;font-weight:800">' + sel.kind.toUpperCase() + '</span>' +
+                '</div>' +
+                '<div id="sb-insp-live" style="background:rgba(15,23,42,0.65);border-radius:8px;padding:7px;margin-bottom:8px"></div>' +
+                // Action Buttons
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:8px">' +
+                '<button class="sb-btn ' + (isFollowing ? 'active' : '') + '" id="sb-in-follow" style="padding:4px">🎯 Follow</button>' +
+                '<button class="sb-btn" id="sb-in-heal" style="padding:4px">❤ Heal/+</button>' +
+                '<button class="sb-btn" id="sb-in-yeet" style="padding:4px">🚀 Yeet</button>' +
+                ((sel.kind === "character" || sel.kind === "enemy") ? '<button class="sb-btn" id="sb-in-pos" style="padding:4px">⚡ Possess</button>' : '') +
+                '<button class="sb-btn ' + (isFrozen ? 'active' : '') + '" id="sb-in-freeze" style="padding:4px">' + (isFrozen ? '❄ Frozen' : '❄ Freeze') + '</button>' +
+                '<button class="sb-btn" id="sb-in-del" style="padding:4px;color:#f87171">🗑 Delete</button>' +
+                '</div>';
+
+            // Direct Live Editors
+            html += '<div class="sb-sec" style="margin-top:2px">Live Properties</div>';
+            if (sel.kind === "character" || sel.kind === "enemy") {
+                html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px">' +
+                    '<label style="font-size:10px;color:#94a3b8">HP<input class="sb-input" type="number" id="sb-ed-hp" value="' + Math.round(o.health || 0) + '"></label>' +
+                    '<label style="font-size:10px;color:#94a3b8">Max HP<input class="sb-input" type="number" id="sb-ed-mhp" value="' + Math.round(o.maxHealth || 100) + '"></label>' +
+                    '<label style="font-size:10px;color:#94a3b8">Speed<input class="sb-input" type="number" id="sb-ed-spd" value="' + Math.round(o.maxspeed || 10) + '"></label>' +
+                    '<label style="font-size:10px;color:#94a3b8">Size<input class="sb-input" type="number" id="sb-ed-sz" value="' + Math.round(o.s1 || 80) + '"></label>' +
+                    '</div>' +
+                    '<label class="sb-row" style="cursor:pointer"><span>🛡 Invincible</span><input type="checkbox" id="sb-ed-inv" ' + (isInv ? 'checked' : '') + '></label>';
+            } else if (sel.kind === "tank") {
+                html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px">' +
+                    '<label style="font-size:10px;color:#94a3b8">HP<input class="sb-input" type="number" id="sb-ed-thp" value="' + Math.round(o.hp || 0) + '"></label>' +
+                    '<label style="font-size:10px;color:#94a3b8">Level<input class="sb-input" type="number" id="sb-ed-tlvl" value="' + (o.lvl || 1) + '"></label>' +
+                    '<label style="font-size:10px;color:#94a3b8">Stat Pts<input class="sb-input" type="number" id="sb-ed-tpts" value="' + (o.pts || 0) + '"></label>' +
+                    '<label style="font-size:10px;color:#94a3b8">Color<input class="sb-input" type="color" id="sb-ed-col" value="' + (o.col || '#38bdf8') + '" style="height:28px;padding:2px"></label>' +
+                    '</div>';
+            } else if (sel.kind === "blob" || sel.kind === "virus") {
+                html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px">' +
+                    '<label style="font-size:10px;color:#94a3b8">Mass<input class="sb-input" type="number" id="sb-ed-mass" value="' + Math.round(o.m || 50) + '"></label>' +
+                    '<label style="font-size:10px;color:#94a3b8">X<input class="sb-input" type="number" id="sb-ed-x" value="' + Math.round(o.x || 0) + '"></label>' +
+                    '</div>';
+            } else if (sel.kind === "worm") {
+                html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px">' +
+                    '<label style="font-size:10px;color:#94a3b8">Length<input class="sb-input" type="number" id="sb-ed-len" value="' + Math.round(o.len || 30) + '"></label>' +
+                    '<label style="font-size:10px;color:#94a3b8">Color<input class="sb-input" type="color" id="sb-ed-col" value="' + (o.col || '#a855f7') + '" style="height:28px;padding:2px"></label>' +
+                    '</div>';
+            } else if (sel.kind === "object") {
+                html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px">' +
+                    '<label style="font-size:10px;color:#94a3b8">X<input class="sb-input" type="number" id="sb-ed-x" value="' + Math.round(o.x || 0) + '"></label>' +
+                    '<label style="font-size:10px;color:#94a3b8">Y<input class="sb-input" type="number" id="sb-ed-y" value="' + Math.round(o.y || 0) + '"></label>' +
+                    '<label style="font-size:10px;color:#94a3b8">W<input class="sb-input" type="number" id="sb-ed-w" value="' + Math.round(o.w || 60) + '"></label>' +
+                    '<label style="font-size:10px;color:#94a3b8">H<input class="sb-input" type="number" id="sb-ed-h" value="' + Math.round(o.h || 60) + '"></label>' +
+                    '</div>';
+            } else if (sel.kind === "ball") {
+                html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px">' +
+                    '<label style="font-size:10px;color:#94a3b8">Radius<input class="sb-input" type="number" id="sb-ed-br" value="' + Math.round(Ball.r || 44) + '"></label>' +
+                    '<label style="font-size:10px;color:#94a3b8">X<input class="sb-input" type="number" id="sb-ed-x" value="' + Math.round(Ball.x || 0) + '"></label>' +
+                    '</div>';
+            }
+
+            // Mode-specific extra fields (Bedwars, Brawl, Terra, etc.)
+            if (sel.extra && sel.extra.fields && sel.extra.fields.length) {
+                html += '<div class="sb-sec">Mode Properties</div>';
+                sel.extra.fields.forEach(function(f, fi) {
+                    var v = f.get ? f.get() : "";
+                    if (f.type === "range") {
+                        html += '<div style="margin-bottom:5px"><div class="sb-row" style="margin-bottom:1px"><span>' + f.label + '</span><strong>' + v + '</strong></div>' +
+                            '<input type="range" style="width:100%" data-exf="' + fi + '" min="' + f.min + '" max="' + f.max + '" step="' + (f.step || 1) + '" value="' + v + '"></div>';
+                    } else if (f.type === "choice") {
+                        html += '<div style="margin-bottom:5px"><div style="font-size:10px;color:#94a3b8">' + f.label + '</div>' +
+                            '<select class="sb-input" data-exf="' + fi + '">' + (f.options || []).map(function(op) { return '<option value="' + op[0] + '" ' + (String(op[0]) === String(v) ? 'selected' : '') + '>' + op[1] + '</option>'; }).join("") + '</select></div>';
+                    } else {
+                        html += '<div class="sb-row"><span>' + f.label + '</span><strong>' + v + '</strong></div>';
+                    }
+                });
+            }
+            if (sel.extra && sel.extra.actions && sel.extra.actions.length) {
+                html += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">' +
+                    sel.extra.actions.map(function(a, ai) { return '<button class="sb-btn" data-exa="' + ai + '" style="flex:1;padding:4px">' + a.label + '</button>'; }).join("") +
+                    '</div>';
+            }
+
+            // Collapsible Raw Property Explorer
+            html += '<details ' + (this.rawOpen ? 'open' : '') + ' id="sb-raw-det" style="margin-top:8px">' +
+                '<summary style="cursor:pointer;font-size:11px;font-weight:700;color:#38bdf8">🧬 Raw Property Explorer</summary>' +
+                '<input class="sb-input" id="sb-raw-filter" placeholder="Filter keys (hp, x, vx, color...)" value="' + this.rawFilter + '" style="margin:6px 0">' +
+                '<div class="sb-scroll" style="max-height:170px;overflow-y:auto">' + this.renderRawPropsHTML(o) + '</div></details>';
+
+            html += '</div>';
+        }
+
+        // World Telemetry Footer
+        html += '<div class="sb-sec">World Telemetry</div><div class="sb-card" style="font-size:11px">' +
+            '<div class="sb-row"><span>Frame Rate</span><strong id="sb-world-fps">' + (typeof measuredFPS !== "undefined" ? measuredFPS : 60) + ' FPS</strong></div>' +
+            '<div class="sb-row"><span>Players / Enemies</span><strong>' + (typeof characters !== "undefined" ? characters.length : 0) + ' / ' + (typeof zombies !== "undefined" ? zombies.length : 0) + '</strong></div>' +
+            '<div class="sb-row" style="margin-bottom:0"><span>Ragdolls / Objects</span><strong>' + (typeof Ragdolls !== "undefined" ? Ragdolls.list.length : 0) + ' / ' + (typeof staticObjects !== "undefined" ? staticObjects.length : 0) + '</strong></div>' +
+            '</div>';
+        return html;
+    },
+
+    renderQuickTargetsHTML: function() {
+        var id = GameModes.current ? GameModes.current.id : "";
+        var chips = [];
+        if (id === "sport" && typeof Ball !== "undefined") {
+            chips.push(["⚽ Ball", "ball"]);
+            if (typeof Flail !== "undefined" && Flail.on() && Flail.men[0]) chips.push(["🟢 Keeper", "flail0"]);
+        } else if (id === "mix" || id === "tanks" || id === "cells" || id === "snake") {
+            if (typeof Tanks !== "undefined" && Tanks.tanks[0]) chips.push(["🛡 Tank", "tank0"]);
+            if (typeof Cells !== "undefined" && Cells.blobs[0]) chips.push(["🟢 Blob", "blob0"]);
+            if (typeof Snake !== "undefined" && Snake.worms[0]) chips.push(["🐍 Worm", "worm0"]);
+            if (typeof Cells !== "undefined" && Cells.viruses[0]) chips.push(["🦠 Virus", "virus0"]);
+        } else {
+            if (typeof redGuy !== "undefined" && redGuy && !redGuy.dead) chips.push(["🧑 P1", "p1"]);
+            if (typeof blueGuy !== "undefined" && blueGuy && !blueGuy.dead) chips.push(["🧑 P2", "p2"]);
+            if (typeof zombies !== "undefined" && zombies[0]) chips.push(["🧟 Enemy", "z0"]);
+        }
+        if (!chips.length) return "";
+        return '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">' +
+            chips.map(function(c) { return '<button class="sb-btn" style="padding:3px 7px;font-size:11px" data-qpick="' + c[1] + '">' + c[0] + '</button>'; }).join("") +
+            '</div>';
+    },
+
+    renderRawPropsHTML: function(o) {
+        if (!o || typeof o !== "object") return "";
+        var q = this.rawFilter.toLowerCase();
+        var keys = Object.keys(o).filter(function(k) {
+            if (k.charAt(0) === "_") return false;
+            var t = typeof o[k];
+            if (t !== "number" && t !== "boolean" && t !== "string") return false;
+            return !q || k.toLowerCase().indexOf(q) !== -1;
+        }).slice(0, 40);
+        return keys.map(function(k) {
+            var v = o[k], t = typeof v;
+            if (t === "boolean") {
+                return '<label class="sb-row" style="margin-bottom:3px;font-size:11px"><span style="color:#94a3b8">' + k + '</span><input type="checkbox" data-rawk="' + k + '" ' + (v ? 'checked' : '') + '></label>';
+            }
+            return '<div class="sb-row" style="margin-bottom:3px;font-size:11px"><span style="color:#94a3b8;overflow:hidden;text-overflow:ellipsis">' + k + '</span>' +
+                '<input class="sb-input" data-rawk="' + k + '" type="' + (t === "number" ? "number" : "text") + '" value="' + (t === "number" ? Math.round(v * 100) / 100 : String(v).replace(/"/g, '&quot;')) + '" style="width:95px;padding:2px 5px;font-size:11px"></div>';
+        }).join("");
+    },
+
+    renderSideToolsHTML: function(sb) {
+        var tools = [
+            ["play", "🎮 Play / Normal"],
+            ["inspect", "🔍 Inspect Anything"],
+            ["select", "✋ Select / Move"],
+            ["drawFloor", "🧱 Draw Floor"],
+            ["drawPlat", "➖ Draw Platform"],
+            ["drawWall", "🏰 Draw Wall"],
+            ["spawn", "➕ Spawn Selected"],
+            ["possess", "⚡ Possess Entity"],
+            ["grapple", "🪝 Grappling Hook"],
+            ["delete", "🗑 Delete"]
+        ];
+        return '<div class="sb-sec">Active Tool</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px">' +
+            tools.map(function(t) {
+                return '<button class="sb-btn ' + (SandboxUI.tool === t[0] ? 'active' : '') + '" style="text-align:left;padding:6px 7px;font-size:11px" data-sbtool="' + t[0] + '">' + t[1] + '</button>';
+            }).join("") + '</div>' +
+            '<div class="sb-sec">Studio Overlays</div>' +
+            '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-spawn">🔍 Universal Spawner [B]</button>' +
+            '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-roster">👥 Entity Roster</button>' +
+            (sb ? '<button class="sb-btn" style="width:100%" id="sb-tl-floor">▦ Toggle Sandbox Floor</button>' : '');
+    },
+
+    renderSideGamesHTML: function(cur) {
+        var list = typeof GameModes !== "undefined" ? GameModes.list : [];
+        var q = this.gameSearch.toLowerCase();
+        var filtered = list.filter(function(g) {
+            return !q || g.title.toLowerCase().indexOf(q) !== -1 || (g.tagline && g.tagline.toLowerCase().indexOf(q) !== -1);
+        });
+        return '<input class="sb-input" id="sb-gm-search" placeholder="Search all ' + list.length + ' games..." value="' + this.gameSearch + '" style="margin-bottom:8px">' +
+            filtered.map(function(g) {
+                var act = cur && cur.id === g.id;
+                return '<button class="sb-btn ' + (act ? 'active' : '') + '" data-gmlaunch="' + g.id + '" style="width:100%;text-align:left;margin-bottom:5px;padding:7px 9px">' +
+                    '<div style="font-weight:800;font-size:12px">' + g.title + '</div>' +
+                    '<div style="font-size:10px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (g.tagline || '') + '</div></button>';
+            }).join("");
     },
 
     renderSpawnerHTML: function() {
@@ -420,7 +808,7 @@ var SandboxUI = {
         if (this.spawnerMode === "spotlight") {
             return '<div class="sb-pe sb-glass" style="position:fixed;top:64px;left:50%;transform:translateX(-50%);width:580px;max-width:92vw;border-radius:14px;padding:12px">' +
                 modeSwitcher +
-                '<input class="sb-input" id="sb-sp-search" placeholder="Search EVERY object & enemy from all 23 games (zombie, boss, bed, tnt, portal, tank...)" value="' + this.spawnerSearch + '" />' +
+                '<input class="sb-input" id="sb-sp-search" placeholder="Search EVERY object & enemy from all games (zombie, boss, bed, tnt, portal, tank...)" value="' + this.spawnerSearch + '" />' +
                 '<div class="sb-scroll" style="display:flex;gap:4px;overflow-x:auto;margin-top:8px;padding-bottom:4px">' +
                 cats.map(function(c) {
                     return '<button class="sb-btn ' + (self.spawnerCat === c ? 'active' : '') + '" style="white-space:nowrap;padding:3px 8px;font-size:11px" data-spcat="' + c + '">' + c + '</button>';
@@ -464,8 +852,7 @@ var SandboxUI = {
                 '</div>';
         }
 
-        // browser (Dual-Pane)
-        return '<div class="sb-pe sb-glass" style="position:fixed;top:68px;left:130px;width:480px;max-width:90vw;height:360px;border-radius:14px;padding:10px;display:flex;flex-direction:column">' +
+        return '<div class="sb-pe sb-glass" style="position:fixed;top:68px;left:304px;width:480px;max-width:90vw;height:360px;border-radius:14px;padding:10px;display:flex;flex-direction:column">' +
             modeSwitcher +
             '<div style="flex:1;display:flex;gap:8px;min-height:0">' +
             '<div class="sb-scroll" style="width:130px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">' +
@@ -516,6 +903,7 @@ var SandboxUI = {
         var self = this;
         var el = function(id) { return document.getElementById(id); };
 
+        // Top Bar (Sandbox)
         if (el("sb-top-spawn")) el("sb-top-spawn").onclick = function() { self.spawnerOpen = !self.spawnerOpen; self.render(); };
         if (el("sb-top-roster")) el("sb-top-roster").onclick = function() { self.rosterOpen = !self.rosterOpen; self.render(); };
         if (el("sb-top-floor")) el("sb-top-floor").onclick = function() {
@@ -526,11 +914,230 @@ var SandboxUI = {
         if (el("sb-top-eject")) el("sb-top-eject").onclick = function() { EntityTakeover.release(false); self.render(); };
         if (el("sb-top-pause")) el("sb-top-pause").onclick = function() { togglePause(); };
 
+        // Universal Side Handle & Drawer
+        if (el("sb-side-open")) el("sb-side-open").onclick = function() { self.sideOpen = true; self.render(); };
+        if (el("sb-side-close")) el("sb-side-close").onclick = function() { self.sideOpen = false; self.render(); };
+        if (el("sb-quick-inspect")) el("sb-quick-inspect").onclick = function() {
+            self.tool = self.tool === "inspect" ? "play" : "inspect";
+            if (self.tool === "inspect") { self.sideOpen = true; self.sideTab = "inspect"; }
+            self.render();
+        };
+        if (el("sb-quick-play")) el("sb-quick-play").onclick = function() { self.tool = "play"; self.render(); };
+
+        // Time Scale & Pause/Step
+        if (el("sb-tm-pause")) el("sb-tm-pause").onclick = function() { if (typeof togglePause === "function") togglePause(); self.render(); };
+        if (el("sb-tm-step")) el("sb-tm-step").onclick = function() {
+            if (typeof paused !== "undefined" && !paused && typeof openPause === "function") openPause(false);
+            if (typeof frame === "function") frame();
+            if (typeof pauseSnap !== "undefined" && pauseSnap && typeof canvas !== "undefined") pauseSnap.getContext("2d").drawImage(canvas, 0, 0);
+            self.render();
+        };
+        this._root.querySelectorAll("[data-ts]").forEach(function(b) {
+            b.onclick = function() { devOpts.timeScale = Number(b.dataset.ts); self.render(); };
+        });
+        this._root.querySelectorAll("[data-stab]").forEach(function(b) {
+            b.onclick = function() { self.sideTab = b.dataset.stab; self.render(); };
+        });
+
+        // Controls Tab: Game Tunables
+        var gRows = (typeof GameTuning !== "undefined") ? GameTuning.rows() : [];
+        this._root.querySelectorAll("[data-gtune]").forEach(function(inp) {
+            var r = gRows[Number(inp.dataset.gtune)];
+            if (!r || !r.set) return;
+            var handler = function() {
+                if (r.type === "toggle") r.set(inp.checked);
+                else if (r.type === "choice") r.set(isNaN(Number(inp.value)) ? inp.value : Number(inp.value));
+                else r.set(Number(inp.value));
+                if (inp.type === "range" && inp.previousElementSibling) {
+                    var strong = inp.previousElementSibling.querySelector("strong");
+                    if (strong) strong.textContent = r.get();
+                } else self.render();
+            };
+            inp.oninput = handler;
+            if (inp.tagName === "SELECT" || inp.type === "checkbox") inp.onchange = handler;
+        });
+
+        // Controls Tab: Universal Cheats
+        if (el("sb-u-god")) el("sb-u-god").onchange = function(e) {
+            var v = e.target.checked;
+            if (typeof godMode !== "undefined") godMode = v;
+            if (typeof arenaCheats !== "undefined") arenaCheats.god = v;
+            if (typeof sandboxCfg !== "undefined") sandboxCfg.invincible = v;
+            if (typeof creativeCfg !== "undefined") creativeCfg.invincible = v;
+        };
+        if (el("sb-u-ammo")) el("sb-u-ammo").onchange = function(e) {
+            if (typeof settings !== "undefined") { settings.ammo = e.target.checked ? "unlimited" : "limited"; if (typeof saveSettings === "function") saveSettings(); }
+        };
+        if (el("sb-u-hb")) el("sb-u-hb").onchange = function(e) { devOpts.showHitboxes = e.target.checked; };
+        if (el("sb-u-grav")) el("sb-u-grav").oninput = function(e) {
+            devOpts.gravityMult = Number(e.target.value);
+            var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong");
+            if (st) st.textContent = devOpts.gravityMult.toFixed(1) + "x";
+        };
+        if (el("sb-u-zoom")) el("sb-u-zoom").oninput = function(e) {
+            if (typeof userZoom !== "undefined") userZoom = Number(e.target.value);
+            var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong");
+            if (st) st.textContent = userZoom.toFixed(2) + "x";
+        };
+        if (el("sb-act-heal") && typeof DevActions !== "undefined") el("sb-act-heal").onclick = function() { DevActions.healAll(); };
+        if (el("sb-act-clear") && typeof DevActions !== "undefined") el("sb-act-clear").onclick = function() { DevActions.clearEnemies(); };
+        if (el("sb-act-restart")) el("sb-act-restart").onclick = function() {
+            if (GameModes.has("onRestart")) GameModes.call("onRestart");
+            else if (typeof resetGame === "function") resetGame();
+            self.render();
+        };
+        if (el("sb-act-hub")) el("sb-act-hub").onclick = function() { if (typeof Hub !== "undefined") Hub.openHub(false); };
+
+        // Inspect Tab
+        if (el("sb-insp-pick")) el("sb-insp-pick").onclick = function() {
+            self.tool = self.tool === "inspect" ? (self.isSandbox() ? "select" : "play") : "inspect";
+            self.render();
+        };
+        if (el("sb-insp-clear")) el("sb-insp-clear").onclick = function() {
+            UniversalInspect.selected = null;
+            UniversalInspect.followTarget = null;
+            self.render();
+        };
+        this._root.querySelectorAll("[data-qpick]").forEach(function(b) {
+            b.onclick = function() {
+                var k = b.dataset.qpick, d = null;
+                if (k === "ball" && typeof Ball !== "undefined") d = UniversalInspect._ballDesc();
+                else if (k === "flail0" && typeof Flail !== "undefined" && Flail.men[0]) d = UniversalInspect._flailDesc(Flail.men[0]);
+                else if (k === "tank0" && typeof Tanks !== "undefined" && Tanks.tanks[0]) d = UniversalInspect._tankDesc(Tanks.tanks[0]);
+                else if (k === "blob0" && typeof Cells !== "undefined" && Cells.blobs[0]) d = UniversalInspect._blobDesc(Cells.blobs[0]);
+                else if (k === "worm0" && typeof Snake !== "undefined" && Snake.worms[0]) d = UniversalInspect._wormDesc(Snake.worms[0]);
+                else if (k === "virus0" && typeof Cells !== "undefined" && Cells.viruses[0]) d = UniversalInspect._virusDesc(Cells.viruses[0]);
+                else if (k === "p1" && typeof redGuy !== "undefined" && redGuy) d = UniversalInspect._charDesc(redGuy);
+                else if (k === "p2" && typeof blueGuy !== "undefined" && blueGuy) d = UniversalInspect._charDesc(blueGuy);
+                else if (k === "z0" && typeof zombies !== "undefined" && zombies[0]) d = UniversalInspect._charDesc(zombies[0]);
+                if (d) { UniversalInspect.selected = d; self.render(); }
+            };
+        });
+
+        var sel = typeof UniversalInspect !== "undefined" ? UniversalInspect.selected : null;
+        if (sel && sel.obj) {
+            var o = sel.obj;
+            if (el("sb-in-follow")) el("sb-in-follow").onclick = function() {
+                UniversalInspect.followTarget = (UniversalInspect.followTarget && UniversalInspect.followTarget.obj === o) ? null : sel;
+                self.render();
+            };
+            if (el("sb-in-heal")) el("sb-in-heal").onclick = function() {
+                if (sel.kind === "character" || sel.kind === "enemy") o.health = o.maxHealth;
+                else if (sel.kind === "tank") o.hp = o.maxHp;
+                else if (sel.kind === "blob" || sel.kind === "virus") o.m = (o.m || 50) + 100;
+                else if (sel.kind === "worm") o.len += 80;
+                else if (sel.kind === "ball") { Ball.x = 0; Ball.y = 420; Ball.vx = Ball.vy = 0; }
+                self.render();
+            };
+            if (el("sb-in-yeet")) el("sb-in-yeet").onclick = function() {
+                if (sel.kind === "character" || sel.kind === "enemy") { o.yspeed = 26; o.xspeed = (Math.random() - 0.5) * 28; }
+                else if (sel.kind === "ball") { Ball.vx = (Math.random() < 0.5 ? -1 : 1) * 24; Ball.vy = 20; }
+                else if (sel.kind === "ragdoll" || sel.kind === "flail") o.addVelocity((Math.random() - 0.5) * 20, 28);
+                else if (o.vx !== undefined) { o.vx += (Math.random() - 0.5) * 18; o.vy = (o.vy || 0) - 10; }
+            };
+            if (el("sb-in-pos")) el("sb-in-pos").onclick = function() {
+                if (typeof EntityTakeover !== "undefined") EntityTakeover.possess(o);
+                self.render();
+            };
+            if (el("sb-in-freeze")) el("sb-in-freeze").onclick = function() {
+                o._sbFrozen = !o._sbFrozen;
+                if (o._sbFrozen) { var p = sel.pos(); o._sbPinX = p.x; o._sbPinY = p.y; }
+                self.render();
+            };
+            if (el("sb-in-del")) el("sb-in-del").onclick = function() {
+                if (sel.kind === "character" || sel.kind === "enemy" || sel.kind === "object") {
+                    if (o !== redGuy) o.dead = true;
+                } else if (sel.kind === "tank") o.alive = false;
+                else if (sel.kind === "worm") o.alive = false;
+                else if (sel.kind === "blob") o.m = 0;
+                else if (sel.kind === "virus" && typeof Cells !== "undefined") {
+                    var vi = Cells.viruses.indexOf(o); if (vi !== -1) Cells.viruses.splice(vi, 1);
+                } else if (sel.kind === "ragdoll" && typeof Ragdolls !== "undefined") Ragdolls.remove(o);
+                if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                UniversalInspect.selected = null;
+                self.render();
+            };
+
+            var bindNum = function(id, fn) {
+                var inp = el(id);
+                if (inp) inp.onchange = function() { var v = Number(inp.value); if (!isNaN(v)) fn(v); };
+            };
+            bindNum("sb-ed-hp", function(v) { o.health = v; });
+            bindNum("sb-ed-mhp", function(v) { o.maxHealth = Math.max(1, v); });
+            bindNum("sb-ed-spd", function(v) { o.maxspeed = Math.max(1, v); });
+            bindNum("sb-ed-sz", function(v) { o.s1 = o.s2 = Math.max(16, v); });
+            bindNum("sb-ed-thp", function(v) { o.hp = v; });
+            bindNum("sb-ed-tlvl", function(v) { o.lvl = Math.max(1, v); });
+            bindNum("sb-ed-tpts", function(v) { o.pts = Math.max(0, v); });
+            bindNum("sb-ed-mass", function(v) { o.m = Math.max(10, v); });
+            bindNum("sb-ed-len", function(v) { o.len = Math.max(10, v); });
+            bindNum("sb-ed-x", function(v) { o.x = v; if (o._sbFrozen) o._sbPinX = v; });
+            bindNum("sb-ed-y", function(v) { o.y = v; if (o._sbFrozen) o._sbPinY = v; });
+            bindNum("sb-ed-w", function(v) { o.w = Math.max(10, v); if (typeof rebuildAllObjects === "function") rebuildAllObjects(); });
+            bindNum("sb-ed-h", function(v) { o.h = Math.max(10, v); if (typeof rebuildAllObjects === "function") rebuildAllObjects(); });
+            bindNum("sb-ed-br", function(v) { Ball.r = Math.max(12, v); });
+            if (el("sb-ed-col")) el("sb-ed-col").oninput = function(e) { o.col = e.target.value; };
+            if (el("sb-ed-inv")) el("sb-ed-inv").onchange = function(e) { o._sbInv = e.target.checked; o.invulnTimer = e.target.checked ? 999999 : 0; };
+
+            // Mode extra fields & actions
+            if (sel.extra && sel.extra.fields) {
+                this._root.querySelectorAll("[data-exf]").forEach(function(inp) {
+                    var f = sel.extra.fields[Number(inp.dataset.exf)];
+                    if (!f || !f.set) return;
+                    inp.oninput = inp.onchange = function() {
+                        f.set(isNaN(Number(inp.value)) ? inp.value : Number(inp.value));
+                        self.render();
+                    };
+                });
+            }
+            if (sel.extra && sel.extra.actions) {
+                this._root.querySelectorAll("[data-exa]").forEach(function(b) {
+                    b.onclick = function() { sel.extra.actions[Number(b.dataset.exa)].fn(); self.render(); };
+                });
+            }
+
+            // Raw Property Explorer
+            if (el("sb-raw-det")) el("sb-raw-det").ontoggle = function(e) { self.rawOpen = e.target.open; };
+            if (el("sb-raw-filter")) {
+                var rf = el("sb-raw-filter");
+                rf.oninput = function() { self.rawFilter = rf.value; self.render(); };
+            }
+            this._root.querySelectorAll("[data-rawk]").forEach(function(inp) {
+                var k = inp.dataset.rawk;
+                inp.onchange = function() {
+                    if (inp.type === "checkbox") o[k] = inp.checked;
+                    else if (typeof o[k] === "number") { var n = Number(inp.value); if (!isNaN(n)) o[k] = n; }
+                    else o[k] = inp.value;
+                };
+            });
+        }
+
+        // Tools Tab
         this._root.querySelectorAll("[data-sbtool]").forEach(function(b) {
             b.onclick = function() { self.tool = b.dataset.sbtool; self.render(); };
         });
+        if (el("sb-tl-spawn")) el("sb-tl-spawn").onclick = function() { self.spawnerOpen = !self.spawnerOpen; self.render(); };
+        if (el("sb-tl-roster")) el("sb-tl-roster").onclick = function() { self.rosterOpen = !self.rosterOpen; self.render(); };
+        if (el("sb-tl-floor")) el("sb-tl-floor").onclick = function() {
+            sandboxCfg.showFloor = !sandboxCfg.showFloor; saveSandboxCfg();
+            if (typeof SandboxFloor !== "undefined") SandboxFloor.sync();
+            self.render();
+        };
 
-        // Inspector
+        // Games Tab
+        if (el("sb-gm-search")) {
+            var gs = el("sb-gm-search");
+            gs.oninput = function() { self.gameSearch = gs.value; self.render(); };
+        }
+        this._root.querySelectorAll("[data-gmlaunch]").forEach(function(b) {
+            b.onclick = function() {
+                if (typeof paused !== "undefined" && paused && typeof closePause === "function") closePause();
+                GameModes.launch(b.dataset.gmlaunch);
+                self.render();
+            };
+        });
+
+        // Sandbox Right Inspector
         if (el("sb-insp-close")) el("sb-insp-close").onclick = function() { self.selectedObj = null; self.render(); };
         if (el("sb-insp-del") && self.selectedObj) el("sb-insp-del").onclick = function() {
             self.selectedObj.dead = true; self.selectedObj = null;
@@ -597,7 +1204,7 @@ var SandboxUI = {
             b.onclick = function() {
                 self.selectedCatalogId = b.dataset.spitem;
                 self.tool = "spawn";
-                var ref = GrappleHook.activeTarget() || { x: 0, y: 120 };
+                var ref = (typeof GrappleHook !== "undefined" ? GrappleHook.activeTarget() : null) || { x: 0, y: 120 };
                 UniversalSpawner.spawnById(self.selectedCatalogId, ref.x + 120, ref.y + 40);
                 self.spawnerOpen = false;
                 self.render();

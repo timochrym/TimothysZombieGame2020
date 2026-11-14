@@ -128,3 +128,392 @@ var GAME_MATCH_STATE = {
     property: function() { return [["Round", Rent.round]].concat(Rent.pl.map(function(p) { return [p.name, p.out ? "bankrupt" : "$" + p.cash]; })); },
     party: function() { return [["Round", Party.round + " / " + partyCfg.rounds]].concat(Party.pl.map(function(p) { return [p.name, "★ " + p.stars + " · " + p.coins + " coins"]; })); }
 };
+
+// ============================================================================
+// UNIVERSAL INSPECT - Works across ALL 24 games (standard world + ownScreen arenas)
+// ============================================================================
+var UniversalInspect = {
+    hovered: null,
+    selected: null,
+    followTarget: null,
+
+    arenaCam: function() {
+        var id = GameModes.current ? GameModes.current.id : "";
+        if (id === "mix" && typeof Mix !== "undefined") return Mix.cam;
+        if (id === "tanks" && typeof Tanks !== "undefined") return Tanks.cam;
+        if (id === "cells" && typeof Cells !== "undefined") return Cells.cam;
+        if (id === "snake" && typeof Snake !== "undefined") return Snake.cam;
+        return null;
+    },
+
+    screenToWorld: function(sx, sy) {
+        var ac = this.arenaCam();
+        if (ac) {
+            var z = ac.z || 1;
+            return { x: (sx - cssW / 2) / z + ac.x, y: (sy - cssH / 2) / z + ac.y };
+        }
+        var s = (typeof cameraScaleX !== "undefined" && cameraScaleX) ? cameraScaleX : 1;
+        var x0 = (typeof xc !== "undefined") ? xc : 0;
+        var y0 = (typeof yc !== "undefined") ? yc : 0;
+        return { x: (sx - x0) / s, y: (y0 - sy) / s };
+    },
+
+    worldToScreen: function(wx, wy) {
+        var ac = this.arenaCam();
+        if (ac) {
+            var z = ac.z || 1;
+            return { x: (wx - ac.x) * z + cssW / 2, y: (wy - ac.y) * z + cssH / 2, scale: z };
+        }
+        var s = (typeof cameraScaleX !== "undefined" && cameraScaleX) ? cameraScaleX : 1;
+        var x0 = (typeof xc !== "undefined") ? xc : 0;
+        var y0 = (typeof yc !== "undefined") ? yc : 0;
+        return { x: x0 + wx * s, y: y0 - wy * s, scale: s };
+    },
+
+    findAt: function(sx, sy) {
+        var id = GameModes.current ? GameModes.current.id : "";
+        var w = this.screenToWorld(sx, sy);
+        var wx = w.x, wy = w.y;
+
+        // 1. Arena IO games (mix, tanks, cells, snake)
+        if (id === "mix" || id === "tanks" || id === "cells" || id === "snake") {
+            if (typeof Tanks !== "undefined" && (id === "mix" || id === "tanks")) {
+                for (var i = Tanks.tanks.length - 1; i >= 0; i--) {
+                    var k = Tanks.tanks[i];
+                    if (!k.alive) continue;
+                    var r = Tanks.size(k);
+                    if (Math.hypot(k.x - wx, k.y - wy) <= r + 14) return this._tankDesc(k);
+                }
+                for (var j = Tanks.shapes.length - 1; j >= 0; j--) {
+                    var sh = Tanks.shapes[j], S = TNK_SHAPES[sh.type];
+                    if (Math.hypot(sh.x - wx, sh.y - wy) <= (S ? S.r : 20) + 10) return this._shapeDesc(sh, S);
+                }
+            }
+            if (typeof Cells !== "undefined" && (id === "mix" || id === "cells")) {
+                for (var bi = Cells.blobs.length - 1; bi >= 0; bi--) {
+                    var b = Cells.blobs[bi], br = Cells.rad(b.m);
+                    if (Math.hypot(b.x - wx, b.y - wy) <= br + 12) return this._blobDesc(b);
+                }
+                for (var vi = Cells.viruses.length - 1; vi >= 0; vi--) {
+                    var v = Cells.viruses[vi], vr = Cells.rad(v.m || 100);
+                    if (Math.hypot(v.x - wx, v.y - wy) <= vr + 12) return this._virusDesc(v);
+                }
+            }
+            if (typeof Snake !== "undefined" && (id === "mix" || id === "snake")) {
+                for (var wi = Snake.worms.length - 1; wi >= 0; wi--) {
+                    var wm = Snake.worms[wi];
+                    if (!wm.alive || !wm.segs.length) continue;
+                    var wr = Snake.rad(wm) + 14;
+                    for (var si = 0; si < wm.segs.length; si += 2) {
+                        if (Math.hypot(wm.segs[si].x - wx, wm.segs[si].y - wy) <= wr) return this._wormDesc(wm);
+                    }
+                }
+            }
+            return null;
+        }
+
+        // 2. Zombie Ball: Ball & Flail Soccer Physics players
+        if (id === "sport" && typeof Ball !== "undefined") {
+            if (Math.hypot(Ball.x - wx, Ball.y - wy) <= Ball.r + 16) return this._ballDesc();
+            if (typeof Flail !== "undefined" && Flail.on()) {
+                for (var fi = Flail.men.length - 1; fi >= 0; fi--) {
+                    var fm = Flail.men[fi];
+                    if (fm.pts.some(function(p) { return Math.hypot(p.x - wx, p.y - wy) < (p.r || 20) + 26; })) {
+                        return this._flailDesc(fm);
+                    }
+                }
+            }
+        }
+
+        // 3. Mode-specific GameInspect (Bedwars, Brawl, Terra, Wheels, Dummy, Words)
+        var extra = GameInspect.find(wx, wy);
+
+        // 4. Characters (players & CPUs)
+        for (var ci = characters.length - 1; ci >= 0; ci--) {
+            var c = characters[ci];
+            if (!c.dead && GameInspect.near(c, wx, wy, 14)) return this._charDesc(c, extra);
+        }
+
+        // 5. Zombies / Enemies
+        for (var zi = zombies.length - 1; zi >= 0; zi--) {
+            var z = zombies[zi];
+            if (!z.dead && GameInspect.near(z, wx, wy, 14)) return this._charDesc(z, extra);
+        }
+
+        // 6. Ragdolls
+        if (typeof Ragdolls !== "undefined") {
+            for (var ri = Ragdolls.list.length - 1; ri >= 0; ri--) {
+                var rd = Ragdolls.list[ri];
+                if (rd.pts.some(function(p) { return Math.hypot(p.x - wx, p.y - wy) < (p.r || 10) + 18; })) {
+                    return this._ragdollDesc(rd, extra);
+                }
+            }
+        }
+
+        // 7. Static & Moving Objects (floors, platforms, walls, crates)
+        var objs = [].concat(movingObjects || [], staticObjects || []);
+        for (var oi = objs.length - 1; oi >= 0; oi--) {
+            var o = objs[oi];
+            if (!o || o.dead) continue;
+            var hw = (o.w || o.s1 || 40) / 2 + 8, hh = (o.h || o.s2 || 40) / 2 + 8;
+            if (Math.abs(o.x - wx) <= hw && Math.abs(o.y - wy) <= hh) return this._objDesc(o, extra);
+        }
+
+        // 8. Fallback to mode-specific tile/water/etc.
+        if (extra) return this._extraOnlyDesc(extra, wx, wy);
+        return null;
+    },
+
+    _charDesc: function(c, extra) {
+        var isZ = !!c.isZombie && !c.isPlayer;
+        return {
+            kind: isZ ? "enemy" : "character",
+            icon: isZ ? "🧟" : "🧑",
+            title: (c.playerLabel || c.name || (isZ ? c.power : "Hero")) + (c.isCPU ? " (CPU)" : ""),
+            sub: isZ ? ("Enemy · " + (c.zombiePower || c.power || "NORMAL")) : ("Hero · " + (c.isPlayer ? "Player" : "NPC")),
+            obj: c,
+            color: c.originalColor || c.color || "#38bdf8",
+            radius: Math.max(c.s1 || 60, c.s2 || 60) * 0.65,
+            pos: function() { return { x: c.x, y: c.y }; },
+            vel: function() { return { vx: c.xspeed || 0, vy: c.yspeed || 0 }; },
+            hpInfo: function() { return { val: Math.round(c.health || 0), max: Math.round(c.maxHealth || 100), label: "HP" }; },
+            isDead: function() { return !!c.dead; },
+            extra: extra
+        };
+    },
+
+    _objDesc: function(o, extra) {
+        return {
+            kind: "object",
+            icon: o.kind === "platform" ? "➖" : (o.kind === "wall" ? "🏰" : "🧱"),
+            title: o.name || "World Object",
+            sub: (o.kind || "box") + " · " + Math.round(o.w || o.s1 || 60) + "×" + Math.round(o.h || o.s2 || 60),
+            obj: o,
+            color: o.color || "#94a3b8",
+            radius: Math.max(o.w || o.s1 || 60, o.h || o.s2 || 60) * 0.55,
+            pos: function() { return { x: o.x, y: o.y }; },
+            vel: function() { return { vx: o.xspeed || 0, vy: o.yspeed || 0 }; },
+            hpInfo: function() { return o.buildMaxHP ? { val: Math.round(o.buildHP || 0), max: o.buildMaxHP, label: "HP" } : null; },
+            isDead: function() { return !!o.dead; },
+            extra: extra
+        };
+    },
+
+    _ragdollDesc: function(rd, extra) {
+        return {
+            kind: "ragdoll",
+            icon: "🦴",
+            title: rd.isVehicle ? "Rider + Vehicle" : "Ragdoll",
+            sub: rd.pts.length + " joints",
+            obj: rd,
+            color: "#fbbf24",
+            radius: 56,
+            pos: function() { return { x: rd.centerX(), y: rd.centerY() }; },
+            vel: function() { return { vx: rd.velX(), vy: rd.velY() }; },
+            hpInfo: function() { return null; },
+            isDead: function() { return typeof Ragdolls !== "undefined" && Ragdolls.list.indexOf(rd) === -1; },
+            extra: extra
+        };
+    },
+
+    _flailDesc: function(rd) {
+        var team = rd.flailTeam === 0 ? "RED" : "BLUE";
+        return {
+            kind: "flail",
+            icon: "⚽",
+            title: (rd.flailLabel || team) + (rd.keeper ? " Keeper #1" : " Player"),
+            sub: "Soccer Physics · " + team + " Team",
+            obj: rd,
+            color: rd.flailTeam === 0 ? "#ef4444" : "#3b82f6",
+            radius: 75,
+            pos: function() { return { x: rd.pts[1].x, y: rd.pts[1].y }; },
+            vel: function() { return { vx: rd.pts[1].x - rd.pts[1].px, vy: rd.pts[1].y - rd.pts[1].py }; },
+            hpInfo: function() { return null; },
+            isDead: function() { return typeof Ragdolls !== "undefined" && Ragdolls.list.indexOf(rd) === -1; }
+        };
+    },
+
+    _ballDesc: function() {
+        return {
+            kind: "ball",
+            icon: "⚽",
+            title: "Match Ball",
+            sub: "Zombie Ball · r=" + Math.round(Ball.r),
+            obj: Ball,
+            color: "#fde047",
+            radius: Ball.r + 12,
+            pos: function() { return { x: Ball.x, y: Ball.y }; },
+            vel: function() { return { vx: Ball.vx, vy: Ball.vy }; },
+            hpInfo: function() { return null; },
+            isDead: function() { return false; }
+        };
+    },
+
+    _tankDesc: function(k) {
+        return {
+            kind: "tank",
+            icon: "🛡",
+            title: (k.name || "Tank") + (k.human !== undefined ? " (Human)" : " (Bot)"),
+            sub: "Diep Tank · Lv " + (k.lvl || 1) + " · " + (k.cls || "basic"),
+            obj: k,
+            color: k.col || "#38bdf8",
+            radius: Tanks.size(k) + 12,
+            pos: function() { return { x: k.x, y: k.y }; },
+            vel: function() { return { vx: k.vx || 0, vy: k.vy || 0 }; },
+            hpInfo: function() {
+                var mx = (typeof Tanks !== "undefined" && typeof Tanks.maxHp === "function") ? Tanks.maxHp(k) : (k.maxHp || k.hp || 100);
+                return { val: Math.round(k.hp), max: Math.round(mx), label: "HP" };
+            },
+            isDead: function() { return !k.alive; }
+        };
+    },
+
+    _shapeDesc: function(sh, S) {
+        return {
+            kind: "shape",
+            icon: "🔷",
+            title: (S ? S.name : "Polygon") + " Shape",
+            sub: "XP: " + (S ? S.xp : 10),
+            obj: sh,
+            color: S ? S.col : "#facc15",
+            radius: (S ? S.r : 20) + 8,
+            pos: function() { return { x: sh.x, y: sh.y }; },
+            vel: function() { return { vx: sh.vx || 0, vy: sh.vy || 0 }; },
+            hpInfo: function() { return { val: Math.round(sh.hp), max: Math.round(S ? S.hp : 100), label: "HP" }; },
+            isDead: function() { return sh.hp <= 0; }
+        };
+    },
+
+    _blobDesc: function(b) {
+        var o = b.owner || {};
+        return {
+            kind: "blob",
+            icon: "🟢",
+            title: (o.name || "Blob") + (o.human !== undefined ? " (Human)" : " (Bot)"),
+            sub: "Agar Blob · Mass " + Math.round(b.m),
+            obj: b,
+            color: o.col || "#4ade80",
+            radius: Cells.rad(b.m) + 10,
+            pos: function() { return { x: b.x, y: b.y }; },
+            vel: function() { return { vx: b.vx || 0, vy: b.vy || 0 }; },
+            hpInfo: function() { return { val: Math.round(b.m), max: Math.max(500, Math.round(b.m * 1.5)), label: "MASS" }; },
+            isDead: function() { return b.m <= 0 || Cells.blobs.indexOf(b) === -1; }
+        };
+    },
+
+    _virusDesc: function(v) {
+        return {
+            kind: "virus",
+            icon: "🦠",
+            title: "Spiky Virus",
+            sub: "Pop threshold: 95 mass",
+            obj: v,
+            color: "#22c55e",
+            radius: Cells.rad(v.m || 100) + 10,
+            pos: function() { return { x: v.x, y: v.y }; },
+            vel: function() { return { vx: v.vx || 0, vy: v.vy || 0 }; },
+            hpInfo: function() { return { val: Math.round(v.m || 100), max: 200, label: "MASS" }; },
+            isDead: function() { return Cells.viruses.indexOf(v) === -1; }
+        };
+    },
+
+    _wormDesc: function(w) {
+        var h = w.segs[0] || { x: 0, y: 0 };
+        return {
+            kind: "worm",
+            icon: "🐍",
+            title: (w.name || "Worm") + (w.human !== undefined ? " (Human)" : " (Bot)"),
+            sub: "Slither Worm · Length " + Math.round(w.len),
+            obj: w,
+            color: w.col || "#a855f7",
+            radius: Snake.rad(w) + 14,
+            pos: function() { return { x: w.segs[0].x, y: w.segs[0].y }; },
+            vel: function() { var sp = w.boost ? 7 : 3.5; return { vx: Math.cos(w.ang || 0) * sp, vy: Math.sin(w.ang || 0) * sp }; },
+            hpInfo: function() { return { val: Math.round(w.len), max: Math.max(300, Math.round(w.len * 1.4)), label: "LEN" }; },
+            isDead: function() { return !w.alive; }
+        };
+    },
+
+    _extraOnlyDesc: function(extra, wx, wy) {
+        return {
+            kind: "extra",
+            icon: "🔎",
+            title: extra.title || "Game Element",
+            sub: extra.sub || "",
+            obj: extra,
+            color: "#38bdf8",
+            radius: 36,
+            pos: function() { var p = extra.pos ? extra.pos() : [wx, wy]; return { x: p[0], y: p[1] }; },
+            vel: function() { return { vx: 0, vy: 0 }; },
+            hpInfo: function() { return null; },
+            isDead: function() { return false; },
+            extra: extra
+        };
+    },
+
+    drawOverlay: function() {
+        var sel = this.selected;
+        if (sel && sel.isDead && sel.isDead()) { this.selected = null; sel = null; }
+        var hov = this.hovered;
+        if (hov && hov.isDead && hov.isDead()) { this.hovered = null; hov = null; }
+
+        var drawReticle = function(d, col, dashed) {
+            if (!d || !d.pos) return;
+            var p = d.pos();
+            var sp = UniversalInspect.worldToScreen(p.x, p.y);
+            var r = Math.max(18, (d.radius || 36) * sp.scale);
+            ctx.save();
+            ctx.strokeStyle = col;
+            ctx.lineWidth = 2.5;
+            if (dashed) ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Corner brackets
+            ctx.setLineDash([]);
+            var br = r + 6, L = 10;
+            [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function(sg) {
+                var cx = sp.x + sg[0] * br, cy = sp.y + sg[1] * br;
+                ctx.beginPath();
+                ctx.moveTo(cx - sg[0] * L, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy - sg[1] * L);
+                ctx.stroke();
+            });
+
+            // Velocity vector arrow
+            if (d.vel) {
+                var v = d.vel(), vmag = Math.hypot(v.vx, v.vy);
+                if (vmag > 0.4) {
+                    var ay = UniversalInspect.arenaCam() ? v.vy : -v.vy;
+                    var ex = sp.x + v.vx * 6, ey = sp.y + ay * 6;
+                    ctx.strokeStyle = "#fde047";
+                    ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(sp.x, sp.y); ctx.lineTo(ex, ey); ctx.stroke();
+                    ctx.fillStyle = "#fde047";
+                    ctx.beginPath(); ctx.arc(ex, ey, 3.5, 0, Math.PI * 2); ctx.fill();
+                }
+            }
+
+            // Floating tag
+            var hp = d.hpInfo ? d.hpInfo() : null;
+            var tag = d.icon + " " + d.title + (hp ? " · " + hp.val + " " + hp.label : "");
+            ctx.font = "800 11px system-ui, sans-serif";
+            var tw = ctx.measureText(tag).width + 14;
+            var tx = Math.max(8, Math.min(cssW - tw - 8, sp.x - tw / 2));
+            var ty = Math.max(8, sp.y - r - 28);
+            ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+            ctx.fillRect(tx, ty, tw, 20);
+            ctx.strokeStyle = col;
+            ctx.lineWidth = 1.2;
+            ctx.strokeRect(tx, ty, tw, 20);
+            ctx.fillStyle = "#f8fafc";
+            ctx.textAlign = "left";
+            ctx.fillText(tag, tx + 7, ty + 14);
+            ctx.restore();
+        };
+
+        if (hov && (!sel || hov.obj !== sel.obj)) drawReticle(hov, "#38bdf8", true);
+        if (sel) drawReticle(sel, "#facc15", false);
+    }
+};
+

@@ -582,6 +582,11 @@ function updateCamera() {
     }
     focusX /= wTotal;
     focusY /= wTotal;
+    if (typeof UniversalInspect !== "undefined" && UniversalInspect.followTarget) {
+        var ft = UniversalInspect.followTarget;
+        if (ft.isDead && ft.isDead()) UniversalInspect.followTarget = null;
+        else if (ft.pos) { var fp = ft.pos(); focusX = fp.x; focusY = fp.y; }
+    }
 
     // Dynamic zoom: zoom out to keep both heroes in frame
     var desired = baseZoom * userZoom * (typeof Feel !== "undefined" ? Feel.zoomMult() : 1);
@@ -1148,9 +1153,18 @@ function frame() {
         SummonManager.drawOverlay();
     }
 
+    // Enforce UniversalInspect freeze/pin
+    var pinList = [].concat(characters, zombies, movingObjects);
+    for (let pi = 0; pi < pinList.length; pi++) {
+        var pe = pinList[pi];
+        if (pe && pe._sbFrozen) { pe.x = pe._sbPinX; pe.y = pe._sbPinY; pe.xspeed = 0; pe.yspeed = 0; }
+    }
+    if (typeof Ball !== "undefined" && Ball._sbFrozen) { Ball.x = Ball._sbPinX; Ball.y = Ball._sbPinY; Ball.vx = 0; Ball.vy = 0; }
+
     drawHUD();
     if (typeof Build !== "undefined") Build.drawHUD();
     if (typeof PlayersBadge !== "undefined") PlayersBadge.draw();
+    if (typeof UniversalInspect !== "undefined") UniversalInspect.drawOverlay();
     if (typeof Net !== "undefined" && Net.role === "host") Net.hostFrame();
 }
 

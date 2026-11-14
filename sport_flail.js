@@ -204,23 +204,180 @@ var Flail = {
     },
 
     drawMan: function(rd) {
-        var P = rd.pts, k = cameraScaleX, col = TEAM_COLORS[rd.flailTeam];
+        var P = rd.pts, k = cameraScaleX;
         var S = function(p) { return [wsx(p.x), wsy(p.y)]; };
         var h = S(P[0]), hip = S(P[1]), f1 = S(P[2]), f2 = S(P[3]);
-        ctx.lineCap = "round";
-        var seg = function(a, b, w, c) { ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = w + 5; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); };
-        seg(hip, f1, 14 * k + 2, "#f8fafc"); seg(hip, f2, 14 * k + 2, "#f8fafc");                // socks/legs
-        [f1, f2].forEach(function(f) { ctx.fillStyle = "#111827"; ctx.beginPath(); ctx.ellipse(f[0], f[1], 20 * k + 2, 10 * k + 2, 0, 0, 7); ctx.fill(); });
-        seg(hip, h, 24 * k + 3, col);                                                            // jersey
-        ctx.fillStyle = "#f2c9a0"; ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(h[0], h[1], P[0].r * k, 0, 7); ctx.fill(); ctx.stroke();         // big head
-        ctx.fillStyle = col; ctx.beginPath(); ctx.arc(h[0], h[1], P[0].r * k, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();   // hair band in team colour
         var dir = rd.flailTeam === 0 ? 1 : -1;
-        ctx.fillStyle = "#0a0f16";
-        ctx.beginPath(); ctx.arc(h[0] + dir * 12 * k, h[1] + 3 * k, 4.5 * k + 1, 0, 7); ctx.fill();
-        ctx.beginPath(); ctx.arc(h[0] + dir * 27 * k, h[1] + 3 * k, 4.5 * k + 1, 0, 7); ctx.fill();
-        ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(h[0] + dir * 20 * k, h[1] + 16 * k, 7 * k, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
-        ctx.fillStyle = "#fff"; ctx.font = "900 " + Math.round(13 * k + 6) + "px " + UI_FONT; ctx.textAlign = "center";
-        ctx.fillText(rd.flailLabel || "", (hip[0] + h[0]) / 2, (hip[1] + h[1]) / 2 + 5);
+        var hs = Math.max(0.75, (P[0].r || 39) / 39); // supports Big Heads modifier
+
+        // Iconic Soccer Physics palettes (Team 0 keeper matches the reference green+red kit; outfield is Red vs Blue)
+        var pal = rd.flailTeam === 0
+            ? (rd.keeper
+                ? { jersey: "#5ce65c", dark: "#243d24", accent: "#ef4444", num: "1" }
+                : { jersey: "#ef4444", dark: "#7f1d1d", accent: "#dc2626", num: String((rd.flailK || 0) + 2) })
+            : (rd.keeper
+                ? { jersey: "#38bdf8", dark: "#1e3a5f", accent: "#facc15", num: "1" }
+                : { jersey: "#3b82f6", dark: "#1e3a8a", accent: "#2563eb", num: String((rd.flailK || 0) + 2) });
+        var outline = "#1c1917";
+        var skin = "#e6a868";
+        var hair = "#5c3317";
+        var ow = Math.max(2, Math.round(4 * k));
+
+        var drawLeg = function(foot) {
+            var dx = foot[0] - hip[0], dy = foot[1] - hip[1];
+            var ld = Math.max(24 * k, Math.hypot(dx, dy));
+            var la = Math.atan2(dy, dx);
+            var lw = Math.round(16 * k);
+            var bootLen = Math.round(22 * k);
+            var bootH = Math.round(13 * k);
+            var toeY = -dir * Math.round(10 * k); // local -y points right (+x screen) when leg points down
+
+            ctx.save();
+            ctx.translate(hip[0], hip[1]);
+            ctx.rotate(la);
+
+            // Thick pixel outline for leg + L-shaped boot
+            ctx.fillStyle = outline;
+            ctx.fillRect(-ow, -lw / 2 - ow, ld + ow * 2, lw + ow * 2);
+            ctx.fillRect(ld - bootH - ow, (dir > 0 ? -lw / 2 - (bootLen - lw) : -lw / 2) - ow, bootH + ow * 2, bootLen + ow * 2);
+
+            // Shorts cuff -> skin knee -> dark sock band -> shin sock
+            var s1 = ld * 0.24, s2 = ld * 0.48, s3 = ld * 0.62, s4 = ld * 0.86;
+            ctx.fillStyle = pal.dark;
+            ctx.fillRect(0, -lw / 2, s1 + 1, lw);
+            ctx.fillStyle = skin;
+            ctx.fillRect(s1, -lw / 2, s2 - s1 + 1, lw);
+            ctx.fillStyle = pal.dark;
+            ctx.fillRect(s2, -lw / 2, s3 - s2 + 1, lw);
+            ctx.fillStyle = pal.jersey;
+            ctx.fillRect(s3, -lw / 2, s4 - s3 + 1, lw);
+
+            // Blocky bright boot/cleat
+            ctx.fillStyle = pal.accent;
+            ctx.fillRect(ld - bootH, dir > 0 ? -lw / 2 - (bootLen - lw) : -lw / 2, bootH, bootLen);
+            ctx.restore();
+        };
+
+        var sa = Math.atan2(h[1] - hip[1], h[0] - hip[0]) + Math.PI / 2;
+        var sd = Math.max(40 * k, Math.hypot(h[0] - hip[0], h[1] - hip[1]));
+
+        // 1. Back leg
+        drawLeg(f1);
+
+        // 2. Torso + raised blocky arms
+        ctx.save();
+        ctx.translate(hip[0], hip[1]);
+        ctx.rotate(sa);
+
+        var tw = Math.round(34 * k);
+        var armW = Math.round(12 * k);
+        var armH = Math.round(54 * k);
+        var armY = -sd - Math.round(16 * k);
+        var shY = -sd + Math.round(24 * k);
+
+        // Raised arms (left & right, slightly flared like Soccer Physics pose)
+        [-1, 1].forEach(function(side) {
+            var ax = side * (tw / 2 + armW * 0.55) - armW / 2;
+            ctx.fillStyle = outline;
+            ctx.fillRect(ax - ow, armY - ow, armW + ow * 2, armH + ow * 2);
+            // Hand (skin)
+            ctx.fillStyle = skin;
+            ctx.fillRect(ax, armY, armW, armH * 0.25);
+            // Dark wrist cuff
+            ctx.fillStyle = pal.dark;
+            ctx.fillRect(ax, armY + armH * 0.25, armW, armH * 0.12);
+            // Jersey sleeve
+            ctx.fillStyle = pal.jersey;
+            ctx.fillRect(ax, armY + armH * 0.37, armW, armH * 0.43);
+            // Dark shoulder pad
+            ctx.fillStyle = pal.dark;
+            ctx.fillRect(ax, armY + armH * 0.80, armW, armH * 0.20);
+        });
+
+        // Torso outline + jersey + dark shoulders + dark shorts
+        var torsoTop = shY - Math.round(6 * k);
+        var torsoH = sd - Math.round(14 * k);
+        ctx.fillStyle = outline;
+        ctx.fillRect(-tw / 2 - ow, torsoTop - ow, tw + ow * 2, torsoH + ow * 2);
+
+        ctx.fillStyle = pal.jersey;
+        ctx.fillRect(-tw / 2, torsoTop, tw, torsoH * 0.72);
+        // Dark shoulder trim
+        ctx.fillStyle = pal.dark;
+        ctx.fillRect(-tw / 2, torsoTop, Math.round(8 * k), Math.round(12 * k));
+        ctx.fillRect(tw / 2 - Math.round(8 * k), torsoTop, Math.round(8 * k), Math.round(12 * k));
+        // Dark shorts
+        ctx.fillStyle = pal.dark;
+        ctx.fillRect(-tw / 2, torsoTop + torsoH * 0.72, tw, torsoH * 0.28);
+
+        // Crisp white vertical chest number / stripe
+        ctx.fillStyle = "#ffffff";
+        var numX = dir * Math.round(4 * k);
+        var numY = torsoTop + torsoH * 0.34;
+        if (pal.num === "1") {
+            ctx.fillRect(numX - Math.round(3 * k), numY - Math.round(9 * k), Math.round(6 * k), Math.round(18 * k));
+        } else {
+            ctx.font = "900 " + Math.max(10, Math.round(18 * k)) + "px monospace";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(pal.num, numX, numY);
+        }
+        ctx.restore();
+
+        // 3. Front leg (drawn over shorts/torso seam for clean layering)
+        drawLeg(f2);
+
+        // 4. Square pixel-art head
+        ctx.save();
+        ctx.translate(h[0], h[1]);
+        ctx.rotate(sa);
+        var hw = Math.round(38 * k * hs);
+        var hh = Math.round(38 * k * hs);
+        var hx = -hw / 2, hy = -hh / 2;
+
+        // Thick pixel outline
+        ctx.fillStyle = outline;
+        ctx.fillRect(hx - ow, hy - ow, hw + ow * 2, hh + ow * 2);
+        // Tan skin
+        ctx.fillStyle = skin;
+        ctx.fillRect(hx, hy, hw, hh);
+        // Brown flat-top hair
+        var hairH = Math.round(hh * 0.22);
+        ctx.fillStyle = hair;
+        ctx.fillRect(hx, hy, hw, hairH);
+        // Stepped bangs on forehead side
+        var bangW = Math.round(hw * 0.28);
+        var bangX = dir > 0 ? hx + Math.round(hw * 0.14) : hx + hw - Math.round(hw * 0.14) - bangW;
+        ctx.fillRect(bangX, hy + hairH + Math.round(hh * 0.14), bangW, Math.round(hh * 0.12));
+        ctx.fillRect(bangX, hy + hairH + Math.round(hh * 0.14), Math.round(bangW * 0.5), Math.round(hh * 0.20));
+
+        // Team/Accent headband
+        ctx.fillStyle = pal.accent;
+        ctx.fillRect(hx, hy + hairH, hw, Math.round(hh * 0.15));
+
+        // Crisp square black eye + small mouth/stubble mark
+        var eyeS = Math.max(3, Math.round(5.5 * k * hs));
+        var eyeX = dir > 0 ? hx + hw * 0.64 : hx + hw * 0.36 - eyeS;
+        var eyeY = hy + hh * 0.44;
+        ctx.fillStyle = "#111111";
+        ctx.fillRect(eyeX, eyeY, eyeS, eyeS);
+
+        // Small mouth / chin mark
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(dir > 0 ? hx + hw * 0.52 : hx + hw * 0.26, hy + hh * 0.72, Math.round(hw * 0.22), Math.max(2, Math.round(3.5 * k * hs)));
+        ctx.restore();
+
+        // Subtle player tag above head
+        if (rd.flailLabel) {
+            ctx.save();
+            ctx.font = "800 " + Math.max(10, Math.round(11 * k + 3)) + "px " + UI_FONT;
+            ctx.textAlign = "center";
+            ctx.fillStyle = "rgba(15,23,42,0.72)";
+            var twTag = ctx.measureText(rd.flailLabel).width + 10;
+            ctx.fillRect(h[0] - twTag / 2, h[1] - hh * 0.75 - 18, twTag, 15);
+            ctx.fillStyle = rd.flailTeam === 0 ? "#fca5a5" : "#93c5fd";
+            ctx.fillText(rd.flailLabel, h[0], h[1] - hh * 0.75 - 7);
+            ctx.restore();
+        }
     }
 };
