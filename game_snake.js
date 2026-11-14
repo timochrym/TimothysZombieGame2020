@@ -385,22 +385,27 @@ GameModes.register({
         return x;
     },
     netState: function() {
-        var lan = Snake.worms.filter(function(w) { return w.human === "lan" && w.alive; }).map(function(w) { return w.segs[0]; });
-        var near = Snake.pellets.filter(function(p) { return lan.some(function(h) { return Math.abs(p.x - h.x) < 2000 && Math.abs(p.y - h.y) < 1400; }); });
-        return {
+        var st = {
             w: Snake.worms.map(function(w) {
-                var sg = []; for (let i = 0; i < w.segs.length; i += 2) sg.push(Math.round(w.segs[i].x), Math.round(w.segs[i].y));
+                var sg = [];
+                if (w.alive) for (let i = 0; i < w.segs.length; i += 2) sg.push(Math.round(w.segs[i].x), Math.round(w.segs[i].y));
                 return { n: w.name, c: w.color, h: w.human === undefined ? -1 : w.human, p: w.pid || null, a: w.alive ? 1 : 0, l: Math.round(w.len), g: Math.round(w.ang * 100) / 100, b: w.boosting ? 1 : 0, s: w.safeT || 0, sg: sg, dm: w.deathMsg || "", fl: w.finalLen || 0, dt: w.deadT || 0 };
-            }),
-            p: near.map(function(p) { return [Math.round(p.x), Math.round(p.y), p.v, SNK_COLORS.indexOf(p.col)]; })
+            })
         };
+        Snake.netTick = (Snake.netTick || 0) + 1;
+        if (Snake.netTick % 4 === 0) {
+            var lan = Snake.worms.filter(function(w) { return w.human === "lan" && w.alive; }).map(function(w) { return w.segs[0]; });
+            var near = Snake.pellets.filter(function(p) { return lan.some(function(h) { return Math.abs(p.x - h.x) < 2000 && Math.abs(p.y - h.y) < 1400; }); });
+            st.p = near.map(function(p) { return [Math.round(p.x), Math.round(p.y), p.v, SNK_COLORS.indexOf(p.col)]; });
+        }
+        return st;
     },
     applyNetState: function(m) {
         Snake.worms = m.w.map(function(o) {
             var segs = []; for (let i = 0; i < o.sg.length; i += 2) { segs.push({ x: o.sg[i], y: o.sg[i + 1] }); segs.push({ x: o.sg[i], y: o.sg[i + 1] }); }
             return { name: o.n, color: o.c, human: o.h === -1 ? undefined : o.h, pid: o.p, alive: !!o.a, len: o.l, ang: o.g, boosting: !!o.b, safeT: o.s, segs: segs.length ? segs : [{ x: 0, y: 0 }], deathMsg: o.dm, finalLen: o.fl, deadT: o.dt };
         });
-        Snake.pellets = m.p.map(function(a) { return { x: a[0], y: a[1], v: a[2], col: SNK_COLORS[a[3]] || "#ffffff", ph: (a[0] + a[1]) % 6 }; });
+        if (m.p) Snake.pellets = m.p.map(function(a) { return { x: a[0], y: a[1], v: a[2], col: SNK_COLORS[a[3]] || "#ffffff", ph: (a[0] + a[1]) % 6 }; });
     },
 
     onClick: function() { return true; },

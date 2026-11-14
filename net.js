@@ -647,6 +647,8 @@ var Net = {
         if (s.mode !== this.curMode || s.lvl !== this.curLvl || s.rs !== this.curReset) {
             this.curMode = s.mode; this.curLvl = s.lvl; this.curReset = s.rs;
             if (typeof Hub !== "undefined") Hub.close();
+            if (typeof SandboxUI !== "undefined") SandboxUI.render();
+            if (typeof topBarRefresh === "function") topBarRefresh();
             paused = false;
             try { GameModes.activate(s.mode); } catch (e) {}
             if (typeof LevelManager !== "undefined" && s.lvl) LevelManager.currentLevelKey = s.lvl;
@@ -879,6 +881,7 @@ var Net = {
     // replaces tick() on a client: draw the host's world
     clientTick: function() {
         this.sendInput();
+        if (typeof topBarRefresh === "function" && (++this._tbN || (this._tbN = 1)) % 15 === 0) { try { topBarRefresh(); } catch (e) {} }
         ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
         ctx.clearRect(0, 0, cssW, cssH);
         if (!this.inGame || this.hostInHub) {

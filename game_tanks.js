@@ -451,7 +451,18 @@ GameModes.register({
         Tanks.render();
         Tanks.hud();
     },
-    screenDraw: function() { Tanks.t++; Tanks.render(); Tanks.hud(); },
+    screenDraw: function() {
+        Tanks.t++;
+        for (let i = 0; i < Tanks.bullets.length; i++) { var b = Tanks.bullets[i]; if (b.vx || b.vy) { b.x += b.vx; b.y += b.vy; } }
+        var me = Tanks.locals()[0];
+        if (me && me.alive && typeof Net !== "undefined" && Net.role === "client") {
+            var sc = Tanks.toScreen(me.x, me.y);
+            me.ang = Math.atan2(mouseY - sc[1], mouseX - sc[0]);
+            var mx = (WASDrightPressed ? 1 : 0) - (WASDleftPressed ? 1 : 0), my = (WASDdownPressed ? 1 : 0) - (WASDupPressed ? 1 : 0);
+            if (mx || my) { var sp = 3.2 + (me.st ? me.st[7] * 0.45 : 0); me.x += mx * sp * 0.7; me.y += my * sp * 0.7; }
+        }
+        Tanks.render(); Tanks.hud();
+    },
     netInput: function() {
         var me = Tanks.locals()[0], x = { mx: (WASDrightPressed ? 1 : 0) - (WASDleftPressed ? 1 : 0), my: (WASDdownPressed ? 1 : 0) - (WASDupPressed ? 1 : 0), f: (mouseDown || SpacePressed) ? 1 : 0 };
         if (me && me.alive) { var sc = Tanks.toScreen(me.x, me.y); x.a = Math.round(Math.atan2(mouseY - sc[1], mouseX - sc[0]) * 100) / 100; }
@@ -459,17 +470,23 @@ GameModes.register({
     },
     netState: function() {
         var T = Tanks.tanks;
-        return {
-            k: T.map(function(k) { return { n: k.name, c: k.color, h: k.human === undefined ? -1 : k.human, p: k.pid || null, a: k.alive ? 1 : 0, x: Math.round(k.x), y: Math.round(k.y), g: Math.round(k.ang * 100) / 100, hp: Math.round(k.hp), l: k.lvl, cl: k.cls, st: k.st, sc: k.score, xp: k.xp, pt: k.pts, iv: k.inv, fl: k.flash, dt: k.deadT, by: k.by ? k.by.name : "", fn: k.final || 0 }; }),
-            s: Tanks.shapes.map(function(q) { return [q.type.charAt(0), Math.round(q.x), Math.round(q.y), Math.round(q.ang * 100) / 100, Math.round(q.hp), q.hitT]; }),
-            b: Tanks.bullets.map(function(bb) { return [Math.round(bb.x), Math.round(bb.y), Math.round(bb.r), T.indexOf(bb.owner)]; })
+        var st = {
+            k: T.map(function(k) { return { n: k.name, c: k.color, h: k.human === undefined ? -1 : k.human, p: k.pid || null, a: k.alive ? 1 : 0, x: Math.round(k.x), y: Math.round(k.y), g: Math.round(k.ang * 100) / 100, hp: Math.round(k.hp), l: k.lvl, cl: k.cls, st: k.st, sc: k.score, xp: k.xp, pt: k.pts, iv: k.inv, fl: k.flash, dt: k.deadT, by: k.by ? k.by.name : "", fn: k.final || 0, ch: k.choose ? 1 : 0 }; }),
+            b: Tanks.bullets.map(function(bb) { return [Math.round(bb.x), Math.round(bb.y), Math.round(bb.r), T.indexOf(bb.owner), Math.round((bb.vx || 0) * 10) / 10, Math.round((bb.vy || 0) * 10) / 10]; })
         };
+        Tanks.netTick = (Tanks.netTick || 0) + 1;
+        if (Tanks.netTick % 3 === 0) {
+            var lan = T.filter(function(k) { return k.human === "lan"; });
+            var sh = lan.length ? Tanks.shapes.filter(function(q) { return lan.some(function(k) { return Math.abs(q.x - k.x) < 2800 && Math.abs(q.y - k.y) < 2000; }); }) : Tanks.shapes;
+            st.s = sh.map(function(q) { return [q.type.charAt(0), Math.round(q.x), Math.round(q.y), Math.round(q.ang * 100) / 100, Math.round(q.hp), q.hitT]; });
+        }
+        return st;
     },
     applyNetState: function(m) {
-        Tanks.tanks = m.k.map(function(o) { return { name: o.n, color: o.c, human: o.h === -1 ? undefined : o.h, pid: o.p, alive: !!o.a, x: o.x, y: o.y, vx: 0, vy: 0, ang: o.g, hp: o.hp, lvl: o.l, cls: o.cl, st: o.st, score: o.sc, xp: o.xp, pts: o.pt, inv: o.iv, flash: o.fl, deadT: o.dt, by: o.by ? { name: o.by } : null, final: o.fn, choose: false }; });
+        Tanks.tanks = m.k.map(function(o) { return { name: o.n, color: o.c, human: o.h === -1 ? undefined : o.h, pid: o.p, alive: !!o.a, x: o.x, y: o.y, vx: 0, vy: 0, ang: o.g, hp: o.hp, lvl: o.l, cls: o.cl, st: o.st, score: o.sc, xp: o.xp, pts: o.pt, inv: o.iv, flash: o.fl, deadT: o.dt, by: o.by ? { name: o.by } : null, final: o.fn, choose: !!o.ch }; });
         var tm = { s: "square", t: "tri", p: "penta" };
-        Tanks.shapes = m.s.map(function(a) { var ty = tm[a[0]]; return { type: ty, x: a[1], y: a[2], ang: a[3], hp: a[4], max: TNK_SHAPES[ty].hp, hitT: a[5] }; });
-        Tanks.bullets = m.b.map(function(a) { return { x: a[0], y: a[1], r: a[2], owner: Tanks.tanks[a[3]] || { color: "#fff" } }; });
+        if (m.s) Tanks.shapes = m.s.map(function(a) { var ty = tm[a[0]]; return { type: ty, x: a[1], y: a[2], ang: a[3], hp: a[4], max: TNK_SHAPES[ty].hp, hitT: a[5] }; });
+        Tanks.bullets = m.b.map(function(a) { return { x: a[0], y: a[1], r: a[2], owner: Tanks.tanks[a[3]] || { color: "#fff" }, vx: a[4] || 0, vy: a[5] || 0 }; });
     },
 
     onKey: function(code) {

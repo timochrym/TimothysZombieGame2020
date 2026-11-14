@@ -155,6 +155,14 @@ var Mix = {
                 p._seenTs = x.ts;
                 if (tk && tk.alive) Tanks.addStat(tk, (x.ts % 10) - 1);
             }
+            if (x.tc && x.tc !== p._seenTc) {
+                p._seenTc = x.tc;
+                if (tk && tk.alive && tk.choose) {
+                    var nx = TNK_CLASSES[tk.cls] && TNK_CLASSES[tk.cls].next;
+                    var ci = (x.tc % 10) - 1;
+                    if (nx && nx[ci]) Tanks.pickClass(tk, nx[ci]);
+                }
+            }
             var again = !!(x.f || x.s || x.b || x.c);
             if (tk && !tk.alive && ++tk.deadT > 60 && again) Tanks.spawn(tk);
             if (cp && !cp.alive && ++cp.deadT > 60 && again) { Cells.spawn(cp); cp.splitPrev = true; }
@@ -1012,7 +1020,35 @@ GameModes.register({
     onDeactivate: function() { Mix.unlink(); },
     setupLevel: function() { Mix.link(); Mix.reset(); },
     screenFrame: function() { Mix.frame(); },
-    screenDraw: function() { Mix.t++; Mix.draw(); },
+    screenDraw: function() {
+        Mix.t++;
+        // Local client prediction for Player 2: smooth 60fps aim, movement, and bullet motion between host snapshots
+        for (let i = 0; i < Tanks.bullets.length; i++) { var b = Tanks.bullets[i]; if (b.vx || b.vy) { b.x += b.vx; b.y += b.vy; } }
+        var m = Mix.me(), c = Cells.cam;
+        if (m && m.alive) {
+            if (m.kind === "tank") {
+                var sc = Tanks.toScreen(m.x, m.y);
+                m.ref.ang = Math.atan2(mouseY - sc[1], mouseX - sc[0]);
+                var mx = (WASDrightPressed ? 1 : 0) - (WASDleftPressed ? 1 : 0), my = (WASDdownPressed ? 1 : 0) - (WASDupPressed ? 1 : 0);
+                if (mx || my) { var sp = 3.2 + (m.ref.st ? m.ref.st[7] * 0.45 : 0); m.ref.x += mx * sp * 0.7; m.ref.y += my * sp * 0.7; }
+            } else if (m.kind === "blob") {
+                var ax = (mouseX - cssW / 2) / c.z + c.x, ay = (mouseY - cssH / 2) / c.z + c.y;
+                for (let i = 0; i < Cells.blobs.length; i++) {
+                    var bl = Cells.blobs[i];
+                    if (bl.dead || bl.pl !== m.ref) continue;
+                    var dx = ax - bl.x, dy = ay - bl.y, d = Math.hypot(dx, dy);
+                    if (d > 6) { var s = Math.min(3.4, d * 0.12); bl.x += dx / d * s; bl.y += dy / d * s; }
+                }
+            } else if (m.kind === "worm") {
+                var scW = Tanks.toScreen(m.x, m.y), ta = Math.atan2(mouseY - scW[1], mouseX - scW[0]);
+                var da = Math.atan2(Math.sin(ta - m.ref.ang), Math.cos(ta - m.ref.ang));
+                m.ref.ang += Math.max(-0.14, Math.min(0.14, da));
+                var wsp = (mouseDown || SpacePressed || WASDupPressed) ? 5.2 : 3.2;
+                m.ref.segs[0].x += Math.cos(m.ref.ang) * wsp; m.ref.segs[0].y += Math.sin(m.ref.ang) * wsp;
+            }
+        }
+        Mix.draw();
+    },
     netInput: function() {
         var m = Mix.me(), c = Cells.cam;
         var x = {
@@ -1033,28 +1069,48 @@ GameModes.register({
         if (Mix._lanBody) x.body = Mix._lanBody;
         if (Mix._lanWs) x.ws = Mix._lanWs;
         if (Mix._lanTs) x.ts = Mix._lanTs;
+        if (Mix._lanTc) x.tc = Mix._lanTc;
         return x;
     },
     netState: function() {
         var tMode = GameModes.get("tanks"), cMode = GameModes.get("cells"), sMode = GameModes.get("snake");
+        var wx = {};
+        for (let i = 0; i < Snake.worms.length; i++) {
+            var w = Snake.worms[i];
+            if (w.human === "lan" && w.pid && w.mx) wx[w.pid] = [w.mx.lvl, w.mx.pts, w.mx.st[0], w.mx.st[1], w.mx.st[2]];
+        }
         return {
             t: tMode && tMode.netState ? tMode.netState() : null,
             c: cMode && cMode.netState ? cMode.netState() : null,
             s: sMode && sMode.netState ? sMode.netState() : null,
             mm: Tanks.tanks.map(function(k) { return Math.round(k.mixMass || 36); }),
             cp: Cells.players.map(function(p) { return p.chain ? 1 : 0; }),
+            wx: wx,
             lg: Mix.log.slice(0, 4).map(function(L) { return [L.text, L.col]; })
         };
     },
     applyNetState: function(m) {
         if (!m) return;
+        var prev = Mix.me();
+        var px = prev && prev.alive ? prev.x : 0, py = prev && prev.alive ? prev.y : 0, pk = prev ? prev.kind : null;
         var tMode = GameModes.get("tanks"), cMode = GameModes.get("cells"), sMode = GameModes.get("snake");
         if (m.t && tMode && tMode.applyNetState) tMode.applyNetState(m.t);
         if (m.c && cMode && cMode.applyNetState) cMode.applyNetState(m.c);
         if (m.s && sMode && sMode.applyNetState) sMode.applyNetState(m.s);
         if (m.mm) for (let i = 0; i < Tanks.tanks.length && i < m.mm.length; i++) Tanks.tanks[i].mixMass = m.mm[i];
         if (m.cp) for (let i = 0; i < Cells.players.length && i < m.cp.length; i++) Cells.players[i].chain = !!m.cp[i];
+        if (m.wx) for (let i = 0; i < Snake.worms.length; i++) {
+            var w = Snake.worms[i], q = w.pid && m.wx[w.pid];
+            if (q) w.mx = { lvl: q[0], pts: q[1], st: [q[2], q[3], q[4]], biteCd: 0, vFeedCd: 0 };
+        }
         var me = Mix.me();
+        if (me && me.alive && pk === me.kind) {
+            var d = Math.hypot(me.x - px, me.y - py);
+            if (d > 0 && d < 50) {
+                if (me.kind === "tank") { me.ref.x = px + (me.x - px) * 0.55; me.ref.y = py + (me.y - py) * 0.55; }
+                else if (me.kind === "worm" && me.ref.segs[0]) { me.ref.segs[0].x = px + (me.x - px) * 0.55; me.ref.segs[0].y = py + (me.y - py) * 0.55; }
+            }
+        }
         if (me) {
             var bk = me.kind === "blob" ? (me.ref.chain ? "chain" : "blob") : me.kind;
             mixCfg.body = bk;
@@ -1064,7 +1120,10 @@ GameModes.register({
 
     tunables: function() {
         return [
-            { label: "Play as", type: "choice", options: MIX_BODIES, get: function() { return mixCfg.body; }, set: function(v) { Mix.setBody(String(v)); } }
+            { label: "Play as", type: "choice", localOnly: true, options: MIX_BODIES, get: function() { return mixCfg.body; }, set: function(v) {
+                if (typeof Net !== "undefined" && Net.role === "client") { Mix._lanBody = String(v); mixCfg.body = String(v); }
+                else Mix.setBody(String(v));
+            } }
         ].concat(arenaRows(), [
             { label: "CPU tanks", type: "range", min: 0, max: 14, step: 1, get: function() { return TNK.CPUS; }, set: function(v) { TNK.CPUS = v; }, note: "next arena" },
             { label: "CPU blobs", type: "range", min: 0, max: 40, step: 1, get: function() { return cellsCfg.bots; }, set: function(v) { cellsCfg.bots = v; saveCellsCfg(); }, note: "changes live" },
@@ -1087,6 +1146,12 @@ GameModes.register({
             if (mixCfg.body === "tank") {
                 var tm = /^Digit([1-8])$/.exec(code);
                 if (tm) { Mix._lanTs = ((Mix._lanTs || 0) - ((Mix._lanTs || 0) % 10)) + 10 + Number(tm[1]); return true; }
+                var ci = ["KeyU", "KeyI", "KeyO", "KeyP"].indexOf(code);
+                var mTk = Mix.me();
+                if (ci >= 0 && mTk && mTk.kind === "tank" && mTk.ref.choose) {
+                    Mix._lanTc = ((Mix._lanTc || 0) - ((Mix._lanTc || 0) % 10)) + 10 + (ci + 1);
+                    return true;
+                }
             }
             return false;
         }
@@ -1104,6 +1169,20 @@ GameModes.register({
                         Mix._lanBody = p.id; mixCfg.body = p.id;
                     } else if (p.id !== mixCfg.body) Mix.setBody(p.id);
                     return true;
+                }
+            }
+            if (typeof Net !== "undefined" && Net.role === "client" && mixCfg.body === "tank") {
+                var hit = function(r) { return mouseX >= r[0] && mouseX <= r[0] + r[2] && mouseY >= r[1] && mouseY <= r[1] + r[3]; };
+                var mTk = Mix.me();
+                if (mTk && mTk.kind === "tank" && mTk.ref.alive) {
+                    for (let i = 0; i < (Tanks.classRects || []).length; i++) if (hit(Tanks.classRects[i])) {
+                        Mix._lanTc = ((Mix._lanTc || 0) - ((Mix._lanTc || 0) % 10)) + 10 + (i + 1);
+                        mouseDown = false; return true;
+                    }
+                    if (mTk.ref.pts > 0) for (let i = 0; i < (Tanks.statRects || []).length; i++) if (hit(Tanks.statRects[i])) {
+                        Mix._lanTs = ((Mix._lanTs || 0) - ((Mix._lanTs || 0) % 10)) + 10 + (Tanks.statRects[i][4] + 1);
+                        mouseDown = false; return true;
+                    }
                 }
             }
         }

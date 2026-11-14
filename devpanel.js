@@ -1371,6 +1371,10 @@ function topBarRefresh() {
                 humans = 0; cpus = 0;
                 GameModes.call("seats").forEach(function(st) { if (st.count) cpus += st.value; else if (st.value === "human") humans++; else if (st.value === "cpu") cpus++; });
             }
+            if (typeof Net !== "undefined" && (Net.role === "host" || Net.role === "client")) {
+                var netN = Net.role === "host" ? (Net.peerCount() + 1) : ((Net.lobbyPlayers && Net.lobbyPlayers.length) || humans);
+                if (netN > humans) humans = netN;
+            }
             var ch = "👥 <b>" + humans + "</b>" + (cpus ? "<span style='opacity:.8'>+" + cpus + "🤖</span>" : "") + " <span class='lbl'>" + (humans === 1 ? "player" : "players") + "</span>";
             if (coopBtn.innerHTML !== ch) coopBtn.innerHTML = ch;
             coopBtn.title = humans + " human" + (humans === 1 ? "" : "s") + (cpus ? " + " + cpus + " CPU" : "") + " — click to change who's playing";
@@ -1379,7 +1383,8 @@ function topBarRefresh() {
         if (lanBtn && typeof Net !== "undefined") {
             var live = Net.role === "host" || Net.role === "client";
             lanBtn.classList.toggle("live", live);
-            var lh = "📡 <span class='lbl'>" + (Net.role === "host" ? "Hosting · " + (Net.peerCount() + 1) : "LAN") + "</span>";
+            var nLan = Net.role === "host" ? (Net.peerCount() + 1) : ((Net.lobbyPlayers && Net.lobbyPlayers.length) || 2);
+            var lh = "📡 <span class='lbl'>" + (Net.role === "host" ? "Hosting · " + nLan : (Net.role === "client" ? "Joined · " + nLan : "LAN")) + "</span>";
             if (lanBtn.innerHTML !== lh) lanBtn.innerHTML = lh;
         }
     document.body.classList.toggle("paused", typeof paused !== "undefined" && !!paused);

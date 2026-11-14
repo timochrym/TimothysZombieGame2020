@@ -1030,7 +1030,7 @@ var SandboxUI = {
             var handler = function() {
                 var val = r.type === "toggle" ? inp.checked : (r.type === "choice" ? (isNaN(Number(inp.value)) ? inp.value : Number(inp.value)) : Number(inp.value));
                 r.set(val);
-                self.sendNet({ k: "tune", idx: idx, val: val });
+                if (!r.localOnly) self.sendNet({ k: "tune", idx: idx, val: val });
                 if (inp.type === "range" && inp.previousElementSibling) {
                     var strong = inp.previousElementSibling.querySelector("strong");
                     if (strong) strong.textContent = r.get();
