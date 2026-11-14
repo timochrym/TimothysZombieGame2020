@@ -4,7 +4,7 @@ PANES is what portfolio_html adds to its tab strip. The panes load when first op
 /api/tasks and /api/history, and draw with textContent only, like every page here.
 
 Tasks     a rank board of Up next / Doing / Waiting on you / Later for every project (what each project keeps, read as it is; see review_tasks.py),
-          drag a card (or Alt+Up / Alt+Down, or its buttons) to rank it, Later parks it; add a task; import a .csv or .tsv with a preview first
+          drag a card (or Alt+Up / Alt+Down, or its buttons) to rank it, Later parks it; add a task; import a .csv, .tsv or .xlsx with a preview first
 History   every project's commits by day, with who wrote them (Claude, Codex, a person, CI), how big, whether a review covers them, and the reviews of that
           time; filter by project and range, search, load older
 Proposals what agents suggest (notes/proposals.md): the ones waiting for your decision first, with Approve / Not now / No; the rest by state (review_notes.py)
@@ -57,6 +57,7 @@ JS = r"""
     if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
     return j;
   };
+  const b64 = (buf) => { let s = ''; const a = new Uint8Array(buf); for (let i = 0; i < a.length; i += 8192) s += String.fromCharCode.apply(null, a.subarray(i, i + 8192)); return btoa(s); };
   const note = (t) => { if (typeof toast === 'function') toast(t); };
   const pane = (k) => document.getElementById('pane-' + k);
   const pill = (label, n, on, fn) => el('button', { type: 'button', className: on ? 'on' : '', onclick: fn }, label, n === undefined ? '' : el('span', { className: 'n' }, String(n)));
@@ -106,13 +107,14 @@ JS = r"""
     const input = el('input', { type: 'text', placeholder: 'Add a task' + (target ? ' to ' + target.name : '') + '...', maxLength: 200 });
     const add = async () => { if (!input.value.trim() || !target) return; await act({ op: 'add', project: target.id, title: input.value.trim() }, 'Added to ' + target.name + '.'); };
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
-    const file = el('input', { type: 'file', accept: '.csv,.tsv,.txt,text/csv,text/tab-separated-values', style: 'display:none' });
+    const file = el('input', { type: 'file', accept: '.csv,.tsv,.txt,.xlsx,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', style: 'display:none' });
     const importBox = el('div', {});
     file.onchange = async () => {
       const f = file.files[0]; if (!f) return;
-      if (f.size > 200000) { note('That file is too large (200 KB at most).'); return; }
+      const isX = /\.xlsx$/i.test(f.name);
+      if (f.size > (isX ? 1000000 : 200000)) { note('That file is too large (' + (isX ? '1 MB' : '200 KB') + ' at most).'); return; }
       try {
-        const rows = (await api('/api/tasks', { op: 'preview', text: await f.text() })).rows;
+        const rows = (await api('/api/tasks', isX ? { op: 'preview', xlsx: b64(await f.arrayBuffer()) } : { op: 'preview', text: await f.text() })).rows;
         if (!rows.length) { importBox.replaceChildren(el('div', { className: 'dim' }, 'No tasks found in that file. It needs a Task (or Title / Name) column, or one task per line.')); return; }
         importBox.replaceChildren(el('section', { className: 'card import' }, el('strong', {}, rows.length + ' task(s) found in ' + f.name + (target ? ', to add to ' + target.name : '')),
           el('table', {}, ...rows.slice(0, 8).map((r) => el('tr', {}, el('td', {}, r.title), el('td', { className: 'dim' }, r.status)))), rows.length > 8 ? el('div', { className: 'dim' }, '... and ' + (rows.length - 8) + ' more') : '',

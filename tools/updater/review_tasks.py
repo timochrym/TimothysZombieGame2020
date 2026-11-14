@@ -230,15 +230,8 @@ def set_status(project, projects, ident, status):
 
 # ---- spreadsheet import (csv / tsv)
 
-def parse_table(text, limit=500):
-    """csv or tsv text -> [{'title', 'status'}]. A header row with Title/Task/Name (and optionally Status/Done) is used; without one, the first column is the title."""
-    import csv
-    import io
-    text = text.lstrip('﻿')
-    if not text.strip():
-        return []
-    delim = '\t' if text.count('\t') >= text.count(',') and '\t' in text else ','
-    rows = [r for r in csv.reader(io.StringIO(text), delimiter=delim) if any(c.strip() for c in r)]
+def _tasks_from_rows(rows, limit=500):
+    rows = [[str(c) for c in r] for r in rows if any(str(c).strip() for c in r)]
     if not rows:
         return []
     head = [c.strip().lower() for c in rows[0]]
@@ -254,6 +247,72 @@ def parse_table(text, limit=500):
         raw = (r[scol].strip().lower() if scol is not None and scol < len(r) else '')
         out.append({'title': title[:MAX_TITLE], 'status': 'done' if raw in ('done', 'complete', 'completed', 'closed', 'yes', 'true', 'x', '1') else 'todo'})
     return out
+
+
+def parse_table(text, limit=500):
+    """csv or tsv text -> [{'title', 'status'}]. A header row with Title/Task/Name (and optionally Status/Done) is used; without one, the first column is the title."""
+    import csv
+    import io
+    text = text.lstrip('\ufeff')
+    if not text.strip():
+        return []
+    delim = '\t' if text.count('\t') >= text.count(',') and '\t' in text else ','
+    return _tasks_from_rows(list(csv.reader(io.StringIO(text), delimiter=delim)), limit)
+
+
+XLSX_MAX_PART = 3 * 1024 * 1024             # an uploaded file is untrusted: no part of the zip may expand past this, and no DOCTYPE is accepted
+XLSX_MAX_BYTES = 1024 * 1024
+
+
+def parse_xlsx(data, limit=500):
+    """The first sheet of an .xlsx file (bytes) -> the same [{'title', 'status'}] as parse_table. Raises ValueError for anything that is not a plain workbook."""
+    import io
+    import xml.etree.ElementTree as ET
+    import zipfile
+    if len(data) > XLSX_MAX_BYTES:
+        raise ValueError('That spreadsheet is too large (1 MB at most).')
+
+    def part(zf, name):
+        info = zf.getinfo(name)
+        if info.file_size > XLSX_MAX_PART:
+            raise ValueError('That spreadsheet is not a plain workbook.')
+        raw = zf.read(name)
+        if b'<!DOCTYPE' in raw[:2048].upper() or b'<!ENTITY' in raw.upper():
+            raise ValueError('That spreadsheet is not a plain workbook.')
+        return ET.fromstring(raw)
+
+    ns = '{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+        names = set(zf.namelist())
+        shared = []
+        if 'xl/sharedStrings.xml' in names:
+            shared = [''.join(t.text or '' for t in si.iter(ns + 't')) for si in part(zf, 'xl/sharedStrings.xml').iter(ns + 'si')]
+        sheet = next((n for n in sorted(names) if re.match(r'^xl/worksheets/sheet\d+\.xml$', n)), None)
+        if not sheet:
+            raise ValueError('That file has no sheet in it.')
+        rows = []
+        for row in part(zf, sheet).iter(ns + 'row'):
+            cells = {}
+            for c in row.iter(ns + 'c'):
+                col = re.match(r'^([A-Z]+)', c.get('r', 'A'))
+                idx = 0
+                for ch in (col.group(1) if col else 'A'):
+                    idx = idx * 26 + ord(ch) - 64
+                kind, v = c.get('t'), c.find(ns + 'v')
+                if kind == 's' and v is not None and (v.text or '').isdigit() and int(v.text) < len(shared):
+                    text = shared[int(v.text)]
+                elif kind == 'inlineStr':
+                    text = ''.join(t.text or '' for t in c.iter(ns + 't'))
+                else:
+                    text = (v.text or '') if v is not None else ''
+                cells[idx - 1] = text
+            rows.append([cells.get(i, '') for i in range(max(cells) + 1)] if cells else [])
+            if len(rows) > limit + 5:
+                break
+    except (zipfile.BadZipFile, KeyError, ET.ParseError) as err:
+        raise ValueError('That file is not a readable .xlsx workbook (%s).' % err.__class__.__name__)
+    return _tasks_from_rows(rows, limit)
 
 
 def import_rows(project, projects, rows):
