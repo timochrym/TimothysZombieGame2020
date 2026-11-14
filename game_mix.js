@@ -219,15 +219,20 @@ var Mix = {
             var bj = blobs[j];
             blobR[j] = bj.dead ? 0 : Cells.rad(bj.m);
         }
-        // ---- bullets: they shrink blobs (a blob shot below 12 is gone) and hurt worms (heads most, bodies soak)
+        var viruses = Cells.viruses;
+        // ---- bullets: they shrink blobs (a blob shot below 12 is gone), hurt worms (heads most, bodies soak), and feed viruses
         for (let i = bullets.length - 1; i >= 0; i--) {
             var bu = bullets[i], used = false, bux = bu.x, buy = bu.y, bur = bu.r;
+            var effDmg = bu.dmg;
+            if (effDmg > 10) effDmg = 10 + Math.sqrt((effDmg - 10) * 5.5);
+            if (bu.maxLife) effDmg *= (0.35 + 0.65 * Math.min(1, bu.life / bu.maxLife));
             for (let j = 0; j < blobs.length; j++) {
                 var bl = blobs[j];
                 if (bl.dead || Cells.protectedNow(bl.pl)) continue;
                 var br = blobR[j], rr = br + bur, dx = bux - bl.x, dy = buy - bl.y;
                 if (dx > rr || dx < -rr || dy > rr || dy < -rr || dx * dx + dy * dy > rr * rr) continue;
-                bl.m -= bu.dmg * 1.3; used = true; S.bulletBlob++;
+                bl.m -= effDmg * 1.3; used = true; S.bulletBlob++;
+                bl.vx = (bl.vx || 0) + (bu.vx || 0) * 0.16; bl.vy = (bl.vy || 0) + (bu.vy || 0) * 0.16;
                 this.burst(bux, buy, bl.pl.color || "#a78bfa", "spark", "", 22);
                 if (bu.owner && bu.owner.alive) Tanks.gainXp(bu.owner, 2);
                 if (bl.m < 12) {
@@ -245,7 +250,7 @@ var Mix = {
                     if (!w.alive || w.safeT > 0 || arenaProtected(w)) continue;
                     var h = w.segs[0], wr = wormR[j], rrW = wr + bur, dxW = bux - h.x, dyW = buy - h.y;
                     if (dxW > rrW || dxW < -rrW || dyW > rrW || dyW < -rrW || dxW * dxW + dyW * dyW >= rrW * rrW) continue;
-                    w.len -= bu.dmg * 1.6 * (1 - 0.1 * (w.mx ? w.mx.st[1] : 0)); used = true; S.bulletWorm++;
+                    w.len -= effDmg * 1.6 * (1 - 0.1 * (w.mx ? w.mx.st[1] : 0)); used = true; S.bulletWorm++;
                     this.burst(bux, buy, w.color, "spark", "", 24);
                     if (bu.owner && bu.owner.alive) Tanks.gainXp(bu.owner, 3);
                     if (w.len < 12) {
@@ -258,19 +263,32 @@ var Mix = {
                 if (!used) {
                     var hitW = Snake.hitBody(bux, buy, bur, null);
                     if (hitW && hitW.alive) {
-                        hitW.len = Math.max(12, hitW.len - bu.dmg * 0.25 * (1 - 0.1 * (hitW.mx ? hitW.mx.st[1] : 0)));
-                        used = true; S.bulletWorm++;
+                        hitW.len = Math.max(12, hitW.len - effDmg * 0.18 * (1 - 0.1 * (hitW.mx ? hitW.mx.st[1] : 0)));
+                        used = true; bu.pen -= 0.5; S.bulletWorm++;
                         this.burst(bux, buy, hitW.color, "spark", "", 18);
+                    }
+                }
+            }
+            if (!used) {
+                for (let v = 0; v < viruses.length; v++) {
+                    var viB = viruses[v], vrB = Cells.rad(viB.m || 100) + bur;
+                    var vdxB = bux - viB.x, vdyB = buy - viB.y;
+                    if (vdxB * vdxB + vdyB * vdyB < vrB * vrB) {
+                        var firedV = Cells.feedVirus(viB, bu.vx || (viB.x - bux), bu.vy || (viB.y - buy), 1);
+                        used = true;
+                        this.burst(viB.x, viB.y, "#4ade80", firedV ? "ring" : "spark", firedV ? "SPIKE!" : "", firedV ? 55 : 22);
+                        break;
                     }
                 }
             }
             if (used) { bu.pen -= 1; if (bu.pen <= 0) mixSwapPop(bullets, i); }
         }
-        // ---- worms: break blocks, bite tanks; a worm's body is a wall for tanks
+        // ---- worms: break blocks, bite tanks, feed spikes when boosting; a worm's body is a wall for tanks
         var shapes = Tanks.shapes;
         for (let j = 0; j < worms.length; j++) {
             var w2 = worms[j];
             if (!w2.alive || !w2.mx) continue;
+            if (w2.mx.vFeedCd > 0) w2.mx.vFeedCd--;
             var h2 = w2.segs[0], wr2 = wormR[j], bite = w2.mx.st[0], boost = w2.boosting ? 2 : 1;
             for (let i = shapes.length - 1; i >= 0; i--) {
                 var sh = shapes[i], SH = TNK_SHAPES[sh.type], rrS = SH.r + wr2;
@@ -296,6 +314,20 @@ var Mix = {
                     this.burst(k2.x, k2.y, w2.color, "spark", "BITE!", 34);
                     if (!k2.alive) { this.wormXp(w2, 40); this.note(w2.human !== undefined || k2.human !== undefined, w2.name + " bit " + k2.name + " to pieces", w2.color); }
                     break;
+                }
+            }
+            // boosting worms can feed viruses in their heading direction
+            if (w2.boosting && w2.len > 26 && !w2.mx.vFeedCd) {
+                for (let v = 0; v < viruses.length; v++) {
+                    var viW = viruses[v], vrW = Cells.rad(viW.m || 100) + wr2 + 6;
+                    var vdxW = h2.x - viW.x, vdyW = h2.y - viW.y;
+                    if (vdxW * vdxW + vdyW * vdyW < vrW * vrW) {
+                        var firedW = Cells.feedVirus(viW, Math.cos(w2.ang), Math.sin(w2.ang), 2);
+                        w2.len = Math.max(12, w2.len - 4);
+                        w2.mx.vFeedCd = 15;
+                        this.burst(viW.x, viW.y, "#4ade80", firedW ? "ring" : "spark", firedW ? "SPIKE!" : "", firedW ? 55 : 22);
+                        break;
+                    }
                 }
             }
         }
@@ -769,7 +801,7 @@ var Mix = {
         }
         this.log.length = lw;
         this.drawRadar(m);
-        uiText("Bullets shrink blobs · tanks are blobs with a gun (bigger eats smaller) · blobs pop on worms · worms break blocks, bite tanks and level up", cssW / 2, cssH - 28, 11, "rgba(220,230,240,0.75)", "center", "700");
+        uiText("Bullets shrink blobs · tanks are blobs with a gun · blobs pop on worms · feed spikes (W / shoot / boost) to launch them!", cssW / 2, cssH - 28, 11, "rgba(220,230,240,0.75)", "center", "700");
     },
 
     nextBody: function(dir) {

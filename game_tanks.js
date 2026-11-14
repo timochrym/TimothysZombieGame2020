@@ -181,7 +181,8 @@ var Tanks = {
                 var ca = Math.cos(a), sa = Math.sin(a), off = (B.off || 0) * r / 30;
                 var spd = (7 + 0.9 * k.st[3]) * (C.sp || 1) * (B.thrust ? 0.8 : 1);
                 var bx = k.x + ca * r * 1.6 * (B.len || 1) - sa * off, by = k.y + sa * r * 1.6 * (B.len || 1) + ca * off;
-                Tanks.bullets.push({ x: bx, y: by, vx: ca * spd + k.vx * 0.5, vy: sa * spd + k.vy * 0.5, r: 9 * (r / 30) * (C.size || 1) * (B.w ? Math.min(1.4, B.w * 0.8) : 1), dmg: (5.5 + 1.6 * k.st[5]) * (C.dm || 1) * mf, pen: (1 + 0.8 * k.st[4]) * (C.size || 1), owner: k, life: 110 + k.st[3] * 6 });
+                var blife = 110 + k.st[3] * 6;
+                Tanks.bullets.push({ x: bx, y: by, vx: ca * spd + k.vx * 0.5, vy: sa * spd + k.vy * 0.5, r: 9 * (r / 30) * (C.size || 1) * (B.w ? Math.min(1.4, B.w * 0.8) : 1), dmg: (5.5 + 1.6 * k.st[5]) * (C.dm || 1) * mf, pen: (1 + 0.8 * k.st[4]) * (C.size || 1), owner: k, life: blife, maxLife: blife });
                 var rec = (C.recoil || 0.35) * (B.thrust ? 2.2 : 1);
                 k.vx -= ca * rec * 0.3; k.vy -= sa * rec * 0.3;
                 k.recoilT = 4;

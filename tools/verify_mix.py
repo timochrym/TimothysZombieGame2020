@@ -229,6 +229,29 @@ try:
         Cells.pickups = [{ x: 0, y: 0, kind: 'speed' }, { x: 0, y: 0, kind: 'shield' }, { x: 0, y: 0, kind: 'mass' }, { x: 2000, y: 0, kind: 'magnet' }, { x: 2000, y: 0, kind: 'mass' }, { x: 2000, y: 0, kind: 'shield' }]; const wl = w.len; run();
         R.sharedPowerups = 'tank speed x' + (Tanks.speed(k) / sp0).toFixed(1) + ', shield ' + (k.inv > 300) + ', mass +' + Math.round(k.mixMass - mass0) + ' | worm magnet ' + (w.mixFx.magnet > 0) + ', length +' + Math.round(w.len - wl) + ', shield ' + (w.safeT > 300) + ' | left ' + Cells.pickups.length;
 
+        // 9. buffed virus burns 25% mass on giant blobs & all players can feed viruses
+        clear(); bl = blob(0, 0, 400); Cells.viruses.push({ x: 0, y: 0, m: 100, feed: 0, vx: 0, vy: 0 }); Cells.step();
+        const vTotal = Math.round(Cells.blobs.reduce((a, q) => a + q.m, 0));
+        R.virusBurnsBigBlob = Cells.blobs.length >= 4 && vTotal <= 310;
+
+        clear(); const vi = { x: 0, y: 0, m: 100, feed: 0, vx: 0, vy: 0 }; Cells.viruses.push(vi);
+        Cells.pellets.push({ x: 0, y: 0, m: 11, col: '#fff', vx: 10, vy: 0, ejected: true }); Cells.step();
+        const afterEject = vi.feed;
+        k = tank(-100, 0); Tanks.bullets.push({ x: 0, y: 0, vx: 10, vy: 0, r: 9, dmg: 10, pen: 1, owner: k, life: 50 }); run();
+        const afterBullet = vi.feed;
+        w = worm(0, 0, 40); w.boosting = true; w.ang = 0; Snake.buildGrid(); run();
+        const afterWorm = vi.feed;
+        w.segs[0].x = 600;
+        Tanks.bullets.push({ x: 0, y: 0, vx: 10, vy: 0, r: 9, dmg: 10, pen: 1, owner: k, life: 50 }); run();
+        R.allFeedVirus = (afterEject === 1 && afterBullet === 2 && afterWorm === 4 && Cells.viruses.length === 2);
+
+        // 10. bullet falloff & high-dmg soft-cap balance
+        clear(); bl = blob(300, 0, 200); Tanks.bullets.push({ x: 300, y: 0, vx: 10, vy: 0, r: 9, dmg: 30, pen: 1, owner: k, life: 100, maxLife: 100 }); run();
+        const dmgNear = 200 - bl.m;
+        clear(); bl = blob(300, 0, 200); Tanks.bullets.push({ x: 300, y: 0, vx: 10, vy: 0, r: 9, dmg: 30, pen: 1, owner: k, life: 10, maxLife: 100 }); run();
+        const dmgFar = 200 - bl.m;
+        R.bulletBalanceFalloff = dmgNear < 30 * 1.3 && dmgFar < dmgNear * 0.65;
+
         cellsCfg.bots = bots; SNK.PELLETS = 1400; Mix.reset(); paused = false;
         return JSON.stringify(R);
     })()""")
@@ -250,6 +273,9 @@ try:
     assert r["wormBodyHurtsTank"] is True
     assert r["piecesDontRepop"] is True
     assert r["tinyBlobTakenWhole"] is True
+    assert r["virusBurnsBigBlob"] is True, r["virusBurnsBigBlob"]
+    assert r["allFeedVirus"] is True, r["allFeedVirus"]
+    assert r["bulletBalanceFalloff"] is True, r["bulletBalanceFalloff"]
     assert r["sharedPowerups"] == "tank speed x1.5, shield true, mass +30 | worm magnet true, length +30, shield true | left 0", r["sharedPowerups"]
     print("ALL ASSERTIONS PASSED!")
 

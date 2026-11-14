@@ -66,7 +66,23 @@ var Cells = {
     },
     rndPos: function(pad) { return [(Math.random() - 0.5) * (CEL.W - pad * 2), (Math.random() - 0.5) * (CEL.H - pad * 2)]; },
     addPellet: function(x, y, m, col) { if (x === undefined) { var p = this.rndPos(20); x = p[0]; y = p[1]; } this.pellets.push({ x: x, y: y, m: m || 1, col: col || CEL_COLORS[(Math.random() * CEL_COLORS.length) | 0], vx: 0, vy: 0 }); },
-    addVirus: function() { var p = this.rndPos(300); this.viruses.push({ x: p[0], y: p[1], m: 100 }); },
+    addVirus: function() { var p = this.rndPos(300); this.viruses.push({ x: p[0], y: p[1], m: 100, feed: 0, vx: 0, vy: 0 }); },
+    feedVirus: function(vi, dx, dy, amt) {
+        var L = Math.hypot(dx, dy) || 1;
+        vi.fx = dx / L; vi.fy = dy / L;
+        vi.feed = (vi.feed || 0) + (amt || 1);
+        vi.m = Math.min(160, (vi.m || 100) + 10);
+        if (vi.feed >= 5) {
+            vi.feed = 0; vi.m = 100;
+            if (this.viruses.length < 44) {
+                this.viruses.push({ x: vi.x + vi.fx * 48, y: vi.y + vi.fy * 48, m: 100, feed: 0, vx: vi.fx * 26, vy: vi.fy * 26, launched: 45 });
+            } else {
+                vi.vx = (vi.vx || 0) + vi.fx * 24; vi.vy = (vi.vy || 0) + vi.fy * 24; vi.launched = 45;
+            }
+            return true;
+        }
+        return false;
+    },
 
     addPlayer: function(o) {
         var pl = { name: o.name, color: o.color, human: o.human, alive: false, deadT: 0, aimX: 0, aimY: 0, cpuT: 0, peak: 0 };
@@ -122,6 +138,12 @@ var Cells = {
         if (pl.chain && eject && !pl.ejectPrev) {
             pl.compact = !pl.compact;
             pl.chainMoving = false;
+            var hd = (pl.chainList && pl.chainList[0]) || me[0];
+            if (hd && hd.m >= 26) {
+                var edx = pl.aimX - hd.x, edy = pl.aimY - hd.y, eL = Math.hypot(edx, edy) || 1, er = this.rad(hd.m);
+                hd.m -= 8;
+                this.pellets.push({ x: hd.x + edx / eL * (er + 12), y: hd.y + edy / eL * (er + 12), m: 7, col: pl.color, vx: edx / eL * 22, vy: edy / eL * 22, ejected: true });
+            }
         }
         pl.ejectPrev = eject;
         pl.chainMoving = !!(pl.chain && pl.compact && split);
@@ -291,7 +313,22 @@ var Cells = {
         for (let k = this.pellets.length - 1; k >= 0; k--) {
             var p = this.pellets[k];
             if (p.vx || p.vy) { p.x += p.vx; p.y += p.vy; p.vx *= 0.88; p.vy *= 0.88; if (Math.abs(p.vx) + Math.abs(p.vy) < 0.1) p.vx = p.vy = 0; }
-            var px = p.x, py = p.y, pm = p.m;
+            var px = p.x, py = p.y, pm = p.m, eatenP = false;
+            if (p.ejected) {
+                for (let v = 0; v < this.viruses.length; v++) {
+                    var vi0 = this.viruses[v], vr0 = this.rad(vi0.m || 100) + 8;
+                    var vdx0 = px - vi0.x, vdy0 = py - vi0.y;
+                    if (vdx0 * vdx0 + vdy0 * vdy0 < vr0 * vr0) {
+                        this.feedVirus(vi0, p.vx || (vi0.x - px), p.vy || (vi0.y - py), 1);
+                        var lastE = this.pellets.length - 1;
+                        if (k < lastE) this.pellets[k] = this.pellets[lastE];
+                        this.pellets.pop();
+                        eatenP = true;
+                        break;
+                    }
+                }
+                if (eatenP) continue;
+            }
             for (let i = 0; i < B.length; i++) {
                 var q = B[i];
                 if (q.dead || (pm >= 5 && q.m <= 20)) continue;
@@ -305,21 +342,45 @@ var Cells = {
                 }
             }
         }
-        // viruses pop big blobs
+        // viruses move when launched and pop big blobs (burning 25% mass so endgame blobs cannot snowball off them)
+        var halfW = CEL.W * 0.5 - 40, halfH = CEL.H * 0.5 - 40;
         for (let v = this.viruses.length - 1; v >= 0; v--) {
             var vi = this.viruses[v];
+            if (vi.launched > 0) vi.launched--;
+            if (vi.vx || vi.vy) {
+                vi.x += vi.vx; vi.y += vi.vy;
+                vi.vx *= 0.94; vi.vy *= 0.94;
+                if (vi.x < -halfW) { vi.x = -halfW; vi.vx = Math.abs(vi.vx); }
+                else if (vi.x > halfW) { vi.x = halfW; vi.vx = -Math.abs(vi.vx); }
+                if (vi.y < -halfH) { vi.y = -halfH; vi.vy = Math.abs(vi.vy); }
+                else if (vi.y > halfH) { vi.y = halfH; vi.vy = -Math.abs(vi.vy); }
+                if (Math.abs(vi.vx) + Math.abs(vi.vy) < 0.15) vi.vx = vi.vy = 0;
+            }
+            var vRad = this.rad(vi.m || 100);
             for (let i = 0; i < B.length; i++) {
                 var bb = B[i];
-                if (bb.dead || bb.m < 130) continue;
-                if (Math.hypot(bb.x - vi.x, bb.y - vi.y) < this.rad(bb.m) - 20) {
+                if (bb.dead || bb.m < 95) continue;
+                var bRad = bRads[i] || this.rad(bb.m), hitR = Math.max(24, bRad - 14 + vRad * 0.35);
+                var bdx = bb.x - vi.x, bdy = bb.y - vi.y;
+                if (bdx * bdx + bdy * bdy < hitR * hitR) {
                     bb.pl.compact = false; bb.pl.chainMoving = false;
-                    var pieces = Math.min(CEL.MAXCELLS - this.mine(bb.pl).length, 7);
-                    bb.m += vi.m * 0.5;
+                    var pieces = Math.max(0, Math.min(CEL.MAXCELLS - this.mine(bb.pl).length, 9));
+                    var lost = bb.m * 0.25;
+                    bb.m = Math.max(20, bb.m - lost);
+                    for (let s = 0; s < 4; s++) {
+                        var sa = Math.random() * Math.PI * 2;
+                        this.pellets.push({ x: bb.x, y: bb.y, m: 3, col: "#4ade80", vx: Math.cos(sa) * 18, vy: Math.sin(sa) * 18 });
+                    }
                     var each = bb.m / (pieces + 1);
-                    for (let k = 0; k < pieces; k++) { var a = k / pieces * Math.PI * 2; B.push({ pl: bb.pl, x: bb.x, y: bb.y, m: each, vx: Math.cos(a) * 16, vy: Math.sin(a) * 16, mergeT: 600 }); }
+                    for (let k = 0; k < pieces; k++) { var a = k / pieces * Math.PI * 2; B.push({ pl: bb.pl, x: bb.x, y: bb.y, m: each, vx: Math.cos(a) * 18, vy: Math.sin(a) * 18, mergeT: 600 }); }
                     bb.m = each; bb.mergeT = 600;
-                    this.viruses.splice(v, 1); this.addVirus();
-                    if (bb.pl.human !== undefined) { showBanner("POPPED!", "you hit a virus", "#4ade80"); screenShake = 6; }
+                    var kd = Math.hypot(bdx, bdy) || 1;
+                    bb.vx += (bdx / kd) * 12; bb.vy += (bdy / kd) * 12;
+                    var lastV = this.viruses.length - 1;
+                    if (v < lastV) this.viruses[v] = this.viruses[lastV];
+                    this.viruses.pop();
+                    if (this.viruses.length < 22) this.addVirus();
+                    if (bb.pl.human !== undefined) { showBanner("POPPED!", "virus burned 25% mass", "#4ade80"); screenShake = 7; }
                     break;
                 }
             }
@@ -418,12 +479,18 @@ var Cells = {
         for (let i = 0; i < all.length; i++) this.drawBlob(all[i], Z);
         // viruses on top of small blobs, under nothing
         for (let i = 0; i < this.viruses.length; i++) {
-            var v = this.viruses[i], vs = this.toScreen(v.x, v.y), vr = this.rad(v.m) * Z;
+            var v = this.viruses[i], vs = this.toScreen(v.x, v.y), vr = this.rad(v.m || 100) * Z;
             if (vs[0] < -vr * 2 || vs[1] < -vr * 2 || vs[0] > cssW + vr * 2 || vs[1] > cssH + vr * 2) continue;
-            ctx.fillStyle = "#4ade80"; ctx.strokeStyle = "#15803d"; ctx.lineWidth = 3;
+            ctx.fillStyle = v.launched > 0 ? "#86efac" : "#4ade80"; ctx.strokeStyle = v.launched > 0 ? "#fde047" : "#15803d"; ctx.lineWidth = 3;
             ctx.beginPath();
             for (let k = 0; k <= 40; k++) { var an = k / 40 * Math.PI * 2 + this.t * 0.005, rr = vr * (k % 2 ? 0.88 : 1.06); ctx.lineTo(vs[0] + Math.cos(an) * rr, vs[1] + Math.sin(an) * rr); }
             ctx.closePath(); ctx.globalAlpha = 0.85; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
+            if (v.feed > 0) {
+                ctx.strokeStyle = "#fde047"; ctx.lineWidth = Math.max(2, 3 * Z);
+                ctx.beginPath();
+                ctx.arc(vs[0], vs[1], vr * 1.15, -Math.PI * 0.5, -Math.PI * 0.5 + (Math.min(5, v.feed) / 5) * Math.PI * 2);
+                ctx.stroke();
+            }
         }
     },
     drawBlob: function(b, Z) {
