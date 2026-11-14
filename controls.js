@@ -8,10 +8,10 @@ var KEY_ACTIONS = [
     // [id, label, default code]
     ["p1up", "P1 jump / up", "KeyW"], ["p1left", "P1 left", "KeyA"], ["p1down", "P1 down", "KeyS"], ["p1right", "P1 right", "KeyD"],
     ["p1shoot", "P1 shoot", "KeyF"], ["p1jet", "P1 jetpack", "Space"], ["p1dash", "P1 dash", "ShiftLeft"], ["p1ability", "P1 shockwave / use", "KeyE"],
-    ["p1grab", "P1 grab & throw", "KeyG"], ["p1reload", "P1 reload", "KeyX"],
+    ["p1grab", "P1 grab & throw", "KeyG"], ["p1reload", "P1 reload", "KeyX"], ["p1build", "P1 build", "KeyC"], ["p1swap", "P1 swap character", "KeyV"],
     ["p2up", "P2 jump / up", "ArrowUp"], ["p2left", "P2 left", "ArrowLeft"], ["p2down", "P2 down", "ArrowDown"], ["p2right", "P2 right", "ArrowRight"],
     ["p2shoot", "P2 shoot", "Enter"], ["p2jet", "P2 jetpack", "Period"], ["p2dash", "P2 dash", "ShiftRight"], ["p2ability", "P2 shockwave / use", "Slash"],
-    ["p2grab", "P2 grab & throw", "Comma"], ["p2reload", "P2 reload", "Quote"]
+    ["p2grab", "P2 grab & throw", "Comma"], ["p2reload", "P2 reload", "Quote"], ["p2build", "P2 build", "Semicolon"], ["p2swap", "P2 swap character", "BracketRight"]
 ];
 var PAD_ACTIONS = [
     // [id, label, default (standard-mapping) button index]
@@ -101,7 +101,7 @@ var ControlsUI = {
         var col = function(list, kind) { return "<div style='flex:1;min-width:230px'>" + list.map(function(a) { return row(a, kind); }).join("") + "</div>"; };
         box.innerHTML = "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'><b style='font-size:20px;color:#7dd3fc'>🎮 CONTROLS</b><span><button id='ctl-reset' style='" + btn + "'>Reset to defaults</button> <button id='ctl-close' style='" + btn + "'>Done (Esc)</button></span></div>" +
             "<div style='color:#94a3b8;margin-bottom:10px'>Click a binding, then press the new key (or gamepad button). Red = two actions share a key.</div>" +
-            "<div style='display:flex;gap:22px;flex-wrap:wrap'>" + col(KEY_ACTIONS.slice(0, 10), "key") + col(KEY_ACTIONS.slice(10), "key") + "</div>" +
+            "<div style='display:flex;gap:22px;flex-wrap:wrap'>" + col(KEY_ACTIONS.slice(0, 12), "key") + col(KEY_ACTIONS.slice(12), "key") + "</div>" +
             "<div style='margin:12px 0 6px;color:#7dd3fc;font-weight:800'>Gamepad buttons (every pad)</div>" +
             "<div style='display:flex;gap:22px;flex-wrap:wrap'>" + col(PAD_ACTIONS.slice(0, 4), "pad") + col(PAD_ACTIONS.slice(4), "pad") + "</div>";
         box.querySelectorAll("button[data-id]").forEach(function(b) {

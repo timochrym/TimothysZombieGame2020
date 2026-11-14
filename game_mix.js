@@ -621,18 +621,28 @@ var Mix = {
             if (!w4 || !w4.alive) continue;
             S.blobPopped++;
             if (b4.m < 25) {                                                   // tiny blob: worm absorbs it whole
-                w4.len += b4.m * 0.25; this.wormXp(w4, b4.m * 0.3);
-                this.burst(b4.x, b4.y, w4.color, "spark", "", 28);
-                this.note(b4.pl.human !== undefined || w4.human !== undefined, w4.name + " absorbed " + b4.pl.name, w4.color);
+                w4.len += b4.m * 0.35; this.wormXp(w4, b4.m * 0.45);
+                this.burst(b4.x, b4.y, w4.color, "spark", "+EAT", 28);
+                this.note(b4.pl.human !== undefined || w4.human !== undefined, w4.name + " ate " + b4.pl.name, w4.color);
                 this._blobGone(blobs, b4, w4.name); anyDead = true; continue;
             }
             var hd = w4.segs[0], adx = b4.x - hd.x, ady = b4.y - hd.y, away = Math.sqrt(adx * adx + ady * ady) || 1;
-            if (b4.m < 80) {                                                   // medium blobs bounce off instead of popping
+            var headEatDist = (wormR[worms.indexOf(w4)] || 14) + r4 * 0.85;
+            if (!b4.pl.chain && b4.m <= Math.max(30, w4.len * 0.32) && adx * adx + ady * ady < headEatDist * headEatDist) {
+                w4.len += b4.m * 0.35; this.wormXp(w4, b4.m * 0.5);
+                this.burst(b4.x, b4.y, w4.color, "spark", "+EAT", 30);
+                this.note(b4.pl.human !== undefined || w4.human !== undefined, w4.name + " ate " + b4.pl.name, w4.color);
+                this._blobGone(blobs, b4, w4.name); anyDead = true; continue;
+            }
+            if (b4.m < 80) {                                                   // medium blobs bounce off, worm nibbles a bit for points
+                var nib = Math.min(b4.m * 0.12, 7 + (w4.mx ? w4.mx.st[0] * 1.5 : 0));
+                b4.m = Math.max(15, b4.m - nib); blobR[i] = Cells.rad(b4.m);
+                w4.len += nib * 0.35; this.wormXp(w4, nib * 0.45);
                 b4.vx += adx / away * 8; b4.vy += ady / away * 8; b4.popCd = 30;
                 continue;
             }
             var lost = b4.m * 0.15, left = b4.m - lost;
-            w4.len += lost * 0.18; this.wormXp(w4, lost * 0.25);
+            w4.len += lost * 0.25; this.wormXp(w4, lost * 0.35);
             this.burst(b4.x, b4.y, "#a78bfa", "ring", "POP!", r4 + 35);
             if (b4.pl.chain && !b4.pl.compact && b4.pl.chainList && b4 === b4.pl.chainList[0] && !(b4.pl.snakeGrace > 0)) {
                 w4.len += b4.m * 0.35; this.wormXp(w4, b4.m * 0.4);
@@ -652,6 +662,33 @@ var Mix = {
             b4.vx += adx / away * 10; b4.vy += ady / away * 10;
             this.note(b4.pl.human !== undefined || w4.human !== undefined, b4.pl.name + " popped on " + w4.name, w4.color);
             if (b4.pl.human !== undefined) screenShake = 6;
+        }
+        // ---- snakes gain points & length by eating/biting Agar.io blobs with their head
+        for (let j = 0; j < worms.length; j++) {
+            var wH = worms[j];
+            if (!wH.alive || !wH.segs || !wH.segs.length) continue;
+            var hH = wH.segs[0], wrH = wormR[j];
+            if (hH.x * hH.x + hH.y * hH.y > MIX_SNK_RING_SQ) continue;
+            for (let i = 0; i < blobs.length; i++) {
+                var bH = blobs[i];
+                if (bH.dead || bH.popCd > 0 || Cells.protectedNow(bH.pl)) continue;
+                if (bH.pl.chain && !bH.pl.compact && !(bH.pl.snakeGrace > 0)) continue; // Bubble Worm body cuts off snakes below
+                var hitH = wrH + blobR[i] * 0.85;
+                var hdx = bH.x - hH.x, hdy = bH.y - hH.y;
+                if (hdx * hdx + hdy * hdy >= hitH * hitH) continue;
+                if (bH.m <= Math.max(35, wH.len * 0.35)) {
+                    wH.len += bH.m * 0.35; this.wormXp(wH, bH.m * 0.5);
+                    this.burst(bH.x, bH.y, wH.color, "spark", "+EAT", 30);
+                    this.note(bH.pl.human !== undefined || wH.human !== undefined, wH.name + " ate " + bH.pl.name, wH.color);
+                    this._blobGone(blobs, bH, wH.name); anyDead = true;
+                } else {
+                    var bite = Math.min(bH.m * 0.14, 10 + (wH.mx ? wH.mx.st[0] * 2 : 0));
+                    bH.m = Math.max(15, bH.m - bite); blobR[i] = Cells.rad(bH.m);
+                    bH.popCd = 20;
+                    wH.len += bite * 0.35; this.wormXp(wH, bite * 0.5);
+                    this.burst(bH.x, bH.y, wH.color, "spark", "+BITE", 22);
+                }
+            }
         }
         // ---- snakes running head-first into bubble snakes die (with grace period if just activated / grew a lot)
         for (let j = 0; j < worms.length; j++) {

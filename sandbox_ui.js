@@ -26,13 +26,48 @@ var SandboxUI = {
     tool: "play", // play | inspect | select | drawFloor | drawPlat | drawWall | spawn | possess | grapple | delete
     selectedObj: null,
     selectedEnt: null,
+    selectedGroup: [],
     piePos: null,
     ctxMenu: null,
     dragDraw: null, // { x1, y1, x2, y2, wx1, wy1 }
-    dragMove: null, // { obj, ox, oy }
+    dragSelect: null, // { x1, y1, x2, y2, wx1, wy1, additive }
+    dragMove: null, // { obj, ox, oy, group }
     _root: null,
     _lastMode: null,
     _lastModeId: null,
+
+    isSelected: function(item) {
+        return !!item && this.selectedGroup.indexOf(item) !== -1;
+    },
+    clearSelection: function() {
+        this.selectedGroup = [];
+        this.selectedObj = null;
+        this.selectedEnt = null;
+        this.piePos = null;
+    },
+    toggleSelect: function(item) {
+        if (!item) return;
+        var idx = this.selectedGroup.indexOf(item);
+        if (idx === -1) this.selectedGroup.push(item);
+        else this.selectedGroup.splice(idx, 1);
+        this.selectedObj = this.selectedGroup.length === 1 ? this.selectedGroup[0] : null;
+    },
+    selectAllObjects: function() {
+        var all = [].concat(typeof staticObjects !== "undefined" ? staticObjects : [], typeof movingObjects !== "undefined" ? movingObjects : []);
+        this.selectedGroup = all.filter(function(o) { return o && !o.dead; });
+        this.selectedObj = this.selectedGroup.length === 1 ? this.selectedGroup[0] : null;
+        this.selectedEnt = null;
+        this.piePos = null;
+        this.render();
+    },
+    selectAllEnemies: function() {
+        var zs = typeof zombies !== "undefined" ? zombies : [];
+        this.selectedGroup = zs.filter(function(z) { return z && !z.dead; });
+        this.selectedObj = null;
+        this.selectedEnt = null;
+        this.piePos = null;
+        this.render();
+    },
 
     isActive: function() {
         return typeof GameModes !== "undefined" && GameModes.current &&
@@ -179,14 +214,14 @@ var SandboxUI = {
                 var hitEnt = typeof EntityTakeover !== "undefined" ? EntityTakeover.findAt(wpos.x, wpos.y) : null;
                 if (hitEnt) {
                     if (self.tool === "possess") {
-                        EntityTakeover.possess(hitEnt.ent);
+                        EntityTakeover.possess(hitEnt.ent, e.shiftKey ? 1 : 0);
                         self.selectedEnt = hitEnt;
                         self.piePos = null;
                         self.render();
                         return;
                     }
                     if (self.tool === "delete") {
-                        if (hitEnt.ent !== redGuy) {
+                        if (hitEnt.ent !== redGuy && hitEnt.ent !== blueGuy) {
                             if (!self.sendNet({ k: "delObj", nid: hitEnt.ent._nid })) hitEnt.ent.dead = true;
                         }
                         self.selectedEnt = null;
@@ -194,8 +229,16 @@ var SandboxUI = {
                         self.render();
                         return;
                     }
+                    if (e.shiftKey) {
+                        self.toggleSelect(hitEnt.ent);
+                        self.selectedEnt = hitEnt;
+                        self.piePos = null;
+                        self.render();
+                        return;
+                    }
                     self.selectedEnt = hitEnt;
                     self.selectedObj = null;
+                    self.selectedGroup = [hitEnt.ent];
                     self.piePos = { x: e.clientX, y: e.clientY };
                     self.render();
                     return;
@@ -216,13 +259,32 @@ var SandboxUI = {
                             hitObj.dead = true;
                             if (typeof rebuildAllObjects === "function") rebuildAllObjects();
                         }
-                        self.selectedObj = null;
-                    } else {
-                        self.selectedObj = hitObj;
+                        self.clearSelection();
+                    } else if (e.shiftKey) {
+                        self.toggleSelect(hitObj);
                         self.selectedEnt = null;
                         self.piePos = null;
-                        self.dragMove = { obj: hitObj, ox: hitObj.x - wpos.x, oy: hitObj.y - wpos.y };
+                    } else {
+                        if (self.selectedGroup.indexOf(hitObj) === -1 || self.selectedGroup.length <= 1) {
+                            self.selectedGroup = [hitObj];
+                            self.selectedObj = hitObj;
+                        } else {
+                            self.selectedObj = null;
+                        }
+                        self.selectedEnt = null;
+                        self.piePos = null;
+                        var grp = self.selectedGroup.filter(function(it) { return it && !it.dead; }).map(function(it) {
+                            return { ref: it, dx: it.x - hitObj.x, dy: it.y - hitObj.y };
+                        });
+                        self.dragMove = { obj: hitObj, ox: hitObj.x - wpos.x, oy: hitObj.y - wpos.y, group: grp };
                     }
+                    self.render();
+                    return;
+                }
+
+                if (self.tool === "select") {
+                    if (!e.shiftKey) self.clearSelection();
+                    self.dragSelect = { x1: e.clientX, y1: e.clientY, x2: e.clientX, y2: e.clientY, wx1: wpos.x, wy1: wpos.y, additive: !!e.shiftKey };
                     self.render();
                     return;
                 }
@@ -255,11 +317,30 @@ var SandboxUI = {
                         var h = Math.max(8, Math.abs(self.dragDraw.y2 - self.dragDraw.y1));
                         box.style.left = l + "px"; box.style.top = t + "px"; box.style.width = w + "px"; box.style.height = h + "px";
                     }
+                } else if (self.dragSelect) {
+                    self.dragSelect.x2 = e.clientX;
+                    self.dragSelect.y2 = e.clientY;
+                    var sbox = document.getElementById("sb-drag-select");
+                    if (sbox) {
+                        var sl = Math.min(self.dragSelect.x1, self.dragSelect.x2), st = Math.min(self.dragSelect.y1, self.dragSelect.y2);
+                        var sw = Math.max(4, Math.abs(self.dragSelect.x2 - self.dragSelect.x1));
+                        var sh = Math.max(4, Math.abs(self.dragSelect.y2 - self.dragSelect.y1));
+                        sbox.style.left = sl + "px"; sbox.style.top = st + "px"; sbox.style.width = sw + "px"; sbox.style.height = sh + "px";
+                    }
                 } else if (self.dragMove && self.dragMove.obj) {
                     var rect2 = cv.getBoundingClientRect();
                     var wpos = typeof sbScreenToWorld === "function" ? sbScreenToWorld(e.clientX - rect2.left, e.clientY - rect2.top) : { x: 0, y: 0 };
-                    self.dragMove.obj.x = Math.round((wpos.x + self.dragMove.ox) / 20) * 20;
-                    self.dragMove.obj.y = Math.round((wpos.y + self.dragMove.oy) / 20) * 20;
+                    var nx = Math.round((wpos.x + self.dragMove.ox) / 20) * 20;
+                    var ny = Math.round((wpos.y + self.dragMove.oy) / 20) * 20;
+                    if (self.dragMove.group && self.dragMove.group.length > 1) {
+                        for (var gi = 0; gi < self.dragMove.group.length; gi++) {
+                            var gm = self.dragMove.group[gi];
+                            if (gm.ref && !gm.ref.dead) { gm.ref.x = nx + gm.dx; gm.ref.y = ny + gm.dy; }
+                        }
+                    } else {
+                        self.dragMove.obj.x = nx;
+                        self.dragMove.obj.y = ny;
+                    }
                 }
             });
 
@@ -284,13 +365,40 @@ var SandboxUI = {
                     var col = self.tool === "drawPlat" ? "#8b6b4a" : (self.tool === "drawWall" ? "#475569" : "#4d7c36");
                     if (!self.sendNet({ k: "addBox", x: cx, y: cy, w: bw, h: bh, col: col, opts: opts })) {
                         self.selectedObj = GameObject.addBox(cx, cy, bw, bh, col, opts);
+                        self.selectedGroup = self.selectedObj ? [self.selectedObj] : [];
                         if (typeof rebuildAllObjects === "function") rebuildAllObjects();
                     }
                     self.dragDraw = null;
                     self.render();
                 }
+                if (self.dragSelect) {
+                    var rectS = cv.getBoundingClientRect();
+                    var wposS = typeof sbScreenToWorld === "function" ? sbScreenToWorld(e.clientX - rectS.left, e.clientY - rectS.top) : { x: 0, y: 0 };
+                    if (Math.hypot(self.dragSelect.x2 - self.dragSelect.x1, self.dragSelect.y2 - self.dragSelect.y1) > 10) {
+                        var minX = Math.min(self.dragSelect.wx1, wposS.x), maxX = Math.max(self.dragSelect.wx1, wposS.x);
+                        var minY = Math.min(self.dragSelect.wy1, wposS.y), maxY = Math.max(self.dragSelect.wy1, wposS.y);
+                        var cands = [].concat(staticObjects || [], movingObjects || [], zombies || []);
+                        for (var si = 0; si < cands.length; si++) {
+                            var it = cands[si];
+                            if (!it || it.dead) continue;
+                            var hwS = (it.w || it.s1 || 40) / 2, hhS = (it.h || it.s2 || 40) / 2;
+                            if (it.x + hwS >= minX && it.x - hwS <= maxX && it.y + hhS >= minY && it.y - hhS <= maxY) {
+                                if (self.selectedGroup.indexOf(it) === -1) self.selectedGroup.push(it);
+                            }
+                        }
+                        self.selectedObj = self.selectedGroup.length === 1 ? self.selectedGroup[0] : null;
+                    }
+                    self.dragSelect = null;
+                    self.render();
+                }
                 if (self.dragMove) {
-                    if (self.dragMove.obj && !self.sendNet({ k: "moveObj", nid: self.dragMove.obj._nid, x: self.dragMove.obj.x, y: self.dragMove.obj.y })) {
+                    if (self.dragMove.group && self.dragMove.group.length > 1) {
+                        for (var gj = 0; gj < self.dragMove.group.length; gj++) {
+                            var gr = self.dragMove.group[gj].ref;
+                            if (gr && !gr.dead) self.sendNet({ k: "moveObj", nid: gr._nid, x: gr.x, y: gr.y });
+                        }
+                        if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                    } else if (self.dragMove.obj && !self.sendNet({ k: "moveObj", nid: self.dragMove.obj._nid, x: self.dragMove.obj.x, y: self.dragMove.obj.y })) {
                         if (typeof rebuildAllObjects === "function") rebuildAllObjects();
                     }
                     self.dragMove = null;
@@ -449,9 +557,30 @@ var SandboxUI = {
             var dw = Math.max(8, Math.abs(this.dragDraw.x2 - this.dragDraw.x1)), dh = Math.max(8, Math.abs(this.dragDraw.y2 - this.dragDraw.y1));
             html += '<div id="sb-drag-preview" style="position:fixed;left:' + dl + 'px;top:' + dt + 'px;width:' + dw + 'px;height:' + dh + 'px;border:2px dashed #38bdf8;background:rgba(56,189,248,0.2);border-radius:4px"></div>';
         }
+        if (this.dragSelect) {
+            var sl = Math.min(this.dragSelect.x1, this.dragSelect.x2), st = Math.min(this.dragSelect.y1, this.dragSelect.y2);
+            var sw = Math.max(4, Math.abs(this.dragSelect.x2 - this.dragSelect.x1)), sh = Math.max(4, Math.abs(this.dragSelect.y2 - this.dragSelect.y1));
+            html += '<div id="sb-drag-select" style="position:fixed;left:' + sl + 'px;top:' + st + 'px;width:' + sw + 'px;height:' + sh + 'px;border:2px dashed #22d3ee;background:rgba(34,211,238,0.14);border-radius:4px"></div>';
+        }
 
-        // 3. Sandbox Right Property Inspector (when object selected & roster closed)
-        if (sb && this.selectedObj && !this.selectedObj.dead && !this.rosterOpen) {
+        // 3. Sandbox Right Property Inspector (single object OR multi-select group)
+        var grpAlive = this.selectedGroup.filter(function(it) { return it && !it.dead; });
+        if (sb && grpAlive.length > 1 && !this.rosterOpen) {
+            html += '<div class="sb-pe sb-glass" style="position:fixed;top:88px;right:12px;width:236px;border-radius:12px;padding:12px">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+                '<strong style="color:#22d3ee">GROUP (' + grpAlive.length + ')</strong>' +
+                '<button class="sb-btn" style="padding:2px 6px" id="sb-grp-clear">✕</button></div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px">' +
+                '<button class="sb-btn" id="sb-grp-snap">▦ Snap 20px</button>' +
+                '<button class="sb-btn" id="sb-grp-alignl">⬅ Align Left</button>' +
+                '<button class="sb-btn" id="sb-grp-aligncx">↔ Center X</button>' +
+                '<button class="sb-btn" id="sb-grp-alignt">⬆ Align Top</button>' +
+                '</div>' +
+                '<div style="display:flex;gap:6px">' +
+                '<button class="sb-btn" style="flex:1" id="sb-grp-dup">Duplicate All</button>' +
+                '<button class="sb-btn" style="color:#f87171" id="sb-grp-del">Delete All</button>' +
+                '</div></div>';
+        } else if (sb && this.selectedObj && !this.selectedObj.dead && !this.rosterOpen) {
             var o = this.selectedObj;
             html += '<div class="sb-pe sb-glass" style="position:fixed;top:88px;right:12px;width:230px;border-radius:12px;padding:12px">' +
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
@@ -481,8 +610,10 @@ var SandboxUI = {
 
         // 5. L3 Tactical Pie Ring around clicked entity
         if (this.piePos && this.selectedEnt && this.selectedEnt.ent && !this.selectedEnt.ent.dead) {
-            html += '<div class="sb-pe" style="position:fixed;left:' + this.piePos.x + 'px;top:' + this.piePos.y + 'px;transform:translate(-50%,-50%);width:150px;height:150px;border-radius:999px;border:2px dashed #38bdf8;background:rgba(15,23,42,0.45)">' +
-                '<button class="sb-btn active" id="sb-pie-pos" style="position:absolute;top:-14px;left:50%;transform:translateX(-50%);white-space:nowrap">⚡ Take Over</button>' +
+            html += '<div class="sb-pe" style="position:fixed;left:' + this.piePos.x + 'px;top:' + this.piePos.y + 'px;transform:translate(-50%,-50%);width:155px;height:155px;border-radius:999px;border:2px dashed #38bdf8;background:rgba(15,23,42,0.45)">' +
+                '<div style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);display:flex;gap:4px;white-space:nowrap">' +
+                '<button class="sb-btn active" id="sb-pie-pos">⚡ P1</button>' +
+                '<button class="sb-btn" id="sb-pie-pos2" style="border-color:#60a5fa;color:#93c5fd">⚡ P2</button></div>' +
                 '<button class="sb-btn" id="sb-pie-fling" style="position:absolute;bottom:-14px;left:50%;transform:translateX(-50%)">⬆ Fling</button>' +
                 '<button class="sb-btn" id="sb-pie-clone" style="position:absolute;right:-26px;top:50%;transform:translateY(-50%)">Clone</button>' +
                 '<button class="sb-btn" id="sb-pie-del" style="position:absolute;left:-20px;top:50%;transform:translateY(-50%);color:#f87171">🗑</button>' +
@@ -815,7 +946,7 @@ var SandboxUI = {
         var tools = [
             ["play", "🎮 Play / Normal"],
             ["inspect", "🔍 Inspect Anything"],
-            ["select", "✋ Select / Move"],
+            ["select", "✋ Select / Box"],
             ["drawFloor", "🧱 Draw Floor"],
             ["drawPlat", "➖ Draw Platform"],
             ["drawWall", "🏰 Draw Wall"],
@@ -824,12 +955,20 @@ var SandboxUI = {
             ["grapple", "🪝 Grappling Hook"],
             ["delete", "🗑 Delete"]
         ];
+        var selCount = this.selectedGroup.filter(function(it) { return it && !it.dead; }).length;
         return '<div class="sb-sec">Active Tool</div>' +
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px">' +
             tools.map(function(t) {
                 return '<button class="sb-btn ' + (SandboxUI.tool === t[0] ? 'active' : '') + '" style="text-align:left;padding:6px 7px;font-size:11px" data-sbtool="' + t[0] + '">' + t[1] + '</button>';
             }).join("") + '</div>' +
-            '<div class="sb-sec">Studio Overlays</div>' +
+            '<div class="sb-sec">Selection Tools (' + selCount + ' selected)</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px">' +
+            '<button class="sb-btn" style="font-size:11px" id="sb-sel-allobj">▦ All Objects</button>' +
+            '<button class="sb-btn" style="font-size:11px" id="sb-sel-allmob">🧟 All Enemies</button>' +
+            '<button class="sb-btn" style="font-size:11px;grid-column:span 2" id="sb-sel-clear">✕ Clear Selection</button>' +
+            '</div>' +
+            '<div class="sb-sec">Character Swap &amp; Overlays</div>' +
+            '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-swap">🔄 Swap P1 ↔ P2 [V]</button>' +
             '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-spawn">🔍 Universal Spawner [B]</button>' +
             '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-roster">👥 Entity Roster</button>' +
             (sb ? '<button class="sb-btn" style="width:100%" id="sb-tl-floor">▦ Toggle Sandbox Floor</button>' : '');
@@ -945,7 +1084,8 @@ var SandboxUI = {
                 '<button class="sb-btn" style="width:100%;margin-bottom:6px" id="sb-p-clear">🧹 Clear All Objects &amp; Enemies</button>' +
                 '<button class="sb-btn" style="width:100%" id="sb-p-horde">🧟 Summon Test Horde</button>';
         } else if (this.pauseTab === "entities") {
-            body = '<button class="sb-btn" style="width:100%;margin-bottom:6px" id="sb-p-eject">↩ Eject to Hero</button>' +
+            body = '<button class="sb-btn" style="width:100%;margin-bottom:6px" id="sb-p-swap">🔄 Swap P1 ↔ P2 Characters</button>' +
+                '<button class="sb-btn" style="width:100%;margin-bottom:6px" id="sb-p-eject">↩ Eject to Hero</button>' +
                 '<button class="sb-btn" style="width:100%" id="sb-p-roster">👥 Open Entity Roster</button>';
         } else if (this.pauseTab === "admin") {
             body = this.renderAdminHTML();
@@ -1207,6 +1347,13 @@ var SandboxUI = {
         this._root.querySelectorAll("[data-sbtool]").forEach(function(b) {
             b.onclick = function() { self.tool = b.dataset.sbtool; self.render(); };
         });
+        if (el("sb-sel-allobj")) el("sb-sel-allobj").onclick = function() { self.selectAllObjects(); };
+        if (el("sb-sel-allmob")) el("sb-sel-allmob").onclick = function() { self.selectAllEnemies(); };
+        if (el("sb-sel-clear")) el("sb-sel-clear").onclick = function() { self.clearSelection(); self.render(); };
+        if (el("sb-tl-swap")) el("sb-tl-swap").onclick = function() {
+            if (!self.sendNet({ k: "swap" }) && typeof EntityTakeover !== "undefined") EntityTakeover.swapPlayers();
+            self.render();
+        };
         if (el("sb-tl-spawn")) el("sb-tl-spawn").onclick = function() { self.spawnerOpen = !self.spawnerOpen; self.render(); };
         if (el("sb-tl-roster")) el("sb-tl-roster").onclick = function() { self.rosterOpen = !self.rosterOpen; self.render(); };
         if (el("sb-tl-floor")) el("sb-tl-floor").onclick = function() {
@@ -1233,14 +1380,81 @@ var SandboxUI = {
             };
         });
 
+        // Group Selection Inspector
+        var grpAlive = self.selectedGroup.filter(function(it) { return it && !it.dead; });
+        if (el("sb-grp-clear")) el("sb-grp-clear").onclick = function() { self.clearSelection(); self.render(); };
+        if (el("sb-grp-snap")) el("sb-grp-snap").onclick = function() {
+            grpAlive.forEach(function(it) {
+                it.x = Math.round(it.x / 20) * 20; it.y = Math.round(it.y / 20) * 20;
+                self.sendNet({ k: "moveObj", nid: it._nid, x: it.x, y: it.y });
+            });
+            if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            self.render();
+        };
+        if (el("sb-grp-alignl")) el("sb-grp-alignl").onclick = function() {
+            var minX = Math.min.apply(null, grpAlive.map(function(it) { return it.x - (it.w || it.s1 || 40) / 2; }));
+            grpAlive.forEach(function(it) {
+                it.x = minX + (it.w || it.s1 || 40) / 2;
+                self.sendNet({ k: "moveObj", nid: it._nid, x: it.x, y: it.y });
+            });
+            if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            self.render();
+        };
+        if (el("sb-grp-aligncx")) el("sb-grp-aligncx").onclick = function() {
+            var avgX = grpAlive.reduce(function(s, it) { return s + it.x; }, 0) / grpAlive.length;
+            grpAlive.forEach(function(it) {
+                it.x = Math.round(avgX);
+                self.sendNet({ k: "moveObj", nid: it._nid, x: it.x, y: it.y });
+            });
+            if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            self.render();
+        };
+        if (el("sb-grp-alignt")) el("sb-grp-alignt").onclick = function() {
+            var maxY = Math.max.apply(null, grpAlive.map(function(it) { return it.y + (it.h || it.s2 || 40) / 2; }));
+            grpAlive.forEach(function(it) {
+                it.y = maxY - (it.h || it.s2 || 40) / 2;
+                self.sendNet({ k: "moveObj", nid: it._nid, x: it.x, y: it.y });
+            });
+            if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            self.render();
+        };
+        if (el("sb-grp-dup")) el("sb-grp-dup").onclick = function() {
+            var clones = [];
+            grpAlive.forEach(function(it) {
+                if (it.w !== undefined || it.h !== undefined) {
+                    if (!self.sendNet({ k: "dupObj", nid: it._nid })) {
+                        var c = GameObject.addBox(it.x + 40, it.y + 40, it.w || it.s1 || 80, it.h || it.s2 || 80, it.color || "#64748b", { name: it.name, texture: it.texture, kind: it.kind });
+                        if (c) clones.push(c);
+                    }
+                } else if (typeof spawnZombie === "function") {
+                    if (!self.sendNet({ k: "spawnZombie", pick: it.power || "NORMAL", x: it.x + 40, y: it.y + 40 })) {
+                        var zc = spawnZombie(it.power || "NORMAL", it.x + 40, it.y + 40);
+                        if (zc) clones.push(zc);
+                    }
+                }
+            });
+            if (clones.length) self.selectedGroup = clones;
+            if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            self.render();
+        };
+        if (el("sb-grp-del")) el("sb-grp-del").onclick = function() {
+            grpAlive.forEach(function(it) {
+                if (it === redGuy || it === blueGuy) return;
+                if (!self.sendNet({ k: "delObj", nid: it._nid })) it.dead = true;
+            });
+            if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            self.clearSelection();
+            self.render();
+        };
+
         // Sandbox Right Inspector
-        if (el("sb-insp-close")) el("sb-insp-close").onclick = function() { self.selectedObj = null; self.render(); };
+        if (el("sb-insp-close")) el("sb-insp-close").onclick = function() { self.clearSelection(); self.render(); };
         if (el("sb-insp-del") && self.selectedObj) el("sb-insp-del").onclick = function() {
             if (!self.sendNet({ k: "delObj", nid: self.selectedObj._nid })) {
                 self.selectedObj.dead = true;
                 if (typeof rebuildAllObjects === "function") rebuildAllObjects();
             }
-            self.selectedObj = null;
+            self.clearSelection();
             self.render();
         };
         if (el("sb-insp-dup") && self.selectedObj) el("sb-insp-dup").onclick = function() {
@@ -1281,7 +1495,8 @@ var SandboxUI = {
         };
 
         // Pie Ring
-        if (el("sb-pie-pos")) el("sb-pie-pos").onclick = function() { EntityTakeover.possess(self.selectedEnt.ent); self.piePos = null; self.render(); };
+        if (el("sb-pie-pos")) el("sb-pie-pos").onclick = function() { EntityTakeover.possess(self.selectedEnt.ent, 0); self.piePos = null; self.render(); };
+        if (el("sb-pie-pos2")) el("sb-pie-pos2").onclick = function() { EntityTakeover.possess(self.selectedEnt.ent, 1); self.piePos = null; self.render(); };
         if (el("sb-pie-fling")) el("sb-pie-fling").onclick = function() {
             if (!self.sendNet({ k: "fling", nid: self.selectedEnt.ent._nid })) self.selectedEnt.ent.yspeed = 26;
             self.piePos = null; self.render();
@@ -1294,7 +1509,7 @@ var SandboxUI = {
             self.piePos = null; self.render();
         };
         if (el("sb-pie-del")) el("sb-pie-del").onclick = function() {
-            if (self.selectedEnt.ent !== redGuy) {
+            if (self.selectedEnt.ent !== redGuy && self.selectedEnt.ent !== blueGuy) {
                 if (!self.sendNet({ k: "delObj", nid: self.selectedEnt.ent._nid })) self.selectedEnt.ent.dead = true;
             }
             self.piePos = null; self.selectedEnt = null; self.render();
@@ -1405,6 +1620,10 @@ var SandboxUI = {
             }
             if (typeof Net !== "undefined" && Net.role === "client") { self.pauseOpen = false; self.render(); } else closePause();
         };
+        if (el("sb-p-swap")) el("sb-p-swap").onclick = function() {
+            if (!self.sendNet({ k: "swap" }) && typeof EntityTakeover !== "undefined") EntityTakeover.swapPlayers();
+            if (typeof Net !== "undefined" && Net.role === "client") { self.pauseOpen = false; self.render(); } else closePause();
+        };
         if (el("sb-p-eject")) el("sb-p-eject").onclick = function() { EntityTakeover.release(false); closePause(); };
         if (el("sb-p-roster")) el("sb-p-roster").onclick = function() {
             if (typeof Net !== "undefined" && Net.role === "client") self.pauseOpen = false; else closePause();
@@ -1484,6 +1703,25 @@ var SandboxUI = {
             self.pauseOpen = false; self.sideOpen = false; self.render();
             if (typeof Net !== "undefined") Net.disconnect();
         };
+    },
+
+    drawOverlay: function() {
+        if (!this.isSandbox() || typeof ctx === "undefined" || typeof sbWorldToScreen !== "function") return;
+        var items = this.selectedGroup.length ? this.selectedGroup : (this.selectedObj ? [this.selectedObj] : []);
+        if (!items.length) return;
+        ctx.save();
+        ctx.strokeStyle = "#22d3ee";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        for (var i = 0; i < items.length; i++) {
+            var it = items[i];
+            if (!it || it.dead) continue;
+            var w = (it.w || it.s1 || 40) * (typeof camZoom !== "undefined" ? camZoom : 1);
+            var h = (it.h || it.s2 || 40) * (typeof camZoom !== "undefined" ? camZoom : 1);
+            var p = sbWorldToScreen(it.x, it.y);
+            ctx.strokeRect(p.x - w / 2 - 4, p.y - h / 2 - 4, w + 8, h + 8);
+        }
+        ctx.restore();
     }
 };
 

@@ -156,10 +156,24 @@ var PlayersUI = {
         }
         // controls & devices
         var pads = (typeof Pads !== "undefined") ? Pads.state.map(function(s, i) { return s.active ? "🎮 Gamepad " + (i + 1) + " connected → drives P" + (i + 1) : null; }).filter(Boolean) : [];
-        h += "<h3>Controls</h3>";
-        h += "<div class='row'><span class='chip'>🎮 P1</span> WASD move/jump · mouse aim + click (or F) · Space jetpack · Shift dash · E ability · G grab · C build</div>";
-        h += "<div class='row'><span class='chip'>🎮 P2</span> Arrows move/jump · Enter shoot · . jetpack · Right-Shift dash · / ability · , grab · ; build</div>";
+        h += "<h3>Controls (1:1 Matched)</h3>";
+        h += "<div class='row'><span class='chip'>🎮 P1</span> WASD move/jump · mouse aim + click (or F) · Space jetpack · Shift dash · E ability · G grab · X reload · C build · V swap</div>";
+        h += "<div class='row'><span class='chip'>🎮 P2</span> Arrows move/jump · Enter shoot · . jetpack · Right-Shift dash · / ability · , grab · ' reload · ; build · ] swap</div>";
         h += "<div class='row muted'>" + (pads.length ? pads.join("  ·  ") : "No gamepads detected (press a button on one to connect it).") + "</div>";
+        if (typeof playerSettings !== "undefined" && typeof heroSkins !== "undefined") {
+            h += "<h3>Player 1 &amp; Player 2 Settings Parity</h3>";
+            [0, 1].forEach(function(si) {
+                var ps = playerSettings[si] || { weapon: "blaster", heroSpeed: "normal", aimMode: si === 0 ? "mouse" : "auto" };
+                var skName = (typeof skinName === "function") ? skinName(heroSkins[si]) : heroSkins[si];
+                h += "<div class='row'><span class='chip' style='min-width:60px;border-color:" + (si === 0 ? "#ff5a5f" : "#3da5ff") + "'>P" + (si + 1) + "</span>" +
+                    "<button class='b' data-pskin='" + si + "'>🧑 " + skName + "</button>" +
+                    "<button class='b' data-pwpn='" + si + "'>🔫 " + ps.weapon + "</button>" +
+                    "<button class='b' data-pspd='" + si + "'>⚡ " + ps.heroSpeed + "</button>" +
+                    "<button class='b' data-paim='" + si + "'>🎯 " + ps.aimMode + "</button>" +
+                    "</div>";
+            });
+            h += "<div class='row'><button class='b' id='pl-match'>🪞 Match P2 Settings to P1</button><button class='b' id='pl-swap'>🔄 Swap P1 ↔ P2</button></div>";
+        }
         var lan = (typeof Net !== "undefined" && Net.role === "host") ? Net.peerCount() : 0;
         h += "<div class='row'><span class='chip'>📡 LAN</span> " + (lan ? lan + " player(s) connected on other devices — they take CPU slots when there are any." : "Play on other devices on the same Wi-Fi.") + " <button class='b' id='pl-lan'>Open LAN…</button></div>";
         // live roster
@@ -184,6 +198,31 @@ var PlayersUI = {
             };
         });
         this.el.querySelectorAll("[data-skill]").forEach(function(b) { b.onclick = function() { sk.set(Number(b.dataset.skill)); self.render(); }; });
+        this.el.querySelectorAll("[data-pskin]").forEach(function(b) { b.onclick = function() { if (typeof cycleSkin === "function") cycleSkin(Number(b.dataset.pskin), 1); self.render(); }; });
+        this.el.querySelectorAll("[data-pwpn]").forEach(function(b) {
+            b.onclick = function() {
+                var i = Number(b.dataset.pwpn);
+                playerSettings[i].weapon = playerSettings[i].weapon === "fists" ? "blaster" : "fists";
+                if (i === 0 && typeof Fight !== "undefined") Fight.set("weapon", playerSettings[0].weapon);
+                savePlayerSettings(); self.render();
+            };
+        });
+        this.el.querySelectorAll("[data-pspd]").forEach(function(b) {
+            b.onclick = function() {
+                var i = Number(b.dataset.pspd), sl = ["normal", "fast", "turbo"];
+                playerSettings[i].heroSpeed = sl[(sl.indexOf(playerSettings[i].heroSpeed) + 1) % 3];
+                savePlayerSettings(); self.render();
+            };
+        });
+        this.el.querySelectorAll("[data-paim]").forEach(function(b) {
+            b.onclick = function() {
+                var i = Number(b.dataset.paim), al = ["mouse", "auto", "move"];
+                playerSettings[i].aimMode = al[(al.indexOf(playerSettings[i].aimMode) + 1) % 3];
+                savePlayerSettings(); self.render();
+            };
+        });
+        var pm = document.getElementById("pl-match"); if (pm) pm.onclick = function() { if (typeof matchPlayerSettings === "function") matchPlayerSettings(0, 1); self.render(); };
+        var psw = document.getElementById("pl-swap"); if (psw) psw.onclick = function() { if (typeof EntityTakeover !== "undefined") EntityTakeover.swapPlayers(); self.render(); };
         var c = document.getElementById("pl-close"); if (c) c.onclick = function() { self.close(); };
         var l = document.getElementById("pl-lan"); if (l) l.onclick = function() { self.close(); NetUI.open(); };
     }

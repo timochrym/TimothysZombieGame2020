@@ -81,7 +81,11 @@ function keyDownHandler(e) {
 
     if (e.repeat) return;
 
-    if (c == "KeyV") { if (typeof SummonManager !== "undefined") SummonManager.toggleGodMode(); }
+    if (c == "KeyV" || c == "BracketRight") {
+        if (typeof Net !== "undefined" && Net.role === "client") { Net.send({ t: "sb", act: { k: "swap" } }); }
+        else if (typeof EntityTakeover !== "undefined") { EntityTakeover.swapPlayers(); }
+        else if (typeof SummonManager !== "undefined") { SummonManager.toggleGodMode(); }
+    }
     // ----- Building (C / ; toggle, 1-4 / [ piece, T material) -----
     if (typeof Build !== "undefined" && !e.repeat) {
         var lanC = typeof Net !== "undefined" && Net.role === "client";

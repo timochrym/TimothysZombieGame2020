@@ -367,6 +367,11 @@ var Net = {
                     GameObject.addBox(o3.x + 50, o3.y + 30, o3.w || o3.s1 || 80, o3.h || o3.s2 || 80, o3.color || "#64748b", { name: o3.name, texture: o3.texture, kind: o3.kind });
                     if (typeof rebuildAllObjects === "function") rebuildAllObjects();
                 }
+            } else if (k === "swap" && typeof EntityTakeover !== "undefined") {
+                EntityTakeover.swapPlayers();
+            } else if (k === "possess" && typeof EntityTakeover !== "undefined") {
+                var pe = this.findByNid(act.nid);
+                if (pe) EntityTakeover.possess(pe, act.slot || 0);
             } else if (k === "spawnZombie" && typeof spawnZombie === "function") {
                 spawnZombie(act.pick || null, act.x !== undefined ? act.x : ref.x + 120, act.y !== undefined ? act.y : ref.y + 120);
             } else if (k === "fling") {
@@ -607,6 +612,9 @@ var Net = {
         for (let i = 0; i < NET_GLOBALS.length; i++) { var gk = NET_GLOBALS[i], gv = window[gk]; if (lg[gk] !== gv) { lg[gk] = gv; g[gk] = gv; } }
         if (lg.multiplayer !== multiplayer) { lg.multiplayer = multiplayer; g.multiplayer = multiplayer; }
         var hsp = settings.heroSpeed; if (lg._hostHeroSpeed !== hsp) { lg._hostHeroSpeed = hsp; g._hostHeroSpeed = hsp; }
+        var hsObj = { weapon: settings.weapon, ammo: settings.ammo, hitRagdoll: settings.hitRagdoll, heroSpeed: settings.heroSpeed, fx: settings.fx, ricochet: settings.ricochet, glow: settings.glow, charDetail: settings.charDetail, view3d: settings.view3d, squareChars: settings.squareChars, ps: typeof playerSettings !== "undefined" ? playerSettings : null };
+        var hsStr = JSON.stringify(hsObj);
+        if (full || hsStr !== lg._hostSettingsStr) { lg._hostSettingsStr = hsStr; g._hostSettings = hsObj; }
         var brS = JSON.stringify(brawl), brSend = (full || brS !== this._lastBr) ? brawl : undefined; this._lastBr = brS;
         var gsO = (typeof Gadgets !== "undefined") ? { starsGot: Gadgets.starsGot, starsTotal: Gadgets.starsTotal, deaths: Gadgets.deaths, keys: Gadgets.keys } : null;
         var gsS = JSON.stringify(gsO), gsSend = (full || gsS !== this._lastGs) ? gsO : undefined; this._lastGs = gsS;
@@ -742,6 +750,15 @@ var Net = {
             map.forEach(function(v, k) { if (!live.has(k)) map.delete(k); });
         }
         for (var gk in s.g) window[gk] = s.g[gk];
+        if (s.g && s.g._hostSettings && typeof settings !== "undefined") {
+            var hs = s.g._hostSettings;
+            ["weapon", "ammo", "hitRagdoll", "heroSpeed", "fx", "ricochet", "glow", "charDetail", "view3d", "squareChars"].forEach(function(k) {
+                if (hs[k] !== undefined) settings[k] = hs[k];
+            });
+            if (Array.isArray(hs.ps) && typeof playerSettings !== "undefined") {
+                for (var pi = 0; pi < 2; pi++) if (hs.ps[pi]) playerSettings[pi] = Object.assign({}, playerSettings[pi], hs.ps[pi]);
+            }
+        }
         if (s.br) for (var bk in s.br) brawl[bk] = s.br[bk];
         if (s.gs && typeof Gadgets !== "undefined") { Gadgets.starsGot = s.gs.starsGot; Gadgets.starsTotal = s.gs.starsTotal; Gadgets.deaths = s.gs.deaths; Gadgets.keys = s.gs.keys || {}; }
         this.myNid = s.you ? s.you[this.pid] : 0;

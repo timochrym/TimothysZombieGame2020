@@ -1051,10 +1051,12 @@ function frame() {
     GameModes.call("preUpdate");
 
     var netHosting = typeof Net !== "undefined" && Net.role === "host";
-    var possessed = typeof EntityTakeover !== "undefined" ? EntityTakeover.target : null;
+    var posTargets = (typeof EntityTakeover !== "undefined" && EntityTakeover.targets) ? EntityTakeover.targets : [typeof EntityTakeover !== "undefined" ? EntityTakeover.target : null, null];
     for (let i = 0; i < characters.length; i++) {
         if (!characters[i].dead) {
-            if (possessed && possessed !== characters[i] && characters[i] === redGuy) {
+            var supP1 = posTargets[0] && posTargets[0] !== characters[i] && characters[i] === redGuy;
+            var supP2 = posTargets[1] && posTargets[1] !== characters[i] && characters[i] === blueGuy;
+            if (supP1 || supP2) {
                 characters[i].leftPressed = characters[i].rightPressed = characters[i].upPressed = characters[i].downPressed = false;
             } else {
                 Components.moveTypeFinder(characters[i]);
@@ -1071,7 +1073,7 @@ function frame() {
             zombies.splice(i, 1);
         } else {
             if (zombies[i]._possessed && typeof EntityTakeover !== "undefined") {
-                EntityTakeover.drive(zombies[i]);
+                EntityTakeover.drive(zombies[i], zombies[i]._possessedBy || 0);
             } else {
                 Components.moveTypeFinder(zombies[i]);
                 Components.shootLazer(zombies[i]);
@@ -1165,6 +1167,7 @@ function frame() {
     if (typeof Build !== "undefined") Build.drawHUD();
     if (typeof PlayersBadge !== "undefined") PlayersBadge.draw();
     if (typeof UniversalInspect !== "undefined") UniversalInspect.drawOverlay();
+    if (typeof SandboxUI !== "undefined" && SandboxUI.drawOverlay) SandboxUI.drawOverlay();
     if (typeof Net !== "undefined" && Net.role === "host") Net.hostFrame();
 }
 
@@ -1229,10 +1232,13 @@ var PAUSE_CYCLE_IDS = ["skin0", "skin1", "bopp", "blvl", "bstk", "bstage", "svol
 
 function pauseItems() {
     if (pauseSub === "settings") {
+        var ps1 = (typeof playerSettings !== "undefined" && playerSettings[0]) ? playerSettings[0] : { weapon: settings.weapon, heroSpeed: settings.heroSpeed, aimMode: "mouse" };
+        var ps2 = (typeof playerSettings !== "undefined" && playerSettings[1]) ? playerSettings[1] : { weapon: settings.weapon, heroSpeed: settings.heroSpeed, aimMode: "auto" };
         return [
             { id: "stheme", label: "Theme:  ◀  " + Theme.c.label + "  ▶", hint: "Sky, hills, panels and backgrounds in every game" },
             { id: "sbright", label: "Brightness:  ◀  " + Math.round(settings.bright * 100) + "%  ▶", hint: "Lighter or darker screen, every game" },
-            { id: "sweapon", label: "Weapon:  ◀  " + FIGHT_WEAPONS.find(function(o) { return o[0] === settings.weapon; })[1].replace(/ \(.*/, "") + "  ▶", hint: settings.weapon === "fists" ? "Fire = punch, punch, kick · UP+fire uppercut · air DOWN+fire ground pound" : "Fire shoots · switch to Fists for melee" },
+            { id: "sweapon", label: "P1 Weapon:  ◀  " + FIGHT_WEAPONS.find(function(o) { return o[0] === ps1.weapon; })[1].replace(/ \(.*/, "") + "  ▶", hint: ps1.weapon === "fists" ? "Fire = punch, punch, kick · UP+fire uppercut · air DOWN+fire ground pound" : "Fire shoots · switch to Fists for melee" },
+            { id: "sweapon2", label: "P2 Weapon:  ◀  " + FIGHT_WEAPONS.find(function(o) { return o[0] === ps2.weapon; })[1].replace(/ \(.*/, "") + "  ▶", hint: "Matches P1 options — P2's own weapon" },
             { id: "sammo", label: "Ammo:  " + (settings.ammo === "limited" ? "Limited (reload)" : "Unlimited"), hint: "Limited = magazine, reload and ammo packs" },
             { id: "sragdoll", label: "Ragdoll when you get hit:  ◀  " + FIGHT_RAGDOLL.find(function(o) { return o[0] === settings.hitRagdoll; })[1] + "  ▶", hint: "How long a big hit knocks your hero over" },
             { id: "svol", label: "Sound volume:  ◀  " + (settings.volume <= 0 ? "OFF" : Math.round(settings.volume * 100) + "%") + "  ▶", hint: "◀ ▶ adjust" },
@@ -1240,13 +1246,17 @@ function pauseItems() {
             { id: "shit", label: "Hit-stop on big hits:  " + (settings.hitStop ? "ON" : "OFF"), hint: "Freezes a few frames on heavy impacts" },
             { id: "shidpi", label: "Sharp hi-DPI graphics:  " + (settings.hiDPI ? (renderScaleAutoReduced ? "ON (auto-reduced for speed)" : "ON") : "OFF"), hint: "Turn off if the game runs slowly" },
             { id: "sglow", label: "Glow effects:  " + (settings.glow ? (glowAutoDisabled ? "ON (auto-reduced for speed)" : "ON") : "OFF"), hint: "Turn off for more FPS on slower computers" },
-            { id: "sspeed", label: "Hero speed:  ◀  " + ({ normal: "Normal", fast: "Fast", turbo: "Turbo" })[settings.heroSpeed] + "  ▶", hint: "How fast heroes run" },
+            { id: "sspeed", label: "P1 Hero speed:  ◀  " + ({ normal: "Normal", fast: "Fast", turbo: "Turbo" })[ps1.heroSpeed] + "  ▶", hint: "How fast P1 runs" },
+            { id: "sspeed2", label: "P2 Hero speed:  ◀  " + ({ normal: "Normal", fast: "Fast", turbo: "Turbo" })[ps2.heroSpeed] + "  ▶", hint: "How fast P2 runs" },
+            { id: "saim", label: "P1 Aim mode:  ◀  " + ps1.aimMode.toUpperCase() + "  ▶", hint: "Mouse, Auto-aim, or Movement direction" },
+            { id: "saim2", label: "P2 Aim mode:  ◀  " + ps2.aimMode.toUpperCase() + "  ▶", hint: "Mouse, Auto-aim, or Movement direction" },
+            { id: "smatchp2", label: "Match P2 settings to P1", hint: "Copies P1 weapon, speed, aim mode, and character skin to P2" },
             { id: "sfx", label: "Effects:  " + (settings.fx === "full" ? "Full (every number & spark)" : "Calm (merged numbers, fewer sparks)"), hint: "Calm keeps busy waves readable" },
             { id: "sric", label: "Bouncing bullets:  ◀  " + (settings.ricochet ? settings.ricochet + " bounce" + (settings.ricochet > 1 ? "s" : "") : "OFF") + "  ▶", hint: "Shots ricochet off walls" },
             { id: "sdetail", label: "Character detail when zoomed in:  " + (settings.charDetail !== false ? "ON" : "OFF"), hint: "Shading, highlights and shine on big characters" },
             { id: "s3d", label: "3D view (2.5D):  " + (settings.view3d ? "ON" : "OFF"), hint: "Looks only: blocks get depth, gameplay stays 2D" },
             { id: "ssquare", label: "Character look:  " + (settings.squareChars ? "Classic squares" : "Detailed"), hint: "Classic squares = the original 2020 blocky look" },
-            { id: "scontrols", label: "Controls: remap keys & buttons  ▸", hint: "P1 / P2 keys and gamepad buttons" },
+            { id: "scontrols", label: "Controls: remap keys & buttons  ▸", hint: "P1 / P2 keys and gamepad buttons (1:1 matched)" },
             { id: "help", label: "Controls help:  " + (devOpts.showHelp ? "ON" : "OFF"), hint: "Shows the key cheat-sheet" },
             { id: "back", label: "◀  Back", hint: "Esc" }
         ];
@@ -1275,7 +1285,8 @@ function pauseItems() {
     }
     if (typeof PlayersUI !== "undefined") items.splice(Math.min(items.length, 2), 0, { id: "players", label: "👥 Players & CPUs…   " + PlayersUI.summary(), hint: "Who is human, who is CPU, teams and controls" });
     items.push({ id: "skin0", label: "Player 1 character:  ◀  " + skinName(heroSkins[0]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
-    if (multiplayer && (!inBrawl || (brawlCfg.opponents.indexOf("p2") === 0))) items.push({ id: "skin1", label: "Player 2 character:  ◀  " + skinName(heroSkins[1]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
+    items.push({ id: "skin1", label: "Player 2 character:  ◀  " + skinName(heroSkins[1]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
+    items.push({ id: "swap", label: "🔄 Swap P1 ↔ P2 Characters", hint: "Swap positions, skins, settings, or possess next hero (V)" });
     if (!inBrawl && !GameModes.has("menuItems") && pauseLevelKeys.length > 1) {
         var lvlName = LevelManager.getAllLevels()[pauseLevelKeys[pauseLevelIdx]];
         var curLvl = LevelManager.getCurrentLevel();
@@ -1295,14 +1306,54 @@ function pauseActivate(id, dir) {
     if (id === "settings") { pauseSub = "settings"; pauseIndex = 0; return; }
     if (id === "back") { pauseSub = null; pauseIndex = 0; return; }
     if (id === "svol") { SFX.setVolume(Math.round((settings.volume + (dir || 1) * 0.1) * 10) / 10); if (settings.volume > 1) SFX.setVolume(1); return; }
-    if (id === "sweapon") { Fight.set("weapon", settings.weapon === "fists" ? "blaster" : "fists"); return; }
+    if (id === "sweapon") {
+        var nw1 = (typeof playerSettings !== "undefined" ? playerSettings[0].weapon : settings.weapon) === "fists" ? "blaster" : "fists";
+        if (typeof playerSettings !== "undefined") { playerSettings[0].weapon = nw1; savePlayerSettings(); }
+        Fight.set("weapon", nw1); return;
+    }
+    if (id === "sweapon2") {
+        if (typeof playerSettings !== "undefined") {
+            playerSettings[1].weapon = playerSettings[1].weapon === "fists" ? "blaster" : "fists";
+            savePlayerSettings();
+        }
+        return;
+    }
     if (id === "sammo") { Fight.set("ammo", settings.ammo === "limited" ? "unlimited" : "limited"); return; }
     if (id === "sragdoll") { var rl = FIGHT_RAGDOLL.map(function(o) { return o[0]; }); Fight.set("hitRagdoll", rl[(rl.indexOf(settings.hitRagdoll) + (dir || 1) + rl.length) % rl.length]); return; }
     if (id === "stheme") { Theme.cycle(dir || 1); return; }
     if (id === "sbright") { Theme.stepBright(dir || 1); return; }
     if (id === "sshake") { settings.shake = Math.max(0, Math.min(1, Math.round((settings.shake + (dir || 1) * 0.25) * 4) / 4)); saveSettings(); return; }
     if (id === "sglow") { settings.glow = !settings.glow; glowAutoDisabled = false; saveSettings(); return; }
-    if (id === "sspeed") { var sl = ["normal", "fast", "turbo"]; settings.heroSpeed = sl[(sl.indexOf(settings.heroSpeed) + (dir || 1) + 3) % 3]; saveSettings(); return; }
+    if (id === "sspeed") {
+        var sl = ["normal", "fast", "turbo"];
+        var ns1 = sl[(sl.indexOf(settings.heroSpeed) + (dir || 1) + 3) % 3];
+        settings.heroSpeed = ns1;
+        if (typeof playerSettings !== "undefined") { playerSettings[0].heroSpeed = ns1; savePlayerSettings(); }
+        else saveSettings();
+        return;
+    }
+    if (id === "sspeed2") {
+        if (typeof playerSettings !== "undefined") {
+            var sl2 = ["normal", "fast", "turbo"];
+            playerSettings[1].heroSpeed = sl2[(sl2.indexOf(playerSettings[1].heroSpeed) + (dir || 1) + 3) % 3];
+            savePlayerSettings();
+        }
+        return;
+    }
+    if (id === "saim" || id === "saim2") {
+        if (typeof playerSettings !== "undefined") {
+            var idxA = id === "saim2" ? 1 : 0;
+            var al = ["mouse", "auto", "move"];
+            playerSettings[idxA].aimMode = al[(al.indexOf(playerSettings[idxA].aimMode) + (dir || 1) + 3) % 3];
+            savePlayerSettings();
+        }
+        return;
+    }
+    if (id === "smatchp2") {
+        if (typeof matchPlayerSettings === "function") matchPlayerSettings(0, 1);
+        if (typeof showBanner === "function") showBanner("SETTINGS MATCHED", "P2 now matches P1", "#38bdf8");
+        return;
+    }
     if (id === "sfx") { settings.fx = settings.fx === "full" ? "calm" : "full"; saveSettings(); return; }
     if (id === "sric") { settings.ricochet = (settings.ricochet + (dir || 1) + 4) % 4; saveSettings(); return; }
     if (id === "sdetail") { settings.charDetail = settings.charDetail === false; saveSettings(); return; }
@@ -1324,6 +1375,7 @@ function pauseActivate(id, dir) {
     else if (id === "restart") { pauseConfirm = true; pauseIndex = 1; }
     else if (id === "skin0") cycleSkin(0, dir || 1);
     else if (id === "skin1") cycleSkin(1, dir || 1);
+    else if (id === "swap") { if (typeof EntityTakeover !== "undefined") EntityTakeover.swapPlayers(); closePause(); }
     else if (id === "gmode") {
         closePause();
         if (brawl.active) LevelManager.selectLevel("classic_arena");

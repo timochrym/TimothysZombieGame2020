@@ -28,6 +28,36 @@ function saveSettings() {
     try { localStorage.setItem("timsZombieGameSettings", JSON.stringify(settings)); } catch (e) {}
 }
 
+var playerSettings = [
+    { weapon: settings.weapon || "blaster", heroSpeed: settings.heroSpeed || "normal", aimMode: "mouse" },
+    { weapon: settings.weapon || "blaster", heroSpeed: settings.heroSpeed || "normal", aimMode: "auto" }
+];
+try {
+    var savedPS = JSON.parse(localStorage.getItem("timsPlayerSettings") || "null");
+    if (Array.isArray(savedPS)) {
+        for (var psi = 0; psi < 2; psi++) {
+            if (!savedPS[psi]) continue;
+            if (typeof savedPS[psi].weapon === "string") playerSettings[psi].weapon = savedPS[psi].weapon;
+            if (["normal", "fast", "turbo"].indexOf(savedPS[psi].heroSpeed) !== -1) playerSettings[psi].heroSpeed = savedPS[psi].heroSpeed;
+            if (["mouse", "auto", "move"].indexOf(savedPS[psi].aimMode) !== -1) playerSettings[psi].aimMode = savedPS[psi].aimMode;
+        }
+    }
+} catch (e) {}
+function savePlayerSettings() {
+    settings.weapon = playerSettings[0].weapon;
+    settings.heroSpeed = playerSettings[0].heroSpeed;
+    saveSettings();
+    try { localStorage.setItem("timsPlayerSettings", JSON.stringify(playerSettings)); } catch (e) {}
+}
+function matchPlayerSettings(fromSlot, toSlot) {
+    var f = playerSettings[fromSlot] || playerSettings[0], t = playerSettings[toSlot] || playerSettings[1];
+    t.weapon = f.weapon;
+    t.heroSpeed = f.heroSpeed;
+    t.aimMode = f.aimMode;
+    if (typeof heroSkins !== "undefined" && heroSkins[fromSlot] !== undefined) heroSkins[toSlot] = heroSkins[fromSlot];
+    savePlayerSettings();
+}
+
 // ---- Hit-stop (freeze a few frames on big impacts) and slow motion ----
 var hitStopFrames = 0;
 var slowMoFrames = 0;

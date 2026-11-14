@@ -187,41 +187,92 @@ var GrappleHook = {
 // ENTITY TAKEOVER (POSSESSION) SYSTEM
 // ============================================================================
 var EntityTakeover = {
-    target: null,
+    targets: [null, null],
+    get target() { return this.targets[0]; },
+    set target(v) { this.targets[0] = v; },
 
-    possess: function(ent) {
+    possess: function(ent, slot) {
+        slot = slot === 1 ? 1 : 0;
         if (!ent || ent.dead) return false;
-        this.release(true);
-        this.target = ent;
+        this.release(true, slot);
+        this.targets[slot] = ent;
         ent._possessed = true;
+        ent._possessedBy = slot;
         ent._wasCPU = !!ent.isCPU;
         ent.isCPU = false;
         if (typeof Components !== "undefined") {
-            Components.addFloatingText("⚡ POSSESSED", ent.x, ent.y + 80, "#38bdf8", 18);
-            Components.spawnSparks(ent.x, ent.y, "#38bdf8", 12);
+            Components.addFloatingText("⚡ P" + (slot + 1) + " POSSESSED", ent.x, ent.y + 80, slot === 1 ? "#3da5ff" : "#38bdf8", 18);
+            Components.spawnSparks(ent.x, ent.y, slot === 1 ? "#3da5ff" : "#38bdf8", 12);
         }
         return true;
     },
 
-    release: function(silent) {
-        var t = this.target;
+    release: function(silent, slot) {
+        slot = slot === 1 ? 1 : 0;
+        var t = this.targets[slot];
         if (!t) return;
         t._possessed = false;
+        t._possessedBy = undefined;
         if (t._wasCPU !== undefined) t.isCPU = t._wasCPU;
         t.leftPressed = t.rightPressed = t.upPressed = t.downPressed = false;
-        this.target = null;
-        if (!silent && redGuy && typeof Components !== "undefined") {
-            Components.addFloatingText("↩ RETURNED TO HERO", redGuy.x, redGuy.y + 80, "#e2e8f0", 15);
+        this.targets[slot] = null;
+        var home = slot === 1 ? (typeof blueGuy !== "undefined" ? blueGuy : null) : (typeof redGuy !== "undefined" ? redGuy : null);
+        if (!silent && home && typeof Components !== "undefined") {
+            Components.addFloatingText("↩ P" + (slot + 1) + " RETURNED", home.x, home.y + 80, "#e2e8f0", 15);
         }
     },
 
-    drive: function(ent) {
-        if (!ent || ent.dead) { this.release(true); return; }
-        var inp = (typeof PlayerInput !== "undefined" && PlayerInput[0]) ? PlayerInput[0] : {};
-        ent.leftPressed = !!(inp.left || (typeof WASDleftPressed !== "undefined" && WASDleftPressed) || (typeof ULDRleftPressed !== "undefined" && ULDRleftPressed));
-        ent.rightPressed = !!(inp.right || (typeof WASDrightPressed !== "undefined" && WASDrightPressed) || (typeof ULDRrightPressed !== "undefined" && ULDRrightPressed));
-        ent.upPressed = !!(inp.up || (typeof WASDupPressed !== "undefined" && WASDupPressed) || (typeof ULDRupPressed !== "undefined" && ULDRupPressed));
-        ent.downPressed = !!(inp.down || (typeof WASDdownPressed !== "undefined" && WASDdownPressed) || (typeof ULDRdownPressed !== "undefined" && ULDRdownPressed));
+    swapPlayers: function() {
+        if (typeof redGuy !== "undefined" && redGuy && typeof blueGuy !== "undefined" && blueGuy && !redGuy.dead && !blueGuy.dead) {
+            var tmp = redGuy;
+            redGuy = blueGuy;
+            blueGuy = tmp;
+            redGuy.playerIndex = 0; blueGuy.playerIndex = 1;
+            redGuy.playerLabel = "P1"; blueGuy.playerLabel = "P2";
+            redGuy.name = "Player 1"; blueGuy.name = "Player 2";
+            if (typeof heroSkins !== "undefined") {
+                var sk = heroSkins[0]; heroSkins[0] = heroSkins[1]; heroSkins[1] = sk;
+            }
+            if (typeof playerSettings !== "undefined" && playerSettings[0] && playerSettings[1]) {
+                var ps = playerSettings[0]; playerSettings[0] = playerSettings[1]; playerSettings[1] = ps;
+                if (typeof savePlayerSettings === "function") savePlayerSettings();
+            }
+            if (typeof Components !== "undefined") {
+                Components.addFloatingText("🔄 P1", redGuy.x, redGuy.y + 80, "#ff5a5f", 18);
+                Components.addFloatingText("🔄 P2", blueGuy.x, blueGuy.y + 80, "#3da5ff", 18);
+            }
+            return true;
+        }
+        // Solo / sandbox: swap P1 with another alive non-zombie character if available
+        if (typeof redGuy !== "undefined" && redGuy && typeof characters !== "undefined") {
+            var alt = characters.find(function(c) { return c !== redGuy && !c.dead && !c.isZombie; });
+            if (alt) {
+                var prev = redGuy;
+                prev.isCPU = true; prev.playerIndex = undefined;
+                redGuy = alt;
+                redGuy.isCPU = false; redGuy.isPlayer = true; redGuy.playerIndex = 0; redGuy.playerLabel = "P1";
+                if (typeof Components !== "undefined") Components.addFloatingText("🔄 SWAPPED", redGuy.x, redGuy.y + 80, "#38bdf8", 18);
+                return true;
+            }
+        }
+        return false;
+    },
+
+    drive: function(ent, slot) {
+        slot = slot === 1 ? 1 : (ent && ent._possessedBy === 1 ? 1 : 0);
+        if (!ent || ent.dead) { this.release(true, slot); return; }
+        var inp = (typeof PlayerInput !== "undefined" && PlayerInput[slot]) ? PlayerInput[slot] : {};
+        if (slot === 0) {
+            ent.leftPressed = !!(inp.left || (typeof WASDleftPressed !== "undefined" && WASDleftPressed));
+            ent.rightPressed = !!(inp.right || (typeof WASDrightPressed !== "undefined" && WASDrightPressed));
+            ent.upPressed = !!(inp.up || (typeof WASDupPressed !== "undefined" && WASDupPressed));
+            ent.downPressed = !!(inp.down || (typeof WASDdownPressed !== "undefined" && WASDdownPressed));
+        } else {
+            ent.leftPressed = !!(inp.left || (typeof ULDRleftPressed !== "undefined" && ULDRleftPressed));
+            ent.rightPressed = !!(inp.right || (typeof ULDRrightPressed !== "undefined" && ULDRrightPressed));
+            ent.upPressed = !!(inp.up || (typeof ULDRupPressed !== "undefined" && ULDRupPressed));
+            ent.downPressed = !!(inp.down || (typeof ULDRdownPressed !== "undefined" && ULDRdownPressed));
+        }
         if (ent.leftPressed) ent.facing = -1;
         else if (ent.rightPressed) ent.facing = 1;
         if (inp.shoot && typeof ent.shoot === "function") ent.shoot();
