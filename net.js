@@ -319,7 +319,7 @@ var Net = {
         var p = this.peers[pid];
         if (!p || !m) return;
         if (m.full) { this.fullNext = true; return; }
-        if (m.t === "in") p.inp = m;
+        if (m.t === "in") { p.inp = m; if (m.q) p.ackSeq = m.q; }
         else if (m.t === "sb" && m.act) this.hostExecSandbox(pid, m.act);
     },
 
@@ -610,16 +610,22 @@ var Net = {
         var brS = JSON.stringify(brawl), brSend = (full || brS !== this._lastBr) ? brawl : undefined; this._lastBr = brS;
         var gsO = (typeof Gadgets !== "undefined") ? { starsGot: Gadgets.starsGot, starsTotal: Gadgets.starsTotal, deaths: Gadgets.deaths, keys: Gadgets.keys } : null;
         var gsS = JSON.stringify(gsO), gsSend = (full || gsS !== this._lastGs) ? gsO : undefined; this._lastGs = gsS;
-        var you = {};
-        for (var k in this.peers) if (this.peers[k].ch) you[k] = this.nid(this.peers[k].ch);
+        var you = {}, ack = {};
+        for (var k in this.peers) {
+            if (this.peers[k].ch) you[k] = this.nid(this.peers[k].ch);
+            if (this.peers[k].ackSeq) ack[k] = this.peers[k].ackSeq;
+        }
+        this.isFullSnap = full;
+        var msData = GameModes.has("netState") ? GameModes.call("netState") : undefined;
+        this.isFullSnap = false;
         var snap = {
             t: "snap", f: this.tickNo, full: full ? 1 : 0, rs: this.resetNo,
             mode: GameModes.current ? GameModes.current.id : "survival",
             lvl: (typeof LevelManager !== "undefined") ? LevelManager.currentLevelKey : "",
             g: g, br: brSend, gs: gsSend,
             r: { red: redGuy ? this.nid(redGuy) : 0, blue: blueGuy ? this.nid(blueGuy) : 0 },
-            you: you, c: C, ev: this.events,
-            ms: GameModes.has("netState") ? GameModes.call("netState") : undefined
+            you: you, ack: ack, c: C, ev: this.events,
+            ms: msData
         };
         var s;
         try { s = JSON.stringify(snap); } catch (e) { this.events = []; return; }
@@ -739,6 +745,7 @@ var Net = {
         if (s.br) for (var bk in s.br) brawl[bk] = s.br[bk];
         if (s.gs && typeof Gadgets !== "undefined") { Gadgets.starsGot = s.gs.starsGot; Gadgets.starsTotal = s.gs.starsTotal; Gadgets.deaths = s.gs.deaths; Gadgets.keys = s.gs.keys || {}; }
         this.myNid = s.you ? s.you[this.pid] : 0;
+        this.hostAck = (s.ack && s.ack[this.pid]) || 0;
         // the HUD on this screen shows MY hero (falls back to the host's P1 while spectating)
         var mine = map.get(this.myNid);
         redGuy = mine || map.get(s.r.red) || characters[0] || null;
@@ -802,7 +809,8 @@ var Net = {
         var str = JSON.stringify(m);
         var now = performance.now();
         if (str !== this.lastInpStr || now - this.lastInpSent > 100) {
-            this.send(str);
+            m.q = this.inSeq = (this.inSeq || 0) + 1;
+            this.send(JSON.stringify(m));
             this.lastInpStr = str;
             this.lastInpSent = now;
         }

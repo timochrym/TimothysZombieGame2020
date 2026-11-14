@@ -403,39 +403,81 @@ GameModes.register({
         return x;
     },
     netState: function() {
-        var st = {
-            w: Snake.worms.map(function(w) {
-                var sg = [];
-                if (w.alive) for (let i = 0; i < w.segs.length; i += 2) sg.push(Math.round(w.segs[i].x), Math.round(w.segs[i].y));
-                return { n: w.name, c: w.color, h: w.human === undefined ? -1 : w.human, p: w.pid || null, a: w.alive ? 1 : 0, l: Math.round(w.len), g: Math.round(w.ang * 100) / 100, b: w.boosting ? 1 : 0, s: w.safeT || 0, sg: sg, dm: w.deathMsg || "", fl: w.finalLen || 0, dt: w.deadT || 0 };
-            })
-        };
         Snake.netTick = (Snake.netTick || 0) + 1;
+        var fullMeta = (typeof Net !== "undefined" && Net.isFullSnap) || Snake.netTick % 30 === 1;
+        var lan = Snake.worms.filter(function(w) { return w.human === "lan" && w.alive; }).map(function(w) { return w.segs[0]; });
+        var wm = {}, hasWm = false;
+        var wList = Snake.worms.map(function(w) {
+            var id = w.id || (w.id = Snake.nextId = (Snake.nextId || 0) + 1);
+            var h = w.human === undefined ? -1 : w.human;
+            var dm = w.deathMsg || "";
+            var mk = w.name + "|" + w.color + "|" + h + "|" + (w.pid || 0) + "|" + dm + "|" + (w.finalLen || 0);
+            if (fullMeta || w._nmk !== mk) {
+                w._nmk = mk;
+                wm[id] = [w.name, w.color, h, w.pid || null, dm, w.finalLen || 0];
+                hasWm = true;
+            }
+            var sg = [];
+            if (w.alive && w.segs.length) {
+                var inView = !lan.length;
+                if (!inView) {
+                    for (let i = 0; i < w.segs.length; i += 6) {
+                        var s = w.segs[i];
+                        if (lan.some(function(lh) { return Math.abs(s.x - lh.x) < 2600 && Math.abs(s.y - lh.y) < 1800; })) { inView = true; break; }
+                    }
+                }
+                if (inView) {
+                    for (let i = 0; i < w.segs.length; i += 2) sg.push(Math.round(w.segs[i].x), Math.round(w.segs[i].y));
+                } else {
+                    sg.push(Math.round(w.segs[0].x), Math.round(w.segs[0].y));
+                }
+            }
+            return { id: id, a: w.alive ? 1 : 0, l: Math.round(w.len), g: Math.round(w.ang * 100) / 100, b: w.boosting ? 1 : 0, s: w.safeT || 0, sg: sg, dt: w.deadT || 0 };
+        });
+        var st = { w: wList };
+        if (hasWm) st.wm = wm;
         if (Snake.netTick % 4 === 0) {
-            var lan = Snake.worms.filter(function(w) { return w.human === "lan" && w.alive; }).map(function(w) { return w.segs[0]; });
             var near = Snake.pellets.filter(function(p) { return lan.some(function(h) { return Math.abs(p.x - h.x) < 2000 && Math.abs(p.y - h.y) < 1400; }); });
             st.p = near.map(function(p) { return [Math.round(p.x), Math.round(p.y), p.v, SNK_COLORS.indexOf(p.col)]; });
         }
         return st;
     },
     applyNetState: function(m) {
+        var mc = Snake._metaCache || (Snake._metaCache = {});
+        if (m.wm) for (var mid in m.wm) mc[mid] = m.wm[mid];
         var prev = {};
         for (let i = 0; i < Snake.worms.length; i++) {
             var pw = Snake.worms[i];
-            if (pw.alive && pw.segs && pw.segs[0]) prev[pw.pid || pw.name] = pw;
+            if (pw.alive && pw.segs && pw.segs[0]) prev[pw.id || pw.pid || pw.name] = pw;
         }
         Snake.worms = m.w.map(function(o) {
+            var md = mc[o.id] || ["Worm", "#4ade80", -1, null, "", 0];
             var segs = []; for (let i = 0; i < o.sg.length; i += 2) { segs.push({ x: o.sg[i], y: o.sg[i + 1] }); segs.push({ x: o.sg[i], y: o.sg[i + 1] }); }
-            var w = { name: o.n, color: o.c, human: o.h === -1 ? undefined : o.h, pid: o.p, alive: !!o.a, len: o.l, ang: o.g, boosting: !!o.b, safeT: o.s, segs: segs.length ? segs : [{ x: 0, y: 0 }], deathMsg: o.dm, finalLen: o.fl, deadT: o.dt };
+            var w = { id: o.id, name: md[0], color: md[1], human: md[2] === -1 ? undefined : md[2], pid: md[3], deathMsg: md[4], finalLen: md[5], alive: !!o.a, len: o.l, ang: o.g, boosting: !!o.b, safeT: o.s, segs: segs.length ? segs : [{ x: 0, y: 0 }], deadT: o.dt };
             w._tx = w.segs[0].x; w._ty = w.segs[0].y;
-            var old = prev[o.p || o.n];
+            var old = prev[o.id || w.pid || w.name];
             if (old && w.alive && Math.hypot(w._tx - old.segs[0].x, w._ty - old.segs[0].y) < 140) {
-                w.segs[0].x = old.segs[0].x; w.segs[0].y = old.segs[0].y;
-                if (typeof Net !== "undefined" && w.pid === Net.pid) w.ang = old.ang;
+                if (typeof Net !== "undefined" && w.pid === Net.pid && old.segs.length > 2) {
+                    w.segs = old.segs;
+                    w.ang = old.ang;
+                } else {
+                    w.segs[0].x = old.segs[0].x; w.segs[0].y = old.segs[0].y;
+                    if (typeof Net !== "undefined" && w.pid === Net.pid) w.ang = old.ang;
+                }
             }
             return w;
         });
-        if (m.p) Snake.pellets = m.p.map(function(a) { return { x: a[0], y: a[1], v: a[2], col: SNK_COLORS[a[3]] || "#ffffff", ph: (a[0] + a[1]) % 6 }; });
+        if (m.p) {
+            var now = performance.now(), eaten = Snake._eatenPellets;
+            if (eaten && eaten.length) eaten = Snake._eatenPellets = eaten.filter(function(e) { return e[2] > now; });
+            Snake.pellets = m.p.map(function(a) {
+                return { x: a[0], y: a[1], v: a[2], col: SNK_COLORS[a[3]] || "#ffffff", ph: (a[0] + a[1]) % 6 };
+            }).filter(function(p) {
+                if (!eaten || !eaten.length) return true;
+                for (let i = 0; i < eaten.length; i++) if (Math.abs(p.x - eaten[i][0]) < 8 && Math.abs(p.y - eaten[i][1]) < 8) return false;
+                return true;
+            });
+        }
     },
 
     onClick: function() { return true; },

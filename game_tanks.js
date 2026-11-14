@@ -489,37 +489,82 @@ GameModes.register({
     },
     netState: function() {
         var T = Tanks.tanks;
-        var st = {
-            k: T.map(function(k) { return { n: k.name, c: k.color, h: k.human === undefined ? -1 : k.human, p: k.pid || null, a: k.alive ? 1 : 0, x: Math.round(k.x), y: Math.round(k.y), g: Math.round(k.ang * 100) / 100, hp: Math.round(k.hp), l: k.lvl, cl: k.cls, st: k.st, sc: k.score, xp: k.xp, pt: k.pts, iv: k.inv, fl: k.flash, dt: k.deadT, by: k.by ? k.by.name : "", fn: k.final || 0, ch: k.choose ? 1 : 0 }; }),
-            b: Tanks.bullets.map(function(bb) { return [Math.round(bb.x), Math.round(bb.y), Math.round(bb.r), T.indexOf(bb.owner), Math.round((bb.vx || 0) * 10) / 10, Math.round((bb.vy || 0) * 10) / 10]; })
-        };
         Tanks.netTick = (Tanks.netTick || 0) + 1;
+        var fullMeta = (typeof Net !== "undefined" && Net.isFullSnap) || Tanks.netTick % 30 === 1;
+        var km = {}, hasKm = false;
+        var k = T.map(function(tk) {
+            var id = tk.id || (tk.id = Tanks.nextId = (Tanks.nextId || 0) + 1);
+            var h = tk.human === undefined ? -1 : tk.human;
+            var by = tk.by ? tk.by.name : "";
+            var mk = tk.name + "|" + tk.color + "|" + h + "|" + (tk.pid || 0) + "|" + tk.cls + "|" + (tk.st ? tk.st.join(",") : "") + "|" + by + "|" + (tk.final || 0);
+            if (fullMeta || tk._nmk !== mk) {
+                tk._nmk = mk;
+                km[id] = [tk.name, tk.color, h, tk.pid || null, tk.cls, tk.st, by, tk.final || 0];
+                hasKm = true;
+            }
+            return [id, tk.alive ? 1 : 0, Math.round(tk.x), Math.round(tk.y), Math.round(tk.ang * 100) / 100, Math.round(tk.hp), tk.lvl, tk.score, tk.xp, tk.pts, tk.inv, tk.flash, tk.deadT, tk.choose ? 1 : 0];
+        });
+        var lan = T.filter(function(tk) { return tk.human === "lan"; });
+        var bl = lan.length ? Tanks.bullets.filter(function(bb) {
+            return lan.some(function(tk) { return Math.abs(bb.x - tk.x) < 2600 && Math.abs(bb.y - tk.y) < 1800; });
+        }) : Tanks.bullets;
+        var st = {
+            k: k,
+            b: bl.map(function(bb) { return [Math.round(bb.x), Math.round(bb.y), Math.round(bb.r), T.indexOf(bb.owner), Math.round((bb.vx || 0) * 10) / 10, Math.round((bb.vy || 0) * 10) / 10, Math.round((bb.dmg || 5) * 10) / 10]; })
+        };
+        if (hasKm) st.km = km;
         if (Tanks.netTick % 3 === 0) {
-            var lan = T.filter(function(k) { return k.human === "lan"; });
-            var sh = lan.length ? Tanks.shapes.filter(function(q) { return lan.some(function(k) { return Math.abs(q.x - k.x) < 2800 && Math.abs(q.y - k.y) < 2000; }); }) : Tanks.shapes;
+            var sh = lan.length ? Tanks.shapes.filter(function(q) { return lan.some(function(tk) { return Math.abs(q.x - tk.x) < 2800 && Math.abs(q.y - tk.y) < 2000; }); }) : Tanks.shapes;
             st.s = sh.map(function(q) { return [q.type.charAt(0), Math.round(q.x), Math.round(q.y), Math.round(q.ang * 100) / 100, Math.round(q.hp), q.hitT]; });
         }
         return st;
     },
     applyNetState: function(m) {
+        var mc = Tanks._metaCache || (Tanks._metaCache = {});
+        if (m.km) for (var mid in m.km) mc[mid] = m.km[mid];
         var prev = {};
         for (let i = 0; i < Tanks.tanks.length; i++) {
             var pk = Tanks.tanks[i];
-            if (pk.alive) prev[(pk.pid || pk.name)] = pk;
+            if (pk.alive) prev[(pk.id || pk.pid || pk.name)] = pk;
         }
         Tanks.tanks = m.k.map(function(o) {
-            var k = { name: o.n, color: o.c, human: o.h === -1 ? undefined : o.h, pid: o.p, alive: !!o.a, x: o.x, y: o.y, vx: 0, vy: 0, ang: o.g, hp: o.hp, lvl: o.l, cls: o.cl, st: o.st, score: o.sc, xp: o.xp, pts: o.pt, inv: o.iv, flash: o.fl, deadT: o.dt, by: o.by ? { name: o.by } : null, final: o.fn, choose: !!o.ch, _tx: o.x, _ty: o.y, _ta: o.g };
-            var old = prev[o.p || o.n];
-            if (old && k.alive && Math.hypot(o.x - old.x, o.y - old.y) < 140) {
-                k.x = old.x; k.y = old.y;
-                if (typeof Net !== "undefined" && k.pid === Net.pid) k.ang = old.ang;
-                else k.ang = old.ang;
+            var id = o[0], md = mc[id] || ["Tank", "#38bdf8", -1, null, "tank", [0,0,0,0,0,0,0,0], "", 0];
+            var k = {
+                id: id, name: md[0], color: md[1], human: md[2] === -1 ? undefined : md[2], pid: md[3],
+                cls: md[4], st: md[5], by: md[6] ? { name: md[6] } : null, final: md[7],
+                alive: !!o[1], x: o[2], y: o[3], vx: 0, vy: 0, ang: o[4], hp: o[5],
+                lvl: o[6], score: o[7], xp: o[8], pts: o[9], inv: o[10], flash: o[11], deadT: o[12], choose: !!o[13],
+                _tx: o[2], _ty: o[3], _ta: o[4]
+            };
+            var old = prev[id] || prev[k.pid || k.name];
+            if (old && k.alive && Math.hypot(k.x - old.x, k.y - old.y) < 140) {
+                k.x = old.x; k.y = old.y; k.ang = old.ang;
+                k._localCd = old._localCd;
             }
             return k;
         });
         var tm = { s: "square", t: "tri", p: "penta" };
-        if (m.s) Tanks.shapes = m.s.map(function(a) { var ty = tm[a[0]]; return { type: ty, x: a[1], y: a[2], ang: a[3], hp: a[4], max: TNK_SHAPES[ty].hp, hitT: a[5] }; });
-        Tanks.bullets = m.b.map(function(a) { return { x: a[0], y: a[1], r: a[2], owner: Tanks.tanks[a[3]] || { color: "#fff" }, vx: a[4] || 0, vy: a[5] || 0 }; });
+        if (m.s) {
+            var oldSh = Tanks.shapes;
+            Tanks.shapes = m.s.map(function(a) {
+                var ty = tm[a[0]], sh = { type: ty, x: a[1], y: a[2], ang: a[3], hp: a[4], max: TNK_SHAPES[ty].hp, hitT: a[5] };
+                // preserve local hit flash if we just shot it on client
+                for (let j = 0; j < oldSh.length; j++) {
+                    var oq = oldSh[j];
+                    if (oq.hitT > sh.hitT && Math.abs(oq.x - sh.x) < 16 && Math.abs(oq.y - sh.y) < 16) { sh.hitT = oq.hitT; break; }
+                }
+                return sh;
+            });
+        }
+        var now = performance.now();
+        var oldPred = (Tanks.bullets || []).filter(function(bb) { return bb._pred && !bb._hit && (now - bb._born < 180); });
+        var hostBullets = m.b.map(function(a) { return { x: a[0], y: a[1], r: a[2], owner: Tanks.tanks[a[3]] || { color: "#fff" }, vx: a[4] || 0, vy: a[5] || 0, dmg: a[6] || 5 }; });
+        for (let i = 0; i < oldPred.length; i++) {
+            var pb = oldPred[i];
+            var matched = hostBullets.some(function(hb) { return hb.owner === pb.owner && Math.hypot(hb.x - pb.x, hb.y - pb.y) < 75; });
+            if (!matched) hostBullets.push(pb);
+        }
+        Tanks.bullets = hostBullets;
     },
 
     onKey: function(code) {

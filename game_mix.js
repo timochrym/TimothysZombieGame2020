@@ -1023,16 +1023,56 @@ GameModes.register({
     screenFrame: function() { Mix.frame(); },
     screenDraw: function() {
         Mix.t++;
-        // Local client prediction & snapshot interpolation for 60fps smooth movement without snap-back jitter
-        for (let i = 0; i < Tanks.bullets.length; i++) { var b = Tanks.bullets[i]; if (b.vx || b.vy) { b.x += b.vx; b.y += b.vy; } }
+        var now = performance.now();
         var m = Mix.me(), c = Cells.cam;
-        // Glide remote tanks, blobs, and worms toward their latest snapshot targets
+        // 1. Local bullet motion & hit feedback (shapes, tanks, blobs)
+        for (let i = Tanks.bullets.length - 1; i >= 0; i--) {
+            var b = Tanks.bullets[i];
+            if (b.vx || b.vy) { b.x += b.vx; b.y += b.vy; }
+            if (b._hit) { Tanks.bullets.splice(i, 1); continue; }
+            for (let j = 0; j < Tanks.shapes.length; j++) {
+                var q = Tanks.shapes[j], sr = (TNK_SHAPES[q.type] ? TNK_SHAPES[q.type].r : 18);
+                if (Math.abs(b.x - q.x) < sr + b.r && Math.abs(b.y - q.y) < sr + b.r && Math.hypot(b.x - q.x, b.y - q.y) < sr + b.r) {
+                    b._hit = true; q.hitT = 4; q.hp = Math.max(0, q.hp - (b.dmg || 5));
+                    if (typeof Components !== "undefined") Components.spawnSparks(b.x, b.y, "#fde047", 4);
+                    break;
+                }
+            }
+            if (!b._hit) {
+                for (let j = 0; j < Tanks.tanks.length; j++) {
+                    var tk = Tanks.tanks[j];
+                    if (!tk.alive || tk === b.owner) continue;
+                    var tr = Tanks.size ? Tanks.size(tk) : 22;
+                    if (Math.hypot(b.x - tk.x, b.y - tk.y) < tr + b.r) {
+                        b._hit = true; tk.flash = 4;
+                        if (typeof Components !== "undefined") Components.spawnSparks(b.x, b.y, tk.color || "#fff", 4);
+                        break;
+                    }
+                }
+            }
+            if (!b._hit) {
+                for (let j = 0; j < Cells.blobs.length; j++) {
+                    var bl0 = Cells.blobs[j];
+                    if (bl0.dead) continue;
+                    var br0 = Cells.rad(bl0.m);
+                    if (Math.hypot(b.x - bl0.x, b.y - bl0.y) < br0 + b.r) {
+                        b._hit = true;
+                        if (typeof Components !== "undefined") Components.spawnSparks(b.x, b.y, bl0.pl ? bl0.pl.color : "#fff", 4);
+                        break;
+                    }
+                }
+            }
+            if (b._hit) Tanks.bullets.splice(i, 1);
+        }
+        // 2. Glide remote tanks, blobs, and worms toward their latest snapshot targets
         for (let i = 0; i < Tanks.tanks.length; i++) {
             var k = Tanks.tanks[i];
+            if (k.flash > 0) k.flash--;
             if (!k.alive || (m && m.ref === k) || k._tx === undefined) continue;
             k.x += (k._tx - k.x) * 0.45; k.y += (k._ty - k.y) * 0.45;
             k.ang += Math.atan2(Math.sin(k._ta - k.ang), Math.cos(k._ta - k.ang)) * 0.45;
         }
+        for (let i = 0; i < Tanks.shapes.length; i++) if (Tanks.shapes[i].hitT > 0) Tanks.shapes[i].hitT--;
         for (let i = 0; i < Cells.blobs.length; i++) {
             var bl = Cells.blobs[i];
             if (bl.dead || (m && bl.pl === m.ref) || bl.tx === undefined) continue;
@@ -1043,6 +1083,11 @@ GameModes.register({
             if (!w.alive || (m && m.ref === w) || w._tx === undefined || !w.segs[0]) continue;
             w.segs[0].x += (w._tx - w.segs[0].x) * 0.45; w.segs[0].y += (w._ty - w.segs[0].y) * 0.45;
         }
+        // 3. Local player prediction + local interactions (shooting, food eating, shape bounce, segment follow)
+        var markEaten = function(list, x, y) {
+            if (list.length > 200) list.shift();
+            list.push([x, y, now + 260]);
+        };
         if (m && m.alive) {
             if (m.kind === "tank") {
                 var sc = Tanks.toScreen(m.x, m.y);
@@ -1057,17 +1102,85 @@ GameModes.register({
                     if (dt >= 120) { m.ref.x = m.ref._tx; m.ref.y = m.ref._ty; }
                     else if (dt > 8) { m.ref.x += (m.ref._tx - m.ref.x) * 0.12; m.ref.y += (m.ref._ty - m.ref.y) * 0.12; }
                 }
+                // Local predicted shooting
+                m.ref._localCd = Math.max(0, (m.ref._localCd || 0) - 1);
+                if ((mouseDown || SpacePressed) && m.ref._localCd <= 0 && typeof TNK_CLASSES !== "undefined") {
+                    var cls = TNK_CLASSES[m.ref.cls] || TNK_CLASSES.tank;
+                    var reload = Math.max(6, Math.round((cls.reload || 22) * Math.pow(0.9, m.ref.st ? m.ref.st[6] : 0)));
+                    m.ref._localCd = reload;
+                    var bsp = 8.5 + (m.ref.st ? m.ref.st[3] * 1.1 : 0), bdmg = 5 + (m.ref.st ? m.ref.st[5] * 2 : 0);
+                    var bars = cls.barrels || [[0, 26, 8]];
+                    for (let bi = 0; bi < bars.length; bi++) {
+                        var ang = m.ref.ang + (bars[bi][0] || 0), blen = bars[bi][1] || 26, bw = bars[bi][2] || 8;
+                        Tanks.bullets.push({
+                            x: m.ref.x + Math.cos(ang) * blen, y: m.ref.y + Math.sin(ang) * blen,
+                            vx: Math.cos(ang) * bsp, vy: Math.sin(ang) * bsp, r: bw * 0.65,
+                            owner: m.ref, dmg: bdmg, _pred: true, _born: now
+                        });
+                    }
+                    if (typeof SFX !== "undefined") SFX.play("shoot", m.ref.x, m.ref.y, 0.2);
+                }
+                // Local tank vs shape knockback & local food eating
+                var ks = Tanks.size ? Tanks.size(m.ref) : 22;
+                for (let i = 0; i < Tanks.shapes.length; i++) {
+                    var q = Tanks.shapes[i], sr = TNK_SHAPES[q.type] ? TNK_SHAPES[q.type].r : 18;
+                    var dx = m.ref.x - q.x, dy = m.ref.y - q.y, d = Math.hypot(dx, dy);
+                    if (d > 0 && d < ks + sr) {
+                        var push = (ks + sr - d) * 0.5;
+                        m.ref.x += dx / d * push; m.ref.y += dy / d * push;
+                        q.hitT = 3;
+                    }
+                }
+                var ce = Cells._eatenPellets || (Cells._eatenPellets = []), se = Snake._eatenPellets || (Snake._eatenPellets = []);
+                for (let i = Cells.pellets.length - 1; i >= 0; i--) {
+                    var f = Cells.pellets[i];
+                    if (Math.abs(f.x - m.ref.x) < ks + 6 && Math.abs(f.y - m.ref.y) < ks + 6 && Math.hypot(f.x - m.ref.x, f.y - m.ref.y) < ks + 6) {
+                        markEaten(ce, f.x, f.y); Cells.pellets.splice(i, 1);
+                    }
+                }
+                for (let i = Snake.pellets.length - 1; i >= 0; i--) {
+                    var g = Snake.pellets[i];
+                    if (Math.abs(g.x - m.ref.x) < ks + 6 && Math.abs(g.y - m.ref.y) < ks + 6 && Math.hypot(g.x - m.ref.x, g.y - m.ref.y) < ks + 6) {
+                        markEaten(se, g.x, g.y); Snake.pellets.splice(i, 1);
+                    }
+                }
             } else if (m.kind === "blob") {
                 var ax = (mouseX - cssW / 2) / c.z + c.x, ay = (mouseY - cssH / 2) / c.z + c.y;
+                m.ref.aimX = ax; m.ref.aimY = ay;
+                var ce = Cells._eatenPellets || (Cells._eatenPellets = []), se = Snake._eatenPellets || (Snake._eatenPellets = []);
+                var myBlobs = [];
                 for (let i = 0; i < Cells.blobs.length; i++) {
                     var mb = Cells.blobs[i];
                     if (mb.dead || mb.pl !== m.ref) continue;
+                    myBlobs.push(mb);
                     var dx = ax - mb.x, dy = ay - mb.y, d = Math.hypot(dx, dy);
                     if (d > 6) { var s = Math.min(3.4, d * 0.12); mb.x += dx / d * s; mb.y += dy / d * s; }
                     if (mb.tx !== undefined) {
                         var db = Math.hypot(mb.tx - mb.x, mb.ty - mb.y);
                         if (db >= 120) { mb.x = mb.tx; mb.y = mb.ty; }
                         else if (db > 8) { mb.x += (mb.tx - mb.x) * 0.12; mb.y += (mb.ty - mb.y) * 0.12; }
+                    }
+                    var mr = Cells.rad(mb.m);
+                    for (let j = Cells.pellets.length - 1; j >= 0; j--) {
+                        var f = Cells.pellets[j];
+                        if (mb.m > f.m * 1.25 && Math.abs(f.x - mb.x) < mr && Math.abs(f.y - mb.y) < mr && Math.hypot(f.x - mb.x, f.y - mb.y) < mr) {
+                            mb.m += f.m; markEaten(ce, f.x, f.y); Cells.pellets.splice(j, 1);
+                        }
+                    }
+                    for (let j = Snake.pellets.length - 1; j >= 0; j--) {
+                        var g = Snake.pellets[j];
+                        if (Math.abs(g.x - mb.x) < mr && Math.abs(g.y - mb.y) < mr && Math.hypot(g.x - mb.x, g.y - mb.y) < mr) {
+                            mb.m += (g.v || 1) * 0.35; markEaten(se, g.x, g.y); Snake.pellets.splice(j, 1);
+                        }
+                    }
+                }
+                if (m.ref.chain && myBlobs.length > 1) {
+                    for (let i = 1; i < myBlobs.length; i++) {
+                        var seg = myBlobs[i], ld = seg.lead || myBlobs[i - 1];
+                        if (!ld) continue;
+                        var sdx = ld.x - seg.x, sdy = ld.y - seg.y, sd = Math.hypot(sdx, sdy);
+                        var wantD = (Cells.rad(ld.m) + Cells.rad(seg.m)) * 0.75;
+                        if (sd > wantD) { seg.x += (sdx / sd) * (sd - wantD) * 0.55; seg.y += (sdy / sd) * (sd - wantD) * 0.55; }
                     }
                 }
             } else if (m.kind === "worm") {
@@ -1080,6 +1193,27 @@ GameModes.register({
                     var dw = Math.hypot(m.ref._tx - m.ref.segs[0].x, m.ref._ty - m.ref.segs[0].y);
                     if (dw >= 120) { m.ref.segs[0].x = m.ref._tx; m.ref.segs[0].y = m.ref._ty; }
                     else if (dw > 8) { m.ref.segs[0].x += (m.ref._tx - m.ref.segs[0].x) * 0.12; m.ref.segs[0].y += (m.ref._ty - m.ref.segs[0].y) * 0.12; }
+                }
+                // Local worm body segment following
+                for (let i = 1; i < m.ref.segs.length; i++) {
+                    var prev = m.ref.segs[i - 1], cur = m.ref.segs[i];
+                    var dx = prev.x - cur.x, dy = prev.y - cur.y, d = Math.hypot(dx, dy);
+                    if (d > 5.5) { cur.x = prev.x - dx / d * 5.5; cur.y = prev.y - dy / d * 5.5; }
+                }
+                // Local worm food eating
+                var wh = m.ref.segs[0], wr = 18;
+                var se = Snake._eatenPellets || (Snake._eatenPellets = []), ce = Cells._eatenPellets || (Cells._eatenPellets = []);
+                for (let i = Snake.pellets.length - 1; i >= 0; i--) {
+                    var g = Snake.pellets[i];
+                    if (Math.abs(g.x - wh.x) < wr && Math.abs(g.y - wh.y) < wr && Math.hypot(g.x - wh.x, g.y - wh.y) < wr) {
+                        m.ref.len += g.v || 1; markEaten(se, g.x, g.y); Snake.pellets.splice(i, 1);
+                    }
+                }
+                for (let i = Cells.pellets.length - 1; i >= 0; i--) {
+                    var f = Cells.pellets[i];
+                    if (Math.abs(f.x - wh.x) < wr && Math.abs(f.y - wh.y) < wr && Math.hypot(f.x - wh.x, f.y - wh.y) < wr) {
+                        m.ref.len += (f.m || 1) * 0.4; markEaten(ce, f.x, f.y); Cells.pellets.splice(i, 1);
+                    }
                 }
             }
         }
@@ -1115,15 +1249,19 @@ GameModes.register({
             var w = Snake.worms[i];
             if (w.human === "lan" && w.pid && w.mx) wx[w.pid] = [w.mx.lvl, w.mx.pts, w.mx.st[0], w.mx.st[1], w.mx.st[2]];
         }
-        return {
+        var lgArr = Mix.log.slice(0, 4).map(function(L) { return [L.text, L.col]; });
+        var lgKey = JSON.stringify(lgArr);
+        var full = typeof Net !== "undefined" && Net.isFullSnap;
+        var out = {
             t: tMode && tMode.netState ? tMode.netState() : null,
             c: cMode && cMode.netState ? cMode.netState() : null,
             s: sMode && sMode.netState ? sMode.netState() : null,
             mm: Tanks.tanks.map(function(k) { return Math.round(k.mixMass || 36); }),
             cp: Cells.players.map(function(p) { return p.chain ? 1 : 0; }),
-            wx: wx,
-            lg: Mix.log.slice(0, 4).map(function(L) { return [L.text, L.col]; })
+            wx: wx
         };
+        if (full || Mix._lastLgKey !== lgKey) { Mix._lastLgKey = lgKey; out.lg = lgArr; }
+        return out;
     },
     applyNetState: function(m) {
         if (!m) return;

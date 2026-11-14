@@ -818,16 +818,30 @@ GameModes.register({
         return { ax: Math.round((mouseX - cssW / 2) / c.z + c.x), ay: Math.round((mouseY - cssH / 2) / c.z + c.y), s: SpacePressed ? 1 : 0, e: WASDupPressed ? 1 : 0, c: mouseDown ? 1 : 0 };
     },
     netState: function() {
+        Cells.netTick = (Cells.netTick || 0) + 1;
+        var fullMeta = (typeof Net !== "undefined" && Net.isFullSnap) || Cells.netTick % 30 === 1;
+        var pm = {}, hasPm = false;
+        var pl = Cells.players.map(function(p) {
+            var id = p.id || (p.id = Cells.nextPlId = (Cells.nextPlId || 0) + 1);
+            var h = p.human === undefined ? -1 : p.human;
+            var by = p.by ? p.by.name : "";
+            var mk = p.name + "|" + p.color + "|" + h + "|" + (p.pid || 0) + "|" + by;
+            if (fullMeta || p._nmk !== mk) {
+                p._nmk = mk;
+                pm[id] = [p.name, p.color, h, p.pid || null, by];
+                hasPm = true;
+            }
+            var f = p.fx, fx = (f && (f.shield > 0 || f.speed > 0 || f.magnet > 0)) ? [f.speed > 0 ? 1 : 0, f.shield > 0 ? 1 : 0, f.magnet > 0 ? 1 : 0] : 0;
+            return [id, p.alive ? 1 : 0, Math.round(p.peak), p.deadT, fx, p.chain ? 1 : 0, p.compact ? 1 : 0, p.snakeGrace || 0, Math.round(p.aimX || 0), Math.round(p.aimY || 0)];
+        });
+        for (let i = 0; i < Cells.blobs.length; i++) if (!Cells.blobs[i].id) Cells.blobs[i].id = Cells.nextBlobId = (Cells.nextBlobId || 0) + 1;
         var st = {
-            pl: Cells.players.map(function(p) { return { n: p.name, c: p.color, h: p.human === undefined ? -1 : p.human, p: p.pid || null, a: p.alive ? 1 : 0, pk: Math.round(p.peak), dt: p.deadT, by: p.by ? p.by.name : "" }; }),
-            b: Cells.blobs.map(function(bb) { return [Cells.players.indexOf(bb.pl), Math.round(bb.x), Math.round(bb.y), Math.round(bb.m), bb.id || (bb.id = Cells.nextBlobId = (Cells.nextBlobId || 0) + 1)]; }),
+            pl: pl,
+            b: Cells.blobs.map(function(bb) { return [Cells.players.indexOf(bb.pl), Math.round(bb.x), Math.round(bb.y), Math.round(bb.m), bb.id, bb.lead && !bb.lead.dead ? bb.lead.id : 0]; }),
             v: Cells.viruses.map(function(v) { return [Math.round(v.x), Math.round(v.y)]; }),
             u: (Cells.pickups || []).map(function(u) { return [Math.round(u.x), Math.round(u.y), u.kind]; })
         };
-        st.pl.forEach(function(o, i) { var f = Cells.players[i].fx; if (f && (f.shield > 0 || f.speed > 0 || f.magnet > 0)) o.fx = [f.speed > 0 ? 1 : 0, f.shield > 0 ? 1 : 0, f.magnet > 0 ? 1 : 0]; });
-        // Food changes slowly, so it only goes 5x a second: everything inside each LAN player's view (alive or watching,
-        // and wider when their blob is big and the view zooms out). Dropped food carries its owner's colour.
-        Cells.netTick = (Cells.netTick || 0) + 1;
+        if (hasPm) st.pm = pm;
         if (Cells.netTick % 6 === 0) {
             var lan = Cells.players.filter(function(p) { return p.human === "lan"; });
             var boxes = lan.map(function(q) { var z = Math.max(0.22, Math.min(1.2, 1.3 / Math.pow(Math.max(20, Cells.mass(q) || 20) / 20, 0.32))); return [q.cx || 0, q.cy || 0, 1100 / z + 300, 650 / z + 300]; });
@@ -837,19 +851,47 @@ GameModes.register({
         return st;
     },
     applyNetState: function(m) {
-        Cells.players = m.pl.map(function(o) { return { name: o.n, color: o.c, human: o.h === -1 ? undefined : o.h, pid: o.p, alive: !!o.a, peak: o.pk, deadT: o.dt, by: o.by ? { name: o.by } : null, cx: 0, cy: 0, fx: o.fx ? { speed: o.fx[0], shield: o.fx[1], magnet: o.fx[2] } : null }; });
+        var mc = Cells._metaCache || (Cells._metaCache = {});
+        if (m.pm) for (var mid in m.pm) mc[mid] = m.pm[mid];
+        Cells.players = m.pl.map(function(o) {
+            var id = o[0], md = mc[id] || ["Blob", "#a78bfa", -1, null, ""];
+            return {
+                id: id, name: md[0], color: md[1], human: md[2] === -1 ? undefined : md[2], pid: md[3], by: md[4] ? { name: md[4] } : null,
+                alive: !!o[1], peak: o[2], deadT: o[3],
+                fx: o[4] ? { speed: o[4][0], shield: o[4][1], magnet: o[4][2] } : null,
+                chain: !!o[5], compact: !!o[6], snakeGrace: o[7] || 0, aimX: o[8] || 0, aimY: o[9] || 0,
+                cx: 0, cy: 0, chainList: []
+            };
+        });
         Cells.pickups = (m.u || []).map(function(a) { return { x: a[0], y: a[1], kind: a[2] }; });
-        // match each blob to the one it was last packet (by id) so it can glide instead of jumping
-        var old = {};
+        var old = {}, byId = {};
         Cells.blobs.forEach(function(bb) { if (bb.id) old[bb.id] = bb; });
         Cells.blobs = m.b.map(function(a) {
             var o = a[4] ? old[a[4]] : null;
-            var nb = { pl: Cells.players[a[0]], x: a[1], y: a[2], tx: a[1], ty: a[2], m: a[3], id: a[4], vx: 0, vy: 0 };
-            if (o && Math.hypot(a[1] - o.tx, a[2] - o.ty) < 400) { nb.vx = (a[1] - o.tx) / 2; nb.vy = (a[2] - o.ty) / 2; nb.x = o.x; nb.y = o.y; }     // packets are 2 ticks apart
+            var nb = { pl: Cells.players[a[0]], x: a[1], y: a[2], tx: a[1], ty: a[2], m: a[3], id: a[4], leadId: a[5] || 0, vx: 0, vy: 0 };
+            if (o && Math.hypot(a[1] - o.tx, a[2] - o.ty) < 400) { nb.vx = (a[1] - o.tx) / 2; nb.vy = (a[2] - o.ty) / 2; nb.x = o.x; nb.y = o.y; }
+            if (nb.id) byId[nb.id] = nb;
             return nb;
         }).filter(function(bb) { return bb.pl; });
+        for (let i = 0; i < Cells.blobs.length; i++) {
+            var bb = Cells.blobs[i];
+            if (bb.leadId && byId[bb.leadId]) bb.lead = byId[bb.leadId];
+            if (bb.pl.chain) bb.pl.chainList.push(bb);
+        }
         Cells.players.forEach(function(p) { var M = 0, x = 0, y = 0; Cells.blobs.forEach(function(bb) { if (bb.pl === p) { M += bb.m; x += bb.x * bb.m; y += bb.y * bb.m; } }); if (M) { p.cx = x / M; p.cy = y / M; } });
-        if (m.p) Cells.pellets = m.p.map(function(a) { return { x: a[0], y: a[1], m: a[2], col: typeof a[3] === "string" ? a[3] : (a[3] >= 0 ? CEL_COLORS[a[3]] : "#94a3b8"), vx: 0, vy: 0 }; });
+        if (m.p) {
+            var now = performance.now(), eaten = Cells._eatenPellets;
+            if (eaten && eaten.length) {
+                eaten = Cells._eatenPellets = eaten.filter(function(e) { return e[2] > now; });
+            }
+            Cells.pellets = m.p.map(function(a) {
+                return { x: a[0], y: a[1], m: a[2], col: typeof a[3] === "string" ? a[3] : (a[3] >= 0 ? CEL_COLORS[a[3]] : "#94a3b8"), vx: 0, vy: 0 };
+            }).filter(function(p) {
+                if (!eaten || !eaten.length) return true;
+                for (let i = 0; i < eaten.length; i++) if (Math.abs(p.x - eaten[i][0]) < 8 && Math.abs(p.y - eaten[i][1]) < 8) return false;
+                return true;
+            });
+        }
         Cells.viruses = m.v.map(function(a) { return { x: a[0], y: a[1], m: 100 }; });
     },
 
