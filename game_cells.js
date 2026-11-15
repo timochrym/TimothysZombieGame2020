@@ -672,7 +672,7 @@ var Cells = {
         this._tempSwaps = this._tempSwaps || [];
         for (let si = this._tempSwaps.length - 1; si >= 0; si--) {
             var sw = this._tempSwaps[si];
-            if (--sw.t <= 0) {
+            if (--sw.t <= 0 || !sw.target.alive) {
                 sw.target.human = undefined; sw.target.pid = undefined;
                 sw.orig.human = sw.human; sw.orig.pid = sw.pid;
                 if (sw.human !== undefined) showBanner("🔀 BACK TO YOURSELF!", "", "#a855f7");

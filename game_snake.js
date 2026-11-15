@@ -90,12 +90,12 @@ var Snake = {
         w.kbT = Math.max(w.kbT || 0, 18);
     },
     splitAt: function(w, x, y, hitAng) {
-        if (!w || !w.alive || !w.segs || w.segs.length < 16 || w.len < 32) return null;
+        if (!w || !w.alive || w.gone || !w.segs || w.segs.length < 16 || w.len < 32) return null;
         var owner = w.splitOwner || w;
         var sibCount = 0;
         for (let i = 0; i < this.worms.length; i++) {
             var sw = this.worms[i];
-            if (sw.alive && (sw.splitOwner || sw) === owner) sibCount++;
+            if (sw.alive && !sw.gone && ((w.kinId && sw.kinId === w.kinId) || (sw.splitOwner || sw) === owner)) sibCount++;
         }
         if (sibCount >= 4) return null;
         var lo = Math.max(4, Math.floor(w.segs.length * 0.25)), hi = Math.min(w.segs.length - 4, Math.floor(w.segs.length * 0.75));
@@ -108,14 +108,18 @@ var Snake = {
         var frontLen = Math.max(14, Math.round(w.len * frac));
         var backLen = Math.max(14, Math.round(w.len - frontLen));
         var backSegs = w.segs.slice(bestIdx).map(function(s) { return { x: s.x, y: s.y }; });
+        if (!w.kinId) w.kinId = ++this._kinSeq;
         w.segs = w.segs.slice(0, bestIdx);
         w.len = frontLen;
         w.splitOwner = owner;
+        w.rejoinCd = this.REJOIN_FRAMES;
+        w.splitCd = this.SPLIT_FRAMES;
         var w2 = {
             name: w.name, color: w.color, human: w.human, pid: w.pid,
-            alive: true, len: backLen, ang: hitAng, want: hitAng,
+            alive: true, gone: false, slowed: false, len: backLen, ang: hitAng, want: hitAng,
             boost: false, segs: backSegs, kills: 0, deadT: 0, cpuT: 0,
             _dmgLog: null, safeT: 14, mx: w.mx,
+            kinId: w.kinId, rejoinCd: this.REJOIN_FRAMES, splitCd: this.SPLIT_FRAMES,
             splitOwner: owner, isSplitChild: true, kbT: 0, kbSpeed: 0
         };
         this.worms.push(w2);
@@ -282,6 +286,7 @@ var Snake = {
         if (!w.kinId) w.kinId = ++this._kinSeq;
         var B = {};
         for (var key in w) B[key] = w[key];             // same name, colour, owner slot, pid, stats, power-ups
+        B.id = undefined; B._nmk = "";
         B.segs = tailSegs;
         var share = headSegs.length / n;
         B.len = w.len * (1 - share); w.len = w.len * share;
@@ -312,6 +317,7 @@ var Snake = {
             var piece = w;
             if (i > 0) {
                 piece = {}; for (var k2 in base) piece[k2] = base[k2];
+                piece.id = undefined; piece._nmk = "";
                 var t0 = part[0], t1 = part[1] || part[0];
                 piece.ang = Math.atan2(t0.y - t1.y, t0.x - t1.x) + sign * (0.6 + 0.25 * Math.floor((i - 1) / 2)); sign = -sign;   // fan out
                 piece.want = piece.ang; piece.boost = false; piece.boosting = false; piece.kills = 0; piece.deadT = 0; piece.cpuT = 0; piece._dmgLog = null;
@@ -367,7 +373,7 @@ var Snake = {
     },
 
     brakeHeld: function(w) {
-        if (w.human === 0) { var p0 = (typeof Pads !== "undefined") ? Pads.state[0] : null; return !!BrakePressed || !!(p0 && p0.active && p0.interact); }
+        if (w.human === 0) { var p0 = (typeof Pads !== "undefined") ? Pads.state[0] : null; return (typeof BrakePressed !== "undefined" && !!BrakePressed) || !!(p0 && p0.active && p0.interact); }
         if (w.human === 1) { var p1 = (typeof Pads !== "undefined") ? Pads.state[1] : null; return !!RShiftPressed || !!(p1 && p1.active && p1.interact); }
         if (w.human === "lan" && typeof Net !== "undefined" && Net.peers && Net.peers[w.pid]) return !!Net.peerX(w.pid).r;
         return false;
@@ -434,8 +440,12 @@ var Snake = {
                 by.len += Math.max(Math.round(w.len * 0.5), Math.round(putIn * 1.2), 15);
             }
         }
-        var kinLeft = 0;
-        if (w.kinId) for (let q = 0; q < this.worms.length; q++) { var o = this.worms[q]; if (o !== w && o.alive && !o.gone && o.kinId === w.kinId) kinLeft++; }
+        var kinLeft = 0, wOwn = w.splitOwner || w;
+        for (let q = 0; q < this.worms.length; q++) {
+            var o = this.worms[q];
+            if (o === w || !o.alive || o.gone) continue;
+            if ((w.kinId && o.kinId === w.kinId) || ((o.splitOwner || o) === wOwn && (w.splitOwner || o.splitOwner)) || (w.human !== undefined && o.human === w.human && o.pid === w.pid)) kinLeft++;
+        }
         if (kinLeft > 0) { w.gone = true; this._anyGone = true; return; }         // one piece died, the player lives on
         if (w.human !== undefined) {
             w.deathMsg = by ? "Eaten by " + by.name : "You hit the wall";
@@ -673,10 +683,14 @@ var Snake = {
                 ctx.fillRect(mx + q.segs[0].x / SNK.R * mr - qs / 2, my + q.segs[0].y / SNK.R * mr - qs / 2, qs, qs);
             }
         }
-        // death card
+        // death card (only when ALL snakes for that player are dead)
+        var shownDead = {};
         for (let i = 0; i < hs.length; i++) {
             var hw = hs[i];
-            if (hw.alive) continue;
+            if (hw.alive || hw.gone) continue;
+            var hk = hw.human + ":" + (hw.pid || 0);
+            if (shownDead[hk] || hs.some(function(o) { return o !== hw && o.alive && !o.gone && o.human === hw.human && (o.pid || 0) === (hw.pid || 0); })) continue;
+            shownDead[hk] = true;
             var y = cssH / 2 - 60 + i * 120;
             uiPanel(cssW / 2 - 200, y, 400, 100, hw.color, 0.92);
             uiText(hw.name + ": " + (hw.deathMsg || "Out!"), cssW / 2, y + 36, 22, "#fff", "center", "900");
@@ -732,11 +746,12 @@ GameModes.register({
     screenFrame: function() {
         Snake.mouseMoved = Math.hypot(mouseX - Snake.lastMouse[0], mouseY - Snake.lastMouse[1]) > 3;
         Snake.lastMouse = [mouseX, mouseY];
-        // respawn a dead human when they press their button
+        // respawn a dead human when they press their button (only if all their split pieces are dead)
         var hs = Snake.humans();
         for (let i = 0; i < hs.length; i++) {
             var w = hs[i];
-            if (w.alive) continue;
+            if (w.alive || w.gone) continue;
+            if (hs.some(function(o) { return o !== w && o.alive && !o.gone && o.human === w.human; })) continue;
             w.deadT++;
             var pad = (typeof Pads !== "undefined") ? Pads.state[w.human] : null;
             var again = w.human === 0 ? (mouseDown || SpacePressed || !!(pad && pad.active && pad.shoot)) : (ULDRupPressed || !!PlayerInput[1].kbShoot || !!(pad && pad.active && pad.shoot));
@@ -750,7 +765,7 @@ GameModes.register({
     screenDraw: function() {
         Snake.t++;
         var isCl = typeof Net !== "undefined" && Net.role === "client";
-        var myW = isCl ? Snake.worms.find(function(w) { return w.pid === Net.pid; }) : null;
+        var myW = isCl ? (Snake.worms.find(function(w) { return w.pid === Net.pid && w.alive && !w.gone; }) || Snake.worms.find(function(w) { return w.pid === Net.pid; })) : null;
         for (let i = 0; i < Snake.worms.length; i++) {
             var w = Snake.worms[i];
             if (!w.alive || !w.segs || !w.segs.length) continue;
@@ -803,7 +818,7 @@ GameModes.register({
     },
     netInput: function() {
         var me = Snake.humans()[0];
-        var x = { b: (mouseDown || SpacePressed || WASDupPressed) ? 1 : 0, r: BrakePressed ? 1 : 0 };
+        var x = { b: (mouseDown || SpacePressed || WASDupPressed) ? 1 : 0, r: (typeof BrakePressed !== "undefined" && BrakePressed) ? 1 : 0 };
         if (me && me.alive) { var hs = Snake.toScreen(me.segs[0].x, me.segs[0].y); x.a = Math.round(Math.atan2(mouseY - hs[1], mouseX - hs[0]) * 100) / 100; }
         return x;
     },
@@ -851,7 +866,7 @@ GameModes.register({
                     sg.push(Math.round(w.segs[0].x), Math.round(w.segs[0].y));
                 }
             }
-            return { id: id, a: w.alive ? 1 : 0, l: Math.round(w.len), g: Math.round(w.ang * 100) / 100, b: w.boosting ? 1 : 0, s: w.safeT || 0, sg: NetPack.d(sg), dt: w.deadT || 0 };
+            return { id: id, a: w.alive ? 1 : 0, l: Math.round(w.len), g: Math.round(w.ang * 100) / 100, b: w.boosting ? 1 : 0, s: w.safeT || 0, k: w.kinId || 0, sl: w.slowed ? 1 : 0, sg: NetPack.d(sg), dt: w.deadT || 0 };
         });
         var st = { w: wList };
         if (hasWm) st.wm = wm;
@@ -873,11 +888,11 @@ GameModes.register({
             var md = mc[o.id] || ["Worm", "#4ade80", -1, null, "", 0];
             var sgo = NetPack.un(o.sg);
             var segs = []; for (let i = 0; i < sgo.length; i += 2) { segs.push({ x: sgo[i], y: sgo[i + 1] }); segs.push({ x: sgo[i], y: sgo[i + 1] }); }
-            var w = { id: o.id, name: md[0], color: md[1], human: md[2] === -1 ? undefined : md[2], pid: md[3], deathMsg: md[4], finalLen: md[5], alive: !!o.a, len: o.l, ang: o.g, boosting: !!o.b, safeT: o.s, segs: segs.length ? segs : [{ x: 0, y: 0 }], deadT: o.dt };
+            var w = { id: o.id, name: md[0], color: md[1], human: md[2] === -1 ? undefined : md[2], pid: md[3], deathMsg: md[4], finalLen: md[5], alive: !!o.a, len: o.l, ang: o.g, boosting: !!o.b, safeT: o.s, kinId: o.k || 0, slowed: !!o.sl, segs: segs.length ? segs : [{ x: 0, y: 0 }], deadT: o.dt };
             w._tx = w.segs[0].x; w._ty = w.segs[0].y;
             var old = prev[o.id || w.pid || w.name];
             if (old && w.alive && Math.hypot(w._tx - old.segs[0].x, w._ty - old.segs[0].y) < 140) {
-                if (typeof Net !== "undefined" && w.pid === Net.pid && old.segs.length > 2) {
+                if (typeof Net !== "undefined" && w.pid === Net.pid && old.segs.length > 2 && Math.abs(old.segs.length - segs.length) <= 4) {
                     w.segs = old.segs;
                     w.ang = old.ang;
                 } else {

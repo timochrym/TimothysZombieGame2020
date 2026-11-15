@@ -748,6 +748,7 @@ var Mix = {
             } else {
                 var hitAng = Math.atan2(ep.vy || 0, ep.vx || 1);
                 var didSplit = (hw.len >= 32) ? Snake.splitAt(hw, ep.x, ep.y, hitAng) : null;
+                if (didSplit) wormR.push(Snake.rad(didSplit));
                 Snake.hitKnockback(hw, didSplit ? hitAng + 0.5 : hitAng, 11);
                 this.burst(ep.x, ep.y, ep.col || "#38bdf8", "ring", (didSplit ? "SPLIT! +" : "BOUNCE! +") + ownerGain, 38);
             }
@@ -1032,7 +1033,7 @@ var Mix = {
         }
         for (let i = 0; i < Snake.worms.length; i++) {
             var w = Snake.worms[i];
-            if (w !== pickerRef && w.alive && w.human === undefined && w.segs && w.segs[0]) cands.push({ ref: w, kind: "worm", x: w.segs[0].x, y: w.segs[0].y });
+            if (w !== pickerRef && w.alive && !w.gone && w.human === undefined && w.segs && w.segs[0] && (!pickerRef.kinId || w.kinId !== pickerRef.kinId)) cands.push({ ref: w, kind: "worm", x: w.segs[0].x, y: w.segs[0].y });
         }
         if (!cands.length) return false;
         for (let i = cands.length - 1; i > 0; i--) {
@@ -1044,10 +1045,14 @@ var Mix = {
             if (d < bestD) { bestD = d; tgt = three[i]; }
         }
         var h0 = pickerRef.human, p0 = pickerRef.pid, origBody = (h0 === 0) ? mixCfg.body : null;
-        pickerRef.human = undefined; pickerRef.pid = undefined;
-        tgt.ref.human = h0; tgt.ref.pid = p0;
+        var origRefs = (pickerRef.segs && pickerRef.kinId) ? Snake.kinOf(pickerRef) : [pickerRef];
+        if (origRefs.indexOf(pickerRef) === -1) origRefs.push(pickerRef);
+        for (let i = 0; i < origRefs.length; i++) { origRefs[i].human = undefined; origRefs[i].pid = undefined; }
+        var tgtRefs = (tgt.ref.segs && tgt.ref.kinId) ? Snake.kinOf(tgt.ref) : [tgt.ref];
+        if (tgtRefs.indexOf(tgt.ref) === -1) tgtRefs.push(tgt.ref);
+        for (let i = 0; i < tgtRefs.length; i++) { tgtRefs[i].human = h0; tgtRefs[i].pid = p0; }
         if (h0 === 0) mixCfg.body = tgt.kind;
-        this._tempSwaps.push({ orig: pickerRef, target: tgt.ref, human: h0, pid: p0, origBody: origBody, t: 360 });
+        this._tempSwaps.push({ orig: pickerRef, origRefs: origRefs, target: tgt.ref, targetRefs: tgtRefs, human: h0, pid: p0, origBody: origBody, t: 360 });
         return true;
     },
 
@@ -1056,9 +1061,21 @@ var Mix = {
         this._tempSwaps = this._tempSwaps || [];
         for (let si = this._tempSwaps.length - 1; si >= 0; si--) {
             var sw = this._tempSwaps[si];
-            if (--sw.t <= 0) {
-                sw.target.human = undefined; sw.target.pid = undefined;
-                sw.orig.human = sw.human; sw.orig.pid = sw.pid;
+            var tgtAlive = sw.targetRefs ? sw.targetRefs.some(function(r) { return r.alive && !r.gone; }) : (sw.target && sw.target.alive && !sw.target.gone);
+            if (--sw.t <= 0 || !tgtAlive) {
+                var tList = sw.targetRefs || [sw.target];
+                for (let ti = 0; ti < tList.length; ti++) { tList[ti].human = undefined; tList[ti].pid = undefined; }
+                var oList = sw.origRefs || [sw.orig], restoredAny = false;
+                for (let oi = 0; oi < oList.length; oi++) {
+                    var or = oList[oi];
+                    if (or.segs && Snake.worms.indexOf(or) === -1) continue;
+                    or.human = sw.human; or.pid = sw.pid; restoredAny = true;
+                }
+                if (!restoredAny && sw.orig && sw.orig.segs) {
+                    sw.orig.alive = false; sw.orig.gone = false; sw.orig.deadT = 60;
+                    sw.orig.human = sw.human; sw.orig.pid = sw.pid;
+                    Snake.worms.push(sw.orig);
+                }
                 if (sw.origBody) mixCfg.body = sw.origBody;
                 if (sw.human !== undefined) showBanner("🔀 BACK TO YOURSELF!", "", "#a855f7");
                 this._tempSwaps.splice(si, 1);
