@@ -724,7 +724,7 @@ var Mix = {
             var actualEjDmg = Math.min(hw.len, ejDmg);
             hw.len -= ejDmg;
             arenaRecordDmg(hw, ep.ownerPl, actualEjDmg);
-            var ownerGain = Math.max(14, Math.round(actualEjDmg * 1.4));
+            var ownerGain = Math.max(4, Math.round(actualEjDmg * 0.9));
             if (ep.ownerPl && ep.ownerPl.alive) {
                 var ownBlobs = Cells.mine(ep.ownerPl);
                 if (ownBlobs.length) {

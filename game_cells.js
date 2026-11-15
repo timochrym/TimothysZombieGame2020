@@ -177,13 +177,17 @@ var Cells = {
         pl.chainBoosting = !!(pl.chain && split);
         pl.chainMoving = pl.chainBoosting;
         if (split && !pl.splitPrev && !pl.chain) this.split(pl, me);
-        if (eject && !pl.chain && this.t % 4 === 0) this.eject(pl, me);
+        if (pl.ejectCd > 0) pl.ejectCd--;
+        if (eject && !pl.chain && (!pl.ejectCd || pl.ejectCd <= 0)) {
+            this.eject(pl, me);
+            pl.ejectCd = pl.human !== undefined ? 12 : 24;
+        }
         pl.splitPrev = split;
     },
 
     cpu: function(pl, me, cx, cy, M) {
         pl.cpuT++;
-        if (pl.cpuT % 12 !== 0 && pl.goal) { pl.aimX = pl.goal[0]; pl.aimY = pl.goal[1]; return { split: false, eject: !!pl.cpuEject }; }
+        if (pl.cpuT % 12 !== 0 && pl.goal) { pl.aimX = pl.goal[0]; pl.aimY = pl.goal[1]; return { split: false, eject: false }; }
         var big = me.reduce(function(a, b) { return b.m > a.m ? b : a; }, me[0]);
         var r = this.rad(big.m, big), fx = 0, fy = 0, threat = false, prey = null, pd = 1e9, snipeTarget = null, sd = 360;
         var inMix = typeof Mix !== "undefined" && Mix.on;
@@ -192,7 +196,7 @@ var Cells = {
             var o = this.blobs[i];
             if (o.pl === pl) continue;
             var d = Math.hypot(o.x - cx, o.y - cy);
-            if (!pl.chain && o.pl.chain && !o.pl.compact && big.m > 48 && d < sd && !this.protectedNow(o.pl)) { sd = d; snipeTarget = o; }
+            if (!pl.chain && o.pl.chain && !o.pl.compact && big.m > 56 && d < sd && !this.protectedNow(o.pl)) { sd = d; snipeTarget = o; }
             if (o.m > big.m * 1.25 && d < 450 + this.rad(o.m, o)) { fx -= (o.x - cx) / (d || 1) * (1000 / (d + 50)); fy -= (o.y - cy) / (d || 1) * (1000 / (d + 50)); threat = true; }
             else if (big.m > o.m * 1.25 && d < 600 && d / o.m < pd) { pd = d / o.m; prey = o; }
         }
@@ -210,7 +214,7 @@ var Cells = {
                 var w = Snake.worms[i];
                 if (!w.alive || w.safeT > 0 || !w.segs || !w.segs.length) continue;
                 var wh = w.segs[0], wd = Math.hypot(wh.x - cx, wh.y - cy);
-                if (!pl.chain && big.m > 48 && wd < sd) { sd = wd; snipeTarget = { x: wh.x, y: wh.y }; }
+                if (!pl.chain && big.m > 56 && wd < sd) { sd = wd; snipeTarget = { x: wh.x, y: wh.y }; }
                 if (!pl.chain && big.m >= 80 && wd < r + 110) { fx -= (wh.x - cx) / (wd || 1) * 14; fy -= (wh.y - cy) / (wd || 1) * 14; threat = true; }
             }
         }
@@ -220,7 +224,6 @@ var Cells = {
             pl.goal = [cx + fx * 300, cy + fy * 300];
         } else if (snipeTarget) {
             pl.goal = [snipeTarget.x, snipeTarget.y];
-            pl.cpuEject = true;
             pl.aimX = snipeTarget.x; pl.aimY = snipeTarget.y;
             return { split: false, eject: true };
         } else if (prey) {
@@ -356,12 +359,15 @@ var Cells = {
         if (pl.human !== undefined && typeof SFX !== "undefined") SFX.play("whoosh");
     },
     eject: function(pl, me) {
-        for (let i = 0; i < me.length; i++) {
+        var active = 0;
+        for (let k = 0; k < this.pellets.length; k++) if (this.pellets[k].ejected && this.pellets[k].ownerPl === pl) active++;
+        for (let i = 0; i < me.length && active < 6; i++) {
             var b = me[i];
             if (b.m < 32) continue;
             var dx = pl.aimX - b.x, dy = pl.aimY - b.y, L = Math.hypot(dx, dy) || 1, r = this.rad(b.m);
             b.m -= 14;
             this.pellets.push({ x: b.x + dx / L * (r + 14), y: b.y + dy / L * (r + 14), m: 11, col: pl.color, vx: dx / L * 26, vy: dy / L * 26, ejected: true, ownerPl: pl });
+            active++;
         }
     },
 
@@ -464,7 +470,7 @@ var Cells = {
         var ps = this.pellets;
         for (let k = ps.length - 1; k >= 0; k--) {
             var p = ps[k];
-            if (p._returning && p.ownerPl && p.ownerPl.alive) {
+            if (p._returning && p.ownerPl && p.ownerPl.alive && (p._retT = (p._retT || 0) + 1) <= 90) {
                 var ownRet = this.mine(p.ownerPl);
                 if (ownRet.length) {
                     var rt = ownRet[0], rdx = rt.x - p.x, rdy = rt.y - p.y, rdl = Math.hypot(rdx, rdy) || 1;
@@ -474,6 +480,7 @@ var Cells = {
                     p._returning = false;
                 }
             } else if (p.vx || p.vy) {
+                if (p._returning) p._returning = false;
                 p.x += p.vx; p.y += p.vy;
                 var damp = p.ejected ? 0.91 : 0.88;
                 p.vx *= damp; p.vy *= damp;

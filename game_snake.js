@@ -90,7 +90,7 @@ var Snake = {
         w.kbT = Math.max(w.kbT || 0, 18);
     },
     splitAt: function(w, x, y, hitAng) {
-        if (!w || !w.alive || w.gone || !w.segs || w.segs.length < 16 || w.len < 32) return null;
+        if (!w || !w.alive || w.gone || w.splitCd > 0 || !w.segs || w.segs.length < 16 || w.len < 32) return null;
         var owner = w.splitOwner || w;
         var sibCount = 0;
         for (let i = 0; i < this.worms.length; i++) {
