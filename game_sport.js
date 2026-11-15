@@ -3,8 +3,7 @@
 //   Kick (F / Enter / click / RT), dash-tackle opponents (Shift / B), shockwave the ball (E / Y),
 //   jump for headers. 1v1 to 3v3 with CPU teammates/opponents, or P1 vs P2.
 // ============================================================================
-var sportCfg = { format: "1v1", level: 2, minutes: 2, goals: 5 };
-try { var _sc = JSON.parse(localStorage.getItem("timsZombieBallCfg") || "null"); if (_sc) { for (var _k in _sc) sportCfg[_k] = _sc[_k]; } } catch (e) {}
+var sportCfg = Store.load("timsZombieBallCfg", { format: "1v1", level: 2, minutes: 2, goals: 5 });
 var SPORT_FORMATS = [
     ["1v1", "P1 vs CPU"], ["pvp", "P1 vs P2"], ["2v2", "P1 + CPU vs 2 CPU"], ["coop", "P1 + P2 vs 2 CPU"], ["3v3", "P1 + 2 CPU vs 3 CPU"]
 ];
@@ -202,6 +201,15 @@ GameModes.register({
     overSub: function() { return TEAM_NAMES[0] + " " + Sport.score[0] + "  -  " + Sport.score[1] + " " + TEAM_NAMES[1]; },
     overTitle: "FULL TIME",
     againLabel: "Rematch",
+    restartLabel: "Rematch",
+    ui: {
+        levelPicker: false,
+        help: function() {
+            var p1 = { title: multiplayer ? "PLAYER 1" : "", color: "#ff7b80", items: [["A / D", "move"], ["W", "jump"], ["F / click", "kick"], ["Shift", "dash-tackle"], ["E", "shockwave"]] };
+            if (!multiplayer) return [p1];
+            return [p1, { title: "PLAYER 2", color: "#6cb8ff", items: [["← →", "move"], ["↑", "jump"], ["Enter", "kick"], ["R-Shift", "dash-tackle"], ["/", "shockwave"]] }];
+        }
+    },
 
     onActivate: function() { jetpackEnabled = false; },
 
@@ -426,37 +434,23 @@ GameModes.register({
             uiText(n > 0 ? String(n) : "GO!", cx, cssH / 2 - 60, 110, "#ffd23f", "center", "900");
             uiText("KICK-OFF", cx, cssH / 2 - 4, 22, "#e2e8f0", "center", "800");
         }
-        // controls strip
-        uiPanel(14, cssH - 64, 560, 50, "rgba(120,170,200,0.4)", 0.8);
-        uiText("P1: A/D move · W jump · F / click KICK · Shift DASH-TACKLE · E shockwave", 28, cssH - 34, 12, "#dbe7f0", "left", "700");
-        if (multiplayer) uiText("P2: arrows · Enter KICK · R-Shift DASH · / shockwave", 28, cssH - 18, 11, "#94a3b8", "left", "700");
-        uiText("Esc: menu (format, CPU skill, match length)", cssW - 20, cssH - 22, 12, "rgba(200,220,235,0.6)", "right", "700");
         for (let i = 0; i < characters.length; i++) {
             var c = characters[i];
             if (!c.dead) drawEdgeIndicator(c.x, c.y, TEAM_COLORS[c.fighterTeam], c.playerLabel);
         }
     },
 
-    menuItems: function(items) {
-        var fmt = SPORT_FORMATS.find(function(f) { return f[0] === sportCfg.format; });
-        items.push({ id: "zb_fmt", label: "Teams:  ◀  " + fmt[1] + "  ▶", hint: "Applies on Rematch", cycle: true });
-        items.push({ id: "zb_lvl", label: "CPU skill:  ◀  " + ["", "Easy", "Normal", "Hard"][sportCfg.level] + "  ▶", hint: "", cycle: true });
-        items.push({ id: "zb_min", label: "Match length:  ◀  " + sportCfg.minutes + " min  ▶", hint: "Applies on Rematch", cycle: true });
-        items.push({ id: "zb_goals", label: "Goals to win:  ◀  " + sportCfg.goals + "  ▶", hint: "", cycle: true });
-        if (!pauseFromGameOver) items.push({ id: "again", label: "Rematch", hint: "Start a new match" });
-    },
-
-    onMenu: function(id, dir) {
-        dir = dir || 1;
-        var save = function() { try { localStorage.setItem("timsZombieBallCfg", JSON.stringify(sportCfg)); } catch (e) {} };
-        if (id === "zb_fmt") {
-            var i = SPORT_FORMATS.findIndex(function(f) { return f[0] === sportCfg.format; });
-            sportCfg.format = SPORT_FORMATS[(i + dir + SPORT_FORMATS.length) % SPORT_FORMATS.length][0];
-            save(); return true;
-        }
-        if (id === "zb_lvl") { sportCfg.level = ((sportCfg.level - 1 + dir + 3) % 3) + 1; save(); return true; }
-        if (id === "zb_min") { sportCfg.minutes = Math.max(1, Math.min(10, sportCfg.minutes + dir)); save(); return true; }
-        if (id === "zb_goals") { sportCfg.goals = Math.max(1, Math.min(15, sportCfg.goals + dir)); save(); return true; }
-        return false;
+    menuRows: function() {
+        var save = function() { Store.set("timsZombieBallCfg", sportCfg); };
+        return [
+            { label: "Teams", icon: "👥", cycle: true, hint: "Applies on Rematch", value: function() { return SPORT_FORMATS.find(function(f) { return f[0] === sportCfg.format; })[1]; },
+              act: function(d) { var i = SPORT_FORMATS.findIndex(function(f) { return f[0] === sportCfg.format; }); sportCfg.format = SPORT_FORMATS[(i + d + SPORT_FORMATS.length) % SPORT_FORMATS.length][0]; save(); } },
+            { label: "CPU skill", icon: "🤖", cycle: true, value: function() { return ["", "Easy", "Normal", "Hard"][sportCfg.level]; },
+              act: function(d) { sportCfg.level = ((sportCfg.level - 1 + d + 3) % 3) + 1; save(); } },
+            { label: "Match length", icon: "⏱", cycle: true, hint: "Applies on Rematch", value: function() { return sportCfg.minutes + " min"; },
+              act: function(d) { sportCfg.minutes = Math.max(1, Math.min(10, sportCfg.minutes + d)); save(); } },
+            { label: "Goals to win", icon: "🥅", cycle: true, value: function() { return sportCfg.goals; },
+              act: function(d) { sportCfg.goals = Math.max(1, Math.min(15, sportCfg.goals + d)); save(); } }
+        ];
     }
 });

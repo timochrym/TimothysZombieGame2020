@@ -5,8 +5,11 @@
 // ============================================================================
 var PUZZLE_ROOMS = [];
 var puzzleState = { room: 0, unlocked: 1, time: 0, done: false, doneTimer: 0, best: {} };
-try { var _ps = JSON.parse(localStorage.getItem("timsCrateLab") || "null"); if (_ps) { puzzleState.unlocked = _ps.unlocked || 1; puzzleState.best = _ps.best || {}; puzzleState.room = Math.min(_ps.room || 0, puzzleState.unlocked - 1); } } catch (e) {}
-function savePuzzle() { try { localStorage.setItem("timsCrateLab", JSON.stringify({ unlocked: puzzleState.unlocked, best: puzzleState.best, room: puzzleState.room })); } catch (e) {} }
+(function() {
+    var sv = Store.get("timsCrateLab", null);
+    if (sv) { puzzleState.unlocked = sv.unlocked || 1; puzzleState.best = sv.best || {}; puzzleState.room = Math.min(sv.room || 0, puzzleState.unlocked - 1); }
+})();
+function savePuzzle() { Store.set("timsCrateLab", { unlocked: puzzleState.unlocked, best: puzzleState.best, room: puzzleState.room }); }
 
 function puzzleRoom(n, title, left, right, spawn, extra, gadgets) {
     var key = "lab_" + n;
@@ -125,6 +128,11 @@ GameModes.register({
     flags: { waves: false, revive: false, jetpack: false, shooting: true, ability: false, ammo: false, noBedrock: false, scenery: false, coopToggle: true, wallJump: false, airJumps: 1, enemiesPassive: true },
     overTitle: "LAB COMPLETE!",
     againLabel: "Play from room 1",
+    restartLabel: "Start over from room 1",
+    ui: {
+        levelPicker: false,
+        help: [["A / D", "move"], ["W", "jump"], ["G / R-click", "grab a crate"], ["click", "throw"], ["E", "pull lever"], ["R", "restart room"]]
+    },
 
     setupLevel: function(lvl) {
         // rooms with pits replace the full floor with segments
@@ -196,21 +204,15 @@ GameModes.register({
         uiText("CRATE LAB", 30, 46, 24, "#f4c27a", "left", "900");
         uiText("ROOM " + (puzzleState.room + 1) + "/" + PUZZLE_ROOMS.length + "  ·  " + (lvl.title || ""), 30, 70, 14, "#e2e8f0", "left", "800");
         uiText("⏱ " + (puzzleState.time / 60).toFixed(1) + "s   ★ " + Gadgets.starsGot + "/" + Gadgets.starsTotal + "   ☠ " + Gadgets.deaths + (Gadgets.keys["#facc15"] || Gadgets.keys["#38bdf8"] ? "   🔑" : ""), 30, 94, 13, "#94a3b8", "left", "700");
-        uiText("G / right-click grab · click throw · E lever · R restart room · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
     },
 
-    menuItems: function(items) {
-        items.push({ id: "pz_room", label: "Room:  ◀  " + (puzzleState.room + 1) + " / " + PUZZLE_ROOMS.length + "  (" + puzzleState.unlocked + " unlocked)  ▶", hint: "Enter loads the room", cycle: true });
-        items.push({ id: "pz_restart", label: "Restart this room  (R)", hint: "" });
-    },
-
-    onMenu: function(id, dir) {
-        if (id === "pz_room") {
-            if (dir) { puzzleState.room = (puzzleState.room + dir + puzzleState.unlocked) % puzzleState.unlocked; }
-            else { closePause(); LevelManager.selectLevel(PUZZLE_ROOMS[puzzleState.room]); }
-            return true;
-        }
-        if (id === "pz_restart") { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
-        return false;
+    menuRows: function() {
+        return [
+            { label: "Room", icon: "🧪", cycle: true, hint: "◀ ▶ choose, Enter loads it",
+              value: function() { return (puzzleState.room + 1) + " / " + PUZZLE_ROOMS.length + "  (" + puzzleState.unlocked + " unlocked)"; },
+              act: function(d) { puzzleState.room = (puzzleState.room + d + puzzleState.unlocked) % puzzleState.unlocked; },
+              go: function() { closePause(); LevelManager.selectLevel(PUZZLE_ROOMS[puzzleState.room]); } },
+            { label: "Restart this room  (R)", icon: "↻", act: function() { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); } }
+        ];
     }
 });

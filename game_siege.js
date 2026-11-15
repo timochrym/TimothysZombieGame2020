@@ -5,9 +5,8 @@
 //   into crate forts. Topple towers, crush zombies, earn up to 3 stars per fort.
 // ============================================================================
 var SIEGE_LEVELS = [];
-var siegeSave = { stars: {}, best: {}, level: 0 };
-try { var _ss = JSON.parse(localStorage.getItem("timsRagdollSiege") || "null"); if (_ss) { for (var _k2 in _ss) siegeSave[_k2] = _ss[_k2]; } } catch (e) {}
-function saveSiege() { try { localStorage.setItem("timsRagdollSiege", JSON.stringify(siegeSave)); } catch (e) {} }
+var siegeSave = Store.load("timsRagdollSiege", { stars: {}, best: {}, level: 0 });
+function saveSiege() { Store.set("timsRagdollSiege", siegeSave); }
 
 var SIEGE_ANCHOR = { x: -700, y: 330 };
 var SIEGE_MAX_PULL = 230;
@@ -20,7 +19,7 @@ var AMMO = {
 };
 
 var Siege = {
-    phase: "aim", shots: [], shotIdx: 0, rd: null, rdType: null, flightT: 0, settleT: 0,
+    phase: "aim", pick: null, shots: [], shotIdx: 0, rd: null, rdType: null, flightT: 0, settleT: 0,
     angle: 40, power: 0.75, dragging: false, wasMouse: false, wasFire: false,
     score: 0, kills: 0, enemyTotal: 0, resultT: 0, won: false
 };
@@ -204,10 +203,16 @@ GameModes.register({
         coopToggle: false, dash: false, playerControl: false, enemiesPassive: true },
     overTitle: "FORT DESTROYED!",
     againLabel: "Retry this fort",
+    restartLabel: "Retry fort",
+    ui: {
+        levelPicker: false,
+        help: [["drag mouse", "pull back & release"], ["W / S", "aim up / down"], ["A / D", "less / more power"], ["Space", "fire"], ["click / Space", "detonate a bomb"], ["R-click / Tab", "swap shot"], ["R", "retry fort"]]
+    },
 
     setupLevel: function(lvl) {
         var sg = lvl.siege;
         Siege.phase = "aim"; Siege.shots = sg.ammo.slice(); Siege.shotIdx = 0; Siege.rd = null;
+        Siege.pick = null;
         Siege.score = 0; Siege.kills = 0; Siege.resultT = 0; Siege.won = false; Siege.dragging = false;
         Siege.angle = 40; Siege.power = 0.75; Siege.wasMouse = mouseDown; Siege.wasFire = true;
         siegeSave.level = Math.max(0, SIEGE_LEVELS.indexOf(LevelManager.currentLevelKey)); saveSiege();
@@ -454,22 +459,20 @@ GameModes.register({
         if (Siege.phase === "aim" && nxt) uiText("NEXT: " + AMMO[nxt].name.toUpperCase() + " - " + AMMO[nxt].desc, 30 + Siege.shots.length * 30 + 10, ty, 11, AMMO[nxt].color, "left", "800");
         if (Siege.phase === "flight" && Siege.rdType === "bomb" && Siege.rd) uiText("CLICK / SPACE TO DETONATE!", cssW / 2, 110, 24, "#f97316", "center", "900");
         if (Siege.phase === "aim") uiText("angle " + Math.round(Siege.angle) + "°   power " + Math.round(Siege.power * 100) + "%", cssW / 2, 100, 16, "#e2e8f0", "center", "800");
-        uiText("Drag the mouse to pull & release to fire · or W/S aim, A/D power, Space fire · right-click/Tab swap shot · R retry · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
     },
 
-    menuItems: function(items) {
-        var n = Math.max(0, SIEGE_LEVELS.indexOf(LevelManager.currentLevelKey));
-        if (pauseFromGameOver && Siege.won && n + 1 < SIEGE_LEVELS.length) items.unshift({ id: "sg_next", label: "Next fort ▶", hint: "Fort " + (n + 2) });
-        items.push({ id: "sg_level", label: "Fort:  ◀  " + (n + 1) + " / " + SIEGE_LEVELS.length + "  " + "★".repeat(siegeStarsFor(SIEGE_LEVELS[n])) + "  ▶", hint: "", cycle: true });
-        if (!pauseFromGameOver) items.push({ id: "sg_retry", label: "Retry fort  (R)", hint: "" });
-    },
-
-    onMenu: function(id, dir) {
-        var n = Math.max(0, SIEGE_LEVELS.indexOf(LevelManager.currentLevelKey));
-        if (id === "sg_next") { closePause(); LevelManager.selectLevel(SIEGE_LEVELS[n + 1]); return true; }
-        if (id === "sg_level") { n = (n + (dir || 1) + SIEGE_LEVELS.length) % SIEGE_LEVELS.length; closePause(); LevelManager.selectLevel(SIEGE_LEVELS[n]); return true; }
-        if (id === "sg_retry") { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
-        return false;
+    menuRows: function() {
+        var cur = function() { return Math.max(0, SIEGE_LEVELS.indexOf(LevelManager.currentLevelKey)); };
+        var pick = null;
+        var rows = [];
+        if (Menu.over && Siege.won && cur() + 1 < SIEGE_LEVELS.length) {
+            rows.push({ label: "Next fort", icon: "▶", hint: "Fort " + (cur() + 2), act: function() { closePause(); LevelManager.selectLevel(SIEGE_LEVELS[cur() + 1]); } });
+        }
+        rows.push({ label: "Fort", icon: "🏰", cycle: true, hint: "◀ ▶ choose, Enter loads it",
+            value: function() { var n = Siege.pick !== null ? Siege.pick : cur(); return (n + 1) + " / " + SIEGE_LEVELS.length + "  " + "★".repeat(siegeStarsFor(SIEGE_LEVELS[n])) + "☆".repeat(3 - siegeStarsFor(SIEGE_LEVELS[n])); },
+            act: function(d) { Siege.pick = ((Siege.pick !== null ? Siege.pick : cur()) + d + SIEGE_LEVELS.length) % SIEGE_LEVELS.length; },
+            go: function() { var n = Siege.pick !== null ? Siege.pick : cur(); closePause(); LevelManager.selectLevel(SIEGE_LEVELS[n]); } });
+        return rows;
     }
 });
 

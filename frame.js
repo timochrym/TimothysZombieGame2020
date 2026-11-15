@@ -489,7 +489,8 @@ function resetGame() {
     screenShake = 0;
     gameOver = false;
     lastStandTimer = -1;
-    helpTimer = devOpts.showHelp ? 60 * 12 : 0;
+    banners = [];
+    Help.reset();
     createMap();
     createPlayers();
     if (!brawl.active && GameModes.flag("waves", true)) startLevel(1);
@@ -821,8 +822,14 @@ function drawHeroCard(ch, x, y) {
 
 function drawHUD() {
     if (!redGuy) return;
-    if (GameModes.has("drawHUD")) { GameModes.call("drawHUD"); drawBanners(); drawCrosshair(); return; }
-    if (brawl.active) { drawBrawlHUD(); return; }
+    if (GameModes.has("drawHUD")) { GameModes.call("drawHUD"); drawBanners(); drawCrosshair(); Help.draw(); return; }
+    if (brawl.active) { drawBrawlHUD(); Help.draw(); return; }
+    drawSurvivalHUD();
+    Help.draw();
+}
+
+// The original Zombie Survival HUD (waves, score, XP, frontier distance, hero cards)
+function drawSurvivalHUD() {
     ctx.textBaseline = "alphabetic";
 
     // ---------- Top-left: wave / score card ----------
@@ -886,34 +893,6 @@ function drawHUD() {
                 uiText("Hold " + (hh.playerIndex === 0 ? "[E]" : "[/]") + " to REVIVE", ch.x * cameraScaleX + xc, (-ch.y - ch.s2 * 0.5) * cameraScaleY + yc - 62, 14, "#a7f3d0", "center", "800");
             }
         }
-    }
-
-    // ---------- Controls cheat-sheet ----------
-    if (devOpts.showHelp && helpTimer > 0) {
-        helpTimer--;
-        var fade = Math.min(1, helpTimer / 60);
-        var hw = multiplayer ? 640 : 560;
-        var hx = w / 2 - hw / 2, hy = h - 150;
-        ctx.save();
-        ctx.globalAlpha = fade;
-        uiPanel(hx, hy, hw, 132, "rgba(120,170,200,0.4)", 0.8);
-        if (multiplayer) {
-            uiText("PLAYER 1", hx + 24, hy + 28, 14, "#ff7b80", "left", "900");
-            uiText("WASD move/jump   F shoot   Space jetpack", hx + 24, hy + 50, 12, "#dbe7f0", "left", "600");
-            uiText("L-Shift dash   E shockwave / hold: revive   G grab", hx + 24, hy + 68, 12, "#dbe7f0", "left", "600");
-            uiText("Stairs: hold UP to climb, DOWN to step off · mouse also aims for P1", hx + 24, hy + 86, 11, "#8ba2b4", "left", "600");
-            uiText("PLAYER 2", hx + 340, hy + 28, 14, "#6cb8ff", "left", "900");
-            uiText("Arrows move/jump   Enter shoot   . jetpack", hx + 340, hy + 50, 12, "#dbe7f0", "left", "600");
-            uiText("R-Shift dash   / shockwave / hold: revive   , grab", hx + 340, hy + 68, 12, "#dbe7f0", "left", "600");
-        } else {
-            uiText("WASD move/jump   Mouse aim + click or F shoot   Arrows: twin-stick fire", hx + 24, hy + 28, 12, "#dbe7f0", "left", "700");
-            uiText("Space jetpack   L-Shift dash   E shockwave   R-click/G grab & throw crates or BODIES", hx + 24, hy + 50, 12, "#dbe7f0", "left", "700");
-            uiText("Stairs: hold UP to climb, DOWN to step off.   Esc: pause menu (character, co-op, restart, levels)", hx + 24, hy + 72, 12, "#ffd23f", "left", "800");
-        }
-        uiText("Esc pause menu (restart · co-op · levels · settings) · 🎮 controllers supported · H hide · B dev mode · +/- zoom", hx + hw / 2, hy + 116, 11, "#8ba2b4", "center", "600");
-        ctx.restore();
-    } else {
-        uiText("H: controls", w / 2, h - 12, 11, "rgba(200,220,235,0.55)", "center", "600");
     }
 
     // ---------- Wave title ----------
@@ -1109,209 +1088,6 @@ resetGame();
 if (typeof Pathfinder !== "undefined") Pathfinder.init();
 if (typeof SummonManager !== "undefined") SummonManager.init();
 
-// ============================================================================
-// PAUSE MENU (Esc). Restart, co-op, level changes and dev tools live here - never on a single stray key.
-// ============================================================================
-var paused = false;
-var pauseIndex = 0;
-var pauseConfirm = false;
-var pauseRects = [];
-var pauseSnap = null;
-var pauseFromGameOver = false;
-var pauseSub = null; // null = main menu, "settings" = settings page
-var pauseLevelKeys = [];
-var pauseLevelIdx = 0;
-var gameOverTimer = 0;
-
-function openPause(fromGameOver) {
-    pauseFromGameOver = !!fromGameOver;
-    pauseConfirm = false;
-    pauseIndex = 0;
-    pauseSnap = document.createElement("canvas");
-    pauseSnap.width = canvas.width;
-    pauseSnap.height = canvas.height;
-    pauseSnap.getContext("2d").drawImage(canvas, 0, 0);
-    pauseLevelKeys = [];
-    var all = LevelManager.getAllLevels();
-    for (var k in all) if (GameModes.modeOf(all[k]) === GameModes.current.id) pauseLevelKeys.push(k);
-    pauseLevelIdx = Math.max(0, pauseLevelKeys.indexOf(LevelManager.currentLevelKey));
-    paused = true;
-    for (let i = 0; i < PlayerInput.length; i++) PlayerInput[i].shoot = PlayerInput[i].jet = PlayerInput[i].interact = false;
-}
-
-function closePause() {
-    paused = false;
-    pauseSub = null;
-    pauseSnap = null;
-    pauseConfirm = false;
-}
-
-function togglePause() {
-    if (paused) closePause();
-    else openPause(false);
-}
-
-var PAUSE_CYCLE_IDS = ["level", "skin0", "skin1", "bopp", "blvl", "bstk", "bstage", "svol", "sshake"];
-
-function pauseItems() {
-    if (pauseSub === "settings") {
-        return [
-            { id: "svol", label: "Sound volume:  ◀  " + (settings.volume <= 0 ? "OFF" : Math.round(settings.volume * 100) + "%") + "  ▶", hint: "◀ ▶ adjust" },
-            { id: "sshake", label: "Screen shake:  ◀  " + Math.round(settings.shake * 100) + "%  ▶", hint: "◀ ▶ adjust (0% = off)" },
-            { id: "shit", label: "Hit-stop on big hits:  " + (settings.hitStop ? "ON" : "OFF"), hint: "Freezes a few frames on heavy impacts" },
-            { id: "shidpi", label: "Sharp hi-DPI graphics:  " + (settings.hiDPI ? (renderScaleAutoReduced ? "ON (auto-reduced for speed)" : "ON") : "OFF"), hint: "Turn off if the game runs slowly" },
-            { id: "sglow", label: "Glow effects:  " + (settings.glow ? (glowAutoDisabled ? "ON (auto-reduced for speed)" : "ON") : "OFF"), hint: "Turn off for more FPS on slower computers" },
-            { id: "help", label: "Controls help:  " + (devOpts.showHelp ? "ON" : "OFF"), hint: "Shows the key cheat-sheet" },
-            { id: "back", label: "◀  Back", hint: "Esc" }
-        ];
-    }
-    if (pauseConfirm) {
-        return [
-            { id: "yes", label: "Yes - restart the run", hint: "Score and wave progress are lost" },
-            { id: "no", label: "No - go back", hint: "" }
-        ];
-    }
-    var items = [];
-    var inBrawl = brawl.active;
-    if (!pauseFromGameOver) items.push({ id: "resume", label: "Resume", hint: "Esc" });
-    else items.push({ id: "again", label: GameModes.current.againLabel || (inBrawl ? "Rematch" : "Play again"), hint: inBrawl ? "Applies the settings below" : "Start a fresh run" });
-    items.push({ id: "arcade", label: "🕹  Arcade - switch game  (" + (GameModes.current ? GameModes.current.title : "") + ")", hint: "Pick any game made with this engine" });
-    if (GameModes.has("menuItems")) { GameModes.call("menuItems", items); }
-    if (inBrawl) {
-        var sName = LevelManager.getAllLevels()[brawlCfg.stage];
-        items.push({ id: "bopp", label: "Opponents:  ◀  " + brawlOpponentLabel() + "  ▶", hint: "Applies on Rematch - PvP or CPU fighters" });
-        items.push({ id: "blvl", label: "CPU skill:  ◀  " + BRAWL_CPU_NAMES[brawlCfg.cpuLevel] + "  ▶", hint: "Applies on Rematch" });
-        items.push({ id: "bstk", label: "Stocks:  ◀  " + brawlCfg.stocks + "  ▶", hint: "Lives per fighter - applies on Rematch" });
-        items.push({ id: "bstage", label: "Stage:  ◀  " + (sName ? sName.name.replace(/^[^A-Za-z]+/, "") : "?") + "  ▶", hint: "Applies on Rematch" });
-        if (!pauseFromGameOver) items.push({ id: "again", label: "Rematch", hint: "Start a new match with these settings" });
-    } else if (GameModes.flag("coopToggle", true)) {
-        items.push({ id: "mode", label: "Players:  " + (multiplayer ? "2-player co-op" : "Solo") + "   ▶  " + (multiplayer ? "Solo" : "Co-op"), hint: "Enter switches mode (restarts the run)" });
-    }
-    items.push({ id: "skin0", label: "Player 1 character:  ◀  " + skinName(heroSkins[0]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
-    if (multiplayer && (!inBrawl || (brawlCfg.opponents.indexOf("p2") === 0))) items.push({ id: "skin1", label: "Player 2 character:  ◀  " + skinName(heroSkins[1]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
-    if (!inBrawl && !GameModes.has("menuItems") && pauseLevelKeys.length > 1) {
-        var lvlName = LevelManager.getAllLevels()[pauseLevelKeys[pauseLevelIdx]];
-        items.push({ id: "level", label: "Level:  ◀  " + (lvlName ? lvlName.name : "?") + "  ▶", hint: "◀ ▶ choose, Enter loads it (restarts the run)" });
-        if (!pauseFromGameOver) items.push({ id: "restart", label: "Restart run", hint: "Asks for confirmation" });
-    }
-    items.push({ id: "settings", label: "Settings  ▸", hint: "Sound, screen shake, hit-stop, graphics, help" });
-    items.push({ id: "dev", label: "Developer Mode panel", hint: "Same as pressing B" });
-    return items;
-}
-
-function pauseActivate(id, dir) {
-    if (typeof SFX !== "undefined") SFX.play("select");
-    if (id === "settings") { pauseSub = "settings"; pauseIndex = 0; return; }
-    if (id === "back") { pauseSub = null; pauseIndex = 0; return; }
-    if (id === "svol") { SFX.setVolume(Math.round((settings.volume + (dir || 1) * 0.1) * 10) / 10); if (settings.volume > 1) SFX.setVolume(1); return; }
-    if (id === "sshake") { settings.shake = Math.max(0, Math.min(1, Math.round((settings.shake + (dir || 1) * 0.25) * 4) / 4)); saveSettings(); return; }
-    if (id === "sglow") { settings.glow = !settings.glow; glowAutoDisabled = false; saveSettings(); return; }
-    if (id === "shit") { settings.hitStop = !settings.hitStop; saveSettings(); return; }
-    if (id === "shidpi") { settings.hiDPI = !settings.hiDPI; renderScaleAutoReduced = false; saveSettings(); applyCanvasSize(); xcMaster = w / 2; ycMaster = h / 2; return; }
-    if (GameModes.call("onMenu", id, dir)) return;
-    if (id === "arcade") { closePause(); Hub.openHub(false); return; }
-    if (id === "resume") closePause();
-    else if (id === "again" || id === "yes") {
-        closePause();
-        if (GameModes.has("onRestart")) { GameModes.call("onRestart"); return; }
-        if (brawl.active && LevelManager.currentLevelKey !== brawlCfg.stage) LevelManager.selectLevel(brawlCfg.stage);
-        else resetGame();
-    }
-    else if (id === "no") { pauseConfirm = false; pauseIndex = 0; }
-    else if (id === "restart") { pauseConfirm = true; pauseIndex = 1; }
-    else if (id === "skin0") cycleSkin(0, dir || 1);
-    else if (id === "skin1") cycleSkin(1, dir || 1);
-    else if (id === "gmode") {
-        closePause();
-        if (brawl.active) LevelManager.selectLevel("classic_arena");
-        else LevelManager.selectLevel(brawlCfg.stage);
-    }
-    else if (id === "bopp") cycleBrawlOpponents(dir || 1);
-    else if (id === "blvl") { brawlCfg.cpuLevel = ((brawlCfg.cpuLevel - 1 + (dir || 1) + 3) % 3) + 1; saveBrawlCfg(); }
-    else if (id === "bstk") { brawlCfg.stocks = Math.max(1, Math.min(9, brawlCfg.stocks + (dir || 1))); saveBrawlCfg(); }
-    else if (id === "bstage") cycleBrawlStage(dir || 1);
-    else if (id === "mode") { closePause(); toggleMultiplayer(); }
-    else if (id === "level") {
-        if (dir) pauseLevelIdx = (pauseLevelIdx + dir + pauseLevelKeys.length) % pauseLevelKeys.length;
-        else { var key = pauseLevelKeys[pauseLevelIdx]; closePause(); LevelManager.selectLevel(key); }
-    }
-    else if (id === "help") { devOpts.showHelp = !devOpts.showHelp; helpTimer = devOpts.showHelp ? 60 * 14 : 0; }
-    else if (id === "dev") { closePause(); if (!SummonManager.isOpen) SummonManager.togglePanel(); }
-}
-
-function pauseKey(e) {
-    var items = pauseItems();
-    var c = e.code;
-    if (typeof SFX !== "undefined" && (c === "ArrowUp" || c === "ArrowDown" || c === "KeyW" || c === "KeyS")) SFX.play("ui");
-    if (c === "ArrowUp" || c === "KeyW") pauseIndex = (pauseIndex - 1 + items.length) % items.length;
-    else if (c === "ArrowDown" || c === "KeyS") pauseIndex = (pauseIndex + 1) % items.length;
-    else if (c === "ArrowLeft" || c === "KeyA") { var li = items[pauseIndex].id; if (PAUSE_CYCLE_IDS.indexOf(li) !== -1 || items[pauseIndex].cycle) pauseActivate(li, -1); }
-    else if (c === "ArrowRight" || c === "KeyD") { var ri = items[pauseIndex].id; if (PAUSE_CYCLE_IDS.indexOf(ri) !== -1 || items[pauseIndex].cycle) pauseActivate(ri, 1); }
-    else if (c === "Enter" || c === "NumpadEnter" || c === "Space") pauseActivate(items[pauseIndex].id, 0);
-    e.preventDefault();
-}
-
-function pauseHover(mx, my) {
-    for (let i = 0; i < pauseRects.length; i++) {
-        var r = pauseRects[i];
-        if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) { pauseIndex = i; return; }
-    }
-}
-
-function pauseClick(mx, my) {
-    var items = pauseItems();
-    for (let i = 0; i < pauseRects.length; i++) {
-        var r = pauseRects[i];
-        if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
-            pauseIndex = i;
-            var dir = 0;
-            if (PAUSE_CYCLE_IDS.indexOf(items[i].id) !== -1 || items[i].cycle) dir = (mx > r.x + r.w / 2) ? 1 : -1;
-            pauseActivate(items[i].id, dir);
-            return true;
-        }
-    }
-    return false;
-}
-
-function drawPauseMenu() {
-    if (!pauseSnap) return;
-    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
-    ctx.drawImage(pauseSnap, 0, 0, cssW, cssH);
-    ctx.fillStyle = "rgba(4, 8, 14, 0.72)";
-    ctx.fillRect(0, 0, w, h);
-
-    var items = pauseItems();
-    if (pauseIndex >= items.length) pauseIndex = 0;
-    var pw = 560, rowH = Math.max(40, Math.min(58, Math.floor((h - 190) / items.length)));
-    var ph = 150 + items.length * rowH;
-    var px = w / 2 - pw / 2, py = Math.max(20, h / 2 - ph / 2);
-    uiPanel(px, py, pw, ph, pauseFromGameOver ? "#ff4d5e" : "#22d3ee", 0.96);
-    uiText(pauseSub === "settings" ? "SETTINGS" : pauseConfirm ? "RESTART?" : (pauseFromGameOver ? (GameModes.current.overTitle || (brawl.active ? "GAME!" : "OVERRUN")) : "PAUSED"), w / 2, py + 62, 44, pauseFromGameOver ? "#ff4d5e" : "#ffd23f", "center", "900");
-    uiText(GameModes.has("overSub") ? GameModes.call("overSub", pauseFromGameOver) : brawl.active ? ("Brawl  ·  " + (brawl.stage ? brawl.stage.name.replace(/^[^A-Za-z]+/, "") : "")) : ("Wave " + level + "  ·  Score " + score + "  ·  " + (multiplayer ? "Co-op" : "Solo")), w / 2, py + 92, 15, "#a8c0d0", "center", "700");
-
-    pauseRects = [];
-    for (let i = 0; i < items.length; i++) {
-        var ry = py + 116 + i * rowH;
-        var sel = (i === pauseIndex);
-        ctx.save();
-        ctx.fillStyle = sel ? "rgba(34, 211, 238, 0.22)" : "rgba(255,255,255,0.05)";
-        uiRoundRect(px + 24, ry, pw - 48, rowH - 8, 12);
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = sel ? "#22d3ee" : "rgba(255,255,255,0.08)";
-        ctx.stroke();
-        ctx.restore();
-        uiText(items[i].label, w / 2, ry + 28, 19, sel ? "#ffffff" : "#c3d5e2", "center", "800");
-        if (sel && items[i].hint) uiText(items[i].hint, w / 2, ry + 43, 11, "#7ff0ff", "center", "600");
-        if (items[i].id === "skin0" || items[i].id === "skin1") {
-            var si = (items[i].id === "skin0") ? 0 : 1;
-            drawSkinPreview(heroSkins[si], px + 62, ry + (rowH - 8) / 2, 40, si === 0 ? "#ff5a5f" : "#3da5ff", "P" + (si + 1));
-        }
-        pauseRects.push({ x: px + 24, y: ry, w: pw - 48, h: rowH - 8 });
-    }
-    uiText("↑ ↓ select    ← → change    Enter confirm    Esc resume", w / 2, py + ph - 14, 12, "#8ba2b4", "center", "600");
-}
-
 function drawHitboxes() {
     ctx.save();
     ctx.lineWidth = 1.5;
@@ -1335,12 +1111,13 @@ var tickAccumulator = 0;
 var lowFpsSeconds = 0;
 function tick() {
     if (typeof Pads !== "undefined") Pads.poll();
+    UI.sync();
     if (typeof Hub !== "undefined" && Hub.isOpen) { Hub.draw(); return; }
-    if (paused) { drawPauseMenu(); return; }
+    if (Menu.isOpen && paused) { Menu.draw(); return; }
     if (hitStopFrames > 0) { hitStopFrames--; return; }   // impact freeze: hold the last image
     if (gameOver) {
         gameOverTimer++;
-        if (gameOverTimer > 150) { gameOverTimer = 0; openPause(true); return; }
+        if (gameOverTimer > 150) { gameOverTimer = 0; Menu.open(true); return; }
     } else {
         gameOverTimer = 0;
     }
@@ -1355,6 +1132,7 @@ function tick() {
         framesThisSecond++;
     }
     if (tickAccumulator > 4) tickAccumulator = 0;
+    if (Menu.isOpen) Menu.draw();   // live overlay (only when the world keeps running, e.g. during a LAN match)
     var nowT = Date.now();
     if (nowT - lastSecondStamp >= 1000) {
         measuredFPS = framesThisSecond;
@@ -1389,4 +1167,5 @@ function gameLoop(now) {
 requestAnimationFrame(gameLoop);
 
 // Boot into the Arcade game-select screen
+UI.init();
 if (typeof Hub !== "undefined") Hub.openHub(true);

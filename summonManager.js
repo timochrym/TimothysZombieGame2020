@@ -3,6 +3,7 @@ class SummonManager {
     static init() {
         this.isOpen = false;
         this.toolMode = "shoot"; // "shoot" | "place" | "select"
+        this.activeTab = "game";
         this.spawnType = "box";
         this.spawnW = 480;
         this.spawnH = 80;
@@ -70,11 +71,6 @@ class SummonManager {
 
     static toggleGodMode() {
         godMode = !godMode;
-        var btn = document.getElementById("god-mode-btn");
-        if (btn) {
-            btn.classList.toggle("active", godMode);
-            btn.innerHTML = godMode ? "⚡ GOD MODE: ON [V]" : "⚡ God Mode [V]";
-        }
         if (redGuy) {
             for (let i = 0; i < characters.length; i++) if (godMode && characters[i].isZombie) characters[i].reviveAsHuman();
             redGuy.health = redGuy.maxHealth;

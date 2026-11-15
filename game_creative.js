@@ -5,9 +5,8 @@
 //   for placing blocks, stairs, slopes, slides, pads, crates, TNT and enemies.
 //   Levels saved from the dev panel while in Creative stay Creative levels.
 // ============================================================================
-var creativeCfg = { noclip: false, invincible: true };
-try { var _cc = JSON.parse(localStorage.getItem("timsCreativeCfg") || "null"); if (_cc) { for (var _k3 in _cc) creativeCfg[_k3] = _cc[_k3]; } } catch (e) {}
-function saveCreative() { try { localStorage.setItem("timsCreativeCfg", JSON.stringify(creativeCfg)); } catch (e) {} }
+var creativeCfg = Store.load("timsCreativeCfg", { noclip: false, invincible: true });
+function saveCreative() { Store.set("timsCreativeCfg", creativeCfg); }
 
 (function() {
     var L = ModeKit.room(-6000, 6000, 4200, { tex: "brick", color: "#2b3445", floorColor: "#4a7a35", floorTex: "grass_dirt" });
@@ -53,6 +52,11 @@ GameModes.register({
         coopToggle: true, dash: true, wallJump: true, airJumps: 1, flight: true },
     overTitle: "CREATIVE",
     againLabel: "Reload the world",
+    restartLabel: "Reload the world",
+    ui: {
+        edit: true, enemies: true,
+        help: [["W W", "double-tap to fly / land"], ["W / S", "rise / sink"], ["A / D", "move"], ["Shift", "dash"], ["F / click", "shoot"], ["N", "noclip"], ["B", "build tools"]]
+    },
 
     setupLevel: function(lvl) {
         Gadgets.load(lvl.gadgets || []);
@@ -100,25 +104,25 @@ GameModes.register({
         }
         uiText(st.join("   ·   "), 30, 70, 14, "#e2e8f0", "left", "800");
         uiText("noclip " + (creativeCfg.noclip ? "ON" : "off") + " (N)   ·   " + (creativeCfg.invincible ? "invincible" : "mortal") + "   ·   ★ " + Gadgets.starsGot + "/" + Gadgets.starsTotal, 30, 94, 12, "#94a3b8", "left", "700");
-        uiText("Double-tap jump: fly / land · W/S rise & sink · Shift dash · B build tools · N noclip · Esc options", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
         for (let i = 0; i < characters.length; i++) if (!characters[i].dead) drawEdgeIndicator(characters[i].x, characters[i].y, characters[i].color, characters[i].playerLabel);
     },
 
-    menuItems: function(items) {
-        var p1 = redGuy && redGuy.creativeFlying;
-        items.push({ id: "cr_fly", label: "P1 flight:  " + (p1 ? "FLYING  ▶  land" : "walking  ▶  take off"), hint: "Or double-tap jump" });
-        items.push({ id: "cr_noclip", label: "Noclip while flying:  " + (creativeCfg.noclip ? "ON" : "OFF"), hint: "Fly through walls (N)" });
-        items.push({ id: "cr_inv", label: "Invincible:  " + (creativeCfg.invincible ? "ON" : "OFF"), hint: "" });
-        items.push({ id: "cr_horde", label: "Summon a horde", hint: "6 enemies come for you" });
-        items.push({ id: "cr_clear", label: "Clear all enemies", hint: "" });
+    menuRows: function() {
+        return [
+            { label: "Flying", icon: "✈", toggle: function() { return !!(redGuy && redGuy.creativeFlying); }, hint: "Or double-tap jump",
+              act: function() { if (redGuy) { redGuy.creativeFlying = !redGuy.creativeFlying; if (redGuy.creativeFlying) redGuy.yspeed = 6; } } },
+            { label: "Noclip while flying", icon: "👻", toggle: function() { return creativeCfg.noclip; }, hint: "Fly through walls (N)", act: function() { creativeCfg.noclip = !creativeCfg.noclip; saveCreative(); } },
+            { label: "Invincible", icon: "🛡", toggle: function() { return creativeCfg.invincible; }, act: function() { creativeCfg.invincible = !creativeCfg.invincible; saveCreative(); } },
+            { label: "Summon a horde", icon: "🧟", hint: "6 enemies come for you", act: function() { closePause(); creativeHorde(); } },
+            { label: "Clear all enemies", icon: "☠", act: function() { for (let i = 0; i < zombies.length; i++) zombies[i].dead = true; } }
+        ];
     },
 
-    onMenu: function(id) {
-        if (id === "cr_fly") { if (redGuy) { redGuy.creativeFlying = !redGuy.creativeFlying; if (redGuy.creativeFlying) redGuy.yspeed = 6; } return true; }
-        if (id === "cr_noclip") { creativeCfg.noclip = !creativeCfg.noclip; saveCreative(); return true; }
-        if (id === "cr_inv") { creativeCfg.invincible = !creativeCfg.invincible; saveCreative(); return true; }
-        if (id === "cr_horde") { closePause(); creativeHorde(); return true; }
-        if (id === "cr_clear") { for (let i = 0; i < zombies.length; i++) zombies[i].dead = true; return true; }
-        return false;
+    toolbarItems: function() {
+        return [
+            { id: "fly", icon: "✈", label: function() { return redGuy && redGuy.creativeFlying ? "Flying" : "Fly"; }, title: "Take off / land (double-tap jump)",
+              run: function() { if (redGuy) { redGuy.creativeFlying = !redGuy.creativeFlying; if (redGuy.creativeFlying) redGuy.yspeed = 6; } }, active: function() { return !!(redGuy && redGuy.creativeFlying); } },
+            { id: "horde", icon: "🧟", label: "Horde", title: "Summon 6 enemies to test your build", run: creativeHorde }
+        ];
     }
 });

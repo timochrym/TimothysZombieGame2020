@@ -7,8 +7,11 @@
 var PORTAL_LEN = 170;
 var PORTAL_CHAMBERS = [];
 var portalState = { chamber: 0, unlocked: 1, time: 0, done: false, doneTimer: 0 };
-try { var _pp = JSON.parse(localStorage.getItem("timsPortalLab") || "null"); if (_pp) { portalState.unlocked = _pp.unlocked || 1; portalState.chamber = Math.min(_pp.chamber || 0, portalState.unlocked - 1); } } catch (e) {}
-function savePortal() { try { localStorage.setItem("timsPortalLab", JSON.stringify({ unlocked: portalState.unlocked, chamber: portalState.chamber })); } catch (e) {} }
+(function() {
+    var sv = Store.get("timsPortalLab", null);
+    if (sv) { portalState.unlocked = sv.unlocked || 1; portalState.chamber = Math.min(sv.chamber || 0, portalState.unlocked - 1); }
+})();
+function savePortal() { Store.set("timsPortalLab", { unlocked: portalState.unlocked, chamber: portalState.chamber }); }
 
 var Portals = {
     pairs: {},
@@ -314,6 +317,11 @@ GameModes.register({
     flags: { waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, noBedrock: true, scenery: false, coopToggle: true, dash: false, wallJump: false, airJumps: 0, enemiesPassive: true },
     overTitle: "TESTING COMPLETE",
     againLabel: "Restart from chamber 1",
+    restartLabel: "Start over from chamber 1",
+    ui: {
+        levelPicker: false,
+        help: [["A / D", "move"], ["W", "jump"], ["F / click", "blue portal"], ["G / R-click", "orange portal"], ["E", "grab a crate"], ["R", "restart chamber"]]
+    },
 
     setupLevel: function(lvl) {
         Portals.clear();
@@ -423,21 +431,15 @@ GameModes.register({
             }
             px += 80;
         }
-        uiText("F / click BLUE · G / right-click ORANGE · E grab · R restart · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.75)", "center", "700");
     },
 
-    menuItems: function(items) {
-        items.push({ id: "pt_ch", label: "Chamber:  ◀  " + (portalState.chamber + 1) + " / " + PORTAL_CHAMBERS.length + "  (" + portalState.unlocked + " unlocked)  ▶", hint: "Enter loads it", cycle: true });
-        items.push({ id: "pt_restart", label: "Restart chamber  (R)", hint: "" });
-    },
-
-    onMenu: function(id, dir) {
-        if (id === "pt_ch") {
-            if (dir) portalState.chamber = (portalState.chamber + dir + portalState.unlocked) % portalState.unlocked;
-            else { closePause(); LevelManager.selectLevel(PORTAL_CHAMBERS[portalState.chamber]); }
-            return true;
-        }
-        if (id === "pt_restart") { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
-        return false;
+    menuRows: function() {
+        return [
+            { label: "Chamber", icon: "🧪", cycle: true, hint: "◀ ▶ choose, Enter loads it",
+              value: function() { return (portalState.chamber + 1) + " / " + PORTAL_CHAMBERS.length + "  (" + portalState.unlocked + " unlocked)"; },
+              act: function(d) { portalState.chamber = (portalState.chamber + d + portalState.unlocked) % portalState.unlocked; },
+              go: function() { closePause(); LevelManager.selectLevel(PORTAL_CHAMBERS[portalState.chamber]); } },
+            { label: "Restart chamber  (R)", icon: "↻", act: function() { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); } }
+        ];
     }
 });

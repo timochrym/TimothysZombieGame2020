@@ -25,15 +25,15 @@ function devOptionList(list, selected) {
     return html;
 }
 
-function devSlider(label, opt, min, max, step, fmt, tip) {
-    return '<div class="dp-row" title="' + (tip || "") + '">' +
+function devSlider(label, opt, min, max, step, fmt, tip, req) {
+    return '<div class="dp-row"' + (req ? ' data-req="' + req + '"' : '') + ' title="' + (tip || "") + '">' +
         '<label>' + label + '</label>' +
         '<input type="range" class="dp-range" data-opt="' + opt + '" data-fmt="' + (fmt || "x") + '" min="' + min + '" max="' + max + '" step="' + step + '">' +
         '<span class="dp-val" data-val="' + opt + '"></span></div>';
 }
 
-function devToggle(label, opt, tip, special) {
-    return '<label class="dp-toggle" title="' + (tip || "") + '"><input type="checkbox" ' +
+function devToggle(label, opt, tip, special, req) {
+    return '<label class="dp-toggle"' + (req ? ' data-req="' + req + '"' : '') + ' title="' + (tip || "") + '"><input type="checkbox" ' +
         (special ? 'data-toggle="' + special + '"' : 'data-opt="' + opt + '"') + '><span class="dp-switch"></span><span>' + label + '</span></label>';
 }
 
@@ -323,19 +323,13 @@ var DevUI = {
             var zl = panel.querySelector('[data-val="zoom"]');
             if (zl) zl.textContent = userZoom.toFixed(2) + "x";
         }
-        // top bar mirrors
-        var coopBtn = document.getElementById("coop-btn");
-        if (coopBtn) {
-            coopBtn.classList.toggle("active", multiplayer || brawl.active);
-            coopBtn.innerHTML = brawl.active ? (brawlCfg.opponents === "p2" ? "👥 PvP" : "🤖 vs CPU") : (multiplayer ? "👥 Co-op: ON" : "👤 Solo");
-        }
-        var godBtn = document.getElementById("god-mode-btn");
-        if (godBtn) {
-            godBtn.classList.toggle("active", godMode);
-        }
         var info = document.getElementById("dp-live");
         if (info) {
-            info.textContent = "Wave " + level + " · " + zombies.length + " enemies · " + measuredFPS + " fps";
+            var parts = [];
+            if (UI.flagOn("waves")) parts.push("Wave " + level);
+            if (UI.has("enemies") || zombies.length) parts.push(zombies.length + " enemies");
+            parts.push(measuredFPS + " fps");
+            info.textContent = parts.join(" · ");
         }
     },
 
@@ -346,6 +340,37 @@ var DevUI = {
         for (let i = 0; i < pages.length; i++) pages[i].classList.toggle("active", pages[i].getAttribute("data-page") === name);
         SummonManager.activeTab = name;
         if (name === "objects") SummonManager.refreshObjectList();
+        DevUI.syncDock();
+    },
+
+    // The palette dock only makes sense while editing a level: Build tab open, in a game whose levels are editable
+    syncDock: function() {
+        var dock = document.getElementById("mario-maker-dock");
+        if (dock) dock.classList.toggle("open", !!(SummonManager.isOpen && SummonManager.activeTab === "build" && UI.spec("edit")));
+    },
+
+    // Show only the tools the current game can use (data-req="flag:waves" etc.), fall back to a visible tab
+    applyContext: function() {
+        var panel = document.getElementById("summon-panel");
+        if (!panel) return;
+        var els = panel.querySelectorAll("[data-req]");
+        for (let i = 0; i < els.length; i++) els[i].classList.toggle("dp-hidden", !UI.has(els[i].getAttribute("data-req")));
+        var strip = panel.querySelector(".dp-tabs");
+        if (strip) strip.classList.toggle("dp-hidden", panel.querySelectorAll(".dp-tab:not(.dp-hidden)").length < 2);
+        var title = document.getElementById("dp-title");
+        if (title && GameModes.current) title.textContent = "🛠 " + GameModes.current.title;
+        // first time the panel opens in a game: editable games start on Build (palette dock), the rest on Tune
+        if (SummonManager.isOpen && DevUI.tabMode !== GameModes.current.id) {
+            DevUI.tabMode = GameModes.current.id;
+            DevUI.switchTab(UI.spec("edit") ? "build" : "game");
+        }
+        var activeTab = panel.querySelector(".dp-tab.active");
+        if (!activeTab || activeTab.classList.contains("dp-hidden")) {
+            var first = panel.querySelector(".dp-tab:not(.dp-hidden)");
+            if (first) DevUI.switchTab(first.getAttribute("data-tab"));
+        }
+        if (!UI.spec("edit") && SummonManager.toolMode !== "shoot") SummonManager.setToolMode("shoot");
+        DevUI.syncDock();
     },
 
     bind: function(panel) {
@@ -449,12 +474,6 @@ SummonManager.buildUI = function() {
     var style = document.createElement("style");
     style.textContent = `
         :root { --dp-bg: rgba(10,16,24,0.94); --dp-line: rgba(130,180,210,0.22); --dp-accent: #22d3ee; --dp-accent2: #ffd23f; --dp-text: #e6f1f7; --dp-dim: #8aa3b5; }
-        #top-right-bar { position: fixed; top: 14px; right: 16px; z-index: 1000; display: flex; gap: 8px; align-items: center; user-select: none; font-family: 'Segoe UI', Arial, sans-serif; }
-        #level-select-dropdown, .top-bar-btn { background: var(--dp-bg); color: var(--dp-text); border: 1px solid var(--dp-line); padding: 9px 14px; font-size: 13px; font-weight: 700; border-radius: 10px; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,0.4); transition: all .15s; font-family: inherit; }
-        #level-select-dropdown { max-width: 260px; color: #7ff0b0; }
-        .top-bar-btn:hover { border-color: var(--dp-accent); transform: translateY(-1px); }
-        .top-bar-btn.active { background: linear-gradient(135deg, #ffd23f, #ff9f1c); color: #1a1205; border-color: #fff3; box-shadow: 0 0 18px rgba(255,190,40,.55); }
-        #coop-btn.active { background: linear-gradient(135deg, #22d3ee, #3b82f6); color: #04121c; box-shadow: 0 0 18px rgba(34,211,238,.5); }
 
         #mario-maker-dock { position: fixed; bottom: 166px; left: calc(50% - 215px); transform: translateX(-50%); z-index: 1000; background: var(--dp-bg); border: 1px solid var(--dp-line); border-radius: 16px; padding: 10px 14px; display: none; align-items: center; gap: 8px; box-shadow: 0 12px 34px rgba(0,0,0,.6); user-select: none; font-family: 'Segoe UI', Arial, sans-serif; max-width: calc(100vw - 460px); overflow-x: auto; }
         #mario-maker-dock.open { display: flex; }
@@ -470,8 +489,9 @@ SummonManager.buildUI = function() {
         .dp-head { padding: 14px 16px 8px; display: flex; justify-content: space-between; align-items: baseline; }
         .dp-head b { font-size: 16px; letter-spacing: .5px; color: var(--dp-accent2); }
         .dp-head span { font-size: 11px; color: var(--dp-dim); }
-        .dp-tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 0 12px 10px; border-bottom: 1px solid var(--dp-line); }
-        .dp-tab { background: transparent; border: 0; color: var(--dp-dim); padding: 8px 2px; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 12px; font-family: inherit; transition: all .12s; }
+        .dp-hidden { display: none !important; }
+        .dp-tabs { display: flex; gap: 4px; padding: 0 12px 10px; border-bottom: 1px solid var(--dp-line); }
+        .dp-tab { flex: 1; background: transparent; border: 0; color: var(--dp-dim); padding: 8px 2px; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 12px; font-family: inherit; transition: all .12s; }
         .dp-tab:hover { background: rgba(255,255,255,.06); color: var(--dp-text); }
         .dp-tab.active { background: rgba(34,211,238,.16); color: var(--dp-accent); box-shadow: inset 0 -2px 0 var(--dp-accent); }
         .dp-body { overflow-y: auto; flex: 1; padding: 6px 14px 14px; }
@@ -534,38 +554,6 @@ SummonManager.buildUI = function() {
 
     var stop = function(e) { e.stopPropagation(); };
 
-    // ---------- Top-right bar ----------
-    var topBar = document.createElement("div");
-    topBar.id = "top-right-bar";
-    topBar.addEventListener("mousedown", stop);
-    topBar.addEventListener("click", stop);
-
-    var lvlSelect = document.createElement("select");
-    lvlSelect.id = "level-select-dropdown";
-    lvlSelect.addEventListener("change", function() {
-        LevelManager.selectLevel(this.value);
-        this.blur();
-    });
-    topBar.appendChild(lvlSelect);
-
-    var mk = function(id, html, title, fn, hidden) {
-        var b = document.createElement("button");
-        if (id) b.id = id;
-        b.className = "top-bar-btn";
-        b.innerHTML = html;
-        b.title = title;
-        if (hidden) b.style.display = "none";
-        b.addEventListener("click", function(e) { e.stopPropagation(); fn(); this.blur(); });
-        topBar.appendChild(b);
-        return b;
-    };
-    mk("coop-btn", "👤 Solo", "Toggle 2-player co-op (restarts the run)", function() { toggleMultiplayer(); DevUI.sync(); });
-    mk("", "🌲 Frontier", "Procedural frontier with the giant castle", function() { LevelManager.selectLevel("infinite_frontier"); });
-    mk("god-mode-btn", "⚡ God Mode [V]", "Invincible + unlimited everything", function() { SummonManager.toggleGodMode(); DevUI.sync(); }, true);
-    mk("", "🕹 Arcade", "Switch to another game made with this engine", function() { if (typeof paused !== "undefined" && paused) closePause(); Hub.openHub(false); });
-    mk("summon-toggle-btn", "🛠️ Dev Mode [B]", "Open the developer tools", function() { SummonManager.togglePanel(); });
-    document.body.appendChild(topBar);
-
     // ---------- Bottom palette dock ----------
     var dock = document.createElement("div");
     dock.id = "mario-maker-dock";
@@ -601,18 +589,18 @@ SummonManager.buildUI = function() {
     panel.addEventListener("keyup", stop);
 
     panel.innerHTML = `
-        <div class="dp-head"><b>🛠 DEV MODE</b><span id="dp-live"></span></div>
+        <div class="dp-head"><b id="dp-title">🛠 DEV MODE</b><span id="dp-live"></span></div>
         <div class="dp-tabs">
-            <button class="dp-tab active" data-tab="build">🧱 Build</button>
-            <button class="dp-tab" data-tab="inspect">🔍 Inspect</button>
-            <button class="dp-tab" data-tab="game">🎮 Game</button>
-            <button class="dp-tab" data-tab="objects">📋 Objects</button>
-            <button class="dp-tab" data-tab="level">💾 Level</button>
+            <button class="dp-tab" data-tab="build" data-req="ui:edit">🧱 Build</button>
+            <button class="dp-tab" data-tab="inspect" data-req="ui:edit">🔍 Inspect</button>
+            <button class="dp-tab active" data-tab="game">🎮 Tune</button>
+            <button class="dp-tab" data-tab="objects" data-req="ui:edit">📋 Objects</button>
+            <button class="dp-tab" data-tab="level" data-req="ui:edit">💾 Level</button>
         </div>
         <div class="dp-body">
 
         <!-- ================= BUILD ================= -->
-        <div class="dp-page active" data-page="build">
+        <div class="dp-page" data-page="build" data-req="ui:edit">
             <div class="dp-section">
                 <div class="dp-title"><span>Cursor mode</span><span id="sp-mode-hint">Click: Shoot | R-Click: Grab</span></div>
                 <div class="dp-seg">
@@ -645,7 +633,7 @@ SummonManager.buildUI = function() {
         </div>
 
         <!-- ================= INSPECT ================= -->
-        <div class="dp-page" data-page="inspect">
+        <div class="dp-page" data-page="inspect" data-req="ui:edit">
             <div class="dp-empty" id="sp-no-selection">Nothing selected.<br>Switch to <b>✋ Edit</b> mode and click an object,<br>or pick one from the <b>Objects</b> tab.</div>
             <div id="sp-inspector" style="display:none">
                 <div class="dp-section">
@@ -687,20 +675,20 @@ SummonManager.buildUI = function() {
         </div>
 
         <!-- ================= GAME ================= -->
-        <div class="dp-page" data-page="game">
+        <div class="dp-page active" data-page="game">
             <div class="dp-section">
                 <div class="dp-title"><span>Toggles</span></div>
                 <div class="dp-toggles">
                     ${devToggle("God mode [V]", "", "Invincible, endless fuel", "god")}
-                    ${devToggle("Co-op", "", "Two players (restarts the run)", "coop")}
-                    ${devToggle("Waves running", "", "Pause enemy waves", "waves")}
-                    ${devToggle("Jetpack", "", "Enable jetpacks", "jetpack")}
+                    ${devToggle("Co-op", "", "Two players (restarts the run)", "coop", "flag:coopToggle")}
+                    ${devToggle("Waves running", "", "Pause enemy waves", "waves", "flag:waves")}
+                    ${devToggle("Jetpack", "", "Enable jetpacks", "jetpack", "flag:jetpack")}
                     ${devToggle("Creative flight", "flight", "Double-tap jump to fly (W/S up and down) in any game")}
-                    ${devToggle("Infinite ammo", "infiniteAmmo", "Unlimited bullets, no fuel drain or cooldowns")}
-                    ${devToggle("Friendly fire", "friendlyFire", "Heroes can hurt each other")}
+                    ${devToggle("Infinite ammo", "infiniteAmmo", "Unlimited bullets, no fuel drain or cooldowns", "", "flag:ammo,flag:jetpack")}
+                    ${devToggle("Friendly fire", "friendlyFire", "Heroes can hurt each other", "", "multi")}
                     ${devToggle("Show hitboxes", "showHitboxes", "")}
                     ${devToggle("FPS counter", "showFPS", "")}
-                    ${devToggle("Nav paths [P]", "", "Enemy pathfinding debug", "paths")}
+                    ${devToggle("Nav paths [P]", "", "Enemy pathfinding debug", "paths", "enemies")}
                     ${devToggle("Controls help [H]", "showHelp", "")}
                     ${devToggle("Bouncy ragdolls", "bouncyRagdolls", "Bodies bounce like rubber")}
                 </div>
@@ -709,15 +697,15 @@ SummonManager.buildUI = function() {
                 <div class="dp-title"><span>Tuning</span><button class="sp-small-btn" data-act="resetTuning">Reset</button></div>
                 ${devSlider("Game speed", "timeScale", 0, 2, 0.05, "x", "0 = freeze, 1 = normal")}
                 <div class="dp-row"><label>Zoom [+/-]</label><input type="range" class="dp-range" id="dp-zoom" min="0.55" max="1.9" step="0.05"><span class="dp-val" data-val="zoom"></span></div>
-                ${devSlider("Spawn rate", "spawnRate", 0.2, 4, 0.1, "x")}
-                ${devSlider("Max enemies", "maxEnemies", 1, 40, 1, "int")}
-                ${devSlider("Enemy HP", "enemyHealth", 0.25, 5, 0.25, "x")}
-                ${devSlider("Enemy damage", "enemyDamage", 0, 4, 0.25, "x")}
-                ${devSlider("Player damage", "playerDamage", 0.25, 6, 0.25, "x")}
-                ${devSlider("Power-up drops", "powerUpRate", 0, 4, 0.25, "x")}
+                ${devSlider("Spawn rate", "spawnRate", 0.2, 4, 0.1, "x", "", "flag:waves")}
+                ${devSlider("Max enemies", "maxEnemies", 1, 40, 1, "int", "", "enemies")}
+                ${devSlider("Enemy HP", "enemyHealth", 0.25, 5, 0.25, "x", "", "enemies")}
+                ${devSlider("Enemy damage", "enemyDamage", 0, 4, 0.25, "x", "", "enemies")}
+                ${devSlider("Player damage", "playerDamage", 0.25, 6, 0.25, "x", "", "flag:shooting")}
+                ${devSlider("Power-up drops", "powerUpRate", 0, 4, 0.25, "x", "", "flag:waves")}
                 ${devSlider("Gravity", "gravityMult", 0.15, 2, 0.05, "x", "Low = moon jumps & floaty bodies")}
             </div>
-            <div class="dp-section">
+            <div class="dp-section" data-req="flag:waves">
                 <div class="dp-title"><span>Waves</span></div>
                 <div class="dp-grid3">
                     <button class="dp-btn" data-act="nextWave">⏭ Next wave</button>
@@ -725,7 +713,7 @@ SummonManager.buildUI = function() {
                     <div class="dp-row" style="margin:0"><input type="number" id="dp-wave-num" class="dp-num" style="width:44px" value="5" min="1" max="99"><button class="dp-btn" style="flex:1;padding:8px 2px" data-act="gotoWave">Go</button></div>
                 </div>
             </div>
-            <div class="dp-section">
+            <div class="dp-section" data-req="enemies">
                 <div class="dp-title"><span>Spawn</span></div>
                 <div class="dp-row"><select id="dp-enemy-type" class="dp-select">${devOptionList(DEV_ENEMY_TYPES, "NORMAL")}</select>
                     <input type="number" id="dp-enemy-count" class="dp-num" style="width:52px" value="3" min="1" max="30"><button class="dp-btn" data-act="spawnEnemy">🧟 Spawn</button></div>
@@ -736,7 +724,7 @@ SummonManager.buildUI = function() {
                     <button class="dp-btn good" data-act="giveAllPowers">🎁 Give all powers</button>
                 </div>
             </div>
-            <div class="dp-section">
+            <div class="dp-section" data-req="flag:revive,flag:waves">
                 <div class="dp-title"><span>Heroes &amp; revive testing</span></div>
                 <div class="dp-grid3">
                     <button class="dp-btn good" data-act="healAll">❤ Heal all</button>
@@ -770,7 +758,7 @@ SummonManager.buildUI = function() {
         </div>
 
         <!-- ================= OBJECTS ================= -->
-        <div class="dp-page" data-page="objects">
+        <div class="dp-page" data-page="objects" data-req="ui:edit">
             <div class="dp-section">
                 <div class="dp-title"><span>World objects (<span id="sp-obj-count">0</span>)</span></div>
                 <input type="text" id="sp-obj-search" class="dp-text" style="width:100%;box-sizing:border-box" placeholder="Search by name…" oninput="SummonManager.refreshObjectList()">
@@ -784,7 +772,12 @@ SummonManager.buildUI = function() {
         </div>
 
         <!-- ================= LEVEL ================= -->
-        <div class="dp-page" data-page="level">
+        <div class="dp-page" data-page="level" data-req="ui:edit">
+            <div class="dp-section">
+                <div class="dp-title"><span>Load a level</span></div>
+                <select id="level-select-dropdown" class="dp-select" style="width:100%" onchange="LevelManager.selectLevel(this.value); this.blur()"></select>
+                <p class="dp-hint">Levels of this game, plus anything you saved.</p>
+            </div>
             <div class="dp-section">
                 <div class="dp-title"><span>Save / load</span></div>
                 <div class="dp-row"><input type="text" id="dp-level-name" class="dp-text" value="My Custom Arena" placeholder="Level name">
@@ -793,7 +786,7 @@ SummonManager.buildUI = function() {
                     <button class="dp-btn" data-act="newLevel">➕ New blank level</button>
                     <button class="dp-btn warn" data-act="stressLab">⚠ Stress lab</button>
                 </div>
-                <p class="dp-hint">Saved levels appear in the level drop-down at the top of the screen.</p>
+                <p class="dp-hint">Saved levels appear in the list above and in the pause menu's Level row.</p>
             </div>
             <div class="dp-section">
                 <div class="dp-title"><span>Import / export JSON</span></div>
@@ -842,30 +835,20 @@ SummonManager.toggleShowGrid = function() {
 };
 
 SummonManager.togglePanel = function() {
+    if (!UI.spec("dev")) return;
     this.isOpen = !this.isOpen;
-    var panel = document.getElementById("summon-panel");
-    var dock = document.getElementById("mario-maker-dock");
-    var godBtn = document.getElementById("god-mode-btn");
-    var devBtn = document.getElementById("summon-toggle-btn");
-
+    document.getElementById("summon-panel").classList.toggle("open", this.isOpen);
     if (this.isOpen) {
-        panel.classList.add("open");
-        dock.classList.add("open");
-        godBtn.style.display = "inline-block";
-        devBtn.classList.add("active");
-        devBtn.innerHTML = "🛠️ Dev Mode: ON [B]";
+        DevUI.applyContext();
         this.refreshLevelDropdown();
         this.refreshObjectList();
         DevUI.sync();
     } else {
-        panel.classList.remove("open");
-        dock.classList.remove("open");
-        if (!godMode) godBtn.style.display = "none";
-        devBtn.classList.remove("active");
-        devBtn.innerHTML = "🛠️ Dev Mode [B]";
         this.showGrid = false;
         this.setToolMode("shoot");
     }
+    DevUI.syncDock();
+    UI.refresh(true);
 };
 
 SummonManager.setToolMode = function(mode) {

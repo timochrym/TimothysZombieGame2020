@@ -36,11 +36,11 @@ function keyDownHandler(e) {
     // Pause menu owns the keyboard while it is open (restart / co-op / levels live there)
     if (typeof Hub !== "undefined" && Hub.isOpen) { Hub.key(e); return; }
     if (c == "Escape") {
-        if (!e.repeat) { if (paused && pauseSub) { pauseSub = null; pauseIndex = 0; } else togglePause(); }
+        if (!e.repeat) { if (Menu.isOpen) Menu.back(); else Menu.open(false); }
         e.preventDefault();
         return;
     }
-    if (paused) { pauseKey(e); return; }
+    if (Menu.isOpen) { Menu.key(e); return; }
     if (GameModes.call("onKey", c, e)) { e.preventDefault(); return; }
 
     if (k == "ArrowRight") { ULDRrightPressed = true; e.preventDefault(); }
@@ -70,10 +70,10 @@ function keyDownHandler(e) {
 
     if (e.repeat) return;
 
-    if (c == "KeyV") { if (typeof SummonManager !== "undefined") SummonManager.toggleGodMode(); }
-    if (c == "KeyB") { if (typeof SummonManager !== "undefined") SummonManager.togglePanel(); }
+    if (c == "KeyV") { if (UI.spec("dev") && typeof SummonManager !== "undefined") SummonManager.toggleGodMode(); }
+    if (c == "KeyB") { if (UI.spec("dev") && typeof SummonManager !== "undefined") SummonManager.togglePanel(); }
     if (c == "KeyP") { if (typeof Pathfinder !== "undefined") Pathfinder.showDebug = !Pathfinder.showDebug; }
-    if (c == "KeyH") { devOpts.showHelp = !devOpts.showHelp; helpTimer = devOpts.showHelp ? 60 * 14 : 0; }
+    if (c == "KeyH") Help.toggle();
     if (k == "Delete" || k == "Backspace") {
         if (typeof SummonManager !== "undefined" && SummonManager.selectedObject) {
             SummonManager.deleteSelected();
@@ -123,7 +123,7 @@ function mouseMoveHandler(e) {
     mouseX = e.clientX - rect.left;
     mouseY = e.clientY - rect.top;
     if (typeof Hub !== "undefined" && Hub.isOpen) { Hub.hover(mouseX, mouseY); return; }
-    if (paused) { pauseHover(mouseX, mouseY); return; }
+    if (Menu.isOpen) { Menu.hover(mouseX, mouseY); return; }
     useMouseAim = true;
     if (typeof SummonManager !== "undefined") SummonManager.handleCanvasMouseMove(e);
 }
@@ -134,7 +134,7 @@ function mouseDownHandler(e) {
     mouseY = e.clientY - rect.top;
     if (typeof SFX !== "undefined") SFX.unlock();
     if (typeof Hub !== "undefined" && Hub.isOpen) { if (e.button === 0) Hub.click(mouseX, mouseY); return; }
-    if (paused) { if (e.button === 0) pauseClick(mouseX, mouseY); return; }
+    if (Menu.isOpen) { if (e.button === 0) Menu.click(mouseX, mouseY); return; }
     useMouseAim = true;
 
     if (typeof SummonManager !== "undefined" && SummonManager.handleCanvasMouseDown(e)) return;
@@ -206,16 +206,18 @@ var Pads = {
                     if (edge(14) || edge("sl")) hk("ArrowLeft");
                     if (edge(15) || edge("sr")) hk("ArrowRight");
                     if (edge(0) || edge(9)) hk("Enter");
-                } else if (typeof paused !== "undefined" && paused) {
-                    var fake = function(code) { pauseKey({ code: code, preventDefault: function() {} }); };
+                } else if (Menu.isOpen) {
+                    var fake = function(code) { Menu.key({ code: code, preventDefault: function() {} }); };
                     if (edge(12) || edge("su")) fake("ArrowUp");
                     if (edge(13) || edge("sd")) fake("ArrowDown");
                     if (edge(14) || edge("sl")) fake("ArrowLeft");
                     if (edge(15) || edge("sr")) fake("ArrowRight");
+                    if (edge(4)) fake("KeyQ");     // LB / RB switch tabs
+                    if (edge(5)) fake("KeyE");
                     if (edge(0)) fake("Enter");
-                    if (edge(1) || edge(9)) { if (pauseSub) { pauseSub = null; pauseIndex = 0; } else if (!pauseFromGameOver) closePause(); }
+                    if (edge(1) || edge(9)) Menu.back();
                 } else {
-                    if (edge(9)) togglePause();
+                    if (edge(9)) Menu.open(false);
                     if (edge(1)) queueDash(i);
                     if (edge(4)) queueGrab(i);
                     if (edge(2)) PlayerInput[i].reloadQueued = true;
