@@ -705,7 +705,7 @@ SummonManager.buildUI = function() {
     lvlSelect.title = "Levels / courses of this game";
     lvlSelect.addEventListener("change", function() { closeTopMenu(); LevelManager.selectLevel(this.value); this.blur(); });
     menu.appendChild(lvlSelect);
-    row("", "🌲", "Wildwood Frontier", "Survival on the endless generated trail", "", function() { closeTopMenu(); LevelManager.selectLevel("infinite_frontier"); });
+    row("tm-frontier", "🌲", "Wildwood Frontier", "Survival on the endless generated trail", "", function() { closeTopMenu(); LevelManager.selectLevel("infinite_frontier"); });
     row("", "⏸", "Pause menu", "Restart, game options, levels", "Esc", function() { closeTopMenu(); if (typeof openPause === "function" && !paused) openPause(false); });
     sec("People");
     row("", "👥", "Players & CPUs", "Humans, CPU seats, teams, gamepads", "", function() { closeTopMenu(); PlayersUI.open(); });
@@ -732,6 +732,7 @@ SummonManager.buildUI = function() {
             var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
             var stEl = document.getElementById("tm-studio"); if (stEl) stEl.style.display = own ? "none" : "";
             var msEl = document.getElementById("tm-mash"); if (msEl) msEl.style.display = own ? "none" : "";
+            var frEl = document.getElementById("tm-frontier"); if (frEl) frEl.style.display = own ? "none" : "";
             var ldEl = document.getElementById("level-select-dropdown"); if (ldEl) ldEl.style.display = (own || ldEl.options.length <= 1) ? "none" : "";
             var g = GameModes.current, lvl = LevelManager.getCurrentLevel ? LevelManager.getCurrentLevel() : null;
             head.innerHTML = "<b>" + (g ? g.title : "") + "</b><span>" + (lvl && lvl.name ? lvl.name.replace(/^[^A-Za-z0-9]+/, "") : "") + "</span>";
@@ -910,7 +911,7 @@ SummonManager.buildUI = function() {
                     ${devToggle("Bouncy ragdolls", "bouncyRagdolls", "Bodies bounce like rubber")}
                 </div>
             </div>
-            <div class="dp-section">
+            <div class="dp-section" data-need="world">
                 <div class="dp-title"><span>Tuning</span><button class="sp-small-btn" data-act="resetTuning">Reset</button></div>
                 ${devSlider("Game speed", "timeScale", 0, 2, 0.05, "x", "0 = freeze, 1 = normal")}
                 <div class="dp-row"><label>Zoom [+/-]</label><input type="range" class="dp-range" id="dp-zoom" min="0.55" max="1.9" step="0.05"><span class="dp-val" data-val="zoom"></span></div>

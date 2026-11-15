@@ -16,7 +16,7 @@ var cellsSave = { best: 0 };
 // so the loss in absolute terms grows with size by itself.
 var CELL_DECAY_CLASSIC = 0.0000333;
 var CELL_DECAY = [[0, "Off"], [CELL_DECAY_CLASSIC, "Classic (0.2% a second)"], [0.00015, "Quick (0.9% a second)"], [0.0004, "Fast"], [0.001, "Very fast"], [0.0025, "Brutal"]];
-var cellsCfg = { bots: 14, food: 2000, decay: CELL_DECAY_CLASSIC, decayGrow: false, shield: 3, startMass: 20, powerups: true, chain: false, maxCells: 0 };
+var cellsCfg = { bots: 14, food: 2000, decay: CELL_DECAY_CLASSIC, decayGrow: false, shield: 3, startMass: 20, powerups: true, chain: false, maxCells: 0, maxChainBubbles: 20 };
 try { var _cc = JSON.parse(localStorage.getItem("timsBlobArenaCfg") || "null"); if (_cc) for (var _ck in cellsCfg) if (typeof _cc[_ck] === typeof cellsCfg[_ck]) cellsCfg[_ck] = _cc[_ck]; if (_cc && !_cc.decayV2) cellsCfg.decay = CELL_DECAY_CLASSIC; } catch (e) {}      // the old default (0.9% a second) moves to Classic once
 function saveCellsCfg() { try { cellsCfg.decayV2 = true; localStorage.setItem("timsBlobArenaCfg", JSON.stringify(cellsCfg)); } catch (e) {} }
 // Pickups borrowed from the main games' power-ups: run fast, can't be eaten, pull food in, or a lump of mass.
@@ -27,7 +27,7 @@ try { var _cs = JSON.parse(localStorage.getItem("timsBlobArena") || "null"); if 
 var Cells = {
     players: [], blobs: [], pellets: [], viruses: [], t: 0, cam: { x: 0, y: 0, z: 1 },
 
-    rad: function(m) { return Math.sqrt(m) * 5; },
+    rad: function(m, b) { return Math.sqrt(m) * ((b && b.pl && b.pl.chain && !b.pl.compact) ? 3.0 : 5); },
     // players at THIS screen (P1/P2 on the host, my own blob on a LAN client)
     locals: function() {
         if (typeof Net !== "undefined" && Net.role === "client") return this.players.filter(function(p) { return p.pid === Net.pid; });
@@ -255,8 +255,17 @@ var Cells = {
             }
             return;
         }
-        var want = Math.max(1, Math.min(20, Math.floor(Math.sqrt(total / 8))));
+        var maxB = (cellsCfg.maxChainBubbles > 0) ? cellsCfg.maxChainBubbles : 20;
+        var want = Math.max(1, Math.min(maxB, Math.floor(Math.sqrt(total / 8))));
         var head = list[0], tail = list[list.length - 1];
+        if (list.length > maxB) {
+            while (list.length > maxB && list.length > 1) {
+                var extra = list.pop();
+                list[list.length - 1].m += extra.m;
+                extra.dead = true;
+            }
+            tail = list[list.length - 1];
+        }
         if (list.length < want && tail.m > 12 && this.t % 6 === 0) {
             var seed = Math.min(6, tail.m * 0.3);
             tail.m -= seed;
@@ -269,11 +278,15 @@ var Cells = {
             tail.m = Math.max(4, tail.m - bCost);
             this.pellets.push({ x: tail.x, y: tail.y, m: bCost, col: pl.color, vx: (Math.random() - 0.5) * 3, vy: (Math.random() - 0.5) * 3 });
         }
-        // mass settles into a taper: the head is the biggest and each bubble behind is 90% of the one ahead
-        var wsum = 0, wgt = 1;
-        for (let i = 0; i < list.length; i++) { wsum += wgt; wgt *= 0.9; }
-        wgt = 1;
-        for (let i = 0; i < list.length; i++) { var target = total * wgt / wsum; list[i].m += (target - list[i].m) * 0.04; wgt *= 0.9; }
+        // mass settles so the tail is the largest bubble at 10x each of the rest
+        if (list.length > 1) {
+            var wsum = (list.length - 1) + 10;
+            for (let i = 0; i < list.length; i++) {
+                var wgt = (i === list.length - 1) ? 10 : 1;
+                var target = total * wgt / wsum;
+                list[i].m += (target - list[i].m) * 0.08;
+            }
+        }
         pl.chainList = list;
         if (pl.dashCd > 0) pl.dashCd--;
     },
@@ -353,7 +366,7 @@ var Cells = {
                     sp *= (pl.chainBoosting && b.m > 22) ? 1.5 : 0.85;
                 } else if (b.lead && !b.lead.dead) {
                     dx = b.lead.x - b.x; dy = b.lead.y - b.y; L = Math.hypot(dx, dy) || 1;
-                    var gap = (this.rad(b.m) + (this.rad(b.lead.m))) * (pl.compact ? 0.35 : 0.9);
+                    var gap = (this.rad(b.m, b) + (this.rad(b.lead.m, b.lead))) * (pl.compact ? 0.35 : 0.9);
                     sp = Math.max(0, Math.min(L - gap, pl.compact ? 32 : 28));
                 } else if (pl.chainBoosting && b.m > 12) {
                     sp *= 1.75;
@@ -363,7 +376,7 @@ var Cells = {
             b.vx *= 0.9; b.vy *= 0.9;
             if (b.mergeT > 0) b.mergeT--;
             if (cellsCfg.decay > 0 && b.m > 35) b.m -= b.m * cellsCfg.decay * (cellsCfg.decayGrow ? 1 + b.m / 800 : 1);
-            var r = this.rad(b.m);
+            var r = this.rad(b.m, b);
             bRads[i] = r;
             b.x = Math.max(-CEL.W / 2 + r * 0.5, Math.min(CEL.W / 2 - r * 0.5, b.x));
             b.y = Math.max(-CEL.H / 2 + r * 0.5, Math.min(CEL.H / 2 - r * 0.5, b.y));
@@ -467,7 +480,7 @@ var Cells = {
                         if (cp2.eaten || (cp2.m >= 5 && q.m <= 20)) continue;
                         var dx = cp2.x - q.x, dy = cp2.y - q.y;
                         if (dx * dx + dy * dy < rq2) {
-                            cp2.eaten = true; q.m += cp2.m; rq = bRads[i] = this.rad(q.m); rq2 = rq * rq;
+                            cp2.eaten = true; q.m += cp2.m * (q.pl && q.pl.chain && !q.pl.compact ? 1.4 : 1); rq = bRads[i] = this.rad(q.m, q); rq2 = rq * rq;
                         }
                     }
                 }
@@ -678,10 +691,10 @@ var Cells = {
         }
     },
     drawBlob: function(b, Z) {
-        var s = this.toScreen(b.x, b.y), r = this.rad(b.m) * Z;
+        var s = this.toScreen(b.x, b.y), r = this.rad(b.m, b) * Z;
         if (s[0] < -r || s[1] < -r || s[0] > cssW + r || s[1] > cssH + r) return;
         if (b.pl.chain && b.lead && !b.lead.dead) {
-            var ls = this.toScreen(b.lead.x, b.lead.y), lr = this.rad(b.lead.m) * Z;
+            var ls = this.toScreen(b.lead.x, b.lead.y), lr = this.rad(b.lead.m, b.lead) * Z;
             var bw = Math.max(3, Math.min(r, lr) * 1.15);
             ctx.save();
             ctx.lineCap = "round";

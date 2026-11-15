@@ -1305,7 +1305,8 @@ function pauseItems() {
         items.push({ id: "skin0", label: "Player 1 character:  ◀  " + skinName(heroSkins[0]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
         items.push({ id: "skin1", label: "Player 2 character:  ◀  " + skinName(heroSkins[1]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
     }
-    items.push({ id: "swap", label: "🔄 Swap P1 ↔ P2 Characters", hint: "Swap positions, skins, settings, or possess next hero (V)" });
+    var isIoMode = GameModes.current && ["mix", "tanks", "cells", "snake"].indexOf(GameModes.current.id) !== -1;
+    if (!own || isIoMode) items.push({ id: "swap", label: "🔄 Swap P1 ↔ P2 Characters", hint: "Swap positions, skins, settings, or possess next hero (V)" });
     if (!inBrawl && !GameModes.has("menuItems") && pauseLevelKeys.length > 1) {
         var lvlName = LevelManager.getAllLevels()[pauseLevelKeys[pauseLevelIdx]];
         var curLvl = LevelManager.getCurrentLevel();

@@ -105,7 +105,7 @@ var SHARED_TUNABLES = [
     { label: "Brightness (every game)", type: "choice", options: BRIGHT_STEPS.map(function(b) { return [b, Math.round(b * 100) + "%"]; }),
       get: function() { var b = settings.bright, best = BRIGHT_STEPS[1]; BRIGHT_STEPS.forEach(function(x) { if (Math.abs(x - b) < Math.abs(best - b)) best = x; }); return best; },
       set: function(v) { Theme.setBright(Number(v)); } },
-    { label: "CPU skill (every game)", type: "choice", options: [[1, "Easy"], [2, "Normal"], [3, "Hard"]],
+    { label: "CPU skill (every game)", type: "choice", need: "cpu", options: [[1, "Easy"], [2, "Normal"], [3, "Hard"]],
       get: function() { return typeof brawlCfg !== "undefined" ? brawlCfg.cpuLevel : 2; },
       set: function(v) {
           v = Number(v);

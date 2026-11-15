@@ -288,7 +288,7 @@ var Mix = {
         // cache blob radii once per frame
         for (let j = 0; j < blobs.length; j++) {
             var bj = blobs[j];
-            blobR[j] = bj.dead ? 0 : Cells.rad(bj.m);
+            blobR[j] = bj.dead ? 0 : Cells.rad(bj.m, bj);
         }
         var viruses = Cells.viruses;
         // ---- bullets: they shrink blobs (a blob shot below 12 is gone), hurt worms (heads most, bodies soak), and feed viruses
@@ -1418,6 +1418,7 @@ GameModes.register({
             { label: "CPU tanks", type: "range", min: 0, max: 14, step: 1, get: function() { return TNK.CPUS; }, set: function(v) { TNK.CPUS = v; }, note: "next arena" },
             { label: "CPU blobs", type: "range", min: 0, max: 40, step: 1, get: function() { return cellsCfg.bots; }, set: function(v) { cellsCfg.bots = v; saveCellsCfg(); }, note: "changes live" },
             { label: "Max bubbles per player (0 = unlimited)", type: "range", min: 0, max: 64, step: 1, get: function() { return cellsCfg.maxCells || 0; }, set: function(v) { cellsCfg.maxCells = v; saveCellsCfg(); }, note: "0 = no limit" },
+            { label: "Max snake bubbles per snake", type: "range", min: 2, max: 60, step: 1, get: function() { return cellsCfg.maxChainBubbles || 20; }, set: function(v) { cellsCfg.maxChainBubbles = v; saveCellsCfg(); } },
             { label: "CPU worms", type: "range", min: 0, max: 20, step: 1, get: function() { return SNK.CPUS; }, set: function(v) { SNK.CPUS = v; }, note: "next arena" }
         ]);
     },

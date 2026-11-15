@@ -60,6 +60,7 @@ var GameTuning = {
     applies: function(need) {
         var own = GameModes.flag("ownScreen", false);
         if (need === "world") return !own;
+        if (need === "cpu") return ["brawl", "tanks", "mix", "sport", "table"].indexOf(GameModes.current ? GameModes.current.id : "") !== -1;
         var brawlOn = typeof brawl !== "undefined" && brawl.active;
         if (need === "waves") return !own && GameModes.flag("waves", true) && !brawlOn;
         if (need === "enemies") return !own && !brawlOn && (GameModes.flag("waves", true) || zombies.length > 0);     // games with monsters
@@ -92,7 +93,8 @@ GAME_TUNABLES.cells = [
     { label: "Power-up pickups", type: "toggle", get: function() { return cellsCfg.powerups; }, set: function(v) { cellsCfg.powerups = !!v; saveCellsCfg(); }, note: "speed, shield, magnet, mass" },
     { label: "Humans are bubble worms", type: "toggle", get: function() { return cellsCfg.chain; }, set: function(v) { cellsCfg.chain = !!v; saveCellsCfg(); Cells.players.filter(arenaHuman).forEach(function(p) { p.chain = !!v; if (!v) Cells.mine(p).forEach(function(b) { b.lead = null; b.mergeT = 300; }); }); }, note: "a chain of bubbles that follows its head" },
     { label: "Humans start at mass", type: "range", min: 20, max: 1000, step: 20, get: function() { return cellsCfg.startMass; }, set: function(v) { cellsCfg.startMass = v; saveCellsCfg(); }, note: "next spawn" },
-    { label: "Max bubbles per player (0 = unlimited)", type: "range", min: 0, max: 64, step: 1, get: function() { return cellsCfg.maxCells || 0; }, set: function(v) { cellsCfg.maxCells = v; saveCellsCfg(); }, note: "0 = no limit" }
+    { label: "Max bubbles per player (0 = unlimited)", type: "range", min: 0, max: 64, step: 1, get: function() { return cellsCfg.maxCells || 0; }, set: function(v) { cellsCfg.maxCells = v; saveCellsCfg(); }, note: "0 = no limit" },
+    { label: "Max snake bubbles per snake", type: "range", min: 2, max: 60, step: 1, get: function() { return cellsCfg.maxChainBubbles || 20; }, set: function(v) { cellsCfg.maxChainBubbles = v; saveCellsCfg(); } }
 ].concat(arenaRows(), [
     // ---- cheats ----
     { label: "Set human size now", type: "range", min: 20, max: 20000, step: 20, get: function() { var p = Cells.players.find(arenaHuman); return p ? Math.round(Cells.mass(p)) : 20; }, set: function(v) { Cells.players.filter(arenaHuman).forEach(function(p) { var bs = Cells.mine(p); bs.forEach(function(b) { b.m = v / bs.length; }); }); } }
