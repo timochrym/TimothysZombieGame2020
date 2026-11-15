@@ -623,11 +623,11 @@ var Mix = {
             }
             if (!hw) hw = Snake.hitBody(ep.x, ep.y, 18, null);
             if (!hw || !hw.alive) continue;
-            var ejDmg = isHeadEj ? Math.max(36, Math.round(hw.len * 0.35)) : Math.max(24, Math.round(hw.len * 0.22));
+            var ejDmg = isHeadEj ? Math.max(16, Math.round(hw.len * 0.14)) : Math.max(10, Math.round(hw.len * 0.08));
             var actualEjDmg = Math.min(hw.len, ejDmg);
             hw.len -= ejDmg;
             arenaRecordDmg(hw, ep.ownerPl, actualEjDmg);
-            var ownerGain = Math.max(42, Math.round(actualEjDmg * 1.8));
+            var ownerGain = Math.max(18, Math.round(actualEjDmg * 1.3));
             if (ep.ownerPl && ep.ownerPl.alive) {
                 var ownBlobs = Cells.mine(ep.ownerPl);
                 if (ownBlobs.length) {

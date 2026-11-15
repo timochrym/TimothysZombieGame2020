@@ -483,11 +483,11 @@ var Cells = {
                         var rc2 = (bRads[i] || this.rad(bc.m, bc)) + 14;
                         var cdx = p.x - bc.x, cdy = p.y - bc.y;
                         if (cdx * cdx + cdy * cdy < rc2 * rc2) {
-                            var chDmg = Math.max(28, Math.round(bc.m * 0.35));
+                            var chDmg = Math.max(12, Math.round(bc.m * 0.14));
                             var actualChDmg = Math.min(bc.m, chDmg);
                             bc.m -= chDmg;
                             arenaRecordDmg(bc.pl, p.ownerPl, actualChDmg);
-                            var chGain = Math.max(42, Math.round(actualChDmg * 1.8));
+                            var chGain = Math.max(16, Math.round(actualChDmg * 1.3));
                             if (p.ownerPl && p.ownerPl.alive) {
                                 var ownMe = this.mine(p.ownerPl);
                                 if (ownMe.length) {
