@@ -495,6 +495,8 @@ var Snake = {
         }
     },
 
+    // how big a piece of worm food is DRAWN: small food as before, big globs grow slowly and stop at 11
+    pelletR: function(v) { return v >= 4 ? Math.min(11, 3.2 + Math.sqrt(v) * 1.2) : (3 + v * 1.4); },
     toScreen: function(x, y) { var c = this.cam; return [(x - c.x) * c.z + cssW / 2, (y - c.y) * c.z + cssH / 2]; },
 
     humans: function() {
@@ -534,7 +536,7 @@ var Snake = {
         for (let i = 0; i < this.pellets.length; i++) {
             var pl = this.pellets[i], ps = this.toScreen(pl.x, pl.y);
             if (ps[0] < -30 || ps[1] < -30 || ps[0] > cssW + 30 || ps[1] > cssH + 30) continue;
-            var baseR = pl.v >= 4 ? Math.min(18, 3.2 + Math.sqrt(pl.v) * 1.65) : (3 + pl.v * 1.4);
+            var baseR = Snake.pelletR(pl.v);
             var pr = baseR * Z * (1 + Math.sin(this.t * 0.1 + pl.ph) * 0.12);
             ctx.globalAlpha = 0.35; ctx.fillStyle = pl.col; ctx.beginPath(); ctx.arc(ps[0], ps[1], pr * 2.1, 0, 7); ctx.fill();
             ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(ps[0], ps[1], pr, 0, 7); ctx.fill();

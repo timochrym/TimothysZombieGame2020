@@ -27,6 +27,8 @@ try { var _cs = JSON.parse(localStorage.getItem("timsBlobArena") || "null"); if 
 var Cells = {
     players: [], blobs: [], pellets: [], viruses: [], t: 0, cam: { x: 0, y: 0, z: 1 },
 
+    // how big a piece of food is DRAWN: small food as before; heavier food (a dead tank's lumps, thrown mass) grows slowly and stops at 14
+    pelletR: function(m) { return m > 5 ? Math.min(14, 3.5 + Math.sqrt(m) * 2.2) : Math.sqrt(m) * 4; },
     rad: function(m, b) { return ((b && b._sbScale) ? b._sbScale : 1) * Math.sqrt(m) * ((b && b.pl && b.pl.chain && !b.pl.compact) ? 2.2 : 5); },
     // players at THIS screen (P1/P2 on the host, my own blob on a LAN client)
     locals: function() {
@@ -732,7 +734,7 @@ var Cells = {
         for (let i = 0; i < this.pellets.length; i++) {
             var p = this.pellets[i], s = this.toScreen(p.x, p.y);
             if (s[0] < -20 || s[1] < -20 || s[0] > cssW + 20 || s[1] > cssH + 20) continue;
-            ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(s[0], s[1], Math.max(2, this.rad(p.m) * Z * (p.m > 5 ? 1 : 0.8)), 0, 7); ctx.fill();
+            ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(s[0], s[1], Math.max(2, this.pelletR(p.m) * Z), 0, 7); ctx.fill();
         }
         // blobs smallest-last so big ones go under (you see what's about to be eaten)
         var all = this.blobs.slice().sort(function(a, b) { return a.m - b.m; });

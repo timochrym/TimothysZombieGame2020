@@ -44,6 +44,7 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node themes.js              # 5 themes x 5 games: sky/background brightness, brightness filter, saved, pause + panel rows
     node bubble_compact.js     # Bubble worm: combine, held movement and mass drops, eating, return to chain, respawn, cursor
     node nav_reach.js bunker_bridges   # how many route-graph points can reach the hero (a cut graph shows a tiny number)
+    node mix_size_caps.js       # Arena Mix: food is drawn at most 14 units, tank bullets at most radius 20 and x1.6 damage
     node worm_split_menu.js     # menu panel: split into N pieces (slider + button), rejoin on/off switch, real clicks
     node blob_split_eat.js      # Arena Mix: splitting a blob with a worm inside halves the worm (floor 12) and adds it to the blob
     node worm_split.js          # Arena Mix worm: spike cut, head-to-tail rejoin (leeway, cooldown), R brake slows only the outer piece

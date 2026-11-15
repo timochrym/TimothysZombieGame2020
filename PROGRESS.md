@@ -57,6 +57,20 @@ tabs and a clear menu tree, improve LAN packets, then feel, performance and code
 Fastest way to perfect each game: one shared engine fix at a time (so every game gets it), a test per fix, then one
 short play-through list from you per game. Your notes on what feels off are the part no test can replace.
 
+## 2026-11-15 (4): food and tank bullets could get too big - capped (branch)
+Asked: "Sometimes the food gets too large visually, and also the Diepo bullets get too large and powerful."
+- **Food (drawn size only; what it is worth does not change):** blob food was drawn with the blob size formula
+  (radius = 5 x sqrt(mass)), so a dead tank's lump of 5000 mass was a circle 350 units wide. Now `Cells.pelletR`:
+  small food as before (mass 1 = 4), heavier food grows slowly and stops at 14. Worm food (`Snake.pelletR`) stops at 11
+  (was 18). Test reads the real circle radius from a drawn frame.
+- **Tank bullets in Arena Mix:** the bullet radius followed the tank size, which follows mass (mass 2000 = a bullet 6x
+  wider), and the damage boost went up to x3.2. Now the bullet radius stops at 20 (reached at mass about 180) and the
+  mass damage boost stops at x1.6 (8.8 instead of 5.5 at the top); a heavy tank still reloads more slowly (22 -> 36.5).
+  Plain Tank Arena is unchanged. Constants: `Tanks.MIX_BULLET_R_CAP`, `Tanks.MIX_DMG_CAP`.
+- Test: `tests/mix_size_caps.js`. `tools/verify_mix.py` still passes.
+- **Found, not fixed:** `tests/arena_mix.js` (my older test) crashes with "Cells.chainDash is not a function" since the bubble
+  worm rework by the other agent; it crashes the same way without my change. `tools/verify_mix.py` is the maintained suite.
+
 ## 2026-11-15 (3): "Split worm" in the menu panel - number of pieces and a no-rejoin switch - DONE (branch, not main)
 Asked: add an option to split the worm in the menu panel; into as many pieces as wanted; an option to disable recombining.
 Menu panel -> Game tab -> "Game Rules" (Worm Arena and Arena Mix), now at the TOP of the list: slider "Split worm into
