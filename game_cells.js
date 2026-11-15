@@ -27,7 +27,7 @@ try { var _cs = JSON.parse(localStorage.getItem("timsBlobArena") || "null"); if 
 var Cells = {
     players: [], blobs: [], pellets: [], viruses: [], t: 0, cam: { x: 0, y: 0, z: 1 },
 
-    rad: function(m, b) { return Math.sqrt(m) * ((b && b.pl && b.pl.chain && !b.pl.compact) ? 3.0 : 5); },
+    rad: function(m, b) { return Math.sqrt(m) * ((b && b.pl && b.pl.chain && !b.pl.compact) ? 2.2 : 5); },
     // players at THIS screen (P1/P2 on the host, my own blob on a LAN client)
     locals: function() {
         if (typeof Net !== "undefined" && Net.role === "client") return this.players.filter(function(p) { return p.pid === Net.pid; });
@@ -132,7 +132,7 @@ var Cells = {
         pl.fx = { speed: 0, shield: Math.round(cellsCfg.shield * 60), magnet: 0 };       // fresh spawns can't be eaten for a moment
         if (pl.human !== undefined && cellsCfg.chain && !(typeof Mix !== "undefined" && Mix.on)) pl.chain = true;
         pl.chainList = [];
-        pl.compact = false; pl.chainMoving = false; pl.ejectPrev = false; pl.dashCd = 0;
+        pl.compact = false; pl.chainMoving = false; pl.ejectPrev = false; pl.dashCd = 0; pl._dmgLog = null;
         pl.cx = p[0]; pl.cy = p[1];
         this.blobs.push({ pl: pl, x: p[0], y: p[1], m: m0, vx: 0, vy: 0, mergeT: 0 });
     },
@@ -164,7 +164,7 @@ var Cells = {
             split = !!x.s; eject = !!x.e;
         } else {
             var cmd = this.cpu(pl, me, cx, cy, M);
-            split = cmd.split; eject = false;
+            split = cmd.split; eject = !!cmd.eject;
         }
         if (pl.chain && eject && !pl.ejectPrev) {
             pl.compact = !pl.compact;
@@ -182,25 +182,51 @@ var Cells = {
 
     cpu: function(pl, me, cx, cy, M) {
         pl.cpuT++;
-        if (pl.cpuT % 12 !== 0 && pl.goal) { pl.aimX = pl.goal[0]; pl.aimY = pl.goal[1]; return { split: false }; }
+        if (pl.cpuT % 12 !== 0 && pl.goal) { pl.aimX = pl.goal[0]; pl.aimY = pl.goal[1]; return { split: false, eject: !!pl.cpuEject }; }
         var big = me.reduce(function(a, b) { return b.m > a.m ? b : a; }, me[0]);
-        var r = this.rad(big.m), fx = 0, fy = 0, threat = false, prey = null, pd = 1e9;
+        var r = this.rad(big.m, big), fx = 0, fy = 0, threat = false, prey = null, pd = 1e9, snipeTarget = null, sd = 360;
+        var inMix = typeof Mix !== "undefined" && Mix.on;
+        pl.cpuEject = false;
         for (let i = 0; i < this.blobs.length; i++) {
             var o = this.blobs[i];
             if (o.pl === pl) continue;
             var d = Math.hypot(o.x - cx, o.y - cy);
-            if (o.m > big.m * 1.25 && d < 450 + this.rad(o.m)) { fx -= (o.x - cx) / (d || 1) * (1000 / (d + 50)); fy -= (o.y - cy) / (d || 1) * (1000 / (d + 50)); threat = true; }
+            if (!pl.chain && o.pl.chain && !o.pl.compact && big.m > 48 && d < sd && !this.protectedNow(o.pl)) { sd = d; snipeTarget = o; }
+            if (o.m > big.m * 1.25 && d < 450 + this.rad(o.m, o)) { fx -= (o.x - cx) / (d || 1) * (1000 / (d + 50)); fy -= (o.y - cy) / (d || 1) * (1000 / (d + 50)); threat = true; }
             else if (big.m > o.m * 1.25 && d < 600 && d / o.m < pd) { pd = d / o.m; prey = o; }
+        }
+        if (inMix && typeof Tanks !== "undefined") {
+            for (let i = 0; i < Tanks.tanks.length; i++) {
+                var tk = Tanks.tanks[i];
+                if (!tk.alive || tk.inv > 0 || arenaProtected(tk)) continue;
+                var td = Math.hypot(tk.x - cx, tk.y - cy);
+                if (tk.mixMass > big.m * 1.25 && td < 450 + Tanks.size(tk)) { fx -= (tk.x - cx) / (td || 1) * (1000 / (td + 50)); fy -= (tk.y - cy) / (td || 1) * (1000 / (td + 50)); threat = true; }
+                else if (big.m > tk.mixMass * 1.25 && td < 550 && td / Math.max(1, tk.mixMass) < pd) { pd = td / Math.max(1, tk.mixMass); prey = { x: tk.x, y: tk.y, vx: tk.vx, vy: tk.vy, m: tk.mixMass }; }
+            }
+        }
+        if (inMix && typeof Snake !== "undefined") {
+            for (let i = 0; i < Snake.worms.length; i++) {
+                var w = Snake.worms[i];
+                if (!w.alive || w.safeT > 0 || !w.segs || !w.segs.length) continue;
+                var wh = w.segs[0], wd = Math.hypot(wh.x - cx, wh.y - cy);
+                if (!pl.chain && big.m > 48 && wd < sd) { sd = wd; snipeTarget = { x: wh.x, y: wh.y }; }
+                if (!pl.chain && big.m >= 80 && wd < r + 110) { fx -= (wh.x - cx) / (wd || 1) * 14; fy -= (wh.y - cy) / (wd || 1) * 14; threat = true; }
+            }
         }
         // stay off the walls when running
         if (threat) {
             if (cx < -CEL.W / 2 + 400) fx += 3; if (cx > CEL.W / 2 - 400) fx -= 3; if (cy < -CEL.H / 2 + 400) fy += 3; if (cy > CEL.H / 2 - 400) fy -= 3;
             pl.goal = [cx + fx * 300, cy + fy * 300];
+        } else if (snipeTarget) {
+            pl.goal = [snipeTarget.x, snipeTarget.y];
+            pl.cpuEject = true;
+            pl.aimX = snipeTarget.x; pl.aimY = snipeTarget.y;
+            return { split: false, eject: true };
         } else if (prey) {
             pl.goal = [prey.x + prey.vx * 10, prey.y + prey.vy * 10];
             // lunge: split onto prey that is close and well under half our size
             var dd = Math.hypot(prey.x - big.x, prey.y - big.y);
-            if (big.m > prey.m * 2.8 && dd < r + 260 && me.length < 3 && Math.random() < 0.5) { pl.aimX = pl.goal[0]; pl.aimY = pl.goal[1]; return { split: true }; }
+            if (!pl.chain && big.m > prey.m * 2.8 && dd < r + 260 && me.length < 3 && Math.random() < 0.5) { pl.aimX = pl.goal[0]; pl.aimY = pl.goal[1]; return { split: true, eject: false }; }
         } else {
             var best = null, bd = 1e9, pStep = Math.max(1, (this.pellets.length / 60) | 0);
             for (let i = 0; i < this.pellets.length; i += pStep) { var p = this.pellets[i], d2 = Math.hypot(p.x - cx, p.y - cy); if (d2 < bd) { bd = d2; best = p; } }
@@ -209,7 +235,7 @@ var Cells = {
             for (let i = 0; i < this.viruses.length; i++) { var v = this.viruses[i]; if (big.m > 130 && Math.hypot(v.x - cx, v.y - cy) < r + 160) pl.goal = [cx - (v.x - cx), cy - (v.y - cy)]; }
         }
         pl.aimX = pl.goal[0]; pl.aimY = pl.goal[1];
-        return { split: false };
+        return { split: false, eject: false };
     },
 
     // ---------------- BUBBLE WORM: a player whose blobs form a chain instead of a cluster.
@@ -279,11 +305,11 @@ var Cells = {
             tail.m = Math.max(4, tail.m - bCost);
             this.pellets.push({ x: tail.x, y: tail.y, m: bCost, col: pl.color, vx: (Math.random() - 0.5) * 3, vy: (Math.random() - 0.5) * 3 });
         }
-        // mass settles so the tail is the largest bubble at 10x each of the rest
+        // mass settles so the tail is gently larger (2.5x) than each of the rest
         if (list.length > 1) {
-            var wsum = (list.length - 1) + 10;
+            var wsum = (list.length - 1) + 2.5;
             for (let i = 0; i < list.length; i++) {
-                var wgt = (i === list.length - 1) ? 10 : 1;
+                var wgt = (i === list.length - 1) ? 2.5 : 1;
                 var target = total * wgt / wsum;
                 list[i].m += (target - list[i].m) * 0.08;
             }
@@ -301,6 +327,14 @@ var Cells = {
         var globM = Math.max(3, (total * 0.75) / Math.max(1, Math.ceil(list.length / step)));
         for (let i = 0; i < list.length; i += step) {
             this.pellets.push({ x: list[i].x, y: list[i].y, m: globM, col: pl.color, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6 });
+        }
+        if (by && by.alive) {
+            var dmgPutIn = arenaPopDmg(pl, by);
+            var ownK = this.mine(by);
+            if (ownK.length) {
+                var reward = Math.max(Math.round(total * 0.6), Math.round(dmgPutIn * 1.25), 35);
+                for (let ok = 0; ok < ownK.length; ok++) ownK[ok].m += reward / ownK.length;
+            }
         }
         pl.chainList = [];
         if (by && by.human !== undefined && typeof SFX !== "undefined") SFX.play("kill", list[0] ? list[0].x : 0, list[0] ? list[0].y : 0, 0.7);
@@ -415,7 +449,7 @@ var Cells = {
             if (i === j || e.dead || f.dead || e.pl === f.pl || this.protectedNow(f.pl) || e.m < f.m * 1.25) continue;
             var rd = Math.hypot(f.x - e.x, f.y - e.y);
             if (rd < bRads[i] - bRads[j] * 0.4) {
-                e.m += f.m; bRads[i] = this.rad(e.m); f.dead = true;
+                e.m += Math.max(f.m, arenaPopDmg(f.pl, e.pl)); bRads[i] = this.rad(e.m); f.dead = true;
                 if (e.pl.human !== undefined && typeof SFX !== "undefined") SFX.play("kill", e.x, e.y, 0.6);
                 if (!this.mine(f.pl).some(function(q) { return !q.dead; })) this.die(f.pl, e.pl);
             }
@@ -450,8 +484,10 @@ var Cells = {
                         var cdx = p.x - bc.x, cdy = p.y - bc.y;
                         if (cdx * cdx + cdy * cdy < rc2 * rc2) {
                             var chDmg = Math.max(28, Math.round(bc.m * 0.35));
+                            var actualChDmg = Math.min(bc.m, chDmg);
                             bc.m -= chDmg;
-                            var chGain = Math.max(42, Math.round(chDmg * 1.8));
+                            arenaRecordDmg(bc.pl, p.ownerPl, actualChDmg);
+                            var chGain = Math.max(42, Math.round(actualChDmg * 1.8));
                             if (p.ownerPl && p.ownerPl.alive) {
                                 var ownMe = this.mine(p.ownerPl);
                                 if (ownMe.length) {

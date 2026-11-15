@@ -145,14 +145,34 @@ var Tanks = {
         return best;
     },
     cpu: function(k) {
-        var hpFrac = k.hp / this.maxHp(k), foe = null, fd = [0, 500, 700, 900][arenaCheats.tankSkill];
+        var hpFrac = k.hp / this.maxHp(k), maxFd = [0, 500, 700, 900][arenaCheats.tankSkill], fd = maxFd, foe = null;
         for (let i = 0; i < this.tanks.length; i++) { var o = this.tanks[i]; if (o !== k && o.alive && o.inv <= 0) { var d = Math.hypot(o.x - k.x, o.y - k.y); if (d < fd) { fd = d; foe = o; } } }
+        if (typeof Mix !== "undefined" && Mix.on && maxFd > 0) {
+            if (typeof Cells !== "undefined") {
+                for (let i = 0; i < Cells.blobs.length; i++) {
+                    var b = Cells.blobs[i];
+                    if (b.dead || Cells.protectedNow(b.pl)) continue;
+                    var bd = Math.hypot(b.x - k.x, b.y - k.y);
+                    if (bd < fd) { fd = bd; foe = { x: b.x, y: b.y, vx: b.vx || 0, vy: b.vy || 0, lvl: Math.round(b.m / 20), isBlob: true, m: b.m }; }
+                }
+            }
+            if (typeof Snake !== "undefined") {
+                for (let i = 0; i < Snake.worms.length; i++) {
+                    var w = Snake.worms[i];
+                    if (!w.alive || w.safeT > 0 || !w.segs || !w.segs.length) continue;
+                    var wh = w.segs[0], wd = Math.hypot(wh.x - k.x, wh.y - k.y);
+                    if (wd < fd) { fd = wd; foe = { x: wh.x, y: wh.y, vx: Math.cos(w.ang) * 3.5, vy: Math.sin(w.ang) * 3.5, lvl: Math.round(w.len / 15), isWorm: true }; }
+                }
+            }
+        }
         var mx = 0, my = 0, fire = false, aim = null;
-        if (foe && (hpFrac > 0.4 || foe.lvl < k.lvl - 5)) {
+        if (foe && foe.isBlob && foe.m > k.mixMass * 1.25) {
+            mx = -(foe.x - k.x); my = -(foe.y - k.y); aim = { x: foe.x + foe.vx * fd / 14, y: foe.y + foe.vy * fd / 14 }; fire = true;
+        } else if (foe && (hpFrac > 0.4 || foe.lvl < k.lvl - 5)) {
             aim = { x: foe.x + foe.vx * fd / 14, y: foe.y + foe.vy * fd / 14 };
-            var want = 420 + (TNK_CLASSES[k.cls].fov ? 250 : 0);         // keep a fighting distance
+            var want = (foe.isBlob && k.mixMass > foe.m * 1.35) ? 0 : (420 + (TNK_CLASSES[k.cls].fov ? 250 : 0));         // ram smaller blobs, keep fighting distance from others
             var dir = fd > want ? 1 : -0.7;
-            mx = (foe.x - k.x) / fd * dir; my = (foe.y - k.y) / fd * dir;
+            mx = (foe.x - k.x) / (fd || 1) * dir; my = (foe.y - k.y) / (fd || 1) * dir;
             mx += Math.cos(this.t * 0.02 + k.name.length) * 0.6; my += Math.sin(this.t * 0.02 + k.name.length) * 0.6;   // strafe
             fire = true;
         } else if (foe && hpFrac <= 0.4) {

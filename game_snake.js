@@ -12,6 +12,26 @@ var SNK_COLORS = ["#f472b6", "#a78bfa", "#34d399", "#fbbf24", "#60a5fa", "#f8717
 var snakeSave = { best: 0 };
 try { var _sn = JSON.parse(localStorage.getItem("timsWormArena") || "null"); if (_sn) snakeSave.best = _sn.best || 0; } catch (e) {}
 
+function arenaRecordDmg(victim, by, amt) {
+    if (!victim || !by || !(amt > 0)) return;
+    var log = victim._dmgLog || (victim._dmgLog = []);
+    for (var i = 0; i < log.length; i++) {
+        if (log[i].by === by) { log[i].dmg += amt; return; }
+    }
+    log.push({ by: by, dmg: amt });
+}
+function arenaPopDmg(victim, by) {
+    if (!victim || !victim._dmgLog || !by) return 0;
+    for (var i = 0; i < victim._dmgLog.length; i++) {
+        if (victim._dmgLog[i].by === by) {
+            var d = victim._dmgLog[i].dmg;
+            victim._dmgLog.splice(i, 1);
+            return d;
+        }
+    }
+    return 0;
+}
+
 var Snake = {
     worms: [], pellets: [], grid: {}, t: 0, cam: { x: 0, y: 0, z: 1 },
 
@@ -38,7 +58,7 @@ var Snake = {
         }
         var ang = Math.random() * Math.PI * 2, w = o.old || {};
         w.name = o.name; w.color = o.color; w.human = o.human; w.alive = true; w.len = 24; w.ang = ang; w.want = ang;
-        w.boost = false; w.segs = []; w.kills = w.kills || 0; w.deadT = 0; w.cpuT = 0;
+        w.boost = false; w.segs = []; w.kills = w.kills || 0; w.deadT = 0; w.cpuT = 0; w._dmgLog = null;
         w.safeT = o.human !== undefined ? 120 : 0;          // humans get 2 s of spawn protection
         for (let i = 0; i < w.len; i++) w.segs.push({ x: x - Math.cos(ang) * i * SNK.SEG, y: y - Math.sin(ang) * i * SNK.SEG });
         if (!o.old) this.worms.push(w);
@@ -86,8 +106,9 @@ var Snake = {
 
     cpu: function(w) {
         var h = w.segs[0], r = this.radius(w);
+        var inMix = typeof Mix !== "undefined" && Mix.on;
         w.cpuT++;
-        // 1) danger: probe three rays ahead for bodies / the wall
+        // 1) danger: probe rays ahead for bodies / Bubble Snakes / the wall
         var best = null, bestScore = -1e9;
         for (let k = -3; k <= 3; k++) {
             var a = w.ang + k * 0.35, score = -Math.abs(k) * 2, clear = 1;
@@ -95,9 +116,19 @@ var Snake = {
                 var px = h.x + Math.cos(a) * d, py = h.y + Math.sin(a) * d;
                 if (Math.hypot(px, py) > SNK.R - 60) { clear = 0; break; }
                 if (this.hitBody(px, py, r + 8, w)) { clear = 0; break; }
+                if (inMix && typeof Cells !== "undefined") {
+                    for (let bi = 0; bi < Cells.blobs.length; bi++) {
+                        var bc = Cells.blobs[bi];
+                        if (!bc.dead && bc.pl.chain && !bc.pl.compact && !(bc.pl.snakeGrace > 0)) {
+                            var br = Cells.rad(bc.m, bc) + r + 8;
+                            if ((px - bc.x) * (px - bc.x) + (py - bc.y) * (py - bc.y) < br * br) { clear = 0; break; }
+                        }
+                    }
+                    if (!clear) break;
+                }
             }
             if (!clear) score -= 1000;
-            // 2) food: prefer the direction of the nearest big pellet cluster
+            // 2) food / target: prefer the direction of the nearest big pellet cluster or hunted enemy
             if (w.food) { var fa = Math.atan2(w.food.y - h.y, w.food.x - h.x), da = Math.abs(((fa - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI); score += (Math.PI - da) * 20; }
             if (score > bestScore) { bestScore = score; best = a; }
         }
@@ -105,10 +136,30 @@ var Snake = {
             var nf = null, nd = 700;
             for (let i = 0; i < this.pellets.length; i++) { var p = this.pellets[i], dd = Math.hypot(p.x - h.x, p.y - h.y) / p.v; if (dd < nd) { nd = dd; nf = p; } }
             w.food = nf;
-            // 3) hunting: a CPU that is bigger sometimes tries to cut in front of a nearby worm
+            // 3) hunting: cut in front of nearby worms, or bite Tanks/Blobs in Arena Mix
             var tgt = null;
             for (let i = 0; i < this.worms.length; i++) { var o = this.worms[i]; if (o !== w && o.alive && o.len < w.len && Math.hypot(o.segs[0].x - h.x, o.segs[0].y - h.y) < 500) tgt = o; }
             if (tgt && Math.random() < 0.5) { var oh = tgt.segs[0]; w.food = { x: oh.x + Math.cos(tgt.ang) * 160, y: oh.y + Math.sin(tgt.ang) * 160, eaten: false }; w.hunting = 40; }
+            else if (inMix) {
+                var bestCross = null, bestD = 540;
+                if (typeof Tanks !== "undefined") {
+                    for (let i = 0; i < Tanks.tanks.length; i++) {
+                        var tk = Tanks.tanks[i];
+                        if (!tk.alive || tk.inv > 0 || arenaProtected(tk)) continue;
+                        var td = Math.hypot(tk.x - h.x, tk.y - h.y);
+                        if (td < bestD) { bestD = td; bestCross = { x: tk.x + tk.vx * 10, y: tk.y + tk.vy * 10 }; }
+                    }
+                }
+                if (typeof Cells !== "undefined") {
+                    for (let i = 0; i < Cells.blobs.length; i++) {
+                        var bl = Cells.blobs[i];
+                        if (bl.dead || (bl.pl.chain && !bl.pl.compact) || Cells.protectedNow(bl.pl)) continue;
+                        var bd = Math.hypot(bl.x - h.x, bl.y - h.y);
+                        if (bd < bestD) { bestD = bd; bestCross = { x: bl.x + bl.vx * 10, y: bl.y + bl.vy * 10 }; }
+                    }
+                }
+                if (bestCross) { w.food = { x: bestCross.x, y: bestCross.y, eaten: false }; w.hunting = 35; }
+            }
         }
         w.want = best;
         w.boost = (w.hunting > 0 && w.len > 40) || (bestScore < -500 && w.len > 30 && Math.random() < 0.05);
@@ -164,7 +215,13 @@ var Snake = {
         }
         // Group neighboring excess pellets into bigger globs to cap entity count without losing food value
         this.groupPellets(SNK.PELLETS + 180, SNK.PELLETS + 60);
-        if (by) { by.kills++; }
+        if (by) {
+            by.kills++;
+            if (by.segs && by.alive) {
+                var putIn = arenaPopDmg(w, by);
+                by.len += Math.max(Math.round(w.len * 0.5), Math.round(putIn * 1.2), 15);
+            }
+        }
         if (w.human !== undefined) {
             w.deathMsg = by ? "Eaten by " + by.name : "You hit the wall";
             w.finalLen = Math.round(w.len);

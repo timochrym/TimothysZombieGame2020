@@ -441,11 +441,15 @@ var Mix = {
                     var rrBW = blobR[i] + wr2 * 0.7, dxBW = h2.x - bW.x, dyBW = h2.y - bW.y;
                     if (dxBW > rrBW || dxBW < -rrBW || dyBW > rrBW || dyBW < -rrBW || dxBW * dxBW + dyBW * dyBW > rrBW * rrBW) continue;
                     var biteDmg = (10 + bite * 5) * (boost > 1 ? 1.5 : 1);
+                    var actualBite = Math.min(bW.m, biteDmg);
                     bW.m -= biteDmg;
+                    arenaRecordDmg(bW.pl, w2, actualBite);
                     w2.mx.biteCd = 18; S.wormBite++; this.wormXp(w2, 4);
-                    w2.len += Math.min(4, biteDmg * 0.15);
+                    w2.len += Math.max(4, actualBite * 0.5);
                     this.burst(bW.x, bW.y, w2.color, "spark", "BITE!", 30);
                     if (bW.m < 12) {
+                        var totalBiteDmg = arenaPopDmg(bW.pl, w2);
+                        w2.len += Math.max(20, Math.round(totalBiteDmg * 1.15));
                         this._blobGone(blobs, bW, w2.name); anyDead = true;
                         this.wormXp(w2, 25);
                         this.note(w2.human !== undefined || bW.pl.human !== undefined, w2.name + " bit " + bW.pl.name, w2.color);
@@ -620,8 +624,10 @@ var Mix = {
             if (!hw) hw = Snake.hitBody(ep.x, ep.y, 18, null);
             if (!hw || !hw.alive) continue;
             var ejDmg = isHeadEj ? Math.max(36, Math.round(hw.len * 0.35)) : Math.max(24, Math.round(hw.len * 0.22));
+            var actualEjDmg = Math.min(hw.len, ejDmg);
             hw.len -= ejDmg;
-            var ownerGain = Math.max(42, Math.round(ejDmg * 1.8));
+            arenaRecordDmg(hw, ep.ownerPl, actualEjDmg);
+            var ownerGain = Math.max(42, Math.round(actualEjDmg * 1.8));
             if (ep.ownerPl && ep.ownerPl.alive) {
                 var ownBlobs = Cells.mine(ep.ownerPl);
                 if (ownBlobs.length) {
@@ -630,13 +636,15 @@ var Mix = {
                 }
             }
             if (hw.len < 12) {
+                var totalEjPutIn = arenaPopDmg(hw, ep.ownerPl);
                 Snake.kill(hw, ep.ownerPl || null);
                 if (ep.ownerPl && ep.ownerPl.alive) {
+                    var killBonus = Math.max(70, Math.round(totalEjPutIn * 1.25));
                     var ownBlobsK = Cells.mine(ep.ownerPl);
                     if (ownBlobsK.length) {
-                        for (let obk = 0; obk < ownBlobsK.length; obk++) ownBlobsK[obk].m += 70 / ownBlobsK.length;
+                        for (let obk = 0; obk < ownBlobsK.length; obk++) ownBlobsK[obk].m += killBonus / ownBlobsK.length;
                     }
-                    ownerGain += 70;
+                    ownerGain += killBonus;
                 }
                 this.burst(ep.x, ep.y, ep.col || "#38bdf8", "ring", "SNIPED! +" + ownerGain, 48);
                 this.note((ep.ownerPl && ep.ownerPl.human !== undefined) || hw.human !== undefined, ((ep.ownerPl && ep.ownerPl.name) || "A blob") + " sniped " + hw.name + " with food!", ep.col || "#38bdf8");
@@ -679,18 +687,23 @@ var Mix = {
             if (b4.pl.chain && !b4.pl.compact) {
                 var isHeadB = b4.pl.chainList && b4 === b4.pl.chainList[0];
                 var wDmg = isHeadB ? Math.max(14, Math.round(b4.m * 0.22)) : Math.max(6, Math.round(b4.m * 0.08));
+                var actualWDmg = Math.min(w4.len, wDmg);
                 w4.len -= wDmg;
+                arenaRecordDmg(w4, b4.pl, actualWDmg);
                 var orbs = Math.min(8, Math.max(3, Math.round(wDmg / 5)));
                 var orbM = Math.max(4, Math.round(wDmg / orbs * 1.1));
                 for (let oq = 0; oq < orbs; oq++) {
                     var oa = Math.random() * Math.PI * 2, osp = 4 + Math.random() * 6;
                     Cells.pellets.push({ x: b4.x + Math.cos(oa) * (r4 + 8), y: b4.y + Math.sin(oa) * (r4 + 8), m: orbM, col: w4.color || "#fde047", vx: Math.cos(oa) * osp, vy: Math.sin(oa) * osp });
                 }
-                b4.m += wDmg * 0.35; blobR[i] = Cells.rad(b4.m, b4); b4.popCd = 24;
+                b4.m += Math.round(actualWDmg * 1.1); blobR[i] = Cells.rad(b4.m, b4); b4.popCd = 24;
                 b4.vx += adx / away * 9; b4.vy += ady / away * 9;
                 if (w4.len < 10) {
+                    var totalShredDmg = arenaPopDmg(w4, b4.pl);
+                    var shredBonus = Math.max(40, Math.round(totalShredDmg * 1.25));
+                    b4.m += shredBonus; blobR[i] = Cells.rad(b4.m, b4);
                     Snake.kill(w4, b4.pl);
-                    this.burst(b4.x, b4.y, b4.pl.color, "ring", "SHRED!", r4 + 42);
+                    this.burst(b4.x, b4.y, b4.pl.color, "ring", "SHRED! +" + shredBonus, r4 + 42);
                     this.note(b4.pl.human !== undefined || w4.human !== undefined, b4.pl.name + " shredded " + w4.name, b4.pl.color);
                 } else {
                     this.burst(b4.x, b4.y, b4.pl.color, "ring", "-" + wDmg + " FOOD", r4 + 34);
@@ -726,15 +739,17 @@ var Mix = {
                 var hdx = bH.x - hH.x, hdy = bH.y - hH.y;
                 if (hdx * hdx + hdy * hdy >= hitH * hitH) continue;
                 if (bH.m <= Math.max(35, wH.len * 0.35)) {
-                    wH.len += bH.m * 0.35; this.wormXp(wH, bH.m * 0.5);
+                    var eatGain = Math.max(bH.m, arenaPopDmg(bH.pl, wH)) * 1.1;
+                    wH.len += eatGain; this.wormXp(wH, Math.max(15, bH.m * 0.5));
                     this.burst(bH.x, bH.y, wH.color, "spark", "+EAT", 30);
                     this.note(bH.pl.human !== undefined || wH.human !== undefined, wH.name + " ate " + bH.pl.name, wH.color);
                     this._blobGone(blobs, bH, wH.name); anyDead = true;
                 } else {
                     var bite = Math.min(bH.m * 0.14, 10 + (wH.mx ? wH.mx.st[0] * 2 : 0));
                     bH.m = Math.max(15, bH.m - bite); blobR[i] = Cells.rad(bH.m, bH);
+                    arenaRecordDmg(bH.pl, wH, bite);
                     bH.popCd = 20;
-                    wH.len += bite * 0.35; this.wormXp(wH, bite * 0.5);
+                    wH.len += bite * 0.6; this.wormXp(wH, bite * 0.5);
                     this.burst(bH.x, bH.y, wH.color, "spark", "+BITE", 22);
                 }
             }
@@ -751,7 +766,7 @@ var Mix = {
                 var hitS = wrS + blobR[i] * 0.78;
                 var sdx = hS.x - bS.x, sdy = hS.y - bS.y;
                 if (sdx * sdx + sdy * sdy < hitS * hitS) {
-                    var gain = Math.max(38, Math.round(wS.len * 0.55));
+                    var gain = Math.max(38, Math.round(wS.len * 0.55), Math.round(arenaPopDmg(wS, bS.pl) * 1.25));
                     Snake.kill(wS, bS.pl);
                     bS.m += gain; blobR[i] = Cells.rad(bS.m, bS);
                     var dropN = Math.min(10, Math.max(4, Math.round(wS.len / 12)));
