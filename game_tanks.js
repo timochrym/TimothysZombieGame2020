@@ -52,7 +52,7 @@ var Tanks = {
     massFactor: function(k) { return (this.mixLayer && k.mixMass > 0) ? Math.max(0.7, Math.min(3.2, Math.sqrt(k.mixMass / 36))) : 1; },
     reload: function(k) { var f = this.massFactor(k); return 22 * Math.pow(0.9, k.st[6]) * (TNK_CLASSES[k.cls].rl || 1) * (1 + (f - 1) * 0.3); },
     speed: function(k) { return (3.4 + 0.28 * k.st[7] - k.lvl * 0.02) * (TNK_CLASSES[k.cls].speed || 1) * arenaSpeed(k); },
-    size: function(k) { var sc = (k && k._sbScale) ? k._sbScale : 1; if (k.mixMass > 0 && this.mixLayer) return Math.sqrt(k.mixMass) * 5 * sc; return (30 + k.lvl * 0.45) * sc; },      // Arena Mix: a tank's size follows its mass, like a blob
+    size: function(k) { if (k && k.isMini) return 12; var sc = (k && k._sbScale) ? k._sbScale : 1; if (k.mixMass > 0 && this.mixLayer) return Math.sqrt(k.mixMass) * 5 * sc; return (30 + k.lvl * 0.45) * sc; },      // Arena Mix: a tank's size follows its mass, like a blob
 
     reset: function() {
         this.tanks = []; this.shapes = []; this.bullets = []; this.pending = []; this.t = 0;
@@ -243,14 +243,36 @@ var Tanks = {
         this.t++;
         for (let i = this.pending.length - 1; i >= 0; i--) if (this.pending[i].t <= this.t) { var pf = this.pending[i].fn; this.pending.splice(i, 1); pf(); }
         var T = this.tanks;
-        for (let i = 0; i < T.length; i++) {
+        for (let i = T.length - 1; i >= 0; i--) {
             var k = T[i];
-            if (!k.alive) { if (k.human === undefined && ++k.deadT > 200) this.spawn(k); continue; }
+            if (!k.alive) {
+                if (k.isMini) { T.splice(i, 1); continue; }
+                if (k.human === undefined && ++k.deadT > 200) this.spawn(k);
+                continue;
+            }
             if (k.inv > 0) k.inv--;
             if (k.reloadT > 0) k.reloadT--;
             if (k.flash > 0) k.flash--;
-            this.control(k);
-            k.x += k.vx; k.y += k.vy; k.vx *= 0.88; k.vy *= 0.88;
+            if (k.isMini) {
+                var ownPl = k.miniOwner, ownBlobs = (ownPl && ownPl.alive && typeof Cells !== "undefined") ? Cells.mine(ownPl) : [];
+                if (!ownBlobs.length) { k.alive = false; T.splice(i, 1); continue; }
+                var big = ownBlobs.reduce(function(a, b) { return b.m > a.m ? b : a; }, ownBlobs[0]);
+                var grp = [];
+                for (let gi = 0; gi < T.length; gi++) if (T[gi].alive && T[gi].isMini && T[gi].miniOwner === ownPl) grp.push(T[gi]);
+                var idx = grp.indexOf(k), cnt = Math.max(1, grp.length);
+                if (idx === 0) ownPl._miniOrbit = (ownPl._miniOrbit || 0) + 0.022;
+                var orbAng = (ownPl._miniOrbit || 0) + (idx * Math.PI * 2 / cnt);
+                var orbR = Cells.rad(big.m, big) + 28;
+                var tx = big.x + Math.cos(orbAng) * orbR, ty = big.y + Math.sin(orbAng) * orbR;
+                k.vx = (tx - k.x) * 0.08; k.vy = (ty - k.y) * 0.08;
+                k.x += k.vx; k.y += k.vy;
+                k.ang = Math.atan2((ownPl.aimY || k.y) - k.y, (ownPl.aimX || (k.x + 1)) - k.x);
+                var miniFire = ownPl.human === 0 ? mouseDown : (ownPl.human === "lan" && typeof Net !== "undefined" ? !!Net.peerX(ownPl.pid).c : (this.t % 24 === 0));
+                if (miniFire) this.fire(k);
+            } else {
+                this.control(k);
+                k.x += k.vx; k.y += k.vy; k.vx *= 0.88; k.vy *= 0.88;
+            }
             k.x = Math.max(-TNK.W / 2, Math.min(TNK.W / 2, k.x)); k.y = Math.max(-TNK.H / 2, Math.min(TNK.H / 2, k.y));
             var M = this.maxHp(k);
             if (k.hurtT > 0) k.hurtT--; else k.hp = Math.min(M, k.hp + M * 0.0006 * (1 + k.st[0]));
@@ -277,14 +299,14 @@ var Tanks = {
             }
             for (let j = 0; j < this.tanks.length && b.pen > 0; j++) {
                 var tk = this.tanks[j];
-                if (tk === b.owner || !tk.alive) continue;
+                if (tk === b.owner || !tk.alive || (tk.isMini && b.owner && b.owner.isMini && tk.miniOwner === b.owner.miniOwner)) continue;
                 var tr = this.size(tk);
                 if (Math.hypot(tk.x - b.x, tk.y - b.y) < tr + b.r) { this.hurt(tk, b.dmg, b.owner); tk.vx += b.vx * 0.04; tk.vy += b.vy * 0.04; b.pen -= 1.5; }
             }
             // bullets of different owners cancel each other out
             for (let j = i - 1; j >= 0 && b.pen > 0; j--) {
                 var c = this.bullets[j];
-                if (c.owner === b.owner || Math.abs(c.x - b.x) > c.r + b.r || Math.abs(c.y - b.y) > c.r + b.r) continue;
+                if (c.owner === b.owner || (c.owner && b.owner && c.owner.isMini && b.owner.isMini && c.owner.miniOwner === b.owner.miniOwner) || Math.abs(c.x - b.x) > c.r + b.r || Math.abs(c.y - b.y) > c.r + b.r) continue;
                 var x = Math.min(b.pen, c.pen); b.pen -= x; c.pen -= x;
             }
         }

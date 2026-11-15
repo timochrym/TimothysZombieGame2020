@@ -16,7 +16,7 @@ var cellsSave = { best: 0 };
 // so the loss in absolute terms grows with size by itself.
 var CELL_DECAY_CLASSIC = 0.0000333;
 var CELL_DECAY = [[0, "Off"], [CELL_DECAY_CLASSIC, "Classic (0.2% a second)"], [0.00015, "Quick (0.9% a second)"], [0.0004, "Fast"], [0.001, "Very fast"], [0.0025, "Brutal"]];
-var cellsCfg = { bots: 14, food: 2000, decay: CELL_DECAY_CLASSIC, decayGrow: false, shield: 3, startMass: 20, powerups: true, chain: false, maxCells: 0, maxChainBubbles: 20 };
+var cellsCfg = { bots: 14, food: 2000, decay: CELL_DECAY_CLASSIC, decayGrow: false, shield: 3, startMass: 20, powerups: true, chain: false, maxCells: 0, maxChainBubbles: 20, maxMiniTanks: 4 };
 try { var _cc = JSON.parse(localStorage.getItem("timsBlobArenaCfg") || "null"); if (_cc) for (var _ck in cellsCfg) if (typeof _cc[_ck] === typeof cellsCfg[_ck]) cellsCfg[_ck] = _cc[_ck]; if (_cc && !_cc.decayV2) cellsCfg.decay = CELL_DECAY_CLASSIC; } catch (e) {}      // the old default (0.9% a second) moves to Classic once
 function saveCellsCfg() { try { cellsCfg.decayV2 = true; localStorage.setItem("timsBlobArenaCfg", JSON.stringify(cellsCfg)); } catch (e) {} }
 // Pickups borrowed from the main games' power-ups: run fast, can't be eaten, pull food in, or a lump of mass.
@@ -187,6 +187,7 @@ var Cells = {
 
     cpu: function(pl, me, cx, cy, M) {
         pl.cpuT++;
+        if (!me || !me.length) return { split: false, eject: false };
         if (pl.cpuT % 12 !== 0 && pl.goal) { pl.aimX = pl.goal[0]; pl.aimY = pl.goal[1]; return { split: false, eject: false }; }
         var big = me.reduce(function(a, b) { return b.m > a.m ? b : a; }, me[0]);
         var r = this.rad(big.m, big), fx = 0, fy = 0, threat = false, prey = null, pd = 1e9, snipeTarget = null, sd = 360;
@@ -369,6 +370,37 @@ var Cells = {
             this.pellets.push({ x: b.x + dx / L * (r + 14), y: b.y + dy / L * (r + 14), m: 11, col: pl.color, vx: dx / L * 26, vy: dy / L * 26, ejected: true, ownerPl: pl });
             active++;
         }
+    },
+    spawnMiniTank: function(pl) {
+        if (!pl || !pl.alive || pl.chain || typeof Tanks === "undefined") return false;
+        var maxMini = Math.max(0, cellsCfg.maxMiniTanks ?? 4);
+        if (maxMini <= 0) { if (pl.human !== undefined) showBanner("Mini tanks disabled", "Raise Max mini tanks in Menu", "#fca5a5"); return false; }
+        var mine = this.mine(pl);
+        if (!mine.length) return false;
+        var big = mine.reduce(function(a, b) { return b.m > a.m ? b : a; }, mine[0]);
+        var cur = Tanks.tanks.filter(function(k) { return k.alive && k.isMini && k.miniOwner === pl; });
+        if (cur.length >= maxMini) { if (pl.human !== undefined) showBanner("MAX MINI TANKS (" + maxMini + ")", "", "#fde047"); return false; }
+        var cost = 25;
+        if (big.m < 45) { if (pl.human !== undefined) showBanner("Need 45+ mass on largest bubble", "", "#fca5a5"); return false; }
+        big.m -= cost;
+        var ang = (pl._miniOrbit || 0) + (cur.length * Math.PI * 2 / (cur.length + 1));
+        var orbR = this.rad(big.m, big) + 28;
+        var mk = {
+            name: "", color: pl.color, human: undefined, pid: undefined,
+            isMini: true, miniOwner: pl,
+            alive: true, x: big.x + Math.cos(ang) * orbR, y: big.y + Math.sin(ang) * orbR,
+            vx: 0, vy: 0, ang: Math.atan2((pl.aimY || big.y) - big.y, (pl.aimX || (big.x + 1)) - big.x),
+            cls: "basic", st: [0, 0, 0, 2, 1, 1, 2, 0],
+            hp: 35, maxHp: 35, mixMass: 18, mixPeak: 18, lvl: 1, xp: 0, score: 0,
+            pts: 0, choose: false, inv: 20, reloadT: 0, recoilT: 0, flash: 0, hurtT: 0, deadT: 0,
+            kills: 0, barrelT: []
+        };
+        Tanks.tanks.push(mk);
+        if (pl.human !== undefined) {
+            if (typeof SFX !== "undefined") SFX.play("pickup", mk.x, mk.y, 0.5);
+            if (typeof Mix !== "undefined" && Mix.on && Mix.burst) Mix.burst(mk.x, mk.y, pl.color, "ring", "MINI TANK!", 34);
+        }
+        return mk;
     },
 
     step: function() {

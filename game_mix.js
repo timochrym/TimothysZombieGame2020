@@ -356,7 +356,7 @@ var Mix = {
             if (bu.maxLife) effDmg *= (0.35 + 0.65 * Math.min(1, bu.life / bu.maxLife));
             for (let j = 0; j < blobs.length; j++) {
                 var bl = blobs[j];
-                if (bl.dead) continue;
+                if (bl.dead || (bu.owner && bu.owner.isMini && bl.pl === bu.owner.miniOwner)) continue;
                 var br = blobR[j], rr = br + bur, dx = bux - bl.x, dy = buy - bl.y;
                 if (dx > rr || dx < -rr || dy > rr || dy < -rr || dx * dx + dy * dy > rr * rr) continue;
                 if (Cells.protectedNow(bl.pl)) {
@@ -659,7 +659,7 @@ var Mix = {
             }
             km = k.mixMass;
             // blobs and tanks eat each other by the blob rule: 25% bigger and covering it
-            for (let j = 0; j < blobs.length; j++) {
+            for (let j = 0; j < blobs.length && !k.isMini; j++) {
                 var b2 = blobs[j];
                 if (b2.dead || !k.alive) continue;
                 var r2 = blobR[j], bdx = b2.x - kx, bdy = b2.y - ky, rrB = r2 + ks;
@@ -690,9 +690,9 @@ var Mix = {
                     }
                 }
             }
-            for (let j = 0; j < tanks.length && k.alive; j++) {
+            for (let j = 0; j < tanks.length && k.alive && !k.isMini; j++) {
                 var o = tanks[j];
-                if (o === k || !o.alive || o.inv > 0 || arenaProtected(o) || !(km > o.mixMass * 1.25)) continue;
+                if (o === k || !o.alive || o.isMini || o.inv > 0 || arenaProtected(o) || !(km > o.mixMass * 1.25)) continue;
                 var limO = ks - tankS[j] * 0.4;
                 if (limO <= 0) continue;
                 var odx = o.x - kx, ody = o.y - ky;
@@ -1025,7 +1025,7 @@ var Mix = {
         var cands = [];
         for (let i = 0; i < Tanks.tanks.length; i++) {
             var k = Tanks.tanks[i];
-            if (k !== pickerRef && k.alive && k.human === undefined) cands.push({ ref: k, kind: "tank", x: k.x, y: k.y });
+            if (k !== pickerRef && k.alive && !k.isMini && k.human === undefined) cands.push({ ref: k, kind: "tank", x: k.x, y: k.y });
         }
         for (let i = 0; i < Cells.players.length; i++) {
             var p = Cells.players[i];
@@ -1374,7 +1374,7 @@ var Mix = {
         ctx.fillStyle = "rgba(15,23,42,0.84)";
         ctx.fillRect(0, cssH - 30, cssW, 30);
         var bHint = "WASD move · Mouse aim & shoot · E autofire · 1-8 upgrades · Q switch body · V swap bot · Esc menu";
-        if (mixCfg.body === "blob") bHint = "Mouse steers · Space split (a worm inside you is halved and eaten) · W eject mass (feeds spikes!) · Q switch body · V swap bot · Esc menu";
+        if (mixCfg.body === "blob") bHint = "Mouse steers · Click shoot mini tanks · Space split · W eject · E spawn mini tank · Q body · V swap · Esc menu";
         else if (mixCfg.body === "chain") bHint = "Mouse steers · Hold Space boost · W toggle Snake/Bubble form · Q switch body · V swap bot · Esc menu";
         else if (mixCfg.body === "worm") bHint = "Mouse steers · Hold Click/Space boost · 1/2/3 upgrade · R slows the outer worm (when split) · Q switch body · V swap bot";
         uiText(bHint, cssW / 2, cssH - 11, 12, "rgba(226,232,240,0.9)", "center", "700");
@@ -1388,7 +1388,7 @@ var Mix = {
 
     swapCharacter: function() {
         var pool = [];
-        for (let i = 0; i < Tanks.tanks.length; i++) if (Tanks.tanks[i].alive) pool.push({ kind: "tank", ref: Tanks.tanks[i], x: Tanks.tanks[i].x, y: Tanks.tanks[i].y });
+        for (let i = 0; i < Tanks.tanks.length; i++) if (Tanks.tanks[i].alive && !Tanks.tanks[i].isMini) pool.push({ kind: "tank", ref: Tanks.tanks[i], x: Tanks.tanks[i].x, y: Tanks.tanks[i].y });
         for (let i = 0; i < Cells.players.length; i++) if (Cells.players[i].alive) {
             var cp = Cells.players[i], hd = cp.chain && cp.chainList && cp.chainList[0];
             pool.push({ kind: cp.chain ? "chain" : "blob", ref: cp, x: hd ? hd.x : (cp.cx || 0), y: hd ? hd.y : (cp.cy || 0) });
@@ -1730,6 +1730,7 @@ GameModes.register({
             { label: "CPU tanks", type: "range", min: 0, max: 14, step: 1, get: function() { return TNK.CPUS; }, set: function(v) { TNK.CPUS = v; }, note: "next arena" },
             { label: "CPU blobs", type: "range", min: 0, max: 40, step: 1, get: function() { return cellsCfg.bots; }, set: function(v) { cellsCfg.bots = v; saveCellsCfg(); }, note: "changes live" },
             { label: "Max bubbles per player (0 = unlimited)", type: "range", min: 0, max: 64, step: 1, get: function() { return cellsCfg.maxCells || 0; }, set: function(v) { cellsCfg.maxCells = v; saveCellsCfg(); }, note: "0 = no limit" },
+            { label: "Max mini tanks per blob", type: "range", min: 0, max: 12, step: 1, get: function() { return cellsCfg.maxMiniTanks ?? 4; }, set: function(v) { cellsCfg.maxMiniTanks = Math.max(0, Math.min(12, v | 0)); saveCellsCfg(); }, note: "press E as blob to spawn" },
             { label: "Max snake bubbles per snake", type: "range", min: 2, max: 60, step: 1, get: function() { return cellsCfg.maxChainBubbles || 20; }, set: function(v) { cellsCfg.maxChainBubbles = v; saveCellsCfg(); } },
             { label: "CPU worms", type: "range", min: 0, max: 20, step: 1, get: function() { return SNK.CPUS; }, set: function(v) { SNK.CPUS = v; }, note: "next arena" }
         ]);
@@ -1761,6 +1762,7 @@ GameModes.register({
         }
         if (code === "KeyV" || code === "BracketRight") { return Mix.swapCharacter(); }
         if (code === "KeyQ") { Mix.nextBody(1); return true; }
+        if (mixCfg.body === "blob" && code === "KeyE") { var mb = Mix.me(); if (mb && mb.kind === "blob" && mb.alive) { Cells.spawnMiniTank(mb.ref); return true; } }
         if (mixCfg.body === "worm") { var wi = ["Digit1", "Digit2", "Digit3"].indexOf(code), me = Mix.me(); if (wi >= 0 && me && me.alive) { Mix.wormStat(me.ref, wi); return true; } }
         if (mixCfg.body === "tank") { var tk = GameModes.get("tanks"); if (tk && tk.onKey) return tk.onKey(code); }
         return false;
