@@ -326,30 +326,36 @@ var Snake = {
 
     hud: function() {
         var hs = this.humans();
-        uiPanel(14, 10, 300, 60, "#f472b6");
-        uiText("WORM ARENA", 30, 38, 22, "#f9a8d4", "left", "900");
-        uiText(hs.map(function(w) { return w.name + " " + (w.alive ? Math.round(w.len) : "✖"); }).join("   ") + "   best " + snakeSave.best, 30, 58, 12, "#cbd5e1", "left", "800");
-        // leaderboard
-        var all = this.worms.filter(function(w) { return w.alive; }).sort(function(a, b) { return b.len - a.len; });
-        var lb = all.slice(0, 8);
-        all.forEach(function(w, i) { if (i >= 8 && w.human !== undefined) { w.rank = i + 1; lb.push(w); } });   // you, even when you're not top 8
-        uiPanel(cssW - 214, 64, 200, 30 + lb.length * 18, "#f472b6", 0.8);
-        uiText("LEADERBOARD", cssW - 114, 84, 12, "#f9a8d4", "center", "900");
-        for (let i = 0; i < lb.length; i++) {
-            var w = lb[i];
-            uiText((w.rank && i >= 8 ? w.rank : i + 1) + ". " + w.name, cssW - 202, 104 + i * 18, 12, w.human !== undefined ? "#fde047" : w.color, "left", w.human !== undefined ? "900" : "700");
-            uiText(String(Math.round(w.len)), cssW - 26, 104 + i * 18, 12, "#e2e8f0", "right", "800");
-        }
-        // minimap
-        var mr = 60, mx = cssW - 84, my = cssH - 92;
-        ctx.fillStyle = "rgba(15,23,42,0.8)"; ctx.beginPath(); ctx.arc(mx, my, mr, 0, 7); ctx.fill();
-        ctx.strokeStyle = "rgba(239,68,68,0.6)"; ctx.lineWidth = 2; ctx.stroke();
-        for (let i = 0; i < this.worms.length; i++) {
-            var q = this.worms[i];
-            if (!q.alive) continue;
-            ctx.fillStyle = q.human !== undefined ? "#fff" : q.color;
-            var qs = q.human !== undefined ? 4 : 2;
-            ctx.fillRect(mx + q.segs[0].x / SNK.R * mr - qs / 2, my + q.segs[0].y / SNK.R * mr - qs / 2, qs, qs);
+        var lx = (typeof SandboxUI !== "undefined" && SandboxUI.sideOpen) ? 320 : 14;
+        var menuOpen = typeof document !== "undefined" && document.getElementById("top-menu") && document.getElementById("top-menu").classList.contains("open");
+        if (!this.mixLayer) {
+            uiPanel(lx, 10, 300, 60, "#f472b6");
+            uiText("WORM ARENA", lx + 16, 38, 22, "#f9a8d4", "left", "900");
+            uiText(hs.map(function(w) { return w.name + " " + (w.alive ? Math.round(w.len) : "✖"); }).join("   ") + "   best " + snakeSave.best, lx + 16, 58, 12, "#cbd5e1", "left", "800");
+            // leaderboard
+            if (!menuOpen) {
+                var all = this.worms.filter(function(w) { return w.alive; }).sort(function(a, b) { return b.len - a.len; });
+                var lb = all.slice(0, 8);
+                all.forEach(function(w, i) { if (i >= 8 && w.human !== undefined) { w.rank = i + 1; lb.push(w); } });   // you, even when you're not top 8
+                uiPanel(cssW - 214, 64, 200, 30 + lb.length * 18, "#f472b6", 0.8);
+                uiText("LEADERBOARD", cssW - 114, 84, 12, "#f9a8d4", "center", "900");
+                for (let i = 0; i < lb.length; i++) {
+                    var w = lb[i];
+                    uiText((w.rank && i >= 8 ? w.rank : i + 1) + ". " + w.name, cssW - 202, 104 + i * 18, 12, w.human !== undefined ? "#fde047" : w.color, "left", w.human !== undefined ? "900" : "700");
+                    uiText(String(Math.round(w.len)), cssW - 26, 104 + i * 18, 12, "#e2e8f0", "right", "800");
+                }
+            }
+            // minimap
+            var mr = 60, mx = cssW - 84, my = cssH - 92;
+            ctx.fillStyle = "rgba(15,23,42,0.8)"; ctx.beginPath(); ctx.arc(mx, my, mr, 0, 7); ctx.fill();
+            ctx.strokeStyle = "rgba(239,68,68,0.6)"; ctx.lineWidth = 2; ctx.stroke();
+            for (let i = 0; i < this.worms.length; i++) {
+                var q = this.worms[i];
+                if (!q.alive) continue;
+                ctx.fillStyle = q.human !== undefined ? "#fff" : q.color;
+                var qs = q.human !== undefined ? 4 : 2;
+                ctx.fillRect(mx + q.segs[0].x / SNK.R * mr - qs / 2, my + q.segs[0].y / SNK.R * mr - qs / 2, qs, qs);
+            }
         }
         // death card
         for (let i = 0; i < hs.length; i++) {
@@ -360,7 +366,10 @@ var Snake = {
             uiText(hw.name + ": " + (hw.deathMsg || "Out!"), cssW / 2, y + 36, 22, "#fff", "center", "900");
             uiText("length " + hw.finalLen + "  ·  " + (hw.deadT > 60 ? (hw.human === 1 ? "Enter / ↑" : "click / Space") + " to play again" : "…"), cssW / 2, y + 70, 15, "#cbd5e1", "center", "800");
         }
-        uiText((hs[0] && hs[0].keyMode ? "A/D turn" : "Mouse steers") + " · click / Space / W boost (costs length) · cut others off · Esc menu" + (multiplayer ? " · P2: ←/→ turn, ↑ boost" : ""), cssW / 2, cssH - 14, 12, "rgba(220,230,240,0.7)", "center", "700");
+        if (!this.mixLayer) {
+            ctx.fillStyle = "rgba(15,23,42,0.8)"; ctx.fillRect(0, cssH - 30, cssW, 30);
+            uiText((hs[0] && hs[0].keyMode ? "A/D turn" : "Mouse steers") + " · click / Space / W boost · V swap bot · cut others off · Esc menu" + (multiplayer ? " · P2: ←/→ turn, ↑ boost" : ""), cssW / 2, cssH - 11, 12, "rgba(220,230,240,0.85)", "center", "700");
+        }
     },
     swapBot: function(pid) {
         var cur = pid !== undefined

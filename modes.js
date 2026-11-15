@@ -66,6 +66,7 @@ var GameModes = {
         if (this.current && this.current.onDeactivate) this.current.onDeactivate();
         this.current = next;
         if (next.onActivate) next.onActivate();
+        if (typeof topBarRefresh === "function") topBarRefresh();
     },
 
     flag: function(name, def) {
@@ -95,6 +96,7 @@ var GameModes = {
         if (!m) return;
         var key = (typeof m.firstLevel === "function") ? m.firstLevel() : m.firstLevel;
         if (key && LevelManager.getAllLevels()[key]) LevelManager.selectLevel(key);
+        if (typeof topBarRefresh === "function") topBarRefresh();
         try { localStorage.setItem("timsArcadeLastGame", id); } catch (e) {}
     }
 };

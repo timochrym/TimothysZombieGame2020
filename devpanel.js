@@ -696,9 +696,9 @@ SummonManager.buildUI = function() {
         menu.appendChild(b);
         return b;
     };
-    var sec = function(t) { var d = document.createElement("div"); d.className = "tm-sec"; d.textContent = t; menu.appendChild(d); };
+    var sec = function(t, id) { var d = document.createElement("div"); d.className = "tm-sec"; if (id) d.id = id; d.textContent = t; menu.appendChild(d); return d; };
     var head = document.createElement("div"); head.className = "tm-head"; head.id = "tm-head"; menu.appendChild(head);
-    sec("Play");
+    sec("Play", "tm-sec-play");
     row("", "🕹", "Arcade — switch game", "All the games made with this engine", "", function() { closeTopMenu(); if (typeof paused !== "undefined" && paused) closePause(); Hub.openHub(false); });
     var lvlSelect = document.createElement("select");
     lvlSelect.id = "level-select-dropdown";
@@ -707,20 +707,26 @@ SummonManager.buildUI = function() {
     menu.appendChild(lvlSelect);
     row("tm-frontier", "🌲", "Wildwood Frontier", "Survival on the endless generated trail", "", function() { closeTopMenu(); LevelManager.selectLevel("infinite_frontier"); });
     row("", "⏸", "Pause menu", "Restart, game options, levels", "Esc", function() { closeTopMenu(); if (typeof openPause === "function" && !paused) openPause(false); });
-    sec("People");
-    row("", "👥", "Players & CPUs", "Humans, CPU seats, teams, gamepads", "", function() { closeTopMenu(); PlayersUI.open(); });
-    row("", "📡", "LAN multiplayer", "Host or join on the same Wi-Fi", "", function() { closeTopMenu(); NetUI.open(); });
-    sec("Make & tune");
+    sec("Make & tune", "tm-sec-make");
     row("tm-studio", "🛠", "Level Studio", "Build, play-test and share levels", "B", function() { closeTopMenu(); Studio.open(); });
-    row("summon-toggle-btn", "🧪", "Cheats & tuning", "Dev panel: sliders, spawning, god mode", "", function() { closeTopMenu(); SummonManager.togglePanel(); });
+    row("summon-toggle-btn", "🧪", "Cheats & tuning", "Dev panel: sliders, spawning, god mode", "F2", function() {
+        closeTopMenu();
+        if (typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false) && typeof SandboxUI !== "undefined") {
+            SandboxUI.sideOpen = !SandboxUI.sideOpen;
+            if (SandboxUI.sideOpen) SandboxUI.sideTab = "controls";
+            SandboxUI.render();
+        } else {
+            SummonManager.togglePanel();
+        }
+    });
     row("tm-mash", "🧩", "Mash-up", "Mix other games' parts into this one", "", function() {
         closeTopMenu(); if (!SummonManager.isOpen) SummonManager.togglePanel(); DevUI.switchTab("game");
         var m = document.getElementById("dp-mash"); if (m) setTimeout(function() { m.scrollIntoView({ block: "start" }); }, 50);
     });
     var god = row("god-mode-btn", "⚡", "God mode", "Invincible + unlimited everything", "V", function() { SummonManager.toggleGodMode(); DevUI.sync(); });
     god.style.display = "none";
-    sec("Settings");
-    row("", "⚙", "Settings", "Sound, shake, graphics, speed, 3D view", "", function() { closeTopMenu(); if (!paused) openPause(false); pauseActivate("settings"); });
+    sec("Settings", "tm-sec-settings");
+    row("", "⚙", "Settings", "Sound, shake, graphics, theme", "", function() { closeTopMenu(); if (!paused) openPause(false); pauseActivate("settings"); });
     row("", "🎮", "Controls", "Remap keys and gamepad buttons", "", function() { closeTopMenu(); if (typeof ControlsUI !== "undefined") ControlsUI.open(); });
     row("tm-help", "❓", "Key help on screen", "Show / hide the control cheat-sheet", "H", function(b) { devOpts.showHelp = !devOpts.showHelp; b.classList.toggle("active", devOpts.showHelp); });
     document.body.appendChild(menu);
@@ -730,12 +736,13 @@ SummonManager.buildUI = function() {
         if (open) {
             if (typeof SummonManager !== "undefined") SummonManager.refreshLevelDropdown();
             var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
-            var stEl = document.getElementById("tm-studio"); if (stEl) stEl.style.display = own ? "none" : "";
+            var stEl = document.getElementById("tm-studio"); if (stEl) stEl.style.display = "none"; // already on top bar (#studio-btn)
             var msEl = document.getElementById("tm-mash"); if (msEl) msEl.style.display = own ? "none" : "";
             var frEl = document.getElementById("tm-frontier"); if (frEl) frEl.style.display = own ? "none" : "";
             var ldEl = document.getElementById("level-select-dropdown"); if (ldEl) ldEl.style.display = (own || ldEl.options.length <= 1) ? "none" : "";
             var g = GameModes.current, lvl = LevelManager.getCurrentLevel ? LevelManager.getCurrentLevel() : null;
-            head.innerHTML = "<b>" + (g ? g.title : "") + "</b><span>" + (lvl && lvl.name ? lvl.name.replace(/^[^A-Za-z0-9]+/, "") : "") + "</span>";
+            var lvlTxt = (!own && lvl && lvl.name) ? lvl.name.replace(/^[^A-Za-z0-9]+/, "") : (g && g.tagline ? g.tagline : "");
+            head.innerHTML = "<b>" + (g ? g.title : "") + "</b><span>" + lvlTxt + "</span>";
             var h = document.getElementById("tm-help"); if (h) h.classList.toggle("active", !!devOpts.showHelp);
         }
     };
@@ -1367,7 +1374,13 @@ setInterval(function() {
 function topBarRefresh() {
         // keep the open Cheats & tuning panel in step with the game that's on
         var sp = document.getElementById("summon-panel");
-        if (sp && sp.classList.contains("open") && typeof DevUI !== "undefined" && DevUI.syncGame && !topBarRefresh.inSync) { topBarRefresh.inSync = true; try { DevUI.syncGame(sp); } catch (e) {} topBarRefresh.inSync = false; }
+        if (sp && sp.classList.contains("open")) {
+            if (typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false) && typeof SummonManager !== "undefined") {
+                SummonManager.togglePanel();
+            } else if (typeof DevUI !== "undefined" && DevUI.syncGame && !topBarRefresh.inSync) {
+                topBarRefresh.inSync = true; try { DevUI.syncGame(sp); } catch (e) {} topBarRefresh.inSync = false;
+            }
+        }
         var coopBtn = document.getElementById("coop-btn");
         if (coopBtn) {
             coopBtn.classList.toggle("active", multiplayer || brawl.active);

@@ -176,8 +176,8 @@ var Mix = {
             if (tk) return { kind: "tank", ref: tk, x: tk.x, y: tk.y, alive: tk.alive };
             var cp = Cells.players.find(function(q) { return q.pid === Net.pid; });
             if (cp) {
-                var hd = cp.chain && cp.chainList && cp.chainList[0];
-                return { kind: "blob", ref: cp, x: hd ? hd.x : (cp.cx || 0), y: hd ? hd.y : (cp.cy || 0), alive: cp.alive };
+                var hd = (cp.chain && cp.chainList && cp.chainList[0]) || (cp.blobs && cp.blobs[0]);
+                return { kind: "blob", ref: cp, x: cp.cx || (hd ? hd.x : 0), y: cp.cy || (hd ? hd.y : 0), alive: cp.alive };
             }
             var wm = Snake.worms.find(function(q) { return q.pid === Net.pid; });
             if (wm) return { kind: "worm", ref: wm, x: wm.segs[0].x, y: wm.segs[0].y, alive: wm.alive };
@@ -186,8 +186,8 @@ var Mix = {
         if (mixCfg.body === "tank") { var k = Tanks.tanks.find(function(q) { return q.human === 0; }); return k ? { kind: "tank", ref: k, x: k.x, y: k.y, alive: k.alive } : null; }
         if (mixCfg.body === "blob" || mixCfg.body === "chain") {
             var p = Cells.players.find(function(q) { return q.human === 0; });
-            var hd = p && p.chain && p.chainList && p.chainList[0];              // a bubble worm's camera follows its head
-            return p ? { kind: "blob", ref: p, x: hd ? hd.x : (p.cx || 0), y: hd ? hd.y : (p.cy || 0), alive: p.alive } : null;
+            var hd = p && ((p.chain && p.chainList && p.chainList[0]) || (p.blobs && p.blobs[0]));
+            return p ? { kind: "blob", ref: p, x: (p.chain && hd) ? hd.x : (p.cx || (hd ? hd.x : 0)), y: (p.chain && hd) ? hd.y : (p.cy || (hd ? hd.y : 0)), alive: p.alive } : null;
         }
         var w = Snake.worms.find(function(q) { return q.human === 0; });
         return w ? { kind: "worm", ref: w, x: w.segs[0].x, y: w.segs[0].y, alive: w.alive } : null;
@@ -450,7 +450,7 @@ var Mix = {
                         this.wormXp(w2, 25);
                         this.note(w2.human !== undefined || bW.pl.human !== undefined, w2.name + " bit " + bW.pl.name, w2.color);
                     } else {
-                        blobR[i] = Cells.rad(bW.m);
+                        blobR[i] = Cells.rad(bW.m, bW);
                     }
                     break;
                 }
@@ -567,7 +567,7 @@ var Mix = {
                 if (d2sq > rrB * rrB) continue;
                 var limA = r2 - ks * 0.4;
                 if (b2.m > km * 1.25 && limA > 0 && d2sq < limA * limA && !(k.inv > 0) && !arenaProtected(k)) {
-                    b2.m += km; blobR[j] = Cells.rad(b2.m); k.mixEaten = true; k.hp = 0; Tanks.hurt(k, 1, { name: b2.pl.name }); S.blobAteTank++;
+                    b2.m += km; blobR[j] = Cells.rad(b2.m, b2); k.mixEaten = true; k.hp = 0; Tanks.hurt(k, 1, { name: b2.pl.name }); S.blobAteTank++;
                     this.burst(kx, ky, b2.pl.color, "ring", "ABSORBED!", r2 + 20);
                     this.note(b2.pl.human !== undefined || k.human !== undefined, b2.pl.name + " absorbed " + k.name, b2.pl.color);
                 } else {
@@ -584,7 +584,7 @@ var Mix = {
                             Tanks.gainXp(k, 20);
                             this._blobGone(blobs, b2, k.name); anyDead = true;
                         } else {
-                            blobR[j] = Cells.rad(b2.m);
+                            blobR[j] = Cells.rad(b2.m, b2);
                         }
                     }
                 }
@@ -595,7 +595,7 @@ var Mix = {
                 var limO = ks - tankS[j] * 0.4;
                 if (limO <= 0) continue;
                 var odx = o.x - kx, ody = o.y - ky;
-                if (odx * odx + ody * ody < limO * limO) {
+                if (odx * odx + ody * ody < limO * odx * 0 + limO * limO) {
                     k.mixMass += o.mixMass; km = k.mixMass; ks = tankS[i] = Tanks.size(k);
                     o.mixEaten = true; o.hp = 0; Tanks.hurt(o, 1, k); S.tankAteTank++;
                     this.burst(o.x, o.y, k.color, "ring", "CRUSHED!", ks + 20);
@@ -640,7 +640,7 @@ var Mix = {
             }
             if (b4.m < 80) {                                                   // medium blobs bounce off, worm nibbles a bit for points
                 var nib = Math.min(b4.m * 0.12, 7 + (w4.mx ? w4.mx.st[0] * 1.5 : 0));
-                b4.m = Math.max(15, b4.m - nib); blobR[i] = Cells.rad(b4.m);
+                b4.m = Math.max(15, b4.m - nib); blobR[i] = Cells.rad(b4.m, b4);
                 w4.len += nib * 0.35; this.wormXp(w4, nib * 0.45);
                 b4.vx += adx / away * 8; b4.vy += ady / away * 8; b4.popCd = 30;
                 continue;
@@ -655,7 +655,7 @@ var Mix = {
                     var oa = Math.random() * Math.PI * 2, osp = 4 + Math.random() * 6;
                     Cells.pellets.push({ x: b4.x + Math.cos(oa) * (r4 + 8), y: b4.y + Math.sin(oa) * (r4 + 8), m: orbM, col: w4.color || "#fde047", vx: Math.cos(oa) * osp, vy: Math.sin(oa) * osp });
                 }
-                b4.m += wDmg * 0.35; blobR[i] = Cells.rad(b4.m); b4.popCd = 24;
+                b4.m += wDmg * 0.35; blobR[i] = Cells.rad(b4.m, b4); b4.popCd = 24;
                 b4.vx += adx / away * 9; b4.vy += ady / away * 9;
                 if (w4.len < 10) {
                     Snake.kill(w4, b4.pl);
@@ -674,9 +674,9 @@ var Mix = {
             for (let q = 0; q < pieces; q++) {
                 var pa = q / pieces * Math.PI * 2;
                 blobs.push({ pl: b4.pl, x: b4.x, y: b4.y, m: each, vx: Math.cos(pa) * 14, vy: Math.sin(pa) * 14, mergeT: 600, popCd: 240 });
-                blobR[blobs.length - 1] = Cells.rad(each);
+                blobR[blobs.length - 1] = Cells.rad(each, blobs[blobs.length - 1]);
             }
-            b4.m = each; blobR[i] = Cells.rad(each); b4.mergeT = 600; b4.popCd = 240;
+            b4.m = each; blobR[i] = Cells.rad(each, b4); b4.mergeT = 600; b4.popCd = 240;
             b4.vx += adx / away * 10; b4.vy += ady / away * 10;
             this.note(b4.pl.human !== undefined || w4.human !== undefined, b4.pl.name + " popped on " + w4.name, w4.color);
             if (b4.pl.human !== undefined) screenShake = 6;
@@ -701,7 +701,7 @@ var Mix = {
                     this._blobGone(blobs, bH, wH.name); anyDead = true;
                 } else {
                     var bite = Math.min(bH.m * 0.14, 10 + (wH.mx ? wH.mx.st[0] * 2 : 0));
-                    bH.m = Math.max(15, bH.m - bite); blobR[i] = Cells.rad(bH.m);
+                    bH.m = Math.max(15, bH.m - bite); blobR[i] = Cells.rad(bH.m, bH);
                     bH.popCd = 20;
                     wH.len += bite * 0.35; this.wormXp(wH, bite * 0.5);
                     this.burst(bH.x, bH.y, wH.color, "spark", "+BITE", 22);
@@ -720,9 +720,9 @@ var Mix = {
                 var hitS = wrS + blobR[i] * 0.78;
                 var sdx = hS.x - bS.x, sdy = hS.y - bS.y;
                 if (sdx * sdx + sdy * sdy < hitS * hitS) {
-                    var gain = Math.max(24, Math.round(wS.len * 0.45));
+                    var gain = Math.max(38, Math.round(wS.len * 0.55));
                     Snake.kill(wS, bS.pl);
-                    bS.m += gain; blobR[i] = Cells.rad(bS.m);
+                    bS.m += gain; blobR[i] = Cells.rad(bS.m, bS);
                     var dropN = Math.min(10, Math.max(4, Math.round(wS.len / 12)));
                     var dropM = Math.max(5, Math.round(gain * 0.14));
                     for (let oq = 0; oq < dropN; oq++) {
@@ -1010,65 +1010,151 @@ var Mix = {
         else if (m && m.kind === "blob") Cells.hud();
         else if (m) Snake.hud();
 
-        // what this mode adds to the screen: who you are, clickable body pills, and the cross-game feed
+        var lx = (typeof SandboxUI !== "undefined" && SandboxUI.sideOpen) ? 320 : 14;
+        var menuOpen = typeof document !== "undefined" && document.getElementById("top-menu") && document.getElementById("top-menu").classList.contains("open");
+
+        // Unified 3-in-1 Top-Left Header Card (shifts right when SandboxUI drawer is open)
         var name = MIX_BODIES[0][1];
         for (let i = 0; i < MIX_BODIES.length; i++) if (MIX_BODIES[i][0] === mixCfg.body) { name = MIX_BODIES[i][1]; break; }
-        var extra = "";
-        if (m && m.alive && m.kind === "tank") extra = " · mass " + Math.round(this.tankMass(m.ref));
-        else if (m && m.alive && mixCfg.body === "chain" && m.ref.chainList) { var bc = m.ref.chainList.length; extra = " · " + bc + (bc === 1 ? " bubble" : " bubbles"); }
-        if (m && m.alive && m.kind === "worm" && m.ref.mx) { var X = m.ref.mx; extra = " · Lv " + X.lvl + (X.pts ? " · " + X.pts + " pt: 1 Bite " + X.st[0] + " · 2 Armor " + X.st[1] + " · 3 Appetite " + X.st[2] : " (B" + X.st[0] + " A" + X.st[1] + " P" + X.st[2] + ")"); }
-        uiPanel(14, 76, Math.max(360, 60 + (name.length + extra.length + 42) * 6.4), 34, "#fde047", 0.8);
-        uiText("ARENA MIX · you: " + name + " · Q: body · V: swap" + extra, 26, 98, 12, "#fde68a", "left", "800");
+        var liveStat = "Spectating / Respawning", subStat = "Best: " + (mixSave.best[mixCfg.body] || 0);
+        if (m && m.alive) {
+            if (m.kind === "tank") {
+                liveStat = (m.ref.name || "Tank") + " · Lv " + m.ref.lvl + " " + TNK_CLASSES[m.ref.cls].name + " · Score " + m.ref.score;
+                subStat = "Mass " + Math.round(this.tankMass(m.ref)) + " · Best " + (mixSave.best.tank || 0) + " · Q switch body · V swap bot";
+            } else if (m.kind === "blob") {
+                var bm = Math.round(Cells.mass(m.ref));
+                if (mixCfg.body === "chain" && m.ref.chainList) {
+                    var bc = m.ref.chainList.length;
+                    liveStat = (m.ref.name || "Bubble") + " · Mass " + bm + " · " + bc + (bc === 1 ? " bubble" : " bubbles");
+                    subStat = (m.ref.compact ? "Compact Bubble [W: Snake]" : "Bubble Snake [W: Compact]") + " · Best " + (mixSave.best.chain || 0);
+                } else {
+                    var mc = Cells.mine(m.ref).length;
+                    liveStat = (m.ref.name || "Blob") + " · Mass " + bm + " · " + mc + (mc === 1 ? " cell" : " cells");
+                    subStat = "Best " + (mixSave.best.blob || 0) + " · Space split · W eject · Q body · V swap";
+                }
+            } else if (m.kind === "worm") {
+                var X = m.ref.mx;
+                liveStat = (m.ref.name || "Worm") + " · Len " + Math.round(m.ref.len) + (X ? " · Lv " + X.lvl : "");
+                subStat = "Best " + (mixSave.best.worm || 0) + (X ? " · Bite " + X.st[0] + " · Armor " + X.st[1] + " · Appetite " + X.st[2] : "") + " · Q body · V swap";
+            }
+        }
+        uiPanel(lx, 10, 446, 94, "#fde047", 0.88);
+        uiText("🌀 ARENA MIX", lx + 14, 34, 18, "#fde047", "left", "900");
+        uiText(liveStat, lx + 432, 33, 12, "#f8fafc", "right", "800");
+        uiText(subStat, lx + 14, 54, 11, "#cbd5e1", "left", "700");
 
-        // clickable quick-switch body pills (cached to offscreen canvas per active body)
-        if (!this._pillsCanvas || this._pillsBody !== mixCfg.body) {
-            this._pillsBody = mixCfg.body;
+        // Clickable quick-switch body pills inside the header card (cached per active body & lx)
+        var pillsKey = mixCfg.body + ":" + lx;
+        if (!this._pillsCanvas || this._pillsBody !== pillsKey) {
+            this._pillsBody = pillsKey;
             this._pills.length = 0;
             var pc = this._pillsCanvas || (this._pillsCanvas = document.createElement("canvas"));
-            pc.width = 450; pc.height = 26;
+            pc.width = 430; pc.height = 28;
             var pg = pc.getContext("2d");
-            pg.clearRect(0, 0, 450, 26);
+            pg.clearRect(0, 0, 430, 28);
             var px = 0;
             for (let i = 0; i < MIX_BODIES.length; i++) {
                 var bd = MIX_BODIES[i], active = bd[0] === mixCfg.body;
                 var lbl = bd[0] === "chain" ? "📿 Bubble" : bd[1];
-                var pw = lbl.length * 7.2 + 18;
-                pg.fillStyle = active ? "rgba(253,224,71,0.24)" : "rgba(15,23,42,0.72)";
-                pg.strokeStyle = active ? "#fde047" : "rgba(148,163,184,0.35)";
-                pg.lineWidth = active ? 1.5 : 1;
-                pg.beginPath(); pg.roundRect(px + 1, 1, pw, 22, 6); pg.fill(); pg.stroke();
+                var pw = Math.round(lbl.length * 7.0 + 18);
+                pg.fillStyle = active ? "rgba(253,224,71,0.28)" : "rgba(15,23,42,0.82)";
+                pg.strokeStyle = active ? "#fde047" : "rgba(148,163,184,0.4)";
+                pg.lineWidth = active ? 1.8 : 1;
+                pg.beginPath(); pg.roundRect(px + 1, 2, pw, 23, 6); pg.fill(); pg.stroke();
                 pg.font = (active ? "800 " : "700 ") + "11px system-ui, sans-serif";
                 pg.textAlign = "center";
                 pg.fillStyle = active ? "#fef08a" : "#cbd5e1";
-                pg.fillText(lbl, px + 1 + pw * 0.5, 16);
-                this._pills.push({ id: bd[0], x: 14 + px, y: 114, w: pw, h: 22 });
+                pg.fillText(lbl, px + 1 + pw * 0.5, 17);
+                this._pills.push({ id: bd[0], x: lx + 12 + px, y: 68, w: pw, h: 23 });
                 px += pw + 6;
             }
-            var swLbl = "🔄 Swap [V]", swW = swLbl.length * 6.8 + 16;
-            pg.fillStyle = "rgba(56,189,248,0.18)";
+            var swLbl = "🔄 Swap [V]", swW = Math.round(swLbl.length * 6.6 + 16);
+            pg.fillStyle = "rgba(56,189,248,0.22)";
             pg.strokeStyle = "#38bdf8";
-            pg.lineWidth = 1.2;
-            pg.beginPath(); pg.roundRect(px + 1, 1, swW, 22, 6); pg.fill(); pg.stroke();
+            pg.lineWidth = 1.4;
+            pg.beginPath(); pg.roundRect(px + 1, 2, swW, 23, 6); pg.fill(); pg.stroke();
             pg.font = "800 11px system-ui, sans-serif";
             pg.textAlign = "center";
             pg.fillStyle = "#bae6fd";
-            pg.fillText(swLbl, px + 1 + swW * 0.5, 16);
-            this._swapPill = { id: "_swap", x: 14 + px, y: 114, w: swW, h: 22 };
+            pg.fillText(swLbl, px + 1 + swW * 0.5, 17);
+            this._swapPill = { id: "_swap", x: lx + 12 + px, y: 68, w: swW, h: 23 };
         }
-        ctx.drawImage(this._pillsCanvas, 14, 113);
+        ctx.drawImage(this._pillsCanvas, lx + 12, 66);
+
+        // Interactive Worm Upgrade Pills at bottom-left when playing as a worm with unspent points
+        this._wormRects = [];
+        var logStartY = 122;
+        if (m && m.alive && m.kind === "worm" && m.ref.mx && m.ref.mx.pts > 0) {
+            var WX = m.ref.mx, wy = cssH - 74;
+            uiPanel(lx, wy, 368, 36, "#f472b6", 0.92);
+            uiText("+" + WX.pts + " UPGRADE:", lx + 12, wy + 22, 11, "#fbcfe8", "left", "900");
+            var wLabels = ["[1] 🦷 Bite (" + WX.st[0] + ")", "[2] 🛡 Armor (" + WX.st[1] + ")", "[3] 🧲 Appetite (" + WX.st[2] + ")"];
+            var wx = lx + 94;
+            for (let wi = 0; wi < 3; wi++) {
+                var ww = 85;
+                ctx.fillStyle = "rgba(244,114,182,0.25)";
+                ctx.strokeStyle = "#f472b6";
+                ctx.lineWidth = 1.3;
+                ctx.beginPath(); ctx.roundRect(wx, wy + 6, ww, 24, 6); ctx.fill(); ctx.stroke();
+                uiText(wLabels[wi], wx + ww * 0.5, wy + 22, 10, "#fdf2f8", "center", "800");
+                this._wormRects.push({ idx: wi, x: wx, y: wy + 6, w: ww, h: 24 });
+                wx += ww + 6;
+            }
+        }
+
+        // Unified 3-in-1 Combined Leaderboard on the right (auto-hidden when #top-menu is open)
+        if (!menuOpen) {
+            var allEntries = [];
+            for (let i = 0; i < Tanks.tanks.length; i++) {
+                var tk = Tanks.tanks[i];
+                if (!tk.alive) continue;
+                allEntries.push({ icon: "🛡", name: tk.name || "Tank", val: Math.max(tk.score || 0, Math.round(this.tankMass(tk))), col: tk.color || "#60a5fa", human: tk.human !== undefined });
+            }
+            for (let i = 0; i < Cells.players.length; i++) {
+                var cp = Cells.players[i];
+                if (!cp.alive) continue;
+                allEntries.push({ icon: cp.chain ? "📿" : "🫧", name: cp.name || "Blob", val: Math.round(Cells.mass(cp)), col: cp.color || "#c084fc", human: cp.human !== undefined });
+            }
+            for (let i = 0; i < Snake.worms.length; i++) {
+                var sw2 = Snake.worms[i];
+                if (!sw2.alive) continue;
+                allEntries.push({ icon: "🪱", name: sw2.name || "Worm", val: Math.round(sw2.len), col: sw2.color || "#f472b6", human: sw2.human !== undefined });
+            }
+            allEntries.sort(function(a, b) { return b.val - a.val; });
+            var lbRows = allEntries.slice(0, 8);
+            for (let i = 8; i < allEntries.length; i++) {
+                if (allEntries[i].human) { allEntries[i].rank = i + 1; lbRows.push(allEntries[i]); }
+            }
+            uiPanel(cssW - 220, 64, 206, 32 + lbRows.length * 18, "#fde047", 0.85);
+            uiText("3-IN-1 LEADERBOARD", cssW - 117, 84, 12, "#fde047", "center", "900");
+            for (let i = 0; i < lbRows.length; i++) {
+                var row = lbRows[i];
+                var rk = row.rank || (i + 1);
+                uiText(rk + ". " + row.icon + " " + row.name, cssW - 208, 104 + i * 18, 12, row.human ? "#fde047" : row.col, "left", row.human ? "900" : "700");
+                uiText(String(row.val), cssW - 24, 104 + i * 18, 12, "#e2e8f0", "right", "800");
+            }
+        }
 
         var lw = 0;
         for (let i = 0; i < this.log.length; i++) {
             var L = this.log[i]; L.t--;
             if (L.t <= 0) continue;
             ctx.globalAlpha = Math.min(1, L.t / 60);
-            uiText(L.text, 26, 156 + lw * 18, 12, L.col, "left", "800");
+            uiText(L.text, lx + 12, logStartY + lw * 18, 12, L.col, "left", "800");
             ctx.globalAlpha = 1;
             this.log[lw++] = L;
         }
         this.log.length = lw;
         this.drawRadar(m);
-        uiText("Bullets shrink blobs · tanks are blobs with a gun · blobs pop on worms · feed spikes (W / shoot / boost) to launch them!", cssW / 2, cssH - 28, 11, "rgba(220,230,240,0.75)", "center", "700");
+
+        // Single clean bottom control bar tailored to your current body
+        ctx.fillStyle = "rgba(15,23,42,0.84)";
+        ctx.fillRect(0, cssH - 30, cssW, 30);
+        var bHint = "WASD move · Mouse aim & shoot · E autofire · 1-8 upgrades · Q switch body · V swap bot · Esc menu";
+        if (mixCfg.body === "blob") bHint = "Mouse steers · Space split · W eject mass (feeds spikes!) · Q switch body · V swap bot · Esc menu";
+        else if (mixCfg.body === "chain") bHint = "Mouse steers · Hold Space boost · W toggle Snake/Bubble form · Q switch body · V swap bot · Esc menu";
+        else if (mixCfg.body === "worm") bHint = "Mouse steers · Hold Click/Space boost · 1/2/3 upgrade Bite/Armor/Appetite · Q switch body · V swap bot";
+        uiText(bHint, cssW / 2, cssH - 11, 12, "rgba(226,232,240,0.9)", "center", "700");
     },
 
     nextBody: function(dir) {
@@ -1468,6 +1554,21 @@ GameModes.register({
                         Mix._lanBody = p.id; mixCfg.body = p.id;
                     } else if (p.id !== mixCfg.body) Mix.setBody(p.id);
                     return true;
+                }
+            }
+            if (Mix._wormRects && Mix._wormRects.length) {
+                for (let i = 0; i < Mix._wormRects.length; i++) {
+                    var wr = Mix._wormRects[i];
+                    if (mouseX >= wr.x && mouseX <= wr.x + wr.w && mouseY >= wr.y && mouseY <= wr.y + wr.h) {
+                        if (typeof Net !== "undefined" && Net.role === "client") {
+                            Mix._lanWs = ((Mix._lanWs || 0) - ((Mix._lanWs || 0) % 10)) + 10 + (wr.idx + 1);
+                        } else {
+                            var meW = Mix.me();
+                            if (meW && meW.alive && meW.kind === "worm") Mix.wormStat(meW.ref, wr.idx);
+                        }
+                        mouseDown = false;
+                        return true;
+                    }
                 }
             }
             if (typeof Net !== "undefined" && Net.role === "client" && mixCfg.body === "tank") {

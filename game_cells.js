@@ -133,6 +133,7 @@ var Cells = {
         if (pl.human !== undefined && cellsCfg.chain && !(typeof Mix !== "undefined" && Mix.on)) pl.chain = true;
         pl.chainList = [];
         pl.compact = false; pl.chainMoving = false; pl.ejectPrev = false; pl.dashCd = 0;
+        pl.cx = p[0]; pl.cy = p[1];
         this.blobs.push({ pl: pl, x: p[0], y: p[1], m: m0, vx: 0, vy: 0, mergeT: 0 });
     },
 
@@ -747,18 +748,24 @@ var Cells = {
 
     hud: function() {
         var hum = this.locals();
-        uiPanel(14, 10, 320, 60, "#a78bfa");
-        uiText("BLOB ARENA", 30, 38, 22, "#c4b5fd", "left", "900");
-        uiText(hum.map(function(p) { return p.name + " " + (p.alive ? Math.round(Cells.mass(p)) : "✖"); }).join("   ") + "   best " + cellsSave.best, 30, 58, 12, "#cbd5e1", "left", "800");
-        var lb = this.players.filter(function(p) { return p.alive; }).map(function(p) { return [p, Cells.mass(p)]; }).sort(function(a, b) { return b[1] - a[1]; });
-        var rows = lb.slice(0, 8);
-        lb.forEach(function(r, i) { if (i >= 8 && r[0].human !== undefined) { r[2] = i + 1; rows.push(r); } });
-        uiPanel(cssW - 214, 64, 200, 30 + rows.length * 18, "#a78bfa", 0.85);
-        uiText("LEADERBOARD", cssW - 114, 84, 12, "#c4b5fd", "center", "900");
-        for (let i = 0; i < rows.length; i++) {
-            var pl = rows[i][0];
-            uiText((rows[i][2] || i + 1) + ". " + pl.name, cssW - 202, 104 + i * 18, 12, pl.human !== undefined ? "#fde047" : pl.color, "left", pl.human !== undefined ? "900" : "700");
-            uiText(String(Math.round(rows[i][1])), cssW - 26, 104 + i * 18, 12, "#e2e8f0", "right", "800");
+        var lx = (typeof SandboxUI !== "undefined" && SandboxUI.sideOpen) ? 320 : 14;
+        var menuOpen = typeof document !== "undefined" && document.getElementById("top-menu") && document.getElementById("top-menu").classList.contains("open");
+        if (!this.mixLayer) {
+            uiPanel(lx, 10, 320, 60, "#a78bfa");
+            uiText("BLOB ARENA", lx + 16, 38, 22, "#c4b5fd", "left", "900");
+            uiText(hum.map(function(p) { return p.name + " " + (p.alive ? Math.round(Cells.mass(p)) : "✖"); }).join("   ") + "   best " + cellsSave.best, lx + 16, 58, 12, "#cbd5e1", "left", "800");
+            if (!menuOpen) {
+                var lb = this.players.filter(function(p) { return p.alive; }).map(function(p) { return [p, Cells.mass(p)]; }).sort(function(a, b) { return b[1] - a[1]; });
+                var rows = lb.slice(0, 8);
+                lb.forEach(function(r, i) { if (i >= 8 && r[0].human !== undefined) { r[2] = i + 1; rows.push(r); } });
+                uiPanel(cssW - 214, 64, 200, 30 + rows.length * 18, "#a78bfa", 0.85);
+                uiText("LEADERBOARD", cssW - 114, 84, 12, "#c4b5fd", "center", "900");
+                for (let i = 0; i < rows.length; i++) {
+                    var pl = rows[i][0];
+                    uiText((rows[i][2] || i + 1) + ". " + pl.name, cssW - 202, 104 + i * 18, 12, pl.human !== undefined ? "#fde047" : pl.color, "left", pl.human !== undefined ? "900" : "700");
+                    uiText(String(Math.round(rows[i][1])), cssW - 26, 104 + i * 18, 12, "#e2e8f0", "right", "800");
+                }
+            }
         }
         for (let i = 0; i < hum.length; i++) {
             var h = hum[i];
@@ -768,10 +775,12 @@ var Cells = {
             uiText(h.name + (h.by ? " was eaten by " + h.by.name : " is out"), cssW / 2, y + 36, 22, "#fff", "center", "900");
             uiText("peak mass " + Math.round(h.peak) + "  ·  " + (h.deadT > 60 ? (h.human === 1 ? "Enter" : "click / Space") + " to play again" : "…"), cssW / 2, y + 70, 15, "#cbd5e1", "center", "800");
         }
-        ctx.fillStyle = "rgba(15,23,42,0.8)"; ctx.fillRect(0, cssH - 30, cssW, 30);
-        var chainHuman = hum.find(function(p) { return p.chain; });
-        var hint = chainHuman ? (chainHuman.compact ? "BUBBLE · mouse moves · hold Space: boost · W: snake form" : "SNAKE · mouse steers · hold Space: boost · W: bubble form") + " · bumping snakes kills · Esc menu" : "Mouse moves · Space split · W eject · eat anything 25% smaller · green spikes pop big blobs · Esc menu";
-        uiText(hint + (multiplayer ? " · P2: arrows, Enter action, / eject or combine" : ""), cssW / 2, cssH - 11, 12, "rgba(220,230,240,0.85)", "center", "700");
+        if (!this.mixLayer) {
+            ctx.fillStyle = "rgba(15,23,42,0.8)"; ctx.fillRect(0, cssH - 30, cssW, 30);
+            var chainHuman = hum.find(function(p) { return p.chain; });
+            var hint = chainHuman ? (chainHuman.compact ? "BUBBLE · mouse moves · hold Space: boost · W: snake form" : "SNAKE · mouse steers · hold Space: boost · W: bubble form") + " · V: swap bot · Esc menu" : "Mouse moves · Space split · W eject · V swap bot · eat anything 25% smaller · Esc menu";
+            uiText(hint + (multiplayer ? " · P2: arrows, Enter action, / eject or combine" : ""), cssW / 2, cssH - 11, 12, "rgba(220,230,240,0.85)", "center", "700");
+        }
     },
     swapBot: function(pid) {
         var cur = pid !== undefined

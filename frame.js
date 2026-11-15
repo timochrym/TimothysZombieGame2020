@@ -1416,7 +1416,14 @@ function pauseActivate(id, dir) {
     }
     else if (id === "help") { devOpts.showHelp = !devOpts.showHelp; helpTimer = devOpts.showHelp ? 60 * 14 : 0; }
     else if (id === "dev") { closePause(); Studio.open(); }
-    else if (id === "cheats") { closePause(); if (!SummonManager.isOpen) SummonManager.togglePanel(); }
+    else if (id === "cheats") {
+        closePause();
+        if (GameModes.flag("ownScreen", false) && typeof SandboxUI !== "undefined") {
+            SandboxUI.sideOpen = true; SandboxUI.sideTab = "controls"; SandboxUI.render();
+        } else if (!SummonManager.isOpen) {
+            SummonManager.togglePanel();
+        }
+    }
     else if (id === "studio_back") { closePause(); Studio.endPlaytest(); }
 }
 

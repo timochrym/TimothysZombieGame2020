@@ -648,13 +648,20 @@ var SandboxUI = {
         var topY = sb ? 62 : 12;
         var ts = typeof devOpts !== "undefined" ? (devOpts.timeScale || 1) : 1;
         var isPaused = typeof paused !== "undefined" && paused;
-        var tabs = [
+        var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
+        var tabs = own ? [
+            ["controls", "🎛 Play & Tune"],
+            ["inspect", "🔍 Inspect"],
+            ["games", "🕹 Games"],
+            ["admin", "👑 Admin"]
+        ] : [
             ["controls", "🎛 Ctrl"],
             ["inspect", "🔍 Insp"],
             ["tools", "🛠 Tool"],
             ["games", "🕹 Game"],
             ["admin", "👑 Admin"]
         ];
+        if (own && this.sideTab === "tools") this.sideTab = "controls";
 
         var body = "";
         if (this.sideTab === "controls") body = this.renderSideControlsHTML(m);
@@ -679,7 +686,7 @@ var SandboxUI = {
             }).join("") +
             '</div>' +
             // Tabs
-            '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:8px">' +
+            '<div style="display:grid;grid-template-columns:repeat(' + tabs.length + ',1fr);gap:3px;margin-top:8px">' +
             tabs.map(function(t) {
                 return '<button class="sb-btn ' + (self.sideTab === t[0] ? 'active' : '') + '" style="padding:5px 2px;font-size:10px" data-stab="' + t[0] + '">' + t[1] + '</button>';
             }).join("") +
@@ -704,6 +711,7 @@ var SandboxUI = {
             '<button class="sb-btn" id="sb-adm-horde">🧟 Summon Horde</button>' +
             '<button class="sb-btn" id="sb-adm-heal">❤ Heal All</button>' : '') +
             '<button class="sb-btn" id="sb-adm-respawn">🔄 Respawn All</button>' +
+            (isIo ? '<button class="sb-btn" id="sb-adm-swap">🔄 Swap Bot [V]</button>' : '') +
             (!own ? '<button class="sb-btn" id="sb-adm-clearfoe">🧹 Clear Foes</button>' +
             '<button class="sb-btn" style="color:#f87171" id="sb-adm-clearworld">💥 Clear World</button>' : '') +
             '</div>' +
@@ -736,6 +744,9 @@ var SandboxUI = {
 
     renderSideControlsHTML: function(m) {
         var rows = (typeof GameTuning !== "undefined") ? GameTuning.rows() : [];
+        var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
+        var mid = m ? m.id : "";
+        var isIo = ["tanks", "cells", "snake", "mix"].indexOf(mid) !== -1;
         var html = "";
 
         if (rows.length) {
@@ -746,6 +757,17 @@ var SandboxUI = {
                     return '<label class="sb-row" style="cursor:pointer"><span>' + r.label + '</span><input type="checkbox" data-gtune="' + idx + '" ' + (val ? 'checked' : '') + '></label>';
                 }
                 if (r.type === "choice") {
+                    if (mid === "mix" && r.label === "Play as") {
+                        return '<div style="margin-bottom:8px"><div style="font-size:11px;color:#94a3b8;margin-bottom:4px">Play as [Q to cycle]:</div>' +
+                            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px">' +
+                            (r.options || []).map(function(o) {
+                                var act = String(o[0]) === String(val);
+                                return '<button class="sb-btn ' + (act ? 'active' : '') + '" style="padding:5px 6px;font-size:11px" data-mixbody="' + o[0] + '">' + o[1] + '</button>';
+                            }).join("") +
+                            '</div><select class="sb-input" data-gtune="' + idx + '" style="display:none">' +
+                            (r.options || []).map(function(o) { return '<option value="' + o[0] + '" ' + (String(o[0]) === String(val) ? 'selected' : '') + '>' + o[1] + '</option>'; }).join("") +
+                            '</select></div>';
+                    }
                     return '<div style="margin-bottom:7px"><div style="font-size:11px;color:#94a3b8;margin-bottom:2px">' + r.label + '</div>' +
                         '<select class="sb-input" data-gtune="' + idx + '">' +
                         (r.options || []).map(function(o) { return '<option value="' + o[0] + '" ' + (String(o[0]) === String(val) ? 'selected' : '') + '>' + o[1] + '</option>'; }).join("") +
@@ -757,31 +779,30 @@ var SandboxUI = {
             html += '</div>';
         }
 
-        // Universal Physics & Cheats
-        var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
-        var mid = m ? m.id : "";
-        var isIo = ["tanks", "cells", "snake", "mix"].indexOf(mid) !== -1;
+        // Universal Physics & Cheats (only in world games — .io games already have Invincible humans in Game Controls)
         var isGod = !!(typeof godMode !== "undefined" && godMode) || !!(typeof arenaCheats !== "undefined" && arenaCheats.god);
         var unlimAmmo = typeof settings !== "undefined" && settings.ammo === "unlimited";
         var grav = typeof devOpts !== "undefined" ? (devOpts.gravityMult || 1) : 1;
         var uz = typeof userZoom !== "undefined" ? userZoom : 1;
         var hb = typeof devOpts !== "undefined" && !!devOpts.showHitboxes;
 
-        if (!own || isIo) {
+        if (!own) {
             html += '<div class="sb-sec">Universal Physics & Cheats</div><div class="sb-card">' +
                 '<label class="sb-row" style="cursor:pointer"><span>🛡 God Mode (Invincible)</span><input type="checkbox" id="sb-u-god" ' + (isGod ? 'checked' : '') + '></label>' +
-                (!own ? '<label class="sb-row" style="cursor:pointer"><span>∞ Unlimited Ammo</span><input type="checkbox" id="sb-u-ammo" ' + (unlimAmmo ? 'checked' : '') + '></label>' +
+                '<label class="sb-row" style="cursor:pointer"><span>∞ Unlimited Ammo</span><input type="checkbox" id="sb-u-ammo" ' + (unlimAmmo ? 'checked' : '') + '></label>' +
                 '<label class="sb-row" style="cursor:pointer"><span>🟩 Show Hitboxes</span><input type="checkbox" id="sb-u-hb" ' + (hb ? 'checked' : '') + '></label>' +
                 '<div style="margin-bottom:6px"><div class="sb-row" style="margin-bottom:2px"><span>🌍 Gravity</span><strong>' + grav.toFixed(1) + 'x</strong></div>' +
                 '<input type="range" id="sb-u-grav" min="0" max="2.5" step="0.1" value="' + grav + '" style="width:100%"></div>' +
                 '<div><div class="sb-row" style="margin-bottom:2px"><span>🔎 Camera Zoom</span><strong>' + uz.toFixed(2) + 'x</strong></div>' +
-                '<input type="range" id="sb-u-zoom" min="0.4" max="2.2" step="0.05" value="' + uz + '" style="width:100%"></div>' : '') +
+                '<input type="range" id="sb-u-zoom" min="0.4" max="2.2" step="0.05" value="' + uz + '" style="width:100%"></div>' +
                 '</div>';
         }
 
         html += '<div class="sb-sec">Quick Actions</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
             (!own ? '<button class="sb-btn" id="sb-act-heal">❤ Heal All</button>' +
             '<button class="sb-btn" id="sb-act-clear">🧹 Clear Foes</button>' : '') +
+            (isIo ? '<button class="sb-btn" id="sb-tl-swap">🔄 Swap Bot [V]</button>' +
+            '<button class="sb-btn ' + (this.tool === "inspect" ? "active" : "") + '" id="sb-act-inspect">🔍 Inspect</button>' : '') +
             '<button class="sb-btn" id="sb-act-restart">🔄 Restart</button>' +
             '<button class="sb-btn active" id="sb-act-hub">🕹 Arcade Hub</button>' +
             '</div>';
@@ -1228,6 +1249,19 @@ var SandboxUI = {
             if (inp.tagName === "SELECT" || inp.type === "checkbox") inp.onchange = handler;
         });
 
+        this._root.querySelectorAll("[data-mixbody]").forEach(function(b) {
+            b.onclick = function() {
+                var body = b.dataset.mixbody;
+                if (typeof Net !== "undefined" && Net.role === "client") {
+                    if (typeof Mix !== "undefined") Mix._lanBody = body;
+                    if (typeof mixCfg !== "undefined") mixCfg.body = body;
+                } else if (typeof Mix !== "undefined" && Mix.setBody) {
+                    Mix.setBody(body);
+                }
+                self.render();
+            };
+        });
+
         // Controls Tab: Universal Cheats
         if (el("sb-u-god")) el("sb-u-god").onchange = function(e) {
             var v = e.target.checked;
@@ -1255,6 +1289,11 @@ var SandboxUI = {
         };
         if (el("sb-act-heal") && typeof DevActions !== "undefined") el("sb-act-heal").onclick = function() { if (!self.sendNet({ k: "healAll" })) DevActions.healAll(); };
         if (el("sb-act-clear") && typeof DevActions !== "undefined") el("sb-act-clear").onclick = function() { if (!self.sendNet({ k: "clearEnemies" })) DevActions.clearEnemies(); };
+        if (el("sb-act-inspect")) el("sb-act-inspect").onclick = function() {
+            self.tool = self.tool === "inspect" ? "play" : "inspect";
+            if (self.tool === "inspect") self.sideTab = "inspect";
+            self.render();
+        };
         if (el("sb-act-restart")) el("sb-act-restart").onclick = function() {
             if (!self.sendNet({ k: "restart" })) {
                 if (GameModes.has("onRestart")) GameModes.call("onRestart");
@@ -1717,8 +1756,15 @@ var SandboxUI = {
         if (el("sb-adm-respawn")) el("sb-adm-respawn").onclick = function() {
             if (!self.sendNet({ k: "admin", cmd: "respawnAll" })) {
                 for (var i = 0; i < characters.length; i++) { characters[i].dead = false; characters[i].health = characters[i].maxHealth; characters[i].invulnTimer = 90; }
+                if (typeof Tanks !== "undefined" && Tanks.tanks) Tanks.tanks.forEach(function(k) { if (!k.alive) Tanks.spawn(k); });
+                if (typeof Cells !== "undefined" && Cells.players) Cells.players.forEach(function(p) { if (!p.alive) Cells.spawn(p); });
+                if (typeof Snake !== "undefined" && Snake.worms) Snake.worms.forEach(function(w) { if (!w.alive) Snake.spawn({ old: w, name: w.name, color: w.color, human: w.human }); });
                 if (typeof Net !== "undefined" && Net.role === "host") for (var pk in Net.peers) if (!Net.peers[pk].ch || Net.peers[pk].ch.dead) Net.spawnRemoteHero(Net.peers[pk]);
             }
+        };
+        if (el("sb-adm-swap")) el("sb-adm-swap").onclick = function() {
+            if (!self.sendNet({ k: "swap" }) && typeof EntityTakeover !== "undefined") EntityTakeover.swapPlayers();
+            self.render();
         };
         if (el("sb-adm-clearfoe")) el("sb-adm-clearfoe").onclick = function() {
             if (!self.sendNet({ k: "clearEnemies" }) && typeof DevActions !== "undefined") DevActions.clearEnemies();

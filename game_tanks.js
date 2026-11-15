@@ -355,17 +355,20 @@ var Tanks = {
 
     hud: function() {
         var me = this.locals()[0];
-        uiPanel(14, 10, 330, 60, "#60a5fa");
-        uiText("TANK ARENA", 30, 38, 22, "#93c5fd", "left", "900");
-        uiText(this.tanks.filter(function(k) { return k.human !== undefined; }).map(function(k) { return k.name + " " + (k.alive ? "Lv " + k.lvl + " · " + k.score : "✖"); }).join("   ") + "   best " + tanksSave.best, 30, 58, 12, "#cbd5e1", "left", "800");
-        // leaderboard
-        var lb = this.tanks.filter(function(k) { return k.alive; }).sort(function(a, b) { return b.score - a.score; });
-        uiPanel(cssW - 214, 64, 200, 30 + lb.length * 18, "#60a5fa", 0.85);
-        uiText("SCOREBOARD", cssW - 114, 84, 12, "#93c5fd", "center", "900");
-        for (let i = 0; i < lb.length; i++) {
-            var k = lb[i];
-            uiText((i + 1) + ". " + k.name + " · " + TNK_CLASSES[k.cls].name, cssW - 202, 104 + i * 18, 11, k.human !== undefined ? "#fde047" : k.color, "left", k.human !== undefined ? "900" : "700");
-            uiText(String(k.score), cssW - 26, 104 + i * 18, 11, "#e2e8f0", "right", "800");
+        var lx = (typeof SandboxUI !== "undefined" && SandboxUI.sideOpen) ? 320 : 14;
+        if (!this.mixLayer) {
+            uiPanel(lx, 10, 330, 60, "#60a5fa");
+            uiText("TANK ARENA", lx + 16, 38, 22, "#93c5fd", "left", "900");
+            uiText(this.tanks.filter(function(k) { return k.human !== undefined; }).map(function(k) { return k.name + " " + (k.alive ? "Lv " + k.lvl + " · " + k.score : "✖"); }).join("   ") + "   best " + tanksSave.best, lx + 16, 58, 12, "#cbd5e1", "left", "800");
+            // leaderboard
+            var lb = this.tanks.filter(function(k) { return k.alive; }).sort(function(a, b) { return b.score - a.score; });
+            uiPanel(cssW - 214, 64, 200, 30 + lb.length * 18, "#60a5fa", 0.85);
+            uiText("SCOREBOARD", cssW - 114, 84, 12, "#93c5fd", "center", "900");
+            for (let i = 0; i < lb.length; i++) {
+                var k = lb[i];
+                uiText((i + 1) + ". " + k.name + " · " + TNK_CLASSES[k.cls].name, cssW - 202, 104 + i * 18, 11, k.human !== undefined ? "#fde047" : k.color, "left", k.human !== undefined ? "900" : "700");
+                uiText(String(k.score), cssW - 26, 104 + i * 18, 11, "#e2e8f0", "right", "800");
+            }
         }
         this.statRects = []; this.classRects = [];
         if (me && me.alive) {
@@ -375,7 +378,7 @@ var Tanks = {
             ctx.fillStyle = "#fde047"; ctx.fillRect(bx, by, bw * Math.min(1, me.xp / this.xpFor(me.lvl)), 16);
             uiText("Lv " + me.lvl + " " + TNK_CLASSES[me.cls].name + "   ·   score " + me.score, cssW / 2, by + 13, 12, "#ffffff", "center", "900");
             // stats (always visible; brighter when you have points)
-            var sx = 16, sy = cssH - 40 - 8 * 20;
+            var sx = lx + 2, sy = cssH - 40 - 8 * 20;
             uiPanel(sx - 4, sy - 26, 236, 8 * 20 + 30, "#60a5fa", 0.8);
             uiText(me.pts > 0 ? "×" + me.pts + " POINTS — press 1-8" : "STATS", sx + 6, sy - 8, 12, me.pts > 0 ? "#fde047" : "#94a3b8", "left", "900");
             for (let i = 0; i < 8; i++) {
@@ -388,10 +391,10 @@ var Tanks = {
             }
             // class choice
             if (me.choose) {
-                var nx = TNK_CLASSES[me.cls].next, keys = ["U", "I", "O", "P"];
-                uiText("PICK A CLASS", 22, 100, 14, "#fde047", "left", "900");
+                var nx = TNK_CLASSES[me.cls].next, keys = ["U", "I", "O", "P"], baseY = this.mixLayer ? 128 : 100;
+                uiText("PICK A CLASS", lx + 8, baseY, 14, "#fde047", "left", "900");
                 for (let i = 0; i < nx.length; i++) {
-                    var cx = 16 + (i % 2) * 112, cy = 110 + Math.floor(i / 2) * 92;
+                    var cx = lx + 2 + (i % 2) * 112, cy = baseY + 10 + Math.floor(i / 2) * 92;
                     uiPanel(cx, cy, 104, 84, TNK_STAT_COL[i * 2], 0.9);
                     this.drawTankIcon({ ang: -0.6, cls: nx[i], color: me.color }, cx + 52, cy + 38);
                     uiText(keys[i] + " " + TNK_CLASSES[nx[i]].name, cx + 52, cy + 78, 11, "#fff", "center", "900");
@@ -403,7 +406,9 @@ var Tanks = {
             uiText(me.name + (me.by ? " destroyed by " + me.by.name : " destroyed"), cssW / 2, cssH / 2 - 14, 22, "#fff", "center", "900");
             uiText("score " + me.final + "  ·  " + (me.deadT > 60 ? "click / Space to play again" : "…"), cssW / 2, cssH / 2 + 22, 15, "#cbd5e1", "center", "800");
         }
-        uiText("WASD move · mouse aim · hold click fire · E auto-fire" + (this.auto ? " (ON)" : "") + " · 1-8 stats · U/I/O/P class · Esc menu" + (multiplayer ? " · P2: arrows + Enter (auto-aim)" : ""), cssW / 2, cssH - 14, 12, "rgba(220,230,240,0.7)", "center", "700");
+        if (!this.mixLayer) {
+            uiText("WASD move · mouse aim · hold click fire · E auto-fire" + (this.auto ? " (ON)" : "") + " · 1-8 stats · U/I/O/P class · Esc menu" + (multiplayer ? " · P2: arrows + Enter (auto-aim)" : ""), cssW / 2, cssH - 14, 12, "rgba(220,230,240,0.7)", "center", "700");
+        }
     },
     // a small tank picture for the class cards (screen coordinates)
     drawTankIcon: function(k, sx, sy) {
