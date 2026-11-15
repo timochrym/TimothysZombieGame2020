@@ -59,6 +59,7 @@ var Snake = {
         var ang = Math.random() * Math.PI * 2, w = o.old || {};
         w.name = o.name; w.color = o.color; w.human = o.human; w.alive = true; w.len = 24; w.ang = ang; w.want = ang;
         w.boost = false; w.segs = []; w.kills = w.kills || 0; w.deadT = 0; w.cpuT = 0; w._dmgLog = null;
+        w.kinId = 0; w.slowed = false; w.rejoinCd = 0; w.splitCd = 0; w.gone = false;         // a fresh worm is on its own again
         w.safeT = o.human !== undefined ? 120 : 0;          // humans get 2 s of spawn protection
         for (let i = 0; i < w.len; i++) w.segs.push({ x: x - Math.cos(ang) * i * SNK.SEG, y: y - Math.sin(ang) * i * SNK.SEG });
         if (!o.old) this.worms.push(w);
@@ -175,16 +176,132 @@ var Snake = {
             for (let gy = cy - 1; gy <= cy + 1; gy++) {
                 var cell = g.get(base + gy);
                 if (!cell) continue;
-                for (let i = 0; i < cell.length; i += 4) {
+                for (let i = 0; i < cell.length; i += 5) {
                     var w = cell[i + 3];
                     if (w === self) continue;
+                    if (self && self.kinId && w.kinId === self.kinId) continue;       // pieces of one player's split worm never hurt each other
                     var dx = cell[i] - x, dy = cell[i + 1] - y, rr = rad + cell[i + 2];
-                    if (dx * dx + dy * dy < rr * rr) return w;
+                    if (dx * dx + dy * dy < rr * rr) { this.lastHitIdx = cell[i + 4]; return w; }     // lastHitIdx: which body segment was hit
                 }
             }
         }
         return null;
     },
+
+    // ================= SPLIT WORMS =================
+    // A spike pushed into a worm's side cuts it in two. Both halves belong to the same player: same slot, colour,
+    // stats (`mx`) and controls, and they share a `kinId`. Rules:
+    //   - kin worms never collide with each other (no accidental deaths);
+    //   - they can only rejoin HEAD to TAIL: one worm's head must reach the last 3 segments of the other,
+    //     within (radiusA + radiusB) x 1.35, and not before `rejoinCd` (2 s) has run out;
+    //   - hold the brake key (R, P2: Right Shift) to slow the split worm whose head is furthest from the screen centre.
+    _kinSeq: 0,
+    SPLIT_MIN_LEN: 30, SPLIT_MIN_PIECE: 8, SPLIT_MAX_PIECES: 4, REJOIN_FRAMES: 120, SPLIT_FRAMES: 90, REJOIN_LEEWAY: 1.35, BRAKE_FACTOR: 0.45,
+
+    kinOf: function(w) {
+        if (!w.kinId) return [w];
+        var out = [];
+        for (let i = 0; i < this.worms.length; i++) { var q = this.worms[i]; if (q.alive && !q.gone && q.kinId === w.kinId) out.push(q); }
+        return out.length ? out : [w];
+    },
+    // the player's main worm: the longest one alive (a dead record while all are dead); pred picks the player's worms
+    primaryWorm: function(pred) {
+        var best = null;
+        for (let i = 0; i < this.worms.length; i++) {
+            var q = this.worms[i];
+            if (q.gone || !pred(q)) continue;
+            if (!best || (q.alive && !best.alive) || (q.alive === best.alive && q.alive && q.len > best.len)) best = q;
+        }
+        return best;
+    },
+    localWorm: function(human) { return this.primaryWorm(function(q) { return q.human === human; }); },
+
+    // cut worm w at body segment k. Returns the new worm (the tail half), or null when it cannot split.
+    splitWorm: function(w, k) {
+        var n = w.segs.length;
+        if (!w.alive || w.gone || w.splitCd > 0 || w.len < this.SPLIT_MIN_LEN || n < this.SPLIT_MIN_LEN) return null;
+        if (this.kinOf(w).length >= this.SPLIT_MAX_PIECES) return null;
+        var m = this.SPLIT_MIN_PIECE;
+        if (k < m || k > n - m) return null;
+        var headSegs = w.segs.slice(0, k + 1), tailSegs = w.segs.slice(k + 1);
+        if (!w.kinId) w.kinId = ++this._kinSeq;
+        var B = {};
+        for (var key in w) B[key] = w[key];             // same name, colour, owner slot, pid, stats, power-ups
+        B.segs = tailSegs;
+        var share = headSegs.length / n;
+        B.len = w.len * (1 - share); w.len = w.len * share;
+        w.segs = headSegs;
+        // the tail half's new head is the cut end: it carries on in the direction the worm was going there, then veers away
+        var t0 = tailSegs[0], t1 = tailSegs[1] || tailSegs[0];
+        B.ang = Math.atan2(t0.y - t1.y, t0.x - t1.x) + (Math.random() < 0.5 ? -1 : 1) * 0.9;
+        B.want = B.ang; B.boost = false; B.boosting = false; B.kills = 0; B.deadT = 0; B.cpuT = 0; B._dmgLog = null; B.alive = true; B.gone = false; B.slowed = false;
+        B.safeT = Math.max(B.safeT || 0, 30);
+        B.rejoinCd = w.rejoinCd = this.REJOIN_FRAMES;    // no instant re-merge on the split frame
+        B.splitCd = w.splitCd = this.SPLIT_FRAMES;       // and no instant second cut
+        this.worms.push(B);
+        return B;
+    },
+
+    // front keeps its head and gets rear's whole body as its new tail; rear is absorbed (no death, no kill)
+    rejoin: function(front, rear) {
+        front.segs = front.segs.concat(rear.segs);
+        front.len += rear.len;
+        front.rejoinCd = 40; front.splitCd = Math.max(front.splitCd || 0, 40);
+        rear.alive = false; rear.gone = true;
+        this._anyGone = true;
+        this.rejoined = (this.rejoined || 0) + 1;
+    },
+    // head -> tail check for every pair of kin worms
+    kinStep: function() {
+        var W = this.worms, leeway = this.REJOIN_LEEWAY;
+        for (let i = 0; i < W.length; i++) {
+            var a = W[i];
+            if (!a.alive || a.gone || !a.kinId || a.rejoinCd > 0) continue;
+            var h = a.segs[0];
+            for (let j = 0; j < W.length; j++) {
+                var b = W[j];
+                if (b === a || !b.alive || b.gone || b.kinId !== a.kinId || b.rejoinCd > 0) continue;
+                var reach = (this.radius(a) + this.radius(b)) * leeway, n = b.segs.length, touch = false;
+                for (let t = n - 1; t >= Math.max(1, n - 3); t--) {       // only the last 3 segments of the other worm count
+                    var s2 = b.segs[t], dx = s2.x - h.x, dy = s2.y - h.y;
+                    if (dx * dx + dy * dy < reach * reach) { touch = true; break; }
+                }
+                if (touch) { this.rejoin(b, a); break; }
+            }
+        }
+    },
+
+    brakeHeld: function(w) {
+        if (w.human === 0) { var p0 = (typeof Pads !== "undefined") ? Pads.state[0] : null; return !!BrakePressed || !!(p0 && p0.active && p0.interact); }
+        if (w.human === 1) { var p1 = (typeof Pads !== "undefined") ? Pads.state[1] : null; return !!RShiftPressed || !!(p1 && p1.active && p1.interact); }
+        if (w.human === "lan" && typeof Net !== "undefined" && Net.peers && Net.peers[w.pid]) return !!Net.peerX(w.pid).r;
+        return false;
+    },
+    // while the brake is held, slow exactly ONE worm of each split player: the one whose head is furthest from the
+    // centre of the screen (the camera). A small margin keeps the choice from flipping when the two are about level.
+    brakeStep: function() {
+        var groups = {}, W = this.worms;
+        for (let i = 0; i < W.length; i++) { var w = W[i]; w.slowedNow = false; if (w.alive && !w.gone && w.kinId) (groups[w.kinId] || (groups[w.kinId] = [])).push(w); }
+        for (var id in groups) {
+            var g = groups[id];
+            if (g.length < 2) { g[0].slowed = false; continue; }
+            if (!this.brakeHeld(g[0])) { g.forEach(function(q) { q.slowed = false; }); continue; }
+            var local = g[0].human === 0 || g[0].human === 1, cx, cy;
+            if (local) { cx = this.cam.x; cy = this.cam.y; }
+            else { cx = 0; cy = 0; g.forEach(function(q) { cx += q.segs[0].x; cy += q.segs[0].y; }); cx /= g.length; cy /= g.length; }
+            var far = null, farD = -1, prev = null;
+            g.forEach(function(q) { var d = Math.hypot(q.segs[0].x - cx, q.segs[0].y - cy); q._cd = d; if (d > farD) { farD = d; far = q; } if (q.slowed) prev = q; });
+            if (prev && prev !== far && prev._cd >= farD - 40) far = prev;
+            g.forEach(function(q) { q.slowed = q === far; });
+        }
+    },
+    // copy owner / name / colour from one worm to the rest of its split pieces (after a swap with a bot)
+    syncKin: function(w) {
+        if (!w.kinId) return;
+        for (let i = 0; i < this.worms.length; i++) { var q = this.worms[i]; if (q !== w && q.kinId === w.kinId) { q.human = w.human; q.pid = w.pid; q.name = w.name; q.color = w.color; } }
+    },
+    // how many worms the player owns, and the widest gap between them (for the camera and the HUD)
+    kinCount: function(w) { return this.kinOf(w).length; },
 
     buildGrid: function() {
         var g = this.grid;
@@ -197,8 +314,8 @@ var Snake = {
             for (let i = 3; i < segs.length; i += 2) {        // skip the head area, every other segment is plenty
                 var s = segs[i], key = (Math.floor(s.x * 0.0125) + 512) * 1024 + (Math.floor(s.y * 0.0125) + 512);
                 var cell = g.get(key);
-                if (cell) cell.push(s.x, s.y, r, w);
-                else g.set(key, [s.x, s.y, r, w]);
+                if (cell) cell.push(s.x, s.y, r, w, i);
+                else g.set(key, [s.x, s.y, r, w, i]);
             }
         }
     },
@@ -222,6 +339,9 @@ var Snake = {
                 by.len += Math.max(Math.round(w.len * 0.5), Math.round(putIn * 1.2), 15);
             }
         }
+        var kinLeft = 0;
+        if (w.kinId) for (let q = 0; q < this.worms.length; q++) { var o = this.worms[q]; if (o !== w && o.alive && !o.gone && o.kinId === w.kinId) kinLeft++; }
+        if (kinLeft > 0) { w.gone = true; this._anyGone = true; return; }         // one piece died, the player lives on
         if (w.human !== undefined) {
             w.deathMsg = by ? "Eaten by " + by.name : "You hit the wall";
             w.finalLen = Math.round(w.len);
@@ -236,8 +356,12 @@ var Snake = {
     step: function() {
         this.t++;
         this.buildGrid();
+        this.brakeStep();
         for (let k = 0; k < this.worms.length; k++) {
             var w = this.worms[k];
+            if (w.gone) continue;
+            if (w.rejoinCd > 0) w.rejoinCd--;
+            if (w.splitCd > 0) w.splitCd--;
             if (!w.alive) {
                 w.deadT++;
                 if (w.human === undefined && w.deadT > 180) this.spawn({ old: w, name: w.name, color: w.color });
@@ -248,7 +372,7 @@ var Snake = {
             var d = ((w.want - w.ang + Math.PI * 3) % (Math.PI * 2)) - Math.PI, turn = 0.11 - Math.min(0.05, w.len / 4000);
             w.ang += Math.max(-turn, Math.min(turn, d));
             var boosting = w.boost && w.len > 14;
-            var sp = (boosting ? 6.2 : 3.2) * arenaSpeed(w);
+            var sp = (boosting ? 6.2 : 3.2) * arenaSpeed(w) * (w.slowed ? this.BRAKE_FACTOR : 1);
             if (boosting && this.t % 4 === 0) { w.len -= 1; var tl = w.segs[w.segs.length - 1]; this.addPellet(tl.x, tl.y, 1, w.color); }
             var snkDec = (typeof cellsCfg !== "undefined") ? cellsCfg.decay : 0.0000333;
             if (snkDec > 0 && w.len > 60) {
@@ -290,6 +414,8 @@ var Snake = {
             var hit = this.hitBody(nh.x, nh.y, r * 0.7, w);
             if (hit) this.kill(w, hit);
         }
+        this.kinStep();
+        if (this._anyGone) { this._anyGone = false; this.worms = this.worms.filter(function(q) { return !q.gone; }); }
         while (this.pellets.length < SNK.PELLETS) this.addPellet();
         if (this.pellets.length > SNK.PELLETS + 180) this.groupPellets(SNK.PELLETS + 180, SNK.PELLETS + 60);
     },
@@ -327,7 +453,15 @@ var Snake = {
         var hs = this.humans().filter(function(w) { return w.alive; });
         // camera: follow the human worms, zoom out as they grow (and to fit both)
         var tx = 0, ty = 0, span = 0;
-        if (hs.length) { hs.forEach(function(w) { tx += w.segs[0].x; ty += w.segs[0].y; }); tx /= hs.length; ty /= hs.length; if (hs.length > 1) span = Math.hypot(hs[0].segs[0].x - hs[1].segs[0].x, hs[0].segs[0].y - hs[1].segs[0].y); }
+        if (hs.length) {
+            // one focus per player: their main (longest) worm; the others of a split player only widen the view
+            var focus = [], seen = {};
+            hs.forEach(function(w) { var key = w.kinId || ("w" + focus.length + w.human); if (seen[key]) { if (w.len > seen[key].len) focus[focus.indexOf(seen[key])] = (seen[key] = w); return; } seen[key] = w; focus.push(w); });
+            focus.forEach(function(w) { tx += w.segs[0].x; ty += w.segs[0].y; });
+            tx /= focus.length; ty /= focus.length;
+            if (focus.length > 1) span = Math.hypot(focus[0].segs[0].x - focus[1].segs[0].x, focus[0].segs[0].y - focus[1].segs[0].y);
+            hs.forEach(function(w) { span = Math.max(span, Math.hypot(w.segs[0].x - tx, w.segs[0].y - ty) * 2); });
+        }
         else { tx = this.cam.x; ty = this.cam.y; }
         var biggest = hs.reduce(function(m, w) { return Math.max(m, w.len); }, 24);
         var z = Math.max(0.35, Math.min(1.1, 1.15 - Math.sqrt(biggest) * 0.035)), fitZ = span ? Math.min(z, (Math.min(cssW, cssH) * 0.8) / (span + 300)) : z;
@@ -381,7 +515,21 @@ var Snake = {
         ctx.beginPath(); ctx.arc(o[0], o[1], SNK.R * Z, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
     },
 
+    // shown while a player has 2+ worms: how the pieces work (also used by Arena Mix)
+    splitHint: function() {
+        var me = this.localWorm((typeof Net !== "undefined" && Net.role === "client") ? undefined : 0);
+        if (typeof Net !== "undefined" && Net.role === "client") me = this.primaryWorm(function(q) { return q.pid === Net.pid; });
+        if (!me || !me.alive) return;
+        var k = this.kinOf(me);
+        if (k.length < 2) return;
+        var cd = Math.max.apply(null, k.map(function(q) { return q.rejoinCd || 0; }));
+        var held = this.brakeHeld(me);
+        var txt = "SPLIT ×" + k.length + " · hold R: slow the outer worm" + (held ? " (braking)" : "") + " · " + (cd > 0 ? "rejoin in " + Math.ceil(cd / 60) + " s" : "rejoin: touch a worm's head to the other's tail");
+        uiPanel(cssW / 2 - 250, cssH - 74, 500, 28, "#4ade80", 0.85);
+        uiText(txt, cssW / 2, cssH - 55, 12, held ? "#fde047" : "#bbf7d0", "center", "800");
+    },
     hud: function() {
+        this.splitHint();
         var hs = this.humans();
         var sideOpen = typeof SandboxUI !== "undefined" && (SandboxUI.sideOpen || SandboxUI.pauseOpen);
         var lx = sideOpen ? 320 : 12;
@@ -392,7 +540,16 @@ var Snake = {
                 uiText(hs.map(function(w) { return w.name + " " + (w.alive ? Math.round(w.len) : "✖"); }).join("   ") + "   best " + snakeSave.best, lx + 16, 98, 12, "#cbd5e1", "left", "800");
             }
             // leaderboard
-            var all = this.worms.filter(function(w) { return w.alive; }).sort(function(a, b) { return b.len - a.len; });
+            // one line per player: the pieces of a split worm are added together
+            var byKin = {}, all = [];
+            this.worms.forEach(function(w) {
+                if (!w.alive) return;
+                if (!w.kinId) { all.push(w); return; }
+                var e = byKin[w.kinId];
+                if (!e) { e = byKin[w.kinId] = { name: w.name, color: w.color, human: w.human, len: 0 }; all.push(e); }
+                e.len += w.len;
+            });
+            all.sort(function(a, b) { return b.len - a.len; });
             var lb = all.slice(0, 8);
             all.forEach(function(w, i) { if (i >= 8 && w.human !== undefined) { w.rank = i + 1; lb.push(w); } });   // you, even when you're not top 8
             uiPanel(cssW - 214, 14, 200, 30 + lb.length * 18, "#f472b6", 0.8);
@@ -425,13 +582,13 @@ var Snake = {
         }
         if (!this.mixLayer) {
             ctx.fillStyle = "rgba(15,23,42,0.8)"; ctx.fillRect(0, cssH - 30, cssW, 30);
-            uiText((hs[0] && hs[0].keyMode ? "A/D turn" : "Mouse steers") + " · click / Space / W boost · V swap bot · cut others off · Esc menu" + (multiplayer ? " · P2: ←/→ turn, ↑ boost" : ""), cssW / 2, cssH - 11, 12, "rgba(220,230,240,0.85)", "center", "700");
+            uiText((hs[0] && hs[0].keyMode ? "A/D turn" : "Mouse steers") + " · click / Space / W boost · R slows the outer worm when split · V swap bot · cut others off · Esc menu" + (multiplayer ? " · P2: ←/→ turn, ↑ boost" : ""), cssW / 2, cssH - 11, 12, "rgba(220,230,240,0.85)", "center", "700");
         }
     },
     swapBot: function(pid) {
         var cur = pid !== undefined
             ? this.worms.find(function(w) { return w.pid === pid; })
-            : this.worms.find(function(w) { return w.human === 0; });
+            : this.localWorm(0);
         var bots = this.worms.filter(function(w) { return w.alive && w.human === undefined && w !== cur; });
         if (!bots.length) return false;
         this._swapIdx = ((this._swapIdx || 0) + 1) % bots.length;
@@ -443,6 +600,7 @@ var Snake = {
             bot.human = pid !== undefined ? "lan" : 0;
             if (pid !== undefined) bot.pid = pid;
         }
+        this.syncKin(bot); if (cur) this.syncKin(cur);
         if (pid === undefined && bot.segs && bot.segs[0]) {
             this.cam.x = bot.segs[0].x; this.cam.y = bot.segs[0].y;
             if (typeof showBanner === "function") showBanner("SWAPPED", "Now controlling " + (bot.name || "Worm"), "#f472b6");
@@ -543,7 +701,7 @@ GameModes.register({
     },
     netInput: function() {
         var me = Snake.humans()[0];
-        var x = { b: (mouseDown || SpacePressed || WASDupPressed) ? 1 : 0 };
+        var x = { b: (mouseDown || SpacePressed || WASDupPressed) ? 1 : 0, r: BrakePressed ? 1 : 0 };
         if (me && me.alive) { var hs = Snake.toScreen(me.segs[0].x, me.segs[0].y); x.a = Math.round(Math.atan2(mouseY - hs[1], mouseX - hs[0]) * 100) / 100; }
         return x;
     },

@@ -169,6 +169,29 @@ var Mix = {
             if (wm && !wm.alive && ++wm.deadT > 60 && again) { var nw = Snake.spawn({ old: wm, name: wm.name, color: wm.color, human: "lan" }); if (nw) { nw.pid = p.pid; nw.kills = 0; } }
         });
     },
+    // A pushed (launched / moving) spike that hits the SIDE of a worm cuts it in two: same owner, colour, stats. The
+    // spike is used up. Near the head or the tail (or a short worm) it just passes. See Snake.splitWorm for the rules.
+    spikeSplit: function() {
+        var V = Cells.viruses;
+        if (!V.length || !Snake.worms.length) return;
+        for (let v = V.length - 1; v >= 0; v--) {
+            var vi = V[v];
+            if (!(vi.launched > 0 || (vi.vx * vi.vx + vi.vy * vi.vy) > 4)) continue;
+            var hit = Snake.hitBody(vi.x, vi.y, Cells.rad(vi.m || 100) * 0.8, null);
+            if (!hit || !hit.alive || hit.splitCd > 0) continue;
+            // the cut goes where the spike's CENTRE is closest to the body (the spike touches several segments at once)
+            var k = 1, kd = 1e18, sg = hit.segs;
+            for (let q = 1; q < sg.length; q++) { var qx = sg[q].x - vi.x, qy = sg[q].y - vi.y, qd = qx * qx + qy * qy; if (qd < kd) { kd = qd; k = q; } }
+            var B = Snake.splitWorm(hit, k);
+            if (!B) continue;
+            this.stat.spikeSplit = (this.stat.spikeSplit || 0) + 1;
+            this.burst(vi.x, vi.y, "#4ade80", "ring", "SPLIT!", 75);
+            this.note(hit.human !== undefined, hit.name + " was cut in two by a spike", "#4ade80");
+            if (hit.human !== undefined && typeof SFX !== "undefined") SFX.play("kill", vi.x, vi.y, 0.8);
+            V[v] = V[V.length - 1]; V.pop();                      // the spike is consumed
+            if (V.length < 22) Cells.addVirus();
+        }
+    },
     // the human's body as { kind, x, y, alive, ref }
     me: function() {
         if (typeof Net !== "undefined" && Net.role === "client") {
@@ -179,8 +202,8 @@ var Mix = {
                 var hd = (cp.chain && cp.chainList && cp.chainList[0]) || (cp.blobs && cp.blobs[0]);
                 return { kind: "blob", ref: cp, x: cp.cx || (hd ? hd.x : 0), y: cp.cy || (hd ? hd.y : 0), alive: cp.alive };
             }
-            var wm = Snake.worms.find(function(q) { return q.pid === Net.pid; });
-            if (wm) return { kind: "worm", ref: wm, x: wm.segs[0].x, y: wm.segs[0].y, alive: wm.alive };
+            var wm = Snake.primaryWorm(function(q) { return q.pid === Net.pid; });
+            if (wm) return { kind: "worm", ref: wm, x: wm.segs[0].x, y: wm.segs[0].y, alive: wm.alive, span: this.kinSpan(wm) };
             return null;
         }
         if (mixCfg.body === "tank") { var k = Tanks.tanks.find(function(q) { return q.human === 0; }); return k ? { kind: "tank", ref: k, x: k.x, y: k.y, alive: k.alive } : null; }
@@ -189,8 +212,14 @@ var Mix = {
             var hd = p && ((p.chain && p.chainList && p.chainList[0]) || (p.blobs && p.blobs[0]));
             return p ? { kind: "blob", ref: p, x: (p.chain && hd) ? hd.x : (p.cx || (hd ? hd.x : 0)), y: (p.chain && hd) ? hd.y : (p.cy || (hd ? hd.y : 0)), alive: p.alive } : null;
         }
-        var w = Snake.worms.find(function(q) { return q.human === 0; });
-        return w ? { kind: "worm", ref: w, x: w.segs[0].x, y: w.segs[0].y, alive: w.alive } : null;
+        var w = Snake.localWorm(0);          // a split worm is several bodies: the main (longest) one leads the camera
+        return w ? { kind: "worm", ref: w, x: w.segs[0].x, y: w.segs[0].y, alive: w.alive, span: this.kinSpan(w) } : null;
+    },
+    // widest distance from the main worm's head to its other pieces (the camera zooms out to keep them in view)
+    kinSpan: function(w) {
+        var span = 0, k = Snake.kinOf(w), h = w.segs[0];
+        for (let i = 0; i < k.length; i++) if (k[i] !== w) span = Math.max(span, Math.hypot(k[i].segs[0].x - h.x, k[i].segs[0].y - h.y) * 2);
+        return span;
     },
     say: function(text, col) { this.log.unshift({ text: text, col: col || "#e2e8f0", t: 240 }); if (this.log.length > 5) this.log.length = 5; },
     note: function(human, text, col) { this.say(text, col); if (human) showBanner(text, "", col || "#fde047"); },
@@ -259,12 +288,13 @@ var Mix = {
             var w0 = worms[j];
             if (!w0.alive) { w0.mx = null; wormR[j] = 0; continue; }
             if (!w0.mx) w0.mx = { lvl: 1, xp: 0, pts: 0, st: [0, 0, 0], biteCd: 0, last: w0.len };
-            var x0 = w0.mx, grew = w0.len - x0.last;
+            var x0 = w0.mx, grew = w0.len - (w0.mxLast === undefined ? w0.len : w0.mxLast);      // per worm: split pieces share `mx` but not their growth
             if (grew > 0) { w0.len += grew * 0.12 * x0.st[2]; this.wormXp(w0, grew * 0.5); }
-            x0.last = w0.len;
+            w0.mxLast = w0.len; x0.last = w0.len;
             if (x0.biteCd > 0) x0.biteCd--;
             wormR[j] = Snake.radius(w0);
         }
+        this.spikeSplit();
         // ---- tank bookkeeping: mass, level growth, death lumps
         for (let i = 0; i < tanks.length; i++) {
             var k0 = tanks[i];
@@ -948,7 +978,10 @@ var Mix = {
         if (m && m.alive) {
             if (m.kind === "tank") z = 0.85 / ((TNK_CLASSES[m.ref.cls].fov || 1) * (1 + m.ref.lvl * 0.006));
             else if (m.kind === "blob") z = Math.max(0.22, Math.min(1.2, 1.3 / Math.pow(Math.max(20, Cells.mass(m.ref)) / 20, 0.32)));
-            else z = Math.max(0.35, Math.min(1.1, 1.15 - Math.sqrt(m.ref.len) * 0.035));
+            else {
+                z = Math.max(0.35, Math.min(1.1, 1.15 - Math.sqrt(m.ref.len) * 0.035));
+                if (m.span) z = Math.min(z, (Math.min(cssW, cssH) * 0.8) / (m.span + 300));
+            }
             this.cam.x += (m.x - this.cam.x) * 0.15; this.cam.y += (m.y - this.cam.y) * 0.15;
         }
         this.cam.z += (Math.max(0.22, z) - this.cam.z) * 0.05;
@@ -1210,10 +1243,14 @@ var Mix = {
             if (!cp.alive) continue;
             allEntries.push({ icon: cp.chain ? "📿" : "🫧", name: cp.name || "Blob", val: Math.round(Cells.mass(cp)), col: cp.color || "#c084fc", human: cp.human !== undefined });
         }
+        var kinRow = {};
         for (let i = 0; i < Snake.worms.length; i++) {
             var sw2 = Snake.worms[i];
             if (!sw2.alive) continue;
-            allEntries.push({ icon: "🪱", name: sw2.name || "Worm", val: Math.round(sw2.len), col: sw2.color || "#f472b6", human: sw2.human !== undefined });
+            if (sw2.kinId && kinRow[sw2.kinId]) { kinRow[sw2.kinId].val += Math.round(sw2.len); continue; }      // one line per player: split pieces add up
+            var ent = { icon: "🪱", name: sw2.name || "Worm", val: Math.round(sw2.len), col: sw2.color || "#f472b6", human: sw2.human !== undefined };
+            if (sw2.kinId) kinRow[sw2.kinId] = ent;
+            allEntries.push(ent);
         }
         allEntries.sort(function(a, b) { return b.val - a.val; });
         var lbRows = allEntries.slice(0, 8);
@@ -1247,7 +1284,7 @@ var Mix = {
         var bHint = "WASD move · Mouse aim & shoot · E autofire · 1-8 upgrades · Q switch body · V swap bot · Esc menu";
         if (mixCfg.body === "blob") bHint = "Mouse steers · Space split · W eject mass (feeds spikes!) · Q switch body · V swap bot · Esc menu";
         else if (mixCfg.body === "chain") bHint = "Mouse steers · Hold Space boost · W toggle Snake/Bubble form · Q switch body · V swap bot · Esc menu";
-        else if (mixCfg.body === "worm") bHint = "Mouse steers · Hold Click/Space boost · 1/2/3 upgrade Bite/Armor/Appetite · Q switch body · V swap bot";
+        else if (mixCfg.body === "worm") bHint = "Mouse steers · Hold Click/Space boost · 1/2/3 upgrade · R slows the outer worm (when split) · Q switch body · V swap bot";
         uiText(bHint, cssW / 2, cssH - 11, 12, "rgba(226,232,240,0.9)", "center", "700");
     },
 
@@ -1275,6 +1312,8 @@ var Mix = {
             var cName = cur.ref.name, cCol = cur.ref.color;
             cur.ref.human = "lan"; cur.ref.pid = pPid; cur.ref.name = pName; cur.ref.color = pCol;
             lanPeer.ref.human = 0; lanPeer.ref.pid = undefined; lanPeer.ref.name = cName; lanPeer.ref.color = cCol;
+            if (cur.kind === "worm") Snake.syncKin(cur.ref);
+            if (lanPeer.kind === "worm") Snake.syncKin(lanPeer.ref);
             if (typeof Net !== "undefined" && Net.peers && Net.peers[pPid]) {
                 Net.peers[pPid].mixBody = cur.kind;
                 if (Net.peers[pPid].inp && Net.peers[pPid].inp.x) delete Net.peers[pPid].inp.x.body;
@@ -1285,8 +1324,9 @@ var Mix = {
             if (!others.length) return false;
             this._swapIdx = ((this._swapIdx || 0) + 1) % others.length;
             next = others[this._swapIdx];
-            if (cur) cur.ref.human = undefined;
+            if (cur) { cur.ref.human = undefined; if (cur.kind === "worm") Snake.syncKin(cur.ref); }
             next.ref.human = 0;
+            if (next.kind === "worm") Snake.syncKin(next.ref);
         }
         mixCfg.body = next.kind;
         this._pillsBody = null;

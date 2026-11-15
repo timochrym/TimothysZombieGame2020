@@ -6,6 +6,28 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Split worms: spike cut, head-to-tail rejoin, brake key
+
+**Asked:** a spike pushed into a worm's side splits it into two worms of one player; they rejoin only head to tail (with
+leeway and a short cooldown); a key slows the piece furthest from the screen centre; verify with `node --check`,
+`tools/verify_mix.py` and headless tests for (a) split, (b) mid-body no rejoin, (c) head-to-tail rejoin, (d) brake.
+**Shipped:** see the PROGRESS.md entry for the rules. New `tests/worm_split.js`: 60+ staged checks, including both
+directions of rejoin, the "last 3 segments" boundary, the leeway edge, the cooldown, a real keypress for the brake, a
+three-piece case (only one slowed), camera, piece death, swap with a bot, and a live game-loop split.
+**Went well:** the grid that hides worm bodies from heads only needed one more number (the segment index) to know where
+a spike hit, and `kinId` made "pieces ignore each other" a single line in `hitBody`.
+**Went wrong:** (1) the first cut point used whichever segment the grid returned first, not the nearest: a spike aimed at
+segment 5 cut at segment 11. Now the nearest segment to the spike centre. (2) My leeway tests were wrong: 39 px is
+generous enough that a head 27 px from the tail end counts, so "4th from last does not count" was a bad test. (3) The brake
+test paused the game, so the key went to the pause menu; it now un-pauses only around the real key press.
+(4) Several lookups assumed one worm per player (`find(human === 0)`, the leaderboards, swap with a bot); each now uses
+the main piece or adds the pieces up.
+**Left:** a short self-collision grace is not needed because pieces never collide; if you want pieces to hurt each other
+after a delay, it is one condition in `Snake.hitBody`. CPU worms do not use the brake. No LAN test of the brake with a
+second browser (the joiner sends `r`; the host reads it, but this is not tested end to end).
+
+---
+
 ## Enemy pathfinding: measured first, two fixes (work in progress)
 
 **Asked:** "lets bump up pathfinding and enemy tracking" (it was "still horrible").

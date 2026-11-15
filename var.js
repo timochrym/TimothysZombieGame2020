@@ -143,6 +143,7 @@ var zombieImg = document.getElementById("zombie");
 var characterImg = document.getElementById("character");
 
 // Keys
+var BrakePressed = false;     // R: slow the outer split worm (Worm Arena / Arena Mix)
 var ULDRrightPressed = false;
 var ULDRleftPressed = false;
 var ULDRupPressed = false;

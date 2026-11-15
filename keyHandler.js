@@ -66,6 +66,7 @@ function keyDownHandler(e) {
     if (c == "Space") { PlayerInput[0].kbJet = true; SpacePressed = true; e.preventDefault(); }
     if (c == "KeyF") { PlayerInput[0].kbShoot = true; EnterPressed = true; }
     if (c == "KeyE" || c == "KeyQ") { PlayerInput[0].kbInteract = true; EPressed = true; }
+    if (c == "KeyR") BrakePressed = true;
     if (c == "ShiftLeft" && !e.repeat) { ShiftPressed = true; queueDash(0); }
     if (c == "KeyG" && !e.repeat) queueGrab(0);
     if (c == "KeyX" && !e.repeat) PlayerInput[0].reloadQueued = true;
@@ -127,6 +128,7 @@ function keyUpHandler(e) {
     if (c == "Space") { PlayerInput[0].kbJet = false; SpacePressed = false; }
     if (c == "KeyF") { PlayerInput[0].kbShoot = false; EnterPressed = false; }
     if (c == "KeyE" || c == "KeyQ") { PlayerInput[0].kbInteract = false; EPressed = false; }
+    if (c == "KeyR") BrakePressed = false;
     if (c == "ShiftLeft") ShiftPressed = false;
     if (c == "ShiftRight") RShiftPressed = false;
 
@@ -139,7 +141,7 @@ function keyUpHandler(e) {
 window.addEventListener("blur", function() {
     ULDRrightPressed = ULDRleftPressed = ULDRupPressed = ULDRdownPressed = false;
     WASDrightPressed = WASDleftPressed = WASDupPressed = WASDdownPressed = false;
-    SpacePressed = EnterPressed = EPressed = ShiftPressed = false;
+    SpacePressed = EnterPressed = EPressed = ShiftPressed = BrakePressed = false;
     mouseDown = false;
     for (var i = 0; i < PlayerInput.length; i++) {
         PlayerInput[i].shoot = PlayerInput[i].jet = PlayerInput[i].interact = false;

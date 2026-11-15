@@ -57,6 +57,33 @@ tabs and a clear menu tree, improve LAN packets, then feel, performance and code
 Fastest way to perfect each game: one shared engine fix at a time (so every game gets it), a test per fix, then one
 short play-through list from you per game. Your notes on what feels off are the part no test can replace.
 
+## 2026-11-15: split worms (spike cut, head-to-tail rejoin, brake key) - DONE, on main
+Asked (spec from another agent / the user): a pushed spike cuts a worm in two; pieces rejoin only head to tail with
+leeway; a key slows the outer piece. Built in `game_snake.js` (rules), `game_mix.js` (spike hit, camera, HUD, leaderboard),
+`keyHandler.js` + `var.js` (key). Test: `tests/worm_split.js` (about 60 checks); `tools/verify_mix.py` still passes.
+- **Split:** a spike that is launched or moving (`vi.launched > 0` or speed > 2) and touches a worm's SIDE cuts it at the
+  body segment nearest the spike centre. Needs length >= 30 and both pieces >= 8 segments (near the head or tail the
+  spike just passes). Max 4 pieces per player. The spike is used up (a new one appears if fewer than 22), with a ring,
+  a "cut in two" message and a sound. Both pieces keep owner slot, name, colour, stats (`mx` is shared), power-ups.
+  The tail piece's new head is the cut end; it turns about 0.9 rad away. Length is split by segment count.
+- **Pieces** share a `kinId`. They never collide with each other (no accidental deaths). `splitCd` 90 frames blocks a
+  second cut; `rejoinCd` 120 frames blocks a rejoin.
+- **Rejoin:** one piece's head within (radiusA + radiusB) x 1.35 of the LAST 3 segments of the other. The piece whose
+  tail was touched keeps its head and gets the other body as its new tail; the other is removed with no death or kill.
+  Middle-of-body and head-to-head contact do nothing.
+- **Brake key: R** (P2: Right Shift; pad: interact; LAN joiners send `r`). While held, exactly ONE piece of each split
+  player is slowed to 45%: the one whose head is furthest from the screen centre (`Snake.cam`; for others, the centroid
+  of their pieces). A 40 px margin stops the choice flipping when both are level. R was free in Worm Arena and Arena Mix.
+- **Player lookup:** `Snake.primaryWorm / localWorm / kinOf`. The camera and `Mix.me()` follow the longest piece and
+  zoom out to keep the others in view. One piece dying leaves the player alive; the last one dying ends the run.
+  The leaderboards add the pieces together. Swapping with a bot (V) hands over every piece.
+- **Known limits:** CPU worms can be split too and rejoin only by chance. Pieces ignore each other completely (no
+  self-collision at all, not only for a short time). The brake slows the outer piece by distance from the camera, so
+  with a lagging camera it can pick the other piece for a moment; the margin makes it stable.
+- Environment note: `tools/verify_mix.py` needs a `chromium` command. Here it is installed as `/opt/pw-browsers/chromium`;
+  run it with a wrapper script named `chromium` first on `PATH` (outside the repo).
+- Arena Mix now HAS LAN support (the other agent added it); my earlier "no multiplayer" answer is out of date.
+
 ## FUTURE AGENDA (2026-11-13, order of work)
 
 Writing style from now on: about 80% ASD-STE100 (short, active sentences, one topic each) in replies and new notes.
