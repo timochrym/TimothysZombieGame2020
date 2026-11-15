@@ -405,6 +405,7 @@ var Mix = {
                     var actualHDmg = Math.min(w.len, rawHDmg);
                     w.len -= rawHDmg; used = true; S.bulletWorm++;
                     h.x += (bu.vx || 0) * 0.35; h.y += (bu.vy || 0) * 0.35;
+                    Snake.hitKnockback(w, Math.atan2(bu.vy || 0, bu.vx || 1), 9 + dmgLv * 0.8, 10, 60);
                     this.burst(bux, buy, w.color, "spark", "", 24);
                     if (bu.owner && bu.owner.alive) {
                         arenaRecordDmg(w, bu.owner, actualHDmg);
@@ -749,7 +750,7 @@ var Mix = {
                 var hitAng = Math.atan2(ep.vy || 0, ep.vx || 1);
                 var didSplit = (hw.len >= 32) ? Snake.splitAt(hw, ep.x, ep.y, hitAng) : null;
                 if (didSplit) wormR.push(Snake.rad(didSplit));
-                Snake.hitKnockback(hw, didSplit ? hitAng + 0.5 : hitAng, 11);
+                Snake.hitKnockback(hw, didSplit ? hitAng + 0.5 : hitAng, 16, 28, 120);
                 this.burst(ep.x, ep.y, ep.col || "#38bdf8", "ring", (didSplit ? "SPLIT! +" : "BOUNCE! +") + ownerGain, 38);
             }
             if (ep.ownerPl && ep.ownerPl.alive) {
@@ -828,6 +829,8 @@ var Mix = {
             }
             b4.m = each; blobR[i] = Cells.rad(each, b4); b4.mergeT = 600; b4.popCd = 240;
             b4.vx += adx / away * 10; b4.vy += ady / away * 10;
+            var wh0 = w4.segs && w4.segs[0];
+            if (wh0) Snake.hitKnockback(w4, Math.atan2(wh0.y - b4.y, wh0.x - b4.x), 12, 18, 80);
             this.note(b4.pl.human !== undefined || w4.human !== undefined, b4.pl.name + " popped on " + w4.name, w4.color);
             if (b4.pl.human !== undefined) screenShake = 6;
         }
