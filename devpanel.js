@@ -341,7 +341,7 @@ var DevUI = {
 
     // the Game tab follows the game that's on: its own settings first, shared rows only where they do something
     NEED: { waves: { t: ["waves"], o: ["spawnRate", "maxEnemies", "powerUpRate"] }, enemies: { t: ["paths"], o: ["enemyHealth", "enemyDamage"] },
-            world: { t: ["god", "jetpack"], o: ["flight", "infiniteAmmo", "friendlyFire", "showHitboxes", "bouncyRagdolls", "playerDamage", "gravityMult"], id: ["dp-zoom"] }, coop: { t: ["coop"] } },
+            world: { t: ["god", "jetpack"], o: ["flight", "infiniteAmmo", "friendlyFire", "showHitboxes", "bouncyRagdolls", "playerDamage", "gravityMult", "timeScale"], id: ["dp-zoom"] }, coop: { t: ["coop"] } },
     syncGame: function(panel) {
         if (typeof GameTuning === "undefined" || !GameModes.current) return;
         this.refreshGameCard(); this.syncMatchState(); this.syncDock(); SummonManager.refreshAllFields();
@@ -711,7 +711,7 @@ SummonManager.buildUI = function() {
     row("", "👥", "Players & CPUs", "Humans, CPU seats, teams, gamepads", "", function() { closeTopMenu(); PlayersUI.open(); });
     row("", "📡", "LAN multiplayer", "Host or join on the same Wi-Fi", "", function() { closeTopMenu(); NetUI.open(); });
     sec("Make & tune");
-    row("", "🛠", "Level Studio", "Build, play-test and share levels", "B", function() { closeTopMenu(); Studio.open(); });
+    row("tm-studio", "🛠", "Level Studio", "Build, play-test and share levels", "B", function() { closeTopMenu(); Studio.open(); });
     row("summon-toggle-btn", "🧪", "Cheats & tuning", "Dev panel: sliders, spawning, god mode", "", function() { closeTopMenu(); SummonManager.togglePanel(); });
     row("tm-mash", "🧩", "Mash-up", "Mix other games' parts into this one", "", function() {
         closeTopMenu(); if (!SummonManager.isOpen) SummonManager.togglePanel(); DevUI.switchTab("game");
@@ -729,6 +729,10 @@ SummonManager.buildUI = function() {
         menu.classList.toggle("open", open); topBar.classList.toggle("menu-open", open);
         if (open) {
             if (typeof SummonManager !== "undefined") SummonManager.refreshLevelDropdown();
+            var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
+            var stEl = document.getElementById("tm-studio"); if (stEl) stEl.style.display = own ? "none" : "";
+            var msEl = document.getElementById("tm-mash"); if (msEl) msEl.style.display = own ? "none" : "";
+            var ldEl = document.getElementById("level-select-dropdown"); if (ldEl) ldEl.style.display = (own || ldEl.options.length <= 1) ? "none" : "";
             var g = GameModes.current, lvl = LevelManager.getCurrentLevel ? LevelManager.getCurrentLevel() : null;
             head.innerHTML = "<b>" + (g ? g.title : "") + "</b><span>" + (lvl && lvl.name ? lvl.name.replace(/^[^A-Za-z0-9]+/, "") : "") + "</span>";
             var h = document.getElementById("tm-help"); if (h) h.classList.toggle("active", !!devOpts.showHelp);
@@ -1387,6 +1391,8 @@ function topBarRefresh() {
             var lh = "📡 <span class='lbl'>" + (Net.role === "host" ? "Hosting · " + nLan : (Net.role === "client" ? "Joined · " + nLan : "LAN")) + "</span>";
             if (lanBtn.innerHTML !== lh) lanBtn.innerHTML = lh;
         }
+    var stBtn = document.getElementById("studio-btn");
+    if (stBtn) stBtn.style.display = GameModes.flag("ownScreen", false) ? "none" : "";
     document.body.classList.toggle("paused", typeof paused !== "undefined" && !!paused);
     document.body.classList.toggle("hub-open", typeof Hub !== "undefined" && !!Hub.isOpen);
 }

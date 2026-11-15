@@ -200,14 +200,17 @@ var UniversalInspect = {
                 }
             }
             if (typeof Snake !== "undefined" && (id === "mix" || id === "snake")) {
+                var bestWm = null, bestD = Infinity;
                 for (var wi = Snake.worms.length - 1; wi >= 0; wi--) {
                     var wm = Snake.worms[wi];
                     if (!wm.alive || !wm.segs.length) continue;
-                    var wr = Snake.rad(wm) + 14;
-                    for (var si = 0; si < wm.segs.length; si += 2) {
-                        if (Math.hypot(wm.segs[si].x - wx, wm.segs[si].y - wy) <= wr) return this._wormDesc(wm);
+                    var wr = Snake.radius(wm) + 18;
+                    for (var si = 0; si < wm.segs.length; si++) {
+                        var sd = Math.hypot(wm.segs[si].x - wx, wm.segs[si].y - wy);
+                        if (sd <= wr && sd < bestD) { bestD = sd; bestWm = wm; }
                     }
                 }
+                if (bestWm) return this._wormDesc(bestWm);
             }
             return null;
         }
@@ -433,7 +436,7 @@ var UniversalInspect = {
             sub: "Slither Worm · Length " + Math.round(w.len),
             obj: w,
             color: w.color || w.col || "#a855f7",
-            radius: Snake.rad(w) + 14,
+            radius: Snake.radius(w) + 14,
             pos: function() { return { x: w.segs[0].x, y: w.segs[0].y }; },
             vel: function() { var sp = w.boosting ? 7 : 3.5; return { vx: Math.cos(w.ang || 0) * sp, vy: Math.sin(w.ang || 0) * sp }; },
             hpInfo: function() { return { val: Math.round(w.len), max: Math.max(300, Math.round(w.len * 1.4)), label: "LEN" }; },
@@ -470,6 +473,20 @@ var UniversalInspect = {
             var sp = UniversalInspect.worldToScreen(p.x, p.y);
             var r = Math.max(18, (d.radius || 36) * sp.scale);
             ctx.save();
+            if (d.kind === "worm" && d.obj && d.obj.segs && d.obj.segs.length > 1) {
+                ctx.strokeStyle = col;
+                ctx.globalAlpha = 0.45;
+                ctx.lineWidth = Math.max(3, (Snake.radius(d.obj) * 2 + 8) * sp.scale);
+                ctx.lineCap = "round";
+                ctx.lineJoin = "round";
+                ctx.beginPath();
+                for (var si = 0; si < d.obj.segs.length; si += 2) {
+                    var spt = UniversalInspect.worldToScreen(d.obj.segs[si].x, d.obj.segs[si].y);
+                    if (si === 0) ctx.moveTo(spt.x, spt.y); else ctx.lineTo(spt.x, spt.y);
+                }
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
             ctx.strokeStyle = col;
             ctx.lineWidth = 2.5;
             if (dashed) ctx.setLineDash([6, 4]);

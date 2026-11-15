@@ -46,6 +46,7 @@ var Snake = {
     },
 
     radius: function(w) { return 9 + Math.min(22, Math.sqrt(w.len) * 0.9); },
+    rad: function(w) { return this.radius(w); },
 
     control: function(w) {
         if (w.human === 0) {
@@ -192,6 +193,10 @@ var Snake = {
             var boosting = w.boost && w.len > 14;
             var sp = (boosting ? 6.2 : 3.2) * arenaSpeed(w);
             if (boosting && this.t % 4 === 0) { w.len -= 1; var tl = w.segs[w.segs.length - 1]; this.addPellet(tl.x, tl.y, 1, w.color); }
+            var snkDec = (typeof cellsCfg !== "undefined") ? cellsCfg.decay : 0.0000333;
+            if (snkDec > 0 && w.len > 60) {
+                w.len -= (w.len - 40) * snkDec * ((typeof cellsCfg !== "undefined" && cellsCfg.decayGrow) ? 1 + w.len / 400 : 1);
+            }
             var h = w.segs[0];
             var nh = { x: h.x + Math.cos(w.ang) * sp, y: h.y + Math.sin(w.ang) * sp };
             // body follows: each segment keeps SEG distance from the one ahead
