@@ -190,6 +190,10 @@ var SandboxUI = {
                     var hit = typeof UniversalInspect !== "undefined" ? UniversalInspect.findAt(sx, sy) : null;
                     if (hit) {
                         UniversalInspect.selected = hit;
+                        if (hit.pos && typeof UniversalInspect.screenToWorld === "function") {
+                            var hp0 = hit.pos(), wp0 = UniversalInspect.screenToWorld(sx, sy);
+                            self._inspDrag = { desc: hit, ox: hp0.x - wp0.x, oy: hp0.y - wp0.y };
+                        }
                         self.sideOpen = true;
                         self.sideTab = "inspect";
                         self.render();
@@ -305,6 +309,15 @@ var SandboxUI = {
 
             window.addEventListener("mousemove", function(e) {
                 if (!self.isActive()) return;
+                if (self._inspDrag && typeof UniversalInspect !== "undefined") {
+                    var rectI = cv.getBoundingClientRect();
+                    var wpI = UniversalInspect.screenToWorld(e.clientX - rectI.left, e.clientY - rectI.top);
+                    UniversalInspect.moveTo(self._inspDrag.desc, wpI.x + self._inspDrag.ox, wpI.y + self._inspDrag.oy);
+                    var xIn = document.getElementById("sb-ed-ix"), yIn = document.getElementById("sb-ed-iy");
+                    if (xIn && document.activeElement !== xIn) xIn.value = Math.round(wpI.x + self._inspDrag.ox);
+                    if (yIn && document.activeElement !== yIn) yIn.value = Math.round(wpI.y + self._inspDrag.oy);
+                    return;
+                }
                 if (self.tool === "inspect" && typeof UniversalInspect !== "undefined") {
                     var rect = cv.getBoundingClientRect();
                     var sx = e.clientX - rect.left, sy = e.clientY - rect.top;
@@ -400,6 +413,9 @@ var SandboxUI = {
                     }
                     self.dragSelect = null;
                     self.render();
+                }
+                if (self._inspDrag) {
+                    self._inspDrag = null;
                 }
                 if (self.dragMove) {
                     if (self.dragMove.group && self.dragMove.group.length > 1) {
@@ -743,6 +759,17 @@ var SandboxUI = {
                 '<button class="sb-btn ' + (isFrozen ? 'active' : '') + '" id="sb-in-freeze" style="padding:4px">' + (isFrozen ? '❄ Frozen' : '❄ Freeze') + '</button>' +
                 '<button class="sb-btn" id="sb-in-del" style="padding:4px;color:#f87171">🗑 Delete</button>' +
                 '</div>';
+
+            // Universal Move & Rescale (works on any inspected entity)
+            var ipos = sel.pos ? sel.pos() : { x: 0, y: 0 };
+            var iscale = ui.getScale ? ui.getScale(sel) : 100;
+            html += '<div class="sb-sec" style="margin-top:2px">Move & Rescale (or Drag)</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:5px">' +
+                '<label style="font-size:10px;color:#94a3b8">X<input class="sb-input" type="number" id="sb-ed-ix" value="' + Math.round(ipos.x || 0) + '"></label>' +
+                '<label style="font-size:10px;color:#94a3b8">Y<input class="sb-input" type="number" id="sb-ed-iy" value="' + Math.round(ipos.y || 0) + '"></label>' +
+                '<label style="font-size:10px;color:#94a3b8">Scale %<input class="sb-input" type="number" min="25" max="400" id="sb-ed-scale" value="' + iscale + '"></label>' +
+                '</div>' +
+                '<input type="range" id="sb-ed-scale-rng" min="25" max="400" step="5" value="' + iscale + '" style="width:100%;margin-bottom:6px">';
 
             // Direct Live Editors
             html += '<div class="sb-sec" style="margin-top:2px">Live Properties</div>';
@@ -1499,6 +1526,16 @@ var SandboxUI = {
                 var inp = el(id);
                 if (inp) inp.onchange = function() { var v = Number(inp.value); if (!isNaN(v)) fn(v); };
             };
+            bindNum("sb-ed-ix", function(v) { var p = sel.pos ? sel.pos() : { x: 0, y: 0 }; UniversalInspect.moveTo(sel, v, p.y); });
+            bindNum("sb-ed-iy", function(v) { var p = sel.pos ? sel.pos() : { x: 0, y: 0 }; UniversalInspect.moveTo(sel, p.x, v); });
+            var applyInspScale = function(v) {
+                UniversalInspect.setScale(sel, v);
+                var sNum = el("sb-ed-scale"), sRng = el("sb-ed-scale-rng");
+                if (sNum) sNum.value = Math.round(v);
+                if (sRng) sRng.value = Math.round(v);
+            };
+            if (el("sb-ed-scale")) el("sb-ed-scale").oninput = function() { var v = Number(this.value); if (!isNaN(v)) applyInspScale(v); };
+            if (el("sb-ed-scale-rng")) el("sb-ed-scale-rng").oninput = function() { var v = Number(this.value); if (!isNaN(v)) applyInspScale(v); };
             bindNum("sb-ed-hp", function(v) { o.health = v; });
             bindNum("sb-ed-mhp", function(v) { o.maxHealth = Math.max(1, v); });
             bindNum("sb-ed-spd", function(v) { o.maxspeed = Math.max(1, v); });

@@ -65,7 +65,7 @@ var Snake = {
         return w;
     },
 
-    radius: function(w) { return 9 + Math.min(22, Math.sqrt(w.len) * 0.9); },
+    radius: function(w) { return ((w && w._sbScale) ? w._sbScale : 1) * (9 + Math.min(22, Math.sqrt(w.len) * 0.9)); },
     rad: function(w) { return this.radius(w); },
 
     control: function(w) {

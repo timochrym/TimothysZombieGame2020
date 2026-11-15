@@ -27,7 +27,7 @@ try { var _cs = JSON.parse(localStorage.getItem("timsBlobArena") || "null"); if 
 var Cells = {
     players: [], blobs: [], pellets: [], viruses: [], t: 0, cam: { x: 0, y: 0, z: 1 },
 
-    rad: function(m, b) { return Math.sqrt(m) * ((b && b.pl && b.pl.chain && !b.pl.compact) ? 2.2 : 5); },
+    rad: function(m, b) { return ((b && b._sbScale) ? b._sbScale : 1) * Math.sqrt(m) * ((b && b.pl && b.pl.chain && !b.pl.compact) ? 2.2 : 5); },
     // players at THIS screen (P1/P2 on the host, my own blob on a LAN client)
     locals: function() {
         if (typeof Net !== "undefined" && Net.role === "client") return this.players.filter(function(p) { return p.pid === Net.pid; });
@@ -86,7 +86,7 @@ var Cells = {
         vi.m = Math.min(160, (vi.m || 100) + 10);
         if (vi.feed >= 7) {
             vi.feed = 0; vi.m = 100;
-            if (this.viruses.length < 32) {
+            if (this.viruses.length < 42) {
                 this.viruses.push({ x: vi.x + vi.fx * 48, y: vi.y + vi.fy * 48, m: 100, feed: 0, vx: vi.fx * 26, vy: vi.fy * 26, launched: 45 });
             } else {
                 vi.vx = (vi.vx || 0) + vi.fx * 24; vi.vy = (vi.vy || 0) + vi.fy * 24; vi.launched = 45;
@@ -359,7 +359,7 @@ var Cells = {
             if (b.m < 32) continue;
             var dx = pl.aimX - b.x, dy = pl.aimY - b.y, L = Math.hypot(dx, dy) || 1, r = this.rad(b.m);
             b.m -= 14;
-            this.pellets.push({ x: b.x + dx / L * (r + 14), y: b.y + dy / L * (r + 14), m: 11, col: pl.color, vx: dx / L * 20, vy: dy / L * 20, ejected: true, ownerPl: pl });
+            this.pellets.push({ x: b.x + dx / L * (r + 14), y: b.y + dy / L * (r + 14), m: 11, col: pl.color, vx: dx / L * 26, vy: dy / L * 26, ejected: true, ownerPl: pl });
         }
     },
 
@@ -462,8 +462,19 @@ var Cells = {
         var ps = this.pellets;
         for (let k = ps.length - 1; k >= 0; k--) {
             var p = ps[k];
-            if (p.vx || p.vy) {
-                p.x += p.vx; p.y += p.vy; p.vx *= 0.88; p.vy *= 0.88;
+            if (p._returning && p.ownerPl && p.ownerPl.alive) {
+                var ownRet = this.mine(p.ownerPl);
+                if (ownRet.length) {
+                    var rt = ownRet[0], rdx = rt.x - p.x, rdy = rt.y - p.y, rdl = Math.hypot(rdx, rdy) || 1;
+                    p.vx = (rdx / rdl) * 18; p.vy = (rdy / rdl) * 18;
+                    p.x += p.vx; p.y += p.vy;
+                } else {
+                    p._returning = false;
+                }
+            } else if (p.vx || p.vy) {
+                p.x += p.vx; p.y += p.vy;
+                var damp = p.ejected ? 0.91 : 0.88;
+                p.vx *= damp; p.vy *= damp;
                 if (Math.abs(p.vx) + Math.abs(p.vy) < 0.1) p.vx = p.vy = 0;
             }
             if (p.ejected) {
@@ -476,7 +487,7 @@ var Cells = {
                         p.eaten = true; eatenE = true; break;
                     }
                 }
-                if (!eatenE && p.vx * p.vx + p.vy * p.vy > 4) {
+                if (!eatenE && !p._hitOnce && p.vx * p.vx + p.vy * p.vy > 4) {
                     for (let i = 0; i < B.length; i++) {
                         var bc = B[i];
                         if (bc.dead || !bc.pl.chain || bc.pl === p.ownerPl || this.protectedNow(bc.pl)) continue;
@@ -508,7 +519,13 @@ var Cells = {
                             } else {
                                 bRads[i] = this.rad(bc.m, bc);
                             }
-                            p.eaten = true; eatenE = true; break;
+                            if (p.ownerPl && p.ownerPl.alive) {
+                                p._returning = true; p._hitOnce = true;
+                                p.vx = -(p.vx || 0) * 0.5; p.vy = -(p.vy || 0) * 0.5;
+                            } else {
+                                p.eaten = true; eatenE = true;
+                            }
+                            break;
                         }
                     }
                 }
@@ -530,7 +547,7 @@ var Cells = {
                     var cell = grid[rowOff + gx];
                     for (let ci = 0; ci < cell.length; ci++) {
                         var cp2 = cell[ci];
-                        if (cp2.eaten || (cp2.m >= 5 && q.m <= 20)) continue;
+                        if (cp2.eaten || (cp2._returning && cp2.ownerPl && q.pl !== cp2.ownerPl) || (cp2.m >= 5 && q.m <= 20)) continue;
                         var dx = cp2.x - q.x, dy = cp2.y - q.y;
                         if (dx * dx + dy * dy < rq2) {
                             cp2.eaten = true; q.m += cp2.m * (q.pl && q.pl.chain && !q.pl.compact ? 1.4 : 1); rq = bRads[i] = this.rad(q.m, q); rq2 = rq * rq;

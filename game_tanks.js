@@ -52,7 +52,7 @@ var Tanks = {
     massFactor: function(k) { return (this.mixLayer && k.mixMass > 0) ? Math.max(0.7, Math.min(3.2, Math.sqrt(k.mixMass / 36))) : 1; },
     reload: function(k) { var f = this.massFactor(k); return 22 * Math.pow(0.9, k.st[6]) * (TNK_CLASSES[k.cls].rl || 1) * (1 + (f - 1) * 0.3); },
     speed: function(k) { return (3.4 + 0.28 * k.st[7] - k.lvl * 0.02) * (TNK_CLASSES[k.cls].speed || 1) * arenaSpeed(k); },
-    size: function(k) { if (k.mixMass > 0 && this.mixLayer) return Math.sqrt(k.mixMass) * 5; return 30 + k.lvl * 0.45; },      // Arena Mix: a tank's size follows its mass, like a blob
+    size: function(k) { var sc = (k && k._sbScale) ? k._sbScale : 1; if (k.mixMass > 0 && this.mixLayer) return Math.sqrt(k.mixMass) * 5 * sc; return (30 + k.lvl * 0.45) * sc; },      // Arena Mix: a tank's size follows its mass, like a blob
 
     reset: function() {
         this.tanks = []; this.shapes = []; this.bullets = []; this.pending = []; this.t = 0;
@@ -215,10 +215,21 @@ var Tanks = {
     hurt: function(k, dmg, by) {
         if (!k.alive || k.inv > 0 || arenaProtected(k)) return;
         if (by && by.human === undefined && arenaHuman(k)) dmg *= [0, 0.55, 0.8, 1][arenaCheats.tankSkill];
+        var actualDmg = Math.min(Math.max(0, k.hp), dmg);
+        if (by && by.alive !== undefined && by !== k && actualDmg > 0 && !k.mixEaten) {
+            if (typeof arenaRecordDmg === "function") arenaRecordDmg(k, by, actualDmg);
+            this.gainXp(by, Math.max(1, Math.round(actualDmg * 0.45)));
+            if (this.mixLayer && by.mixMass !== undefined) { by.mixMass += actualDmg * 0.2; by.mixPeak = Math.max(by.mixPeak || 0, by.mixMass); }
+        }
         k.hp -= dmg; k.hurtT = 240; k.flash = 5;
         if (k.hp <= 0) {
             k.alive = false; k.deadT = 0; k.by = by;
-            if (by && by.alive !== undefined) { by.kills++; this.gainXp(by, Math.round(Math.min(this.xpFor(k.lvl) * 2, 50 + k.score * 0.5))); }
+            if (by && by.alive !== undefined) {
+                var putIn = typeof arenaPopDmg === "function" ? arenaPopDmg(k, by) : 0;
+                by.kills++;
+                this.gainXp(by, Math.max(Math.round(Math.min(this.xpFor(k.lvl) * 2, 50 + k.score * 0.5)), Math.round(putIn * 1.1)));
+                if (!k.mixEaten && this.mixLayer && by.mixMass !== undefined) { by.mixMass += Math.max(15, Math.round(putIn * 0.85)); by.mixPeak = Math.max(by.mixPeak || 0, by.mixMass); }
+            }
             if (k.human !== undefined) {
                 k.final = k.score;
                 if (k.human === "lan") return;

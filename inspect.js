@@ -538,6 +538,75 @@ var UniversalInspect = {
 
         if (hov && (!sel || hov.obj !== sel.obj)) drawReticle(hov, "#38bdf8", true);
         if (sel) drawReticle(sel, "#facc15", false);
+    },
+
+    moveTo: function(d, nx, ny) {
+        if (!d || !d.obj || isNaN(nx) || isNaN(ny)) return;
+        var o = d.obj;
+        if (d.kind === "worm" && o.segs && o.segs.length) {
+            var dx = nx - o.segs[0].x, dy = ny - o.segs[0].y;
+            for (var i = 0; i < o.segs.length; i++) { o.segs[i].x += dx; o.segs[i].y += dy; }
+        } else if ((d.kind === "ragdoll" || d.kind === "flail") && o.pts && o.pts.length) {
+            var p0 = d.pos ? d.pos() : { x: o.pts[0].x, y: o.pts[0].y };
+            var dxr = nx - p0.x, dyr = ny - p0.y;
+            for (var j = 0; j < o.pts.length; j++) {
+                o.pts[j].x += dxr; o.pts[j].y += dyr;
+                if (o.pts[j].px !== undefined) o.pts[j].px += dxr;
+                if (o.pts[j].py !== undefined) o.pts[j].py += dyr;
+            }
+        } else if (d.kind === "ball" && typeof Ball !== "undefined") {
+            Ball.x = nx; Ball.y = ny; Ball.vx = 0; Ball.vy = 0;
+        } else if (o.x !== undefined && o.y !== undefined) {
+            o.x = nx; o.y = ny;
+        }
+        if (o._sbFrozen) { o._sbPinX = nx; o._sbPinY = ny; }
+        if (typeof rebuildAllObjects === "function" && d.kind === "object") rebuildAllObjects();
+    },
+
+    getScale: function(d) {
+        if (!d || !d.obj) return 100;
+        return Math.round((d.obj._sbScale || 1) * 100);
+    },
+
+    setScale: function(d, pct) {
+        if (!d || !d.obj) return;
+        var s = Math.max(0.25, Math.min(4, (Number(pct) || 100) / 100));
+        var o = d.obj;
+        if (!o._sbBase) {
+            o._sbBase = {
+                s1: o.s1, s2: o.s2, w: o.w, h: o.h, m: o.m, len: o.len,
+                r: d.kind === "ball" && typeof Ball !== "undefined" ? Ball.r : o.r,
+                ptsR: o.pts ? o.pts.map(function(p) { return p.r || 6; }) : null,
+                consD: o.cons ? o.cons.map(function(c) { return c.d || 10; }) : null
+            };
+        }
+        var B = o._sbBase;
+        o._sbScale = s;
+        if (d.kind === "character" || d.kind === "enemy") {
+            var ns1 = Math.max(16, Math.round((B.s1 || 80) * s));
+            var ns2 = Math.max(16, Math.round((B.s2 || 80) * s));
+            if (typeof o.resize === "function") o.resize(ns1, ns2);
+            else { o.s1 = ns1; o.s2 = ns2; }
+        } else if (d.kind === "object") {
+            var nw = Math.max(12, Math.round((B.w || B.s1 || 60) * s));
+            var nh = Math.max(12, Math.round((B.h || B.s2 || 60) * s));
+            if (typeof o.resize === "function") o.resize(nw, nh);
+            else { o.w = o.s1 = nw; o.h = o.s2 = nh; }
+            if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+        } else if (d.kind === "blob" || d.kind === "virus") {
+            o.m = Math.max(10, Math.round((B.m || 50) * s * s));
+        } else if (d.kind === "worm") {
+            o.len = Math.max(15, Math.round((B.len || 40) * s));
+        } else if (d.kind === "ball" && typeof Ball !== "undefined") {
+            Ball.r = Math.max(10, Math.round((B.r || 44) * s));
+            d.radius = Ball.r + 12;
+        } else if ((d.kind === "ragdoll" || d.kind === "flail") && o.pts) {
+            if (B.ptsR) for (var i = 0; i < o.pts.length; i++) o.pts[i].r = Math.max(2, B.ptsR[i] * s);
+            if (B.consD && o.cons) for (var j = 0; j < o.cons.length; j++) o.cons[j].d = Math.max(2, B.consD[j] * s);
+        }
+        if (d.kind === "tank" && typeof Tanks !== "undefined") d.radius = Tanks.size(o) + 12;
+        else if ((d.kind === "blob" || d.kind === "virus") && typeof Cells !== "undefined") d.radius = Cells.rad(o.m, o) + 10;
+        else if (d.kind === "worm" && typeof Snake !== "undefined") d.radius = Snake.radius(o) + 14;
     }
 };
 

@@ -307,13 +307,23 @@ var Mix = {
                     this.burst(bux, buy, "#38bdf8", "spark", "SHIELD!", 24);
                     break;
                 }
-                bl.m -= effDmg * (bl.pl.chain ? 1.65 : 1.3); used = true; S.bulletBlob++;
+                var rawBlobDmg = effDmg * (bl.pl.chain ? 1.65 : 1.3);
+                var actualBlobDmg = Math.min(bl.m, rawBlobDmg);
+                bl.m -= rawBlobDmg; used = true; S.bulletBlob++;
                 bl.vx = (bl.vx || 0) + (bu.vx || 0) * 0.16; bl.vy = (bl.vy || 0) + (bu.vy || 0) * 0.16;
                 this.burst(bux, buy, bl.pl.color || "#a78bfa", "spark", "", 22);
-                if (bu.owner && bu.owner.alive) Tanks.gainXp(bu.owner, 2);
+                if (bu.owner && bu.owner.alive) {
+                    arenaRecordDmg(bl.pl, bu.owner, actualBlobDmg);
+                    Tanks.gainXp(bu.owner, Math.max(3, Math.round(actualBlobDmg * 0.4)));
+                    if (bu.owner.mixMass !== undefined) { bu.owner.mixMass += actualBlobDmg * 0.25; bu.owner.mixPeak = Math.max(bu.owner.mixPeak || 0, bu.owner.mixMass); }
+                }
                 if (bl.m < 12) {
+                    var totalBPutIn = bu.owner ? arenaPopDmg(bl.pl, bu.owner) : 0;
                     this._blobGone(blobs, bl, bu.owner ? bu.owner.name : "a tank"); anyDead = true;
-                    if (bu.owner && bu.owner.alive) Tanks.gainXp(bu.owner, 40);
+                    if (bu.owner && bu.owner.alive) {
+                        Tanks.gainXp(bu.owner, Math.max(40, Math.round(totalBPutIn * 0.85)));
+                        if (bu.owner.mixMass !== undefined) { bu.owner.mixMass += Math.max(12, Math.round(totalBPutIn * 0.6)); bu.owner.mixPeak = Math.max(bu.owner.mixPeak || 0, bu.owner.mixMass); }
+                    }
                     this.note(bu.owner && bu.owner.human !== undefined, (bu.owner ? bu.owner.name : "A tank") + " shot " + bl.pl.name + " to bits", "#93c5fd");
                 } else {
                     blobR[j] = Cells.rad(bl.m);
@@ -321,6 +331,9 @@ var Mix = {
                 break;
             }
             if (!used && bux * bux + buy * buy <= MIX_SNK_RING_SQ) {
+                var dmgLv = (bu.owner && bu.owner.st) ? bu.owner.st[4] : 0;
+                var wormDmgMult = 1 + dmgLv * 0.35;
+                var wormBaseDmg = dmgLv > 0 ? Math.max(effDmg, bu.dmg * 0.85) : effDmg;
                 for (let j = 0; j < worms.length; j++) {
                     var w = worms[j];
                     if (!w.alive) continue;
@@ -331,12 +344,23 @@ var Mix = {
                         this.burst(bux, buy, "#38bdf8", "spark", "SHIELD!", 24);
                         break;
                     }
-                    w.len -= effDmg * 0.85 * (1 - 0.1 * (w.mx ? w.mx.st[1] : 0)); used = true; S.bulletWorm++;
+                    var rawHDmg = wormBaseDmg * 0.85 * wormDmgMult * (1 - 0.1 * (w.mx ? w.mx.st[1] : 0));
+                    var actualHDmg = Math.min(w.len, rawHDmg);
+                    w.len -= rawHDmg; used = true; S.bulletWorm++;
+                    h.x += (bu.vx || 0) * 0.35; h.y += (bu.vy || 0) * 0.35;
                     this.burst(bux, buy, w.color, "spark", "", 24);
-                    if (bu.owner && bu.owner.alive) Tanks.gainXp(bu.owner, 3);
+                    if (bu.owner && bu.owner.alive) {
+                        arenaRecordDmg(w, bu.owner, actualHDmg);
+                        Tanks.gainXp(bu.owner, Math.max(4, Math.round(actualHDmg * 0.5)));
+                        if (bu.owner.mixMass !== undefined) { bu.owner.mixMass += actualHDmg * 0.3; bu.owner.mixPeak = Math.max(bu.owner.mixPeak || 0, bu.owner.mixMass); }
+                    }
                     if (w.len < 12) {
+                        var totalWPutIn = bu.owner ? arenaPopDmg(w, bu.owner) : 0;
                         Snake.kill(w, null); w.deathMsg = "Shot by " + (bu.owner ? bu.owner.name : "a tank");
-                        if (bu.owner && bu.owner.alive) Tanks.gainXp(bu.owner, 45);
+                        if (bu.owner && bu.owner.alive) {
+                            Tanks.gainXp(bu.owner, Math.max(45, Math.round(totalWPutIn * 0.95)));
+                            if (bu.owner.mixMass !== undefined) { bu.owner.mixMass += Math.max(15, Math.round(totalWPutIn * 0.7)); bu.owner.mixPeak = Math.max(bu.owner.mixPeak || 0, bu.owner.mixMass); }
+                        }
                         this.note(bu.owner && bu.owner.human !== undefined, (bu.owner ? bu.owner.name : "A tank") + " shot " + w.name, "#93c5fd");
                     }
                     break;
@@ -348,9 +372,25 @@ var Mix = {
                             used = true; bu.pen = 0;
                             this.burst(bux, buy, "#38bdf8", "spark", "SHIELD!", 22);
                         } else {
-                            hitW.len = Math.max(12, hitW.len - effDmg * 0.08 * (1 - 0.1 * (hitW.mx ? hitW.mx.st[1] : 0)));
+                            var rawBDmg = wormBaseDmg * 0.22 * wormDmgMult * (1 - 0.1 * (hitW.mx ? hitW.mx.st[1] : 0));
+                            var actualBDmg = Math.min(hitW.len, rawBDmg);
+                            hitW.len -= rawBDmg;
                             used = true; S.bulletWorm++;
                             this.burst(bux, buy, hitW.color, "spark", "", 18);
+                            if (bu.owner && bu.owner.alive) {
+                                arenaRecordDmg(hitW, bu.owner, actualBDmg);
+                                Tanks.gainXp(bu.owner, Math.max(2, Math.round(actualBDmg * 0.45)));
+                                if (bu.owner.mixMass !== undefined) { bu.owner.mixMass += actualBDmg * 0.25; bu.owner.mixPeak = Math.max(bu.owner.mixPeak || 0, bu.owner.mixMass); }
+                            }
+                            if (hitW.len < 12) {
+                                var totalWPutInB = bu.owner ? arenaPopDmg(hitW, bu.owner) : 0;
+                                Snake.kill(hitW, null); hitW.deathMsg = "Shot by " + (bu.owner ? bu.owner.name : "a tank");
+                                if (bu.owner && bu.owner.alive) {
+                                    Tanks.gainXp(bu.owner, Math.max(45, Math.round(totalWPutInB * 0.95)));
+                                    if (bu.owner.mixMass !== undefined) { bu.owner.mixMass += Math.max(15, Math.round(totalWPutInB * 0.7)); bu.owner.mixPeak = Math.max(bu.owner.mixPeak || 0, bu.owner.mixMass); }
+                                }
+                                this.note(bu.owner && bu.owner.human !== undefined, (bu.owner ? bu.owner.name : "A tank") + " shot " + hitW.name, "#93c5fd");
+                            }
                         }
                     }
                 }
@@ -362,7 +402,7 @@ var Mix = {
                     if (vdxB * vdxB + vdyB * vdyB < vrB * vrB) {
                         var firedV = Cells.feedVirus(viB, bu.vx || (viB.x - bux), bu.vy || (viB.y - buy), 1);
                         used = true;
-                        this.burst(viB.x, viB.y, "#4ade80", firedV ? "ring" : "spark", firedV ? "SPIKE!" : "", firedV ? 55 : 22);
+                        this.burst(viB.x, viB.y, "#4ade80", firedV ? "ring" : "spark", firedV ? "SPIKE DUP!" : ("FEED " + (viB.feed || 0) + "/7"), firedV ? 55 : 22);
                         break;
                     }
                 }
@@ -610,7 +650,7 @@ var Mix = {
         // ---- flying Agar.io thrown mass HURTS snakes badly (head & body) and rewards the Agar.io bubble heavily
         for (let i = cp0.length - 1; i >= 0; i--) {
             var ep = cp0[i];
-            if (!ep.ejected || ep._gone || (ep.vx * ep.vx + ep.vy * ep.vy <= 4)) continue;
+            if (!ep.ejected || ep._gone || ep._hitOnce || (ep.vx * ep.vx + ep.vy * ep.vy <= 4)) continue;
             var hw = null, isHeadEj = false;
             for (let wj = 0; wj < worms.length; wj++) {
                 var wCand = worms[wj];
@@ -651,7 +691,12 @@ var Mix = {
             } else {
                 this.burst(ep.x, ep.y, ep.col || "#38bdf8", "ring", "-" + ejDmg + " LEN! +" + ownerGain, 38);
             }
-            ep._gone = true; ep.eaten = true; cpGone = true;
+            if (ep.ownerPl && ep.ownerPl.alive) {
+                ep._returning = true; ep._hitOnce = true;
+                ep.vx = -(ep.vx || 0) * 0.5; ep.vy = -(ep.vy || 0) * 0.5;
+            } else {
+                ep._gone = true; ep.eaten = true; cpGone = true;
+            }
             if (hw.human !== undefined && typeof SFX !== "undefined") SFX.play("hit", ep.x, ep.y, 0.7);
         }
         // ---- a blob that touches a worm POPS less easily: requires deeper contact, medium blobs bounce, big blobs lose 15% into max 3 pieces
