@@ -446,15 +446,31 @@ var Cells = {
                     for (let i = 0; i < B.length; i++) {
                         var bc = B[i];
                         if (bc.dead || !bc.pl.chain || bc.pl === p.ownerPl || this.protectedNow(bc.pl)) continue;
-                        var rc2 = (bRads[i] || this.rad(bc.m)) + 10;
+                        var rc2 = (bRads[i] || this.rad(bc.m, bc)) + 14;
                         var cdx = p.x - bc.x, cdy = p.y - bc.y;
                         if (cdx * cdx + cdy * cdy < rc2 * rc2) {
-                            bc.m -= 6;
-                            if (bc.m < 6) {
+                            var chDmg = Math.max(28, Math.round(bc.m * 0.35));
+                            bc.m -= chDmg;
+                            var chGain = Math.max(42, Math.round(chDmg * 1.8));
+                            if (p.ownerPl && p.ownerPl.alive) {
+                                var ownMe = this.mine(p.ownerPl);
+                                if (ownMe.length) {
+                                    for (let oi = 0; oi < ownMe.length; oi++) ownMe[oi].m += chGain / ownMe.length;
+                                }
+                            }
+                            if (bc.m < 8) {
                                 bc.dead = true;
-                                if (!this.mine(bc.pl).some(function(q) { return !q.dead; })) this.killChain(bc.pl, p.ownerPl || null);
+                                if (!this.mine(bc.pl).some(function(q) { return !q.dead; })) {
+                                    this.killChain(bc.pl, p.ownerPl || null);
+                                    if (p.ownerPl && p.ownerPl.alive) {
+                                        var ownMeK = this.mine(p.ownerPl);
+                                        if (ownMeK.length) {
+                                            for (let ok = 0; ok < ownMeK.length; ok++) ownMeK[ok].m += 65 / ownMeK.length;
+                                        }
+                                    }
+                                }
                             } else {
-                                bRads[i] = this.rad(bc.m);
+                                bRads[i] = this.rad(bc.m, bc);
                             }
                             p.eaten = true; eatenE = true; break;
                         }
@@ -748,23 +764,23 @@ var Cells = {
 
     hud: function() {
         var hum = this.locals();
-        var lx = (typeof SandboxUI !== "undefined" && SandboxUI.sideOpen) ? 320 : 14;
-        var menuOpen = typeof document !== "undefined" && document.getElementById("top-menu") && document.getElementById("top-menu").classList.contains("open");
+        var sideOpen = typeof SandboxUI !== "undefined" && (SandboxUI.sideOpen || SandboxUI.pauseOpen);
+        var lx = sideOpen ? 320 : 12;
         if (!this.mixLayer) {
-            uiPanel(lx, 10, 320, 60, "#a78bfa");
-            uiText("BLOB ARENA", lx + 16, 38, 22, "#c4b5fd", "left", "900");
-            uiText(hum.map(function(p) { return p.name + " " + (p.alive ? Math.round(Cells.mass(p)) : "✖"); }).join("   ") + "   best " + cellsSave.best, lx + 16, 58, 12, "#cbd5e1", "left", "800");
-            if (!menuOpen) {
-                var lb = this.players.filter(function(p) { return p.alive; }).map(function(p) { return [p, Cells.mass(p)]; }).sort(function(a, b) { return b[1] - a[1]; });
-                var rows = lb.slice(0, 8);
-                lb.forEach(function(r, i) { if (i >= 8 && r[0].human !== undefined) { r[2] = i + 1; rows.push(r); } });
-                uiPanel(cssW - 214, 64, 200, 30 + rows.length * 18, "#a78bfa", 0.85);
-                uiText("LEADERBOARD", cssW - 114, 84, 12, "#c4b5fd", "center", "900");
-                for (let i = 0; i < rows.length; i++) {
-                    var pl = rows[i][0];
-                    uiText((rows[i][2] || i + 1) + ". " + pl.name, cssW - 202, 104 + i * 18, 12, pl.human !== undefined ? "#fde047" : pl.color, "left", pl.human !== undefined ? "900" : "700");
-                    uiText(String(Math.round(rows[i][1])), cssW - 26, 104 + i * 18, 12, "#e2e8f0", "right", "800");
-                }
+            if (!sideOpen) {
+                uiPanel(lx, 50, 320, 60, "#a78bfa");
+                uiText("BLOB ARENA", lx + 16, 78, 22, "#c4b5fd", "left", "900");
+                uiText(hum.map(function(p) { return p.name + " " + (p.alive ? Math.round(Cells.mass(p)) : "✖"); }).join("   ") + "   best " + cellsSave.best, lx + 16, 98, 12, "#cbd5e1", "left", "800");
+            }
+            var lb = this.players.filter(function(p) { return p.alive; }).map(function(p) { return [p, Cells.mass(p)]; }).sort(function(a, b) { return b[1] - a[1]; });
+            var rows = lb.slice(0, 8);
+            lb.forEach(function(r, i) { if (i >= 8 && r[0].human !== undefined) { r[2] = i + 1; rows.push(r); } });
+            uiPanel(cssW - 214, 14, 200, 30 + rows.length * 18, "#a78bfa", 0.85);
+            uiText("LEADERBOARD", cssW - 114, 34, 12, "#c4b5fd", "center", "900");
+            for (let i = 0; i < rows.length; i++) {
+                var pl = rows[i][0];
+                uiText((rows[i][2] || i + 1) + ". " + pl.name, cssW - 202, 54 + i * 18, 12, pl.human !== undefined ? "#fde047" : pl.color, "left", pl.human !== undefined ? "900" : "700");
+                uiText(String(Math.round(rows[i][1])), cssW - 26, 54 + i * 18, 12, "#e2e8f0", "right", "800");
             }
         }
         for (let i = 0; i < hum.length; i++) {

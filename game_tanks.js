@@ -355,19 +355,22 @@ var Tanks = {
 
     hud: function() {
         var me = this.locals()[0];
-        var lx = (typeof SandboxUI !== "undefined" && SandboxUI.sideOpen) ? 320 : 14;
+        var sideOpen = typeof SandboxUI !== "undefined" && (SandboxUI.sideOpen || SandboxUI.pauseOpen);
+        var lx = sideOpen ? 320 : 12;
         if (!this.mixLayer) {
-            uiPanel(lx, 10, 330, 60, "#60a5fa");
-            uiText("TANK ARENA", lx + 16, 38, 22, "#93c5fd", "left", "900");
-            uiText(this.tanks.filter(function(k) { return k.human !== undefined; }).map(function(k) { return k.name + " " + (k.alive ? "Lv " + k.lvl + " · " + k.score : "✖"); }).join("   ") + "   best " + tanksSave.best, lx + 16, 58, 12, "#cbd5e1", "left", "800");
+            if (!sideOpen) {
+                uiPanel(lx, 50, 330, 60, "#60a5fa");
+                uiText("TANK ARENA", lx + 16, 78, 22, "#93c5fd", "left", "900");
+                uiText(this.tanks.filter(function(k) { return k.human !== undefined; }).map(function(k) { return k.name + " " + (k.alive ? "Lv " + k.lvl + " · " + k.score : "✖"); }).join("   ") + "   best " + tanksSave.best, lx + 16, 98, 12, "#cbd5e1", "left", "800");
+            }
             // leaderboard
             var lb = this.tanks.filter(function(k) { return k.alive; }).sort(function(a, b) { return b.score - a.score; });
-            uiPanel(cssW - 214, 64, 200, 30 + lb.length * 18, "#60a5fa", 0.85);
-            uiText("SCOREBOARD", cssW - 114, 84, 12, "#93c5fd", "center", "900");
+            uiPanel(cssW - 214, 14, 200, 30 + lb.length * 18, "#60a5fa", 0.85);
+            uiText("SCOREBOARD", cssW - 114, 34, 12, "#93c5fd", "center", "900");
             for (let i = 0; i < lb.length; i++) {
                 var k = lb[i];
-                uiText((i + 1) + ". " + k.name + " · " + TNK_CLASSES[k.cls].name, cssW - 202, 104 + i * 18, 11, k.human !== undefined ? "#fde047" : k.color, "left", k.human !== undefined ? "900" : "700");
-                uiText(String(k.score), cssW - 26, 104 + i * 18, 11, "#e2e8f0", "right", "800");
+                uiText((i + 1) + ". " + k.name + " · " + TNK_CLASSES[k.cls].name, cssW - 202, 54 + i * 18, 11, k.human !== undefined ? "#fde047" : k.color, "left", k.human !== undefined ? "900" : "700");
+                uiText(String(k.score), cssW - 26, 54 + i * 18, 11, "#e2e8f0", "right", "800");
             }
         }
         this.statRects = []; this.classRects = [];

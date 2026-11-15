@@ -453,8 +453,8 @@ var SandboxUI = {
         return false;
     },
 
-    openPause: function() { this.pauseOpen = true; this.spawnerOpen = false; this.ctxMenu = null; this.render(); },
-    closePause: function() { this.pauseOpen = false; this.render(); },
+    openPause: function() { this.pauseOpen = true; this.sideOpen = true; this.spawnerOpen = false; this.ctxMenu = null; this.render(); },
+    closePause: function() { this.pauseOpen = false; this.sideOpen = false; this.render(); },
 
     refreshInspectLive: function() {
         var box = document.getElementById("sb-insp-live");
@@ -535,28 +535,26 @@ var SandboxUI = {
         var sb = this.isSandbox();
         var m = GameModes.current;
         var posTarget = typeof EntityTakeover !== "undefined" ? EntityTakeover.target : null;
-
-        // 1. Sandbox Top-Left Quick Action Bar
-        if (sb) {
-            html += '<div class="sb-pe sb-glass" style="position:fixed;top:10px;left:12px;border-radius:12px;padding:5px 10px;display:flex;align-items:center;gap:6px">' +
-                '<span style="font-weight:900;color:#38bdf8;padding:0 4px">✨ BLANK SANDBOX</span>' +
-                '<button class="sb-btn ' + (this.spawnerOpen ? 'active' : '') + '" id="sb-top-spawn">🔍 Spawner [B]</button>' +
-                '<button class="sb-btn ' + (this.rosterOpen ? 'active' : '') + '" id="sb-top-roster">👥 Entities [Tab]</button>' +
-                '<button class="sb-btn ' + (sandboxCfg.showFloor ? 'active' : '') + '" id="sb-top-floor">▦ Floor</button>' +
-                (posTarget ? '<button class="sb-btn active" id="sb-top-eject">↩ Eject [F]</button>' : '') +
-                '<button class="sb-btn" id="sb-top-pause">⚙ Menu [Esc]</button>' +
-                '</div>';
-        }
-
-        // 2. Universal Side Menu Handle (when collapsed) OR Full Side Drawer (when open)
         var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
-        var mid0 = m && m.id ? m.id : "";
-        if (!this.sideOpen) {
-            // In .io / ownScreen games, #top-menu-btn on the top-right bar opens this menu, so we only show a subtle Inspect pill next to the HUD card instead of a duplicate "Side Menu" bar
-            var posStyle = own ? ('left:' + (mid0 === "mix" ? 468 : 344) + 'px;top:10px') : ('left:12px;top:' + (sb ? 62 : 10) + 'px');
-            html += '<div class="sb-pe sb-glass" style="position:fixed;' + posStyle + ';border-radius:10px;padding:4px 6px;display:flex;align-items:center;gap:5px">' +
-                '<button class="sb-btn" id="sb-side-open" style="' + (own ? 'display:none' : '') + '" title="Open Menu [F2 / `]">☰ Menu</button>' +
+        var isOpen = this.sideOpen || this.pauseOpen;
+        if (this.pauseOpen && this.pauseTab) this.sideTab = this.pauseTab;
+
+        var pCount = (typeof LocalMP !== "undefined" && LocalMP.count) ? LocalMP.count() : ((typeof blueGuy !== "undefined" && blueGuy) ? 2 : 1);
+        var lanOnline = (typeof Net !== "undefined" && Net.online);
+        var lanLabel = lanOnline ? ("📡 LAN · " + (Net.role === "host" ? (Net.peerList().length + 1) : ((Net.lobbyPlayers || []).length || 2)) + "P") : "📡 LAN";
+
+        // Single Unified Menu: Compact Top-Left Handle (when collapsed) OR Full Unified Drawer (when open)
+        if (!isOpen) {
+            html += '<div class="sb-pe sb-glass" style="position:fixed;left:12px;top:10px;border-radius:10px;padding:4px 6px;display:flex;align-items:center;gap:5px">' +
+                '<button class="sb-btn" id="sb-side-open" title="Open Unified Menu [F2 / ` / Esc]">☰ Menu</button>' +
                 '<button class="sb-btn ' + (this.tool === 'inspect' ? 'active' : '') + '" id="sb-quick-inspect" title="Click anything in the arena to inspect or swap">🔍 Inspect</button>' +
+                '<button class="sb-btn ' + (pCount > 1 ? 'active' : '') + '" id="sb-quick-players" title="Local Players (1–4)">👥 ' + pCount + 'P</button>' +
+                '<button class="sb-btn ' + (lanOnline ? 'active' : '') + '" id="sb-quick-lan" title="LAN Multiplayer">' + lanLabel + '</button>' +
+                (!own ? '<button class="sb-btn" id="sb-quick-studio" title="Character Studio">🛠 Studio</button>' : '') +
+                (sb ? '<button class="sb-btn ' + (this.spawnerOpen ? 'active' : '') + '" id="sb-top-spawn">🔍 Spawner [B]</button>' +
+                    '<button class="sb-btn ' + (this.rosterOpen ? 'active' : '') + '" id="sb-top-roster">👥 Entities [Tab]</button>' +
+                    '<button class="sb-btn ' + (sandboxCfg.showFloor ? 'active' : '') + '" id="sb-top-floor">▦ Floor</button>' +
+                    (posTarget ? '<button class="sb-btn active" id="sb-top-eject">↩ Eject [F]</button>' : '') : '') +
                 (this.tool !== "play" ? '<button class="sb-btn" id="sb-quick-play" title="Return to Play mode">🎮 Play</button>' : '') +
                 '</div>';
         } else {
@@ -645,21 +643,23 @@ var SandboxUI = {
                 '</div>';
         }
 
-        // 8. L1 Glassmorphic Split Card Pause & Cheats Menu
-        if (this.pauseOpen) html += this.renderPauseHTML();
-
         this._root.innerHTML = html;
         this.bindDynamicEvents();
         if (this.rosterOpen) this.renderRosterOnly();
-        if (this.sideOpen && this.sideTab === "inspect") this.refreshInspectLive();
+        if (isOpen && this.sideTab === "inspect") this.refreshInspectLive();
     },
 
     renderSideDrawerHTML: function(sb, m) {
         var self = this;
-        var topY = sb ? 62 : 12;
         var ts = typeof devOpts !== "undefined" ? (devOpts.timeScale || 1) : 1;
         var isPaused = typeof paused !== "undefined" && paused;
         var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
+        var posTarget = typeof EntityTakeover !== "undefined" ? EntityTakeover.target : null;
+        var pCount = (typeof LocalMP !== "undefined" && LocalMP.count) ? LocalMP.count() : ((typeof blueGuy !== "undefined" && blueGuy) ? 2 : 1);
+        var lanOnline = (typeof Net !== "undefined" && Net.online);
+        var lanLabel = lanOnline ? ("📡 LAN · " + (Net.role === "host" ? (Net.peerList().length + 1) : ((Net.lobbyPlayers || []).length || 2)) + "P") : "📡 LAN";
+        var liveStat = (m && m.id === "mix" && typeof Mix !== "undefined" && Mix.liveStat) ? Mix.liveStat : (m && m.tagline ? m.tagline : "");
+
         var tabs = own ? [
             ["controls", "🎛 Play & Tune"],
             ["inspect", "🔍 Inspect"],
@@ -681,13 +681,26 @@ var SandboxUI = {
         else if (this.sideTab === "admin") body = this.renderAdminHTML();
         else body = this.renderSideGamesHTML(m);
 
-        return '<div class="sb-pe sb-glass" style="position:fixed;top:' + topY + 'px;left:12px;bottom:16px;width:296px;max-width:88vw;border-radius:14px;display:flex;flex-direction:column;overflow:hidden">' +
+        return '<div class="sb-pe sb-glass" style="position:fixed;top:12px;left:12px;bottom:16px;width:296px;max-width:88vw;border-radius:14px;display:flex;flex-direction:column;overflow:hidden">' +
             // Header
             '<div style="padding:10px 10px 8px;border-bottom:1px solid rgba(148,163,184,0.18);background:rgba(15,23,42,0.65)">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">' +
-            '<span style="font-weight:900;font-size:12px;color:' + (m && m.color ? m.color : '#38bdf8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (m ? m.title : 'UNIVERSAL MENU') + '</span>' +
-            '<button class="sb-btn" style="padding:2px 7px" id="sb-side-close" title="Collapse [F2 / `]">✕</button>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+            '<span style="font-weight:900;font-size:13px;color:' + (m && m.color ? m.color : '#38bdf8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (m ? m.title : 'UNIVERSAL MENU') + '</span>' +
+            '<button class="sb-btn" style="padding:2px 7px" id="sb-side-close" title="Collapse Menu [F2 / ` / Esc]">✕</button>' +
             '</div>' +
+            (liveStat ? '<div id="sb-live-stat" style="font-size:11px;color:#cbd5e1;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + liveStat + '</div>' : '') +
+            // Session Row: Players, LAN, Studio / Sandbox tools
+            '<div style="display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap">' +
+            '<button class="sb-btn ' + (pCount > 1 ? 'active' : '') + '" style="flex:1;padding:3px 6px;font-size:11px" id="sb-top-players">👥 ' + pCount + ' Player' + (pCount > 1 ? 's' : '') + '</button>' +
+            '<button class="sb-btn ' + (lanOnline ? 'active' : '') + '" style="flex:1;padding:3px 6px;font-size:11px" id="sb-top-lan">' + lanLabel + '</button>' +
+            (!own ? '<button class="sb-btn" style="padding:3px 6px;font-size:11px" id="sb-top-studio">🛠 Studio</button>' : '') +
+            '</div>' +
+            (sb ? '<div style="display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap">' +
+                '<button class="sb-btn ' + (this.spawnerOpen ? 'active' : '') + '" style="flex:1;padding:3px 5px;font-size:10px" id="sb-top-spawn">🔍 Spawner</button>' +
+                '<button class="sb-btn ' + (this.rosterOpen ? 'active' : '') + '" style="flex:1;padding:3px 5px;font-size:10px" id="sb-top-roster">👥 Entities</button>' +
+                '<button class="sb-btn ' + (sandboxCfg.showFloor ? 'active' : '') + '" style="padding:3px 5px;font-size:10px" id="sb-top-floor">▦ Floor</button>' +
+                (posTarget ? '<button class="sb-btn active" style="padding:3px 5px;font-size:10px" id="sb-top-eject">↩ Eject</button>' : '') +
+                '</div>' : '') +
             // Time Scale & Pause/Step Bar
             '<div style="display:flex;gap:3px;align-items:center">' +
             '<button class="sb-btn ' + (isPaused ? 'active' : '') + '" style="padding:3px 7px" id="sb-tm-pause" title="Pause / Resume">' + (isPaused ? '▶' : '⏸') + '</button>' +
@@ -809,15 +822,28 @@ var SandboxUI = {
                 '</div>';
         }
 
+        var sndPct = typeof settings !== "undefined" ? Math.round((settings.sound || 0) * 100) : 70;
+        var shkPct = typeof settings !== "undefined" ? Math.round((settings.shake || 0) * 100) : 100;
+        var themeLbl = (typeof THEMES !== "undefined" && typeof currentTheme !== "undefined" && THEMES[currentTheme]) ? THEMES[currentTheme].label : (typeof currentTheme !== "undefined" ? currentTheme : "Classic");
+        var showHelp = typeof settings !== "undefined" && !!settings.showHelp;
+
+        html += '<div class="sb-sec">Audio & Display</div><div class="sb-card">' +
+            '<div style="margin-bottom:6px"><div class="sb-row" style="margin-bottom:2px"><span>🔊 Sound Volume</span><strong>' + (sndPct ? (sndPct + '%') : 'Muted') + '</strong></div>' +
+            '<input type="range" id="sb-set-vol" min="0" max="100" step="5" value="' + sndPct + '" style="width:100%"></div>' +
+            (!own ? '<div style="margin-bottom:6px"><div class="sb-row" style="margin-bottom:2px"><span>📳 Screen Shake</span><strong>' + (shkPct ? (shkPct + '%') : 'Off') + '</strong></div>' +
+            '<input type="range" id="sb-set-shake" min="0" max="200" step="25" value="' + shkPct + '" style="width:100%"></div>' : '') +
+            '<div class="sb-row" style="margin-bottom:4px"><span>🎨 Theme</span><button class="sb-btn" style="padding:2px 8px;font-size:11px" id="sb-set-theme">' + themeLbl + ' ▸</button></div>' +
+            '<label class="sb-row" style="cursor:pointer"><span>❓ Key Help Overlay</span><input type="checkbox" id="sb-set-help" ' + (showHelp ? 'checked' : '') + '></label>' +
+            '</div>';
+
         html += '<div class="sb-sec">Quick Actions</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
             (!own ? '<button class="sb-btn" id="sb-act-heal">❤ Heal All</button>' +
             '<button class="sb-btn" id="sb-act-clear">🧹 Clear Foes</button>' : '') +
             (isIo ? '<button class="sb-btn" id="sb-tl-swap">🔄 Swap Bot [V]</button>' +
             '<button class="sb-btn ' + (this.tool === "inspect" ? "active" : "") + '" id="sb-act-inspect">🔍 Inspect</button>' : '') +
-            '<button class="sb-btn" id="sb-act-settings">⚙ Settings</button>' +
-            '<button class="sb-btn" id="sb-act-controls">🎮 Controls</button>' +
+            '<button class="sb-btn" id="sb-act-controls">🎮 Keybinds</button>' +
             '<button class="sb-btn" id="sb-act-restart">🔄 Restart</button>' +
-            '<button class="sb-btn active" id="sb-act-hub">🕹 Arcade Hub</button>' +
+            '<button class="sb-btn active" style="grid-column:1 / -1" id="sb-act-hub">🕹 Arcade Hub</button>' +
             '</div>';
         return html;
     },
@@ -1211,13 +1237,24 @@ var SandboxUI = {
 
         // Universal Side Handle & Drawer
         if (el("sb-side-open")) el("sb-side-open").onclick = function() { self.sideOpen = true; self.render(); };
-        if (el("sb-side-close")) el("sb-side-close").onclick = function() { self.sideOpen = false; self.render(); };
+        if (el("sb-side-close")) el("sb-side-close").onclick = function() {
+            self.sideOpen = false;
+            self.pauseOpen = false;
+            if (typeof paused !== "undefined" && paused && typeof closePause === "function") closePause();
+            else self.render();
+        };
         if (el("sb-quick-inspect")) el("sb-quick-inspect").onclick = function() {
             self.tool = self.tool === "inspect" ? "play" : "inspect";
             if (self.tool === "inspect") { self.sideOpen = true; self.sideTab = "inspect"; }
             self.render();
         };
         if (el("sb-quick-play")) el("sb-quick-play").onclick = function() { self.tool = "play"; self.render(); };
+        if (el("sb-quick-players")) el("sb-quick-players").onclick = function() { if (typeof PlayersUI !== "undefined") PlayersUI.open(); };
+        if (el("sb-top-players")) el("sb-top-players").onclick = function() { if (typeof PlayersUI !== "undefined") PlayersUI.open(); };
+        if (el("sb-quick-lan")) el("sb-quick-lan").onclick = function() { if (typeof NetUI !== "undefined") NetUI.open(); };
+        if (el("sb-top-lan")) el("sb-top-lan").onclick = function() { if (typeof NetUI !== "undefined") NetUI.open(); };
+        if (el("sb-quick-studio")) el("sb-quick-studio").onclick = function() { if (typeof Studio !== "undefined") Studio.open(); };
+        if (el("sb-top-studio")) el("sb-top-studio").onclick = function() { if (typeof Studio !== "undefined") Studio.open(); };
 
         // Time Scale & Pause/Step
         if (el("sb-tm-pause")) el("sb-tm-pause").onclick = function() {
@@ -1240,7 +1277,7 @@ var SandboxUI = {
             };
         });
         this._root.querySelectorAll("[data-stab]").forEach(function(b) {
-            b.onclick = function() { self.sideTab = b.dataset.stab; self.render(); };
+            b.onclick = function() { self.sideTab = b.dataset.stab; self.pauseTab = b.dataset.stab; self.render(); };
         });
 
         // Controls Tab: Game Tunables
@@ -1300,15 +1337,37 @@ var SandboxUI = {
             var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong");
             if (st) st.textContent = userZoom.toFixed(2) + "x";
         };
+
+        // Audio & Display Settings
+        if (el("sb-set-vol")) el("sb-set-vol").oninput = function(e) {
+            var v = Number(e.target.value);
+            if (typeof settings !== "undefined") { settings.sound = v / 100; if (typeof saveSettings === "function") saveSettings(); }
+            var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong");
+            if (st) st.textContent = v ? (v + "%") : "Muted";
+        };
+        if (el("sb-set-shake")) el("sb-set-shake").oninput = function(e) {
+            var v = Number(e.target.value);
+            if (typeof settings !== "undefined") { settings.shake = v / 100; if (typeof saveSettings === "function") saveSettings(); }
+            var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong");
+            if (st) st.textContent = v ? (v + "%") : "Off";
+        };
+        if (el("sb-set-theme")) el("sb-set-theme").onclick = function() {
+            if (typeof THEME_ORDER !== "undefined" && typeof applyTheme === "function") {
+                var idx = (THEME_ORDER.indexOf(currentTheme) + 1) % THEME_ORDER.length;
+                applyTheme(THEME_ORDER[idx]);
+                self.render();
+            }
+        };
+        if (el("sb-set-help")) el("sb-set-help").onchange = function(e) {
+            if (typeof settings !== "undefined") { settings.showHelp = e.target.checked; if (typeof saveSettings === "function") saveSettings(); }
+        };
+
         if (el("sb-act-heal") && typeof DevActions !== "undefined") el("sb-act-heal").onclick = function() { if (!self.sendNet({ k: "healAll" })) DevActions.healAll(); };
         if (el("sb-act-clear") && typeof DevActions !== "undefined") el("sb-act-clear").onclick = function() { if (!self.sendNet({ k: "clearEnemies" })) DevActions.clearEnemies(); };
         if (el("sb-act-inspect")) el("sb-act-inspect").onclick = function() {
             self.tool = self.tool === "inspect" ? "play" : "inspect";
             if (self.tool === "inspect") self.sideTab = "inspect";
             self.render();
-        };
-        if (el("sb-act-settings")) el("sb-act-settings").onclick = function() {
-            if (typeof toggleDevPanel === "function") toggleDevPanel("game");
         };
         if (el("sb-act-controls")) el("sb-act-controls").onclick = function() {
             if (typeof toggleControlMenu === "function") toggleControlMenu();

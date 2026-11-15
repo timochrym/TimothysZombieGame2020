@@ -556,18 +556,18 @@ SummonManager.buildUI = function() {
     var style = document.createElement("style");
     style.textContent = `
         :root { --dp-bg: rgba(10,16,24,0.94); --dp-line: rgba(130,180,210,0.22); --dp-accent: #22d3ee; --dp-accent2: #ffd23f; --dp-text: #e6f1f7; --dp-dim: #8aa3b5; }
-        /* compact top bar: a few icon buttons + a ☰ menu with everything else; fades back while you play */
-        #top-right-bar { position: fixed; top: 10px; right: 12px; z-index: 1000; display: flex; gap: 6px; align-items: center; user-select: none; font-family: 'Segoe UI', Arial, sans-serif; opacity: .62; transition: opacity .2s; }
+        /* Legacy right-hand menu bars are consolidated into the single unified SandboxUI menu */
+        #top-right-bar { position: fixed; top: 10px; right: 12px; z-index: 1000; display: none !important; gap: 6px; align-items: center; user-select: none; font-family: 'Segoe UI', Arial, sans-serif; opacity: .62; transition: opacity .2s; }
         #top-right-bar:hover, #top-right-bar.menu-open, body.hub-open #top-right-bar, body.paused #top-right-bar { opacity: 1; }
-        body.studio-open #top-right-bar { display: none; }
+        body.studio-open #top-right-bar { display: none !important; }
         .top-bar-btn { background: var(--dp-bg); color: var(--dp-text); border: 1px solid var(--dp-line); height: 36px; min-width: 38px; padding: 0 11px; font-size: 13px; font-weight: 700; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,0.35); transition: border-color .15s, background .15s; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
         .top-bar-btn:hover { border-color: var(--dp-accent); }
         .top-bar-btn.active { background: linear-gradient(135deg, #ffd23f, #ff9f1c); color: #1a1205; border-color: #fff3; }
         #coop-btn.active { background: linear-gradient(135deg, #22d3ee, #3b82f6); color: #04121c; }
         #lan-btn.live { background: linear-gradient(135deg, #34d399, #059669); color: #03140d; }
         @media (max-width: 1100px) { .top-bar-btn .lbl { display: none; } }
-        #top-menu { position: fixed; top: 52px; right: 12px; z-index: 1001; width: 300px; max-height: calc(100vh - 70px); overflow-y: auto; background: var(--dp-bg); border: 1px solid var(--dp-line); border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.6); padding: 8px; display: none; font-family: 'Segoe UI', Arial, sans-serif; color: var(--dp-text); }
-        #top-menu.open { display: block; }
+        #top-menu { position: fixed; top: 52px; right: 12px; z-index: 1001; width: 300px; max-height: calc(100vh - 70px); overflow-y: auto; background: var(--dp-bg); border: 1px solid var(--dp-line); border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.6); padding: 8px; display: none !important; font-family: 'Segoe UI', Arial, sans-serif; color: var(--dp-text); }
+        #top-menu.open { display: none !important; }
         #top-menu .tm-head { padding: 6px 8px 8px; border-bottom: 1px solid var(--dp-line); margin-bottom: 6px; }
         #top-menu .tm-head b { display: block; font-size: 14px; color: #fde68a; } #top-menu .tm-head span { font-size: 12px; color: var(--dp-dim); }
         #top-menu .tm-sec { font-size: 10px; font-weight: 800; letter-spacing: .1em; color: var(--dp-dim); text-transform: uppercase; margin: 8px 8px 3px; }
@@ -588,8 +588,8 @@ SummonManager.buildUI = function() {
         .mm-divider { width: 1px; height: 48px; background: var(--dp-line); margin: 0 2px; flex: 0 0 auto; }
         .mm-label { color: var(--dp-dim); font-size: 11px; font-weight: 800; line-height: 1.25; letter-spacing: .5px; }
 
-        #summon-panel { position: fixed; top: 62px; right: 16px; bottom: 16px; width: 410px; background: var(--dp-bg); border: 1px solid var(--dp-line); border-radius: 18px; color: var(--dp-text); font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; z-index: 1000; display: none; flex-direction: column; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,.65); user-select: none; backdrop-filter: blur(8px); }
-        #summon-panel.open { display: flex; }
+        #summon-panel { position: fixed; top: 62px; right: 16px; bottom: 16px; width: 410px; background: var(--dp-bg); border: 1px solid var(--dp-line); border-radius: 18px; color: var(--dp-text); font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; z-index: 1000; display: none !important; flex-direction: column; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,.65); user-select: none; backdrop-filter: blur(8px); }
+        #summon-panel.open { display: none !important; }
         .dp-head { padding: 12px 12px 8px 16px; display: flex; align-items: center; }
         .dp-head b { font-size: 16px; letter-spacing: .5px; color: var(--dp-accent2); }
         .dp-head span { font-size: 11px; color: var(--dp-dim); margin-left: auto; margin-right: 10px; }
@@ -1404,17 +1404,29 @@ function topBarRefresh() {
             var ch = "👥 <b>" + humans + "</b>" + (cpus ? "<span style='opacity:.8'>+" + cpus + "🤖</span>" : "") + " <span class='lbl'>" + (humans === 1 ? "player" : "players") + "</span>";
             if (coopBtn.innerHTML !== ch) coopBtn.innerHTML = ch;
             coopBtn.title = humans + " human" + (humans === 1 ? "" : "s") + (cpus ? " + " + cpus + " CPU" : "") + " — click to change who's playing";
+            var sbQp = document.getElementById("sb-quick-players"), sbTp = document.getElementById("sb-top-players");
+            var pTxt = "👥 " + humans + "P" + (cpus ? "+" + cpus + "🤖" : "");
+            if (sbQp && sbQp.textContent !== pTxt) sbQp.textContent = pTxt;
+            if (sbTp && sbTp.textContent !== pTxt) sbTp.textContent = pTxt;
         }
         var lanBtn = document.getElementById("lan-btn");
         if (lanBtn && typeof Net !== "undefined") {
             var live = Net.role === "host" || Net.role === "client";
             lanBtn.classList.toggle("live", live);
             var nLan = Net.role === "host" ? (Net.peerCount() + 1) : ((Net.lobbyPlayers && Net.lobbyPlayers.length) || 2);
-            var lh = "📡 <span class='lbl'>" + (Net.role === "host" ? "Hosting · " + nLan : (Net.role === "client" ? "Joined · " + nLan : "LAN")) + "</span>";
+            var lTxt = Net.role === "host" ? "Hosting · " + nLan : (Net.role === "client" ? "Joined · " + nLan : "LAN");
+            var lh = "📡 <span class='lbl'>" + lTxt + "</span>";
             if (lanBtn.innerHTML !== lh) lanBtn.innerHTML = lh;
+            var sbQl = document.getElementById("sb-quick-lan"), sbTl = document.getElementById("sb-top-lan");
+            if (sbQl && sbQl.textContent !== "📡 " + lTxt) sbQl.textContent = "📡 " + lTxt;
+            if (sbTl && sbTl.textContent !== "📡 " + lTxt) sbTl.textContent = "📡 " + lTxt;
         }
     var stBtn = document.getElementById("studio-btn");
     if (stBtn) stBtn.style.display = GameModes.flag("ownScreen", false) ? "none" : "";
+    var sbLive = document.getElementById("sb-live-stat");
+    if (sbLive && typeof Mix !== "undefined" && GameModes.current && GameModes.current.id === "mix" && Mix.liveStat) {
+        if (sbLive.textContent !== Mix.liveStat) sbLive.textContent = Mix.liveStat;
+    }
     document.body.classList.toggle("paused", typeof paused !== "undefined" && !!paused);
     document.body.classList.toggle("hub-open", typeof Hub !== "undefined" && !!Hub.isOpen);
 }

@@ -603,17 +603,48 @@ var Mix = {
                 }
             }
         }
-        // ---- flying Agar.io thrown mass damages snakes and snakes only
+        // ---- flying Agar.io thrown mass HURTS snakes badly (head & body) and rewards the Agar.io bubble heavily
         for (let i = cp0.length - 1; i >= 0; i--) {
             var ep = cp0[i];
             if (!ep.ejected || ep._gone || (ep.vx * ep.vx + ep.vy * ep.vy <= 4)) continue;
-            var hw = Snake.hitBody(ep.x, ep.y, 12, null);
+            var hw = null, isHeadEj = false;
+            for (let wj = 0; wj < worms.length; wj++) {
+                var wCand = worms[wj];
+                if (!wCand.alive || !wCand.segs || !wCand.segs.length) continue;
+                var hCand = wCand.segs[0], hrCand = (wormR[wj] || 14) + 16;
+                var hdxE = ep.x - hCand.x, hdyE = ep.y - hCand.y;
+                if (hdxE * hdxE + hdyE * hdyE < hrCand * hrCand) {
+                    hw = wCand; isHeadEj = true; break;
+                }
+            }
+            if (!hw) hw = Snake.hitBody(ep.x, ep.y, 18, null);
             if (!hw || !hw.alive) continue;
-            hw.len -= 4;
-            if (hw.len < 10) Snake.kill(hw, null);
+            var ejDmg = isHeadEj ? Math.max(36, Math.round(hw.len * 0.35)) : Math.max(24, Math.round(hw.len * 0.22));
+            hw.len -= ejDmg;
+            var ownerGain = Math.max(42, Math.round(ejDmg * 1.8));
+            if (ep.ownerPl && ep.ownerPl.alive) {
+                var ownBlobs = Cells.mine(ep.ownerPl);
+                if (ownBlobs.length) {
+                    var eachGain = ownerGain / ownBlobs.length;
+                    for (let obi = 0; obi < ownBlobs.length; obi++) ownBlobs[obi].m += eachGain;
+                }
+            }
+            if (hw.len < 12) {
+                Snake.kill(hw, ep.ownerPl || null);
+                if (ep.ownerPl && ep.ownerPl.alive) {
+                    var ownBlobsK = Cells.mine(ep.ownerPl);
+                    if (ownBlobsK.length) {
+                        for (let obk = 0; obk < ownBlobsK.length; obk++) ownBlobsK[obk].m += 70 / ownBlobsK.length;
+                    }
+                    ownerGain += 70;
+                }
+                this.burst(ep.x, ep.y, ep.col || "#38bdf8", "ring", "SNIPED! +" + ownerGain, 48);
+                this.note((ep.ownerPl && ep.ownerPl.human !== undefined) || hw.human !== undefined, ((ep.ownerPl && ep.ownerPl.name) || "A blob") + " sniped " + hw.name + " with food!", ep.col || "#38bdf8");
+            } else {
+                this.burst(ep.x, ep.y, ep.col || "#38bdf8", "ring", "-" + ejDmg + " LEN! +" + ownerGain, 38);
+            }
             ep._gone = true; ep.eaten = true; cpGone = true;
-            this.burst(ep.x, ep.y, ep.col || "#fff", "spark", "HIT!", 26);
-            if (hw.human !== undefined && typeof SFX !== "undefined") SFX.play("hit", ep.x, ep.y, 0.5);
+            if (hw.human !== undefined && typeof SFX !== "undefined") SFX.play("hit", ep.x, ep.y, 0.7);
         }
         // ---- a blob that touches a worm POPS less easily: requires deeper contact, medium blobs bounce, big blobs lose 15% into max 3 pieces
         for (let i = 0, n0 = blobs.length; i < n0; i++) {
@@ -810,7 +841,7 @@ var Mix = {
                         for (let gx = wx0; gx <= wx1; gx++) {
                             var bkW = cpGrid[rowW | gx]; if (!bkW || !bkW.length) continue;
                             for (let i = 0; i < bkW.length; i++) {
-                                var f = bkW[i]; if (f._gone) continue;
+                                var f = bkW[i]; if (f._gone || (f.ejected && (f.vx * f.vx + f.vy * f.vy > 1))) continue;
                                 var fdx5 = f.x - h5.x, fdy5 = f.y - h5.y;
                                 if (fdx5 < rr5 && fdx5 > -rr5 && fdy5 < rr5 && fdy5 > -rr5) { w5.len += f.m * (f.fromSpike ? 0.2 : 0.4); f._gone = true; cpGone = true; S.crossFood++; }
                             }
@@ -1010,13 +1041,11 @@ var Mix = {
         else if (m && m.kind === "blob") Cells.hud();
         else if (m) Snake.hud();
 
-        var sideOpen = typeof SandboxUI !== "undefined" && SandboxUI.sideOpen;
-        var lx = sideOpen ? 320 : 14;
-        var menuOpen = typeof document !== "undefined" && document.getElementById("top-menu") && document.getElementById("top-menu").classList.contains("open");
+        var sideOpen = typeof SandboxUI !== "undefined" && (SandboxUI.sideOpen || SandboxUI.pauseOpen);
+        var lx = sideOpen ? 320 : 12;
+        var ty = sideOpen ? 10 : 50;
 
-        // Unified 3-in-1 Top-Left Header Card (compact status bar when side menu is open; includes quick-switch pills when side menu is closed)
-        var name = MIX_BODIES[0][1];
-        for (let i = 0; i < MIX_BODIES.length; i++) if (MIX_BODIES[i][0] === mixCfg.body) { name = MIX_BODIES[i][1]; break; }
+        // Unified 3-in-1 status & body switcher
         var liveStat = "Spectating / Respawning", subStat = "Best: " + (mixSave.best[mixCfg.body] || 0);
         if (m && m.alive) {
             if (m.kind === "tank") {
@@ -1039,9 +1068,11 @@ var Mix = {
                 subStat = "Best " + (mixSave.best.worm || 0) + (X ? " · Bite " + X.st[0] + " · Armor " + X.st[1] + " · Appetite " + X.st[2] : "") + " · Q body · V swap";
             }
         }
+        this.liveStat = liveStat;
+        this.subStat = subStat;
 
-        // Clickable quick-switch body pills (cached per active body & lx)
-        var pillsKey = mixCfg.body + ":" + lx;
+        // Clickable quick-switch body pills (cached per active body, lx, ty)
+        var pillsKey = mixCfg.body + ":" + lx + ":" + ty;
         if (!this._pillsCanvas || this._pillsBody !== pillsKey) {
             this._pillsBody = pillsKey;
             this._pills.length = 0;
@@ -1062,7 +1093,7 @@ var Mix = {
                 pg.textAlign = "center";
                 pg.fillStyle = active ? "#fef08a" : "#cbd5e1";
                 pg.fillText(lbl, px + 1 + pw * 0.5, 17);
-                this._pills.push({ id: bd[0], x: lx + 12 + px, y: 68, w: pw, h: 23 });
+                this._pills.push({ id: bd[0], x: lx + 12 + px, y: ty + 58, w: pw, h: 23 });
                 px += pw + 6;
             }
             var swLbl = "🔄 Swap [V]", swW = Math.round(swLbl.length * 6.6 + 16);
@@ -1074,26 +1105,21 @@ var Mix = {
             pg.textAlign = "center";
             pg.fillStyle = "#bae6fd";
             pg.fillText(swLbl, px + 1 + swW * 0.5, 17);
-            this._swapPill = { id: "_swap", x: lx + 12 + px, y: 68, w: swW, h: 23 };
+            this._swapPill = { id: "_swap", x: lx + 12 + px, y: ty + 58, w: swW, h: 23 };
         }
 
-        if (sideOpen) {
-            // Side menu already shows the body switcher buttons — only draw a sleek status badge here!
-            uiPanel(lx, 10, 420, 52, "#fde047", 0.86);
-            uiText("🌀 ARENA MIX", lx + 14, 32, 16, "#fde047", "left", "900");
-            uiText(liveStat, lx + 406, 32, 12, "#f8fafc", "right", "800");
-            uiText(subStat, lx + 14, 50, 11, "#cbd5e1", "left", "700");
-        } else {
-            uiPanel(lx, 10, 446, 94, "#fde047", 0.88);
-            uiText("🌀 ARENA MIX", lx + 14, 34, 18, "#fde047", "left", "900");
-            uiText(liveStat, lx + 432, 33, 12, "#f8fafc", "right", "800");
-            uiText(subStat, lx + 14, 54, 11, "#cbd5e1", "left", "700");
-            ctx.drawImage(this._pillsCanvas, lx + 12, 66);
+        // Only draw the canvas status/switcher card when the unified menu is collapsed — when open, the unified menu is the ONLY menu!
+        if (!sideOpen) {
+            uiPanel(lx, ty, 446, 90, "#fde047", 0.88);
+            uiText("🌀 ARENA MIX", lx + 14, ty + 24, 17, "#fde047", "left", "900");
+            uiText(liveStat, lx + 432, ty + 23, 12, "#f8fafc", "right", "800");
+            uiText(subStat, lx + 14, ty + 44, 11, "#cbd5e1", "left", "700");
+            ctx.drawImage(this._pillsCanvas, lx + 12, ty + 56);
         }
 
         // Interactive Worm Upgrade Pills at bottom-left when playing as a worm with unspent points
         this._wormRects = [];
-        var logStartY = 122;
+        var logStartY = sideOpen ? 24 : 154;
         if (m && m.alive && m.kind === "worm" && m.ref.mx && m.ref.mx.pts > 0) {
             var WX = m.ref.mx, wy = cssH - 74;
             uiPanel(lx, wy, 368, 36, "#f472b6", 0.92);
@@ -1112,37 +1138,35 @@ var Mix = {
             }
         }
 
-        // Unified 3-in-1 Combined Leaderboard on the right (auto-hidden when #top-menu is open)
-        if (!menuOpen) {
-            var allEntries = [];
-            for (let i = 0; i < Tanks.tanks.length; i++) {
-                var tk = Tanks.tanks[i];
-                if (!tk.alive) continue;
-                allEntries.push({ icon: "🛡", name: tk.name || "Tank", val: Math.max(tk.score || 0, Math.round(this.tankMass(tk))), col: tk.color || "#60a5fa", human: tk.human !== undefined });
-            }
-            for (let i = 0; i < Cells.players.length; i++) {
-                var cp = Cells.players[i];
-                if (!cp.alive) continue;
-                allEntries.push({ icon: cp.chain ? "📿" : "🫧", name: cp.name || "Blob", val: Math.round(Cells.mass(cp)), col: cp.color || "#c084fc", human: cp.human !== undefined });
-            }
-            for (let i = 0; i < Snake.worms.length; i++) {
-                var sw2 = Snake.worms[i];
-                if (!sw2.alive) continue;
-                allEntries.push({ icon: "🪱", name: sw2.name || "Worm", val: Math.round(sw2.len), col: sw2.color || "#f472b6", human: sw2.human !== undefined });
-            }
-            allEntries.sort(function(a, b) { return b.val - a.val; });
-            var lbRows = allEntries.slice(0, 8);
-            for (let i = 8; i < allEntries.length; i++) {
-                if (allEntries[i].human) { allEntries[i].rank = i + 1; lbRows.push(allEntries[i]); }
-            }
-            uiPanel(cssW - 220, 64, 206, 32 + lbRows.length * 18, "#fde047", 0.85);
-            uiText("3-IN-1 LEADERBOARD", cssW - 117, 84, 12, "#fde047", "center", "900");
-            for (let i = 0; i < lbRows.length; i++) {
-                var row = lbRows[i];
-                var rk = row.rank || (i + 1);
-                uiText(rk + ". " + row.icon + " " + row.name, cssW - 208, 104 + i * 18, 12, row.human ? "#fde047" : row.col, "left", row.human ? "900" : "700");
-                uiText(String(row.val), cssW - 24, 104 + i * 18, 12, "#e2e8f0", "right", "800");
-            }
+        // Unified 3-in-1 Combined Leaderboard at the top-right
+        var allEntries = [];
+        for (let i = 0; i < Tanks.tanks.length; i++) {
+            var tk = Tanks.tanks[i];
+            if (!tk.alive) continue;
+            allEntries.push({ icon: "🛡", name: tk.name || "Tank", val: Math.max(tk.score || 0, Math.round(this.tankMass(tk))), col: tk.color || "#60a5fa", human: tk.human !== undefined });
+        }
+        for (let i = 0; i < Cells.players.length; i++) {
+            var cp = Cells.players[i];
+            if (!cp.alive) continue;
+            allEntries.push({ icon: cp.chain ? "📿" : "🫧", name: cp.name || "Blob", val: Math.round(Cells.mass(cp)), col: cp.color || "#c084fc", human: cp.human !== undefined });
+        }
+        for (let i = 0; i < Snake.worms.length; i++) {
+            var sw2 = Snake.worms[i];
+            if (!sw2.alive) continue;
+            allEntries.push({ icon: "🪱", name: sw2.name || "Worm", val: Math.round(sw2.len), col: sw2.color || "#f472b6", human: sw2.human !== undefined });
+        }
+        allEntries.sort(function(a, b) { return b.val - a.val; });
+        var lbRows = allEntries.slice(0, 8);
+        for (let i = 8; i < allEntries.length; i++) {
+            if (allEntries[i].human) { allEntries[i].rank = i + 1; lbRows.push(allEntries[i]); }
+        }
+        uiPanel(cssW - 220, 14, 206, 32 + lbRows.length * 18, "#fde047", 0.85);
+        uiText("3-IN-1 LEADERBOARD", cssW - 117, 34, 12, "#fde047", "center", "900");
+        for (let i = 0; i < lbRows.length; i++) {
+            var row = lbRows[i];
+            var rk = row.rank || (i + 1);
+            uiText(rk + ". " + row.icon + " " + row.name, cssW - 208, 54 + i * 18, 12, row.human ? "#fde047" : row.col, "left", row.human ? "900" : "700");
+            uiText(String(row.val), cssW - 24, 54 + i * 18, 12, "#e2e8f0", "right", "800");
         }
 
         var lw = 0;

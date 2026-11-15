@@ -326,24 +326,24 @@ var Snake = {
 
     hud: function() {
         var hs = this.humans();
-        var lx = (typeof SandboxUI !== "undefined" && SandboxUI.sideOpen) ? 320 : 14;
-        var menuOpen = typeof document !== "undefined" && document.getElementById("top-menu") && document.getElementById("top-menu").classList.contains("open");
+        var sideOpen = typeof SandboxUI !== "undefined" && (SandboxUI.sideOpen || SandboxUI.pauseOpen);
+        var lx = sideOpen ? 320 : 12;
         if (!this.mixLayer) {
-            uiPanel(lx, 10, 300, 60, "#f472b6");
-            uiText("WORM ARENA", lx + 16, 38, 22, "#f9a8d4", "left", "900");
-            uiText(hs.map(function(w) { return w.name + " " + (w.alive ? Math.round(w.len) : "✖"); }).join("   ") + "   best " + snakeSave.best, lx + 16, 58, 12, "#cbd5e1", "left", "800");
+            if (!sideOpen) {
+                uiPanel(lx, 50, 300, 60, "#f472b6");
+                uiText("WORM ARENA", lx + 16, 78, 22, "#f9a8d4", "left", "900");
+                uiText(hs.map(function(w) { return w.name + " " + (w.alive ? Math.round(w.len) : "✖"); }).join("   ") + "   best " + snakeSave.best, lx + 16, 98, 12, "#cbd5e1", "left", "800");
+            }
             // leaderboard
-            if (!menuOpen) {
-                var all = this.worms.filter(function(w) { return w.alive; }).sort(function(a, b) { return b.len - a.len; });
-                var lb = all.slice(0, 8);
-                all.forEach(function(w, i) { if (i >= 8 && w.human !== undefined) { w.rank = i + 1; lb.push(w); } });   // you, even when you're not top 8
-                uiPanel(cssW - 214, 64, 200, 30 + lb.length * 18, "#f472b6", 0.8);
-                uiText("LEADERBOARD", cssW - 114, 84, 12, "#f9a8d4", "center", "900");
-                for (let i = 0; i < lb.length; i++) {
-                    var w = lb[i];
-                    uiText((w.rank && i >= 8 ? w.rank : i + 1) + ". " + w.name, cssW - 202, 104 + i * 18, 12, w.human !== undefined ? "#fde047" : w.color, "left", w.human !== undefined ? "900" : "700");
-                    uiText(String(Math.round(w.len)), cssW - 26, 104 + i * 18, 12, "#e2e8f0", "right", "800");
-                }
+            var all = this.worms.filter(function(w) { return w.alive; }).sort(function(a, b) { return b.len - a.len; });
+            var lb = all.slice(0, 8);
+            all.forEach(function(w, i) { if (i >= 8 && w.human !== undefined) { w.rank = i + 1; lb.push(w); } });   // you, even when you're not top 8
+            uiPanel(cssW - 214, 14, 200, 30 + lb.length * 18, "#f472b6", 0.8);
+            uiText("LEADERBOARD", cssW - 114, 34, 12, "#f9a8d4", "center", "900");
+            for (let i = 0; i < lb.length; i++) {
+                var w = lb[i];
+                uiText((w.rank && i >= 8 ? w.rank : i + 1) + ". " + w.name, cssW - 202, 54 + i * 18, 12, w.human !== undefined ? "#fde047" : w.color, "left", w.human !== undefined ? "900" : "700");
+                uiText(String(Math.round(w.len)), cssW - 26, 54 + i * 18, 12, "#e2e8f0", "right", "800");
             }
             // minimap
             var mr = 60, mx = cssW - 84, my = cssH - 92;

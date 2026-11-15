@@ -1213,7 +1213,7 @@ function openPause(fromGameOver) {
     pauseLevelIdx = Math.max(0, pauseLevelKeys.indexOf(LevelManager.currentLevelKey));
     paused = true;
     for (let i = 0; i < PlayerInput.length; i++) PlayerInput[i].shoot = PlayerInput[i].jet = PlayerInput[i].interact = false;
-    if (typeof SandboxUI !== "undefined" && SandboxUI.isSandbox()) SandboxUI.openPause();
+    if (typeof SandboxUI !== "undefined" && SandboxUI.isActive() && !fromGameOver) SandboxUI.openPause();
 }
 
 function closePause() {
