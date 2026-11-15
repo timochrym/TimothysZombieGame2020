@@ -304,19 +304,25 @@ var Cells = {
             var nb = { pl: pl, x: tail.x - (tail.lead ? (tail.lead.x - tail.x) * 0.3 : 6), y: tail.y - (tail.lead ? (tail.lead.y - tail.y) * 0.3 : 6), m: seed, vx: 0, vy: 0, mergeT: 9999, lead: tail };
             this.blobs.push(nb); list.push(nb);
         }
-        // Smooth boost in snake form: low energy cost (0.15% mass every 6 ticks)
+        // Smooth boost in snake form: low energy cost (0.1% mass every 6 ticks), dropped behind tail
         if (pl.chainBoosting && total > 22 && this.t % 6 === 0) {
-            var bCost = Math.min(total - 20, Math.max(0.3, total * 0.0015));
+            var bCost = Math.min(total - 20, Math.max(0.25, total * 0.001));
             tail.m = Math.max(4, tail.m - bCost);
-            this.pellets.push({ x: tail.x, y: tail.y, m: bCost, col: pl.color, vx: (Math.random() - 0.5) * 3, vy: (Math.random() - 0.5) * 3 });
+            var bdx = tail.lead ? (tail.x - tail.lead.x) : -Math.cos(Math.atan2((pl.aimY || tail.y) - tail.y, (pl.aimX || (tail.x + 1)) - tail.x));
+            var bdy = tail.lead ? (tail.y - tail.lead.y) : -Math.sin(Math.atan2((pl.aimY || tail.y) - tail.y, (pl.aimX || (tail.x + 1)) - tail.x));
+            var bL = Math.hypot(bdx, bdy) || 1, br = this.rad(tail.m, tail) + 12;
+            this.pellets.push({ x: tail.x + bdx / bL * br, y: tail.y + bdy / bL * br, m: bCost, col: pl.color, vx: bdx / bL * 3.5, vy: bdy / bL * 3.5 });
         }
-        // mass settles so the tail is gently larger (2.5x) than each of the rest
+        // mass settles into a smooth taper: head is largest, each trailing bubble is ~90% of the one ahead
         if (list.length > 1) {
-            var wsum = (list.length - 1) + 2.5;
+            var wsum = 0, wgts = [];
             for (let i = 0; i < list.length; i++) {
-                var wgt = (i === list.length - 1) ? 2.5 : 1;
-                var target = total * wgt / wsum;
-                list[i].m += (target - list[i].m) * 0.08;
+                var wgt = (i === 0) ? 1.5 : Math.pow(0.9, i);
+                wgts.push(wgt); wsum += wgt;
+            }
+            for (let i = 0; i < list.length; i++) {
+                var target = total * wgts[i] / wsum;
+                list[i].m += (target - list[i].m) * 0.1;
             }
         }
         pl.chainList = list;
@@ -441,8 +447,8 @@ var Cells = {
                     sp *= (pl.chainBoosting && b.m > 22) ? 1.5 : 0.85;
                 } else if (b.lead && !b.lead.dead) {
                     dx = b.lead.x - b.x; dy = b.lead.y - b.y; L = Math.hypot(dx, dy) || 1;
-                    var gap = (this.rad(b.m, b) + (this.rad(b.lead.m, b.lead))) * (pl.compact ? 0.35 : 0.9);
-                    sp = Math.max(0, Math.min(L - gap, pl.compact ? 32 : 28));
+                    var gap = (this.rad(b.m, b) + (this.rad(b.lead.m, b.lead))) * (pl.compact ? 0.35 : 0.92);
+                    sp = Math.max(0, Math.min(L - gap, 32));
                 } else if (pl.chainBoosting && b.m > 12) {
                     sp *= 1.75;
                 }
@@ -459,7 +465,7 @@ var Cells = {
         // own pieces: push apart until they may merge, then merge on overlap (stay lined up while Shift held)
         for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++) {
             var a = B[i], c = B[j];
-            if (a.pl !== c.pl || a.dead || c.dead) continue;
+            if (a.pl !== c.pl || a.dead || c.dead || (a.pl.chain && !a.pl.compact)) continue;
             var ddx = c.x - a.x, ddy = c.y - a.y, d = Math.hypot(ddx, ddy) || 0.01, ra = bRads[i], rc = bRads[j];
             if (a.mergeT > 0 || c.mergeT > 0 || a.pl.lineUp) {
                 if (d < ra + rc) { var push = (ra + rc - d) * 0.25; a.x -= ddx / d * push * c.m / (a.m + c.m); a.y -= ddy / d * push * c.m / (a.m + c.m); c.x += ddx / d * push * a.m / (a.m + c.m); c.y += ddy / d * push * a.m / (a.m + c.m); }
@@ -486,7 +492,9 @@ var Cells = {
         // eat other blobs
         for (let i = 0; i < B.length; i++) for (let j = 0; j < B.length; j++) {
             var e = B[i], f = B[j];
-            if (i === j || e.dead || f.dead || e.pl === f.pl || this.protectedNow(f.pl) || e.m < f.m * 1.25) continue;
+            if (i === j || e.dead || f.dead || e.pl === f.pl || this.protectedNow(f.pl)) continue;
+            var eatRatio = (f.pl.chain && !f.pl.compact && f.lead) ? 1.4 : 1.25;
+            if (e.m < f.m * eatRatio) continue;
             var rd = Math.hypot(f.x - e.x, f.y - e.y);
             if (rd < bRads[i] - bRads[j] * 0.4) {
                 e.m += Math.max(f.m, arenaPopDmg(f.pl, e.pl)); bRads[i] = this.rad(e.m); f.dead = true;
@@ -834,7 +842,7 @@ var Cells = {
         if (s[0] < -r || s[1] < -r || s[0] > cssW + r || s[1] > cssH + r) return;
         if (b.pl.chain && b.lead && !b.lead.dead) {
             var ls = this.toScreen(b.lead.x, b.lead.y), lr = this.rad(b.lead.m, b.lead) * Z;
-            var bw = Math.max(3, Math.min(r, lr) * 1.15);
+            var bw = Math.max(3, Math.min(r, lr) * 1.32);
             ctx.save();
             ctx.lineCap = "round";
             ctx.strokeStyle = Components.shade(b.pl.color, -45);

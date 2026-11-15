@@ -364,7 +364,7 @@ var Mix = {
                     this.burst(bux, buy, "#38bdf8", "spark", "SHIELD!", 24);
                     break;
                 }
-                var rawBlobDmg = effDmg * (bl.pl.chain ? 1.65 : 1.3);
+                var rawBlobDmg = effDmg * (bl.pl.chain ? 1.05 : 1.3);
                 var actualBlobDmg = Math.min(bl.m, rawBlobDmg);
                 bl.m -= rawBlobDmg; used = true; S.bulletBlob++;
                 bl.vx = (bl.vx || 0) + (bu.vx || 0) * 0.16; bl.vy = (bl.vy || 0) + (bu.vy || 0) * 0.16;
