@@ -192,10 +192,40 @@ GAME_TUNABLES.cells = [
     // ---- cheats ----
     { label: "Set human size now", type: "range", min: 20, max: 20000, step: 20, get: function() { var p = Cells.players.find(arenaHuman); return p ? Math.round(Cells.mass(p)) : 20; }, set: function(v) { Cells.players.filter(arenaHuman).forEach(function(p) { var bs = Cells.mine(p); bs.forEach(function(b) { b.m = v / bs.length; }); }); } }
 ]);
+function tankAutoRows() {
+    if (typeof Tanks === "undefined" || !Tanks.autoUpgrade || typeof TNK_STATS === "undefined") return [];
+    var rows = [
+        { label: "Auto-spend Diep.io upgrades", type: "toggle", localOnly: true, get: function() { return !!Tanks.autoUpgrade.enabled; }, set: function(v) {
+            Tanks.autoUpgrade.enabled = !!v;
+            if (Tanks.saveAutoUpgrade) Tanks.saveAutoUpgrade();
+            if (Tanks.autoUpgrade.enabled) {
+                var me = Tanks.tanks.find(function(k) { return k.human === 0 && k.alive; });
+                if (me && me.pts > 0) Tanks.applyAutoUpgrades(me);
+            }
+        } }
+    ];
+    for (let i = 0; i < 8; i++) {
+        (function(idx) {
+            rows.push({
+                label: "Rank: " + TNK_STATS[idx], type: "range", min: 0, max: 1, step: 0.05, localOnly: true,
+                get: function() { return Number((Tanks.autoUpgrade.weights[idx] || 0).toFixed(2)); },
+                set: function(v) {
+                    Tanks.autoUpgrade.weights[idx] = Math.max(0, Math.min(1, Number(v) || 0));
+                    if (Tanks.saveAutoUpgrade) Tanks.saveAutoUpgrade();
+                    if (Tanks.autoUpgrade.enabled) {
+                        var me = Tanks.tanks.find(function(k) { return k.human === 0 && k.alive; });
+                        if (me && me.pts > 0) Tanks.applyAutoUpgrades(me);
+                    }
+                }
+            });
+        })(i);
+    }
+    return rows;
+}
 GAME_TUNABLES.tanks = arenaRows().concat([
     { label: "CPU difficulty", type: "choice", options: [[1, "Easy"], [2, "Normal"], [3, "Hard"]], get: function() { return arenaCheats.tankSkill; }, set: function(v) { setTankSkill(v); } },
     { label: "Human stat points", type: "range", min: 0, max: 56, step: 1, get: function() { var k = Tanks.tanks.find(arenaHuman); return k ? k.pts : 0; }, set: function(v) { Tanks.tanks.filter(arenaHuman).forEach(function(k) { k.pts = v; }); } }
-]);
+], tankAutoRows());
 GAME_TUNABLES.jetpack = [
     { label: "Invincible runners", type: "toggle", get: function() { return !!Jet.invincible; }, set: function(v) { Jet.invincible = v; } },
     { label: "Banked coins", type: "range", min: 0, max: 2000, step: 50, get: function() { return jetSave.coins; }, set: function(v) { jetSave.coins = v; saveJet(); } }

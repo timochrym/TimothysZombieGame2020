@@ -1772,7 +1772,7 @@ GameModes.register({
             { label: "Max mini tanks per blob", type: "range", min: 0, max: 12, step: 1, get: function() { return cellsCfg.maxMiniTanks ?? 4; }, set: function(v) { cellsCfg.maxMiniTanks = Math.max(0, Math.min(12, v | 0)); saveCellsCfg(); }, note: "press E as blob to spawn" },
             { label: "Max snake bubbles per snake", type: "range", min: 2, max: 60, step: 1, get: function() { return cellsCfg.maxChainBubbles || 20; }, set: function(v) { cellsCfg.maxChainBubbles = v; saveCellsCfg(); } },
             { label: "CPU worms", type: "range", min: 0, max: 20, step: 1, get: function() { return SNK.CPUS; }, set: function(v) { SNK.CPUS = v; }, note: "next arena" }
-        ]);
+        ], (typeof tankAutoRows === "function" ? tankAutoRows() : []));
     },
     onKey: function(code) {
         if (typeof Net !== "undefined" && Net.role === "client") {

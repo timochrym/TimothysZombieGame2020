@@ -96,6 +96,58 @@ var Tanks = {
             if (k.human !== undefined && typeof SFX !== "undefined") SFX.play("select", k.x, k.y, 0.6, 1.3);
         }
         if (k.human === undefined || k.human === 1 || k.human === "lan") this.autoSpend(k);
+        else if (k.human === 0 && this.autoUpgrade && this.autoUpgrade.enabled) this.applyAutoUpgrades(k);
+    },
+    autoUpgrade: {
+        enabled: false,
+        showGraph: false,
+        weights: [0.2, 0.3, 0.1, 0.7, 0.8, 1.0, 0.9, 0.5]
+    },
+    loadAutoUpgrade: function() {
+        try {
+            var s = JSON.parse(localStorage.getItem("timsTankAutoUpgrades") || "null");
+            if (s && Array.isArray(s.weights) && s.weights.length === 8) {
+                this.autoUpgrade.weights = s.weights.map(function(v) { return Math.max(0, Math.min(1, Number(v) || 0)); });
+                this.autoUpgrade.enabled = !!s.enabled;
+            }
+        } catch (e) {}
+    },
+    saveAutoUpgrade: function() {
+        try {
+            localStorage.setItem("timsTankAutoUpgrades", JSON.stringify({
+                enabled: !!this.autoUpgrade.enabled,
+                weights: this.autoUpgrade.weights
+            }));
+        } catch (e) {}
+    },
+    pickWeightedStat: function(k) {
+        if (!k || k.pts <= 0) return -1;
+        var w = this.autoUpgrade.weights, sumW = 0, spent = 0;
+        for (let i = 0; i < 8; i++) {
+            spent += k.st[i];
+            if (k.st[i] < 7 && w[i] > 0) sumW += w[i];
+        }
+        if (sumW <= 0) return -1;
+        var nextTotal = spent + 1, best = -1, bestDef = -1e9, bestW = -1;
+        for (let i = 0; i < 8; i++) {
+            if (k.st[i] >= 7 || w[i] <= 0) continue;
+            var target = nextTotal * (w[i] / sumW);
+            var def = target - k.st[i];
+            if (def > bestDef + 1e-6 || (Math.abs(def - bestDef) <= 1e-6 && w[i] > bestW)) {
+                bestDef = def; bestW = w[i]; best = i;
+            }
+        }
+        return best;
+    },
+    applyAutoUpgrades: function(k) {
+        if (!k || !this.autoUpgrade.enabled) return 0;
+        var guard = 0, used = 0;
+        while (k.pts > 0 && guard++ < 56) {
+            var idx = this.pickWeightedStat(k);
+            if (idx < 0 || !this.addStat(k, idx)) break;
+            used++;
+        }
+        return used;
     },
     addStat: function(k, i) { if (k.pts > 0 && k.st[i] < 7) { k.st[i]++; k.pts--; if (i === 1) k.hp += 20; return true; } return false; },
     pickClass: function(k, id) { if (!k.choose) return; k.cls = id; k.choose = false; k.barrelT = []; if (k.human !== undefined) showBanner(TNK_CLASSES[id].name.toUpperCase() + "!", "new class", k.color); },
@@ -426,7 +478,7 @@ var Tanks = {
                 uiText(String(k.score), cssW - 26, 54 + i * 18, 11, "#e2e8f0", "right", "800");
             }
         }
-        this.statRects = []; this.classRects = [];
+        this.statRects = []; this.classRects = []; this.graphBarRects = []; this.autoBtnRect = null; this.graphBtnRect = null;
         if (me && me.alive) {
             // XP bar
             var bw = Math.min(520, cssW - 300), bx = cssW / 2 - bw / 2, by = cssH - 58;
@@ -436,7 +488,23 @@ var Tanks = {
             // stats (always visible; brighter when you have points)
             var sx = lx + 2, sy = cssH - 40 - 8 * 20;
             uiPanel(sx - 4, sy - 26, 236, 8 * 20 + 30, "#60a5fa", 0.8);
-            uiText(me.pts > 0 ? "×" + me.pts + " POINTS — press 1-8" : "STATS", sx + 6, sy - 8, 12, me.pts > 0 ? "#fde047" : "#94a3b8", "left", "900");
+            uiText(me.pts > 0 ? "×" + me.pts + " PTS" : "STATS", sx + 6, sy - 8, 12, me.pts > 0 ? "#fde047" : "#94a3b8", "left", "900");
+            var auOn = !!(this.autoUpgrade && this.autoUpgrade.enabled);
+            var auX = sx + 106, auY = sy - 21, auW = 66, auH = 16;
+            ctx.fillStyle = auOn ? "#16a34a" : "#334155";
+            ctx.fillRect(auX, auY, auW, auH);
+            ctx.strokeStyle = auOn ? "#4ade80" : "#64748b"; ctx.lineWidth = 1;
+            ctx.strokeRect(auX, auY, auW, auH);
+            uiText(auOn ? "AUTO ON" : "AUTO OFF", auX + auW / 2, auY + 12, 9, "#f8fafc", "center", "900");
+            this.autoBtnRect = [auX, auY, auW, auH];
+            var grOn = !!(this.autoUpgrade && this.autoUpgrade.showGraph);
+            var grX = sx + 176, grY = sy - 21, grW = 48, grH = 16;
+            ctx.fillStyle = grOn ? "#2563eb" : "#334155";
+            ctx.fillRect(grX, grY, grW, auH);
+            ctx.strokeStyle = grOn ? "#60a5fa" : "#64748b";
+            ctx.strokeRect(grX, grY, grW, auH);
+            uiText("RANK", grX + grW / 2, grY + 12, 9, "#f8fafc", "center", "900");
+            this.graphBtnRect = [grX, grY, grW, auH];
             for (let i = 0; i < 8; i++) {
                 var y = sy + i * 20;
                 ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.fillRect(sx + 6, y, 160, 15);
@@ -444,6 +512,36 @@ var Tanks = {
                 uiText((i + 1) + " " + TNK_STATS[i], sx + 10, y + 12, 10, "#f8fafc", "left", "800");
                 if (me.pts > 0 && me.st[i] < 7) uiText("+", sx + 186, y + 13, 16, "#fde047", "center", "900");
                 this.statRects.push([sx, y, 200, 18, i]);
+            }
+            if (grOn) {
+                var gx = sx + 240, gy = sy - 26, gw = 232, gh = 8 * 20 + 30;
+                uiPanel(gx, gy, gw, gh, "#a78bfa", 0.88);
+                uiText("RANK GRAPH (0.0 - 1.0)", gx + 10, sy - 8, 11, "#e9d5ff", "left", "900");
+                var wArr = this.autoUpgrade.weights, sumW = 0;
+                for (let i = 0; i < 8; i++) sumW += Math.max(0, wArr[i] || 0);
+                for (let i = 0; i < 8; i++) {
+                    var ry = sy + i * 20, bx0 = gx + 10, bw0 = 148, wv = Math.max(0, Math.min(1, wArr[i] || 0));
+                    ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.fillRect(bx0, ry, bw0, 15);
+                    ctx.fillStyle = TNK_STAT_COL[i]; ctx.fillRect(bx0, ry + 1, bw0 * wv, 13);
+                    uiText(TNK_STATS[i], bx0 + 4, ry + 11, 9, "#f8fafc", "left", "800");
+                    var pct = sumW > 0 ? Math.round((wv / sumW) * 100) : 0;
+                    uiText(wv.toFixed(2) + " (" + pct + "%)", gx + gw - 8, ry + 11, 9, "#e2e8f0", "right", "800");
+                    this.graphBarRects.push([bx0, ry, bw0, 16, i]);
+                }
+                if (mouseDown && typeof mouseX === "number" && typeof mouseY === "number") {
+                    for (let i = 0; i < this.graphBarRects.length; i++) {
+                        var gb = this.graphBarRects[i];
+                        if (mouseX >= gb[0] - 4 && mouseX <= gb[0] + gb[2] + 4 && mouseY >= gb[1] && mouseY <= gb[1] + gb[3]) {
+                            var nv = Math.round(Math.max(0, Math.min(1, (mouseX - gb[0]) / gb[2])) * 20) / 20;
+                            if (this.autoUpgrade.weights[gb[4]] !== nv) {
+                                this.autoUpgrade.weights[gb[4]] = nv;
+                                this.saveAutoUpgrade();
+                                if (this.autoUpgrade.enabled && me.pts > 0) this.applyAutoUpgrades(me);
+                            }
+                            break;
+                        }
+                    }
+                }
             }
             // class choice
             if (me.choose) {
@@ -732,8 +830,28 @@ GameModes.register({
     },
     onClick: function(wx, wy, button) {
         var me = Tanks.tanks.find(function(k) { return k.human === 0; });
-        var hit = function(r) { return mouseX >= r[0] && mouseX <= r[0] + r[2] && mouseY >= r[1] && mouseY <= r[1] + r[3]; };
+        var hit = function(r) { return r && mouseX >= r[0] && mouseX <= r[0] + r[2] && mouseY >= r[1] && mouseY <= r[1] + r[3]; };
         if (me) {
+            if (hit(Tanks.autoBtnRect)) {
+                Tanks.autoUpgrade.enabled = !Tanks.autoUpgrade.enabled;
+                Tanks.saveAutoUpgrade();
+                if (Tanks.autoUpgrade.enabled && me.pts > 0) Tanks.applyAutoUpgrades(me);
+                mouseDown = false; return true;
+            }
+            if (hit(Tanks.graphBtnRect)) {
+                Tanks.autoUpgrade.showGraph = !Tanks.autoUpgrade.showGraph;
+                mouseDown = false; return true;
+            }
+            for (let i = 0; i < (Tanks.graphBarRects || []).length; i++) {
+                var gb = Tanks.graphBarRects[i];
+                if (hit(gb)) {
+                    var nv = Math.round(Math.max(0, Math.min(1, (mouseX - gb[0]) / gb[2])) * 20) / 20;
+                    Tanks.autoUpgrade.weights[gb[4]] = nv;
+                    Tanks.saveAutoUpgrade();
+                    if (Tanks.autoUpgrade.enabled && me.pts > 0) Tanks.applyAutoUpgrades(me);
+                    return true;
+                }
+            }
             for (let i = 0; i < (Tanks.classRects || []).length; i++) if (hit(Tanks.classRects[i])) { Tanks.pickClass(me, Tanks.classRects[i][4]); mouseDown = false; return true; }
             if (me.pts > 0) for (let i = 0; i < (Tanks.statRects || []).length; i++) if (hit(Tanks.statRects[i])) { Tanks.addStat(me, Tanks.statRects[i][4]); mouseDown = false; return true; }
         }
@@ -745,3 +863,4 @@ GameModes.register({
     onRestart: function() { Tanks.reset(); },
     overSub: function() { return "Best score " + tanksSave.best; }
 });
+Tanks.loadAutoUpgrade();
