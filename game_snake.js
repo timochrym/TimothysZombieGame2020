@@ -459,7 +459,7 @@ GameModes.register({
     tagline: "Slither-style arena: grow by eating, boost, and make the other worms crash into you.",
     color: "#f472b6",
     firstLevel: "snake_arena",
-    flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: true },
+    flags: { ownScreen: true, botSwap: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: true },
     overTitle: "WORM ARENA",
 
     seats: function() {
@@ -591,7 +591,7 @@ GameModes.register({
                     sg.push(Math.round(w.segs[0].x), Math.round(w.segs[0].y));
                 }
             }
-            return { id: id, a: w.alive ? 1 : 0, l: Math.round(w.len), g: Math.round(w.ang * 100) / 100, b: w.boosting ? 1 : 0, s: w.safeT || 0, sg: sg, dt: w.deadT || 0 };
+            return { id: id, a: w.alive ? 1 : 0, l: Math.round(w.len), g: Math.round(w.ang * 100) / 100, b: w.boosting ? 1 : 0, s: w.safeT || 0, sg: NetPack.d(sg), dt: w.deadT || 0 };
         });
         var st = { w: wList };
         if (hasWm) st.wm = wm;
@@ -611,7 +611,8 @@ GameModes.register({
         }
         Snake.worms = m.w.map(function(o) {
             var md = mc[o.id] || ["Worm", "#4ade80", -1, null, "", 0];
-            var segs = []; for (let i = 0; i < o.sg.length; i += 2) { segs.push({ x: o.sg[i], y: o.sg[i + 1] }); segs.push({ x: o.sg[i], y: o.sg[i + 1] }); }
+            var sgo = NetPack.un(o.sg);
+            var segs = []; for (let i = 0; i < sgo.length; i += 2) { segs.push({ x: sgo[i], y: sgo[i + 1] }); segs.push({ x: sgo[i], y: sgo[i + 1] }); }
             var w = { id: o.id, name: md[0], color: md[1], human: md[2] === -1 ? undefined : md[2], pid: md[3], deathMsg: md[4], finalLen: md[5], alive: !!o.a, len: o.l, ang: o.g, boosting: !!o.b, safeT: o.s, segs: segs.length ? segs : [{ x: 0, y: 0 }], deadT: o.dt };
             w._tx = w.segs[0].x; w._ty = w.segs[0].y;
             var old = prev[o.id || w.pid || w.name];

@@ -3,6 +3,47 @@
 What's being worked on right now, what just shipped, and what's planned next. Newest entry first.
 RETROS.md has the detail for each shipped update; TODO.md has the full checklists.
 
+## PICK UP HERE (handoff, 2026-11-15, Claude session)
+
+Task from the owner: study the menus (wrong info between games, odd / doubled menus), make them fit each game, add
+tabs and a clear menu tree, improve LAN packets, then feel, performance and code clean-up. **About half is done.**
+
+**Done and pushed** (tests in `tests/`):
+1. **Menu audit.** Causes found: Esc opened the drawer on a made-up tab, so it showed the list of all games; the canvas
+   pause menu was hidden but still took key presses (ghost menu); pause stayed on when the game changed; God / ammo /
+   gravity / heal were repeated in 3 tabs (3 separate handlers); enemy / ammo tools showed in games without them;
+   mode-id lists (`["tanks","cells","snake","mix"]`) were copied in many places.
+2. **One drawer, tab tree** (`sandbox_ui.js`): Game | Players | Settings | Tools | Inspect | Games. Game / Players /
+   Settings rows come from `pauseItems()` (`frame.js`, now split into `pauseMainItems()` / `pauseSettingsItems()`),
+   so there is one source. What shows comes from game flags: `SandboxUI.caps()`; new flags `enemyTools`, `botSwap`.
+   Keyboard / gamepad work inside the drawer (`SandboxUI.menuKey`, Q/E = tabs). Editing tools are folded in Tools.
+3. `SandboxUI.closeTransient()` runs when the game changes: closes pause, panels, LAN / players / controls dialogs.
+4. Course games (Portal, Crate Lab, Parkour, Wheels) lost the duplicate "Chamber ◀▶" row; the select grid stays.
+5. **Dead code removed:** the hidden legacy top bar + ☰ menu + `topBarRefresh` in `devpanel.js` (-173 lines).
+   Button labels now come from `SandboxUI.syncLabels()` (players, LAN, Mix stat).
+6. **LAN** (`net.js`): ping + quality (`Net.pingLabel()`, button border green/amber/red), automatic re-join after a
+   dropped connection (6 tries), shorter field names (`NET_SHORT`), id lists sent only when they change, `NetPack`
+   delta packing for worm segments. `Net.online` was never defined, so the menus never showed "connected": fixed.
+   Measured with the stub-peer bench: world games -20..38% bytes per snapshot (platform 534 -> 333 B), worm data -24%.
+   New test `tests/lan_resilience.js` (PASS). `lan_core/joiner/play/soccer/perf` still pass (`lan_core` needs a server on 8099).
+
+**Not done, in this order:**
+1. **Stale tests** that click removed buttons (`#top-menu-btn`, `#lan-btn`, `#coop-btn`, `#sp-all-fields summary`) were
+   already failing on main before this work: `level_select`, `panel_dock`, `players`, `inspector_fields`,
+   `lan_buttons`, `lan_phone`. Point them at `#sb-side-open`, `#sb-quick-players`, `#sb-quick-lan`, or the drawer rows.
+2. Add `tests/menu_tabs.js`: Esc opens the Game tab; Portal Lab Tools has no ammo / foes; a game change closes pause.
+   (Scratch versions: ask the owner; the logic is `SandboxUI.tabsFor / caps / curTab`.)
+3. **Per-game hint strips** (about 20 `uiText("... Esc menu")` lines in `game_*.js`) ignore the "Controls help"
+   setting; Survival also draws its cheat sheet. Make one `uiHint()` that obeys `devOpts.showHelp`.
+4. **Perf:** only measured LAN. Not profiled: CPU profile each game (`node --cpu-prof` or CDP) and fix the top cost.
+5. LAN: Terra's first full packet is 40 KB and stalls the host ~11 ms (send tiles in chunks); `.io` games' `netState`
+   blobs are 2-6 KB (Arena Mix up to 28 KB; owner dropped Mix multiplayer).
+6. Studio opened from Portal shows "Zombie Survival" as its game: check its start dialog.
+7. Review checklist: `reviews/TimothysZombieGame2020/2026-11-15-menus-lan.md` was written by hand and NOT checked with
+   `review.py ready`. Run `python tools/updater/review.py brief ... --run`, fix Rejected lines.
+
+**Careful:** in tests, a dialog that closes on game change is intended. Pushed to `main` because the owner said so in this session.
+
 ## The plan (order you set, 2026-11-11)
 
 1. **Core multiplayer.** Each joiner's browser moves its own hero right away; the host only corrects it. Smaller packets.

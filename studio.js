@@ -673,7 +673,6 @@ var Studio = {
         var key = "studio_" + name.toLowerCase().replace(/[^a-z0-9]+/g, "_");
         LevelManager.customLevels[key] = this.docToDef(this.doc);
         try { localStorage.setItem("timsZombieGameCustomLevels", JSON.stringify(LevelManager.customLevels)); } catch (e) {}
-        if (typeof SummonManager !== "undefined" && SummonManager.refreshLevelDropdown) SummonManager.refreshLevelDropdown();
         this.say("Saved \"" + name + "\" — also in the level list");
         this.renderTop();
     },
@@ -1065,8 +1064,7 @@ var Studio = {
         if (this.ui) { this.ui.root.style.display = "block"; this.layout(); return; }
         var css = document.createElement("style");
         css.textContent =
-            "body.studio-open #top-right-bar, body.studio-open #level-select-dropdown { display:none !important }" +
-            "#mario-maker-dock { display:none !important }" +
+                        "#mario-maker-dock { display:none !important }" +
             "#studio-root{position:fixed;inset:0;pointer-events:none;z-index:1500;font-family:'Segoe UI',Arial,sans-serif;color:#e2e8f0;--lw:210px;--rw:280px}" +
             "#studio-root.nopanels{--lw:0px;--rw:0px}#studio-root.nopanels #studio-left,#studio-root.nopanels #studio-right{display:none}" +
             "#studio-top .narrow{display:none}#st-name{width:130px}#st-mode{max-width:200px}" +

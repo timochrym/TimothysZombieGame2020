@@ -21,6 +21,7 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node word_rooms.js          # Word Lab rooms 6-8: unsolvable by walking, solved by their word
     node word_tower_fly.js      # Word Lab: "fly", climb, steer over the tower, get the star
     node word_pets.js           # Word Lab: dog / cat / bird follow the hero, the dog bites a zombie
+    node lan_resilience.js      # LAN: ping shows in both menus, a dropped connection re-joins by itself, short packets rebuild the same world
     node lan_buttons.js         # LAN through the real buttons: Host, Join, host picks a game, joiner is in it
     node touch_phone.js         # touch controls on an emulated phone: Arcade tap, walk, shoot, pause
     node lan_phone.js           # a phone joins a LAN game by tapping and moves its hero with the touch buttons

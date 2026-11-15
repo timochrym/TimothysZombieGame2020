@@ -1260,7 +1260,7 @@ GameModes.register({
     tagline: "Worms inside blobs inside tanks: all three arenas in one world. Play as any of them.",
     color: "#fde047",
     firstLevel: "mix_arena",
-    flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: false },
+    flags: { ownScreen: true, botSwap: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: false },
     overTitle: "ARENA MIX",
 
     onActivate: function() { Mix.link(); },

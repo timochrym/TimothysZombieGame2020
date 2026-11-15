@@ -351,7 +351,6 @@ class LevelManager {
                 btn.textContent = SummonManager.pauseWaves ? "▶ Resume Waves" : "⏸ Waves";
                 btn.style.background = SummonManager.pauseWaves ? "#2a9d8f" : "#264653";
             }
-            SummonManager.refreshLevelDropdown();
         }
 
         // Brawl mode bookkeeping (jetpacks are off, fighters are set up by createBrawlFighters)
@@ -361,7 +360,6 @@ class LevelManager {
         brawl.active = nowBrawl;
         GameModes.activate(GameModes.modeOf(lvl));
         jetpackEnabled = GameModes.flag("jetpack", true);
-        if (typeof SummonManager !== "undefined") SummonManager.refreshLevelDropdown();
         if (nowBrawl) { brawlCfg.stage = key; saveBrawlCfg(); }
 
         resetGame();
@@ -524,7 +522,6 @@ class LevelManager {
         } catch (e) {}
         this.currentLevelKey = key;
         if (typeof SummonManager !== "undefined") {
-            SummonManager.refreshLevelDropdown();
         }
         Components.addFloatingText("SAVED LEVEL: " + cleanName, cameraTargetX, cameraTargetY + 100, "#55ff88", 22);
     }

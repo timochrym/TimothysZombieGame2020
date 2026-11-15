@@ -66,7 +66,6 @@ var GameModes = {
         if (this.current && this.current.onDeactivate) this.current.onDeactivate();
         this.current = next;
         if (next.onActivate) next.onActivate();
-        if (typeof topBarRefresh === "function") topBarRefresh();
         if (typeof SandboxUI !== "undefined" && SandboxUI.syncMode && SandboxUI.syncMode()) SandboxUI.render();
     },
 
@@ -97,7 +96,6 @@ var GameModes = {
         if (!m) return;
         var key = (typeof m.firstLevel === "function") ? m.firstLevel() : m.firstLevel;
         if (key && LevelManager.getAllLevels()[key]) LevelManager.selectLevel(key);
-        if (typeof topBarRefresh === "function") topBarRefresh();
         if (typeof SandboxUI !== "undefined" && SandboxUI.syncMode && SandboxUI.syncMode()) SandboxUI.render();
         try { localStorage.setItem("timsArcadeLastGame", id); } catch (e) {}
     }
@@ -117,7 +115,7 @@ GameModes.register({
     tagline: "The original. Waves, co-op, revive, castles, the endless frontier.",
     color: "#55ff88",
     firstLevel: "classic_arena",
-    flags: { waves: true, revive: true, jetpack: true, shooting: true, ability: true, ammo: true, scenery: true, building: true }
+    flags: { waves: true, revive: true, jetpack: true, shooting: true, ability: true, ammo: true, scenery: true, building: true, enemyTools: true }
 });
 
 GameModes.register({

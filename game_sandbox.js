@@ -494,7 +494,7 @@ GameModes.register({
     flags: {
         waves: false, revive: false, jetpack: true, shooting: true, ability: true,
         ammo: false, noBedrock: true, scenery: false, coopToggle: true,
-        dash: true, wallJump: true, airJumps: 99, flight: true, building: true, buildFree: true
+        dash: true, wallJump: true, airJumps: 99, flight: true, building: true, buildFree: true, enemyTools: true
     },
     overTitle: "BLANK SANDBOX",
     againLabel: "Reset Empty World",

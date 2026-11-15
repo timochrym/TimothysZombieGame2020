@@ -49,7 +49,6 @@ class SummonManager {
         };
 
         this.buildUI();
-        this.refreshLevelDropdown();
         this.refreshObjectList();
     }
 
@@ -103,20 +102,6 @@ class SummonManager {
 
     static setGridSnap(val) {
         this.gridSnap = val;
-    }
-
-    static refreshLevelDropdown() {
-        var sel = document.getElementById("level-select-dropdown");
-        if (!sel || typeof LevelManager === "undefined") return;
-        var all = LevelManager.getAllLevels();
-        var html = "";
-        var modeId = (typeof GameModes !== "undefined" && GameModes.current) ? GameModes.current.id : "survival";
-        for (var k in all) {
-            if (typeof GameModes !== "undefined" && GameModes.modeOf(all[k]) !== modeId) continue;
-            var selected = (k === LevelManager.currentLevelKey) ? "selected" : "";
-            html += `<option value="${k}" ${selected}>${all[k].name}</option>`;
-        }
-        sel.innerHTML = html;
     }
 
     static summonNearPlayer() {

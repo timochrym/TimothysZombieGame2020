@@ -52,7 +52,7 @@ GameModes.register({
     tagline: "Fly anywhere and build your own world. Summon enemies when you want a fight.",
     color: "#7dd3fc",
     firstLevel: "creative_world",
-    flags: { waves: false, revive: false, jetpack: false, shooting: true, ability: true, ammo: false, noBedrock: false, scenery: true,
+    flags: { enemyTools: true, waves: false, revive: false, jetpack: false, shooting: true, ability: true, ammo: false, noBedrock: false, scenery: true,
         coopToggle: true, dash: true, wallJump: true, airJumps: 1, flight: true, building: true, buildFree: true },
     overTitle: "CREATIVE",
     againLabel: "Reload the world",

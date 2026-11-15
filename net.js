@@ -33,6 +33,30 @@ var NET_SKIP_NPC = { aiLastX: 1, aiLastY: 1, aiTick: 1, lastNavX: 1, lastNavY: 1
 // what the joiner's own browser decides for its hero; everything else on that hero still comes from the host
 var NET_PREDICT_KEYS = { x: 1, y: 1, xspeed: 1, yspeed: 1 };
 
+// The busiest field names travel as one capital letter (a real field never has one): about 20% fewer bytes per moving enemy.
+// ser() writes the short name, clientApply() turns it back.
+var NET_SHORT = { xspeed: "U", yspeed: "V", health: "E", maxHealth: "M", lastFacing: "L", onGround: "G", ragdollTimer: "R", ragdollAngle: "A",
+                  hitFlashTimer: "F", hitCooldown: "C", invulnTimer: "I", scaleX: "X", scaleY: "Y", degree: "D", frozenTimer: "Z", dizzyTimer: "Q" };
+var NET_LONG = {};
+for (var _nk in NET_SHORT) NET_LONG[NET_SHORT[_nk]] = _nk;
+
+// Delta-pack a flat [x, y, x, y ...] list of whole numbers: first pair as it is, then each pair as the step from the one before.
+// Long worm bodies shrink to about half. NetPack.un() is the exact inverse.
+var NetPack = {
+    d: function(a) {
+        if (a.length < 4) return a;
+        var o = [a[0], a[1]];
+        for (var i = 2; i < a.length; i += 2) o.push(a[i] - a[i - 2], a[i + 1] - a[i - 1]);
+        return o;
+    },
+    un: function(a) {
+        if (!a || a.length < 4) return a || [];
+        var o = [a[0], a[1]];
+        for (var i = 2; i < a.length; i += 2) o.push(o[i - 2] + a[i], o[i - 1] + a[i + 1]);
+        return o;
+    }
+};
+
 var Net = {
     role: null,            // null | "host" | "client"
     ws: null,
@@ -65,9 +89,46 @@ var Net = {
     predBad: 0, predPause: 0, predBroken: false, evOwner: 0,
     predStat: { on: 0, off: 0, pulls: 0, snaps: 0, pauses: 0 },     // ticks moved locally / by the host, soft corrections, hard snaps, hand-backs
 
+    // connection quality (round trip to the host, measured every 2 s) and automatic re-join after a Wi-Fi blip
+    rtt: 0, pingN: 0, _pingAt: 0,
+    retries: 0, lost: false,
+
     available: function() { return /^https?:$/.test(location.protocol); },
     active: function() { return !!this.role; },
+    get online() { return !!this.role && !(this.role === "client" && !this.ws && !this.lost); },   // what the menus ask: am I in a LAN game (or reconnecting to one)?
     peerCount: function() { var n = 0; for (var k in this.peers) n++; return n; },
+
+    // a joiner pings the host; the host pongs and learns each joiner's round trip from the ping itself
+    pingTick: function() {
+        var now = performance.now();
+        if (this.lost || now - this._pingAt < 2000) return;
+        this._pingAt = now;
+        this.send({ t: "ping", n: ++this.pingN, t0: now, rtt: Math.round(this.rtt) });
+    },
+    onPong: function(m) { var r = performance.now() - m.t0; this.rtt = this.rtt ? this.rtt * 0.6 + r * 0.4 : r; },
+    worstRtt: function() {
+        if (this.role === "client") return this.rtt;
+        var w = 0;
+        for (var k in this.peers) w = Math.max(w, this.peers[k].rtt || 0);
+        return w;
+    },
+    pingClass: function() { var r = this.worstRtt(); return !r ? "" : r < 60 ? "good" : r < 140 ? "ok" : "bad"; },
+    pingLabel: function() {
+        if (this.lost) return "reconnecting…";
+        var r = Math.round(this.worstRtt());
+        return r ? r + " ms" : "";
+    },
+
+    // the socket dropped while we were playing: try to get back in (as a new hero) before giving up
+    retryLater: function() {
+        var self = this, wait = Math.min(5000, 700 * Math.pow(2, this.retries++));
+        this.ws = null;
+        this.lost = true;
+        this.status = "Connection lost. Reconnecting (" + this.retries + " of 6)…";
+        this.statusKind = "info";
+        NetUI.render();
+        setTimeout(function() { if (self.lost && self.role === "client") self.openSocket("client"); }, wait);
+    },
 
     // ------------------------------------------------------------------ connection
     // Make sure this page really comes from the game's server.js (a plain web server can't relay players)
@@ -113,6 +174,7 @@ var Net = {
         ws.onclose = function() {
             if (self.ws !== ws) return;
             var was = self.role;
+            if (was === "client" && (self.inGame || self.lost) && self.retries < 6) { self.retryLater(); return; }
             self.cleanup();
             self.status = was ? "Disconnected from the LAN game (the host's server stopped, or the Wi-Fi dropped)." :
                 "Could not open the game connection. Is the LAN server window still open on the host computer? A VPN, a proxy or a security app that filters web traffic can also block it — try with those off.";
@@ -137,6 +199,7 @@ var Net = {
         this.uncapture();
         this.role = null;
         this.ws = null;
+        this.lost = false; this.retries = 0; this.rtt = 0; this._idLists = {}; this._ids = {};
         this.peers = {};
         this.lobbyPlayers = [];
         this.inGame = false;
@@ -158,6 +221,7 @@ var Net = {
         switch (m.t) {
             case "welcome":
                 this.role = m.role; this.pid = m.pid;
+                this.lost = false; this.retries = 0;
                 if (m.addresses) this.addresses = m.addresses;
                 this.statusKind = "ok";
                 if (m.role === "host") {
@@ -180,6 +244,7 @@ var Net = {
             case "hostdown": this.status = "The host left. Waiting for a new host…"; this.inGame = false; break;
             case "hostup": this.status = "Host connected. Loading…"; break;
             case "snap": if (this.role === "client") this.clientApply(m); break;
+            case "pong": this.onPong(m); break;
         }
         NetUI.render();
     },
@@ -319,6 +384,7 @@ var Net = {
         var p = this.peers[pid];
         if (!p || !m) return;
         if (m.full) { this.fullNext = true; return; }
+        if (m.t === "ping") { p.rtt = m.rtt || 0; this.send({ t: "to", pid: pid, msg: { t: "pong", n: m.n, t0: m.t0 } }); return; }
         if (m.t === "in") { p.inp = m; if (m.q) p.ackSeq = m.q; }
         else if (m.t === "sb" && m.act) this.hostExecSandbox(pid, m.act);
     },
@@ -554,7 +620,7 @@ var Net = {
             } else continue;
             if ((t !== "object" || v === null) && last[k] === enc && k in last) continue;      // unchanged (empty fields too)
             last[k] = enc;
-            (out || (out = {}))[k] = enc;
+            (out || (out = {}))[NET_SHORT[k] || k] = enc;
         }
         return out;
     },
@@ -572,7 +638,9 @@ var Net = {
         return d;
     },
 
-    collection: function(list, full, every, ragdoll) {
+    // key: which list this is ("ch", "zb" ...). The id list rides along only when who is in the list changed (or every 2 s),
+    // so a crowd that merely moves costs nothing for it.
+    collection: function(list, full, every, ragdoll, key) {
         var o = [], d = {}, any = false;
         for (let i = 0; i < list.length; i++) {
             var e = list[i];
@@ -583,7 +651,10 @@ var Net = {
             var x = ragdoll ? this.serRagdoll(e, full) : this.ser(e, full, e instanceof Character && !e.isPlayer);
             if (x) { d[id] = x; any = true; }
         }
-        return any || full ? { o: o, d: d } : { o: o };
+        var res = any || full ? { d: d } : {};
+        var ids = o.join(","), cache = this._ids || (this._ids = {});
+        if (!key || full || cache[key] !== ids || this.tickNo % 60 === 0) { res.o = o; if (key) cache[key] = ids; }
+        return res;
     },
 
     hostFrame: function() {
@@ -598,17 +669,17 @@ var Net = {
         // every 2 s each joiner's hero is sent whole, so a wrong local guess can never stick
         for (var rk in this.peers) { var rp = this.peers[rk]; if (rp.ch && rp.ch._ns && (this.tickNo + rp.pid * 14) % 120 === 0) rp.ch._ns = null; }
         var C = {
-            ch: this.collection(characters, full, true),
-            zb: this.collection(zombies, full, true),
-            mv: this.collection(movingObjects, full, true),
-            lz: this.collection(lazers, full, true),
-            pu: this.collection(powerUps, full, true),
-            co: this.collection(coinOrbs, full, this.tickNo % 6 === 0),
-            tc: this.collection(typeof treasureChests !== "undefined" ? treasureChests : [], full, this.tickNo % 10 === 0),
-            gd: this.collection(typeof Gadgets !== "undefined" ? Gadgets.list : [], full, true),
-            rd: this.collection(typeof Ragdolls !== "undefined" ? Ragdolls.list : [], full, true, true)
+            ch: this.collection(characters, full, true, false, "ch"),
+            zb: this.collection(zombies, full, true, false, "zb"),
+            mv: this.collection(movingObjects, full, true, false, "mv"),
+            lz: this.collection(lazers, full, true, false, "lz"),
+            pu: this.collection(powerUps, full, true, false, "pu"),
+            co: this.collection(coinOrbs, full, this.tickNo % 6 === 0, false, "co"),
+            tc: this.collection(typeof treasureChests !== "undefined" ? treasureChests : [], full, this.tickNo % 10 === 0, false, "tc"),
+            gd: this.collection(typeof Gadgets !== "undefined" ? Gadgets.list : [], full, true, false, "gd"),
+            rd: this.collection(typeof Ragdolls !== "undefined" ? Ragdolls.list : [], full, true, true, "rd")
         };
-        if (staticsEvery) C.st = this.collection(staticObjects, full, true);
+        if (staticsEvery) C.st = this.collection(staticObjects, full, true, false, "st");
         // HUD numbers: only the ones that changed since the last packet
         var g = {}, lg = full ? (this._lastG = {}) : (this._lastG || (this._lastG = {}));
         for (let i = 0; i < NET_GLOBALS.length; i++) { var gk = NET_GLOBALS[i], gv = window[gk]; if (lg[gk] !== gv) { lg[gk] = gv; g[gk] = gv; } }
@@ -664,7 +735,6 @@ var Net = {
             this.curMode = s.mode; this.curLvl = s.lvl; this.curReset = s.rs;
             if (typeof Hub !== "undefined") Hub.close();
             if (typeof SandboxUI !== "undefined") SandboxUI.render();
-            if (typeof topBarRefresh === "function") topBarRefresh();
             paused = false;
             try { GameModes.activate(s.mode); } catch (e) {}
             if (typeof LevelManager !== "undefined" && s.lvl) LevelManager.currentLevelKey = s.lvl;
@@ -679,9 +749,11 @@ var Net = {
         var protoFor = { ch: Character.prototype, zb: Character.prototype, mv: GameObject.prototype, st: GameObject.prototype, rd: Ragdoll.prototype };
         var fresh = [];
         var missing = false;
+        var ids = this._idLists || (this._idLists = {});
         var build = function(key, assign) {
             var col = C[key];
             if (!col) return;
+            if (col.o) ids[key] = col.o; else col.o = ids[key] || [];          // list not resent = same members as last time
             var arr = [];
             for (let i = 0; i < col.o.length; i++) {
                 var id = col.o[i];
@@ -719,6 +791,7 @@ var Net = {
             var smooth = (key === "ch" || key === "zb" || key === "mv") && !e._new;
             var ox = e.x, oy = e.y;
             var mineNow = this.predictOn && key === "ch" && e._nid === this.myNid && !e._new;
+            for (var sk in d) { var lk = NET_LONG[sk]; if (lk) { d[lk] = d[sk]; delete d[sk]; } }       // short names back to real ones
             for (var k in d) {
                 var v = d[k];
                 if (mineNow && NET_PREDICT_KEYS[k] === 1) { e["_h" + k] = v; e._hFresh = true; continue; }     // the host's opinion, kept for the correction step
@@ -908,7 +981,7 @@ var Net = {
     // replaces tick() on a client: draw the host's world
     clientTick: function() {
         this.sendInput();
-        if (typeof topBarRefresh === "function" && (++this._tbN || (this._tbN = 1)) % 15 === 0) { try { topBarRefresh(); } catch (e) {} }
+        this.pingTick();
         ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
         ctx.clearRect(0, 0, cssW, cssH);
         if (!this.inGame || this.hostInHub) {
@@ -1021,7 +1094,7 @@ var Net = {
 
     drawClientBadge: function(me) {
         var age = performance.now() - this.lastSnapAt;
-        var txt = "📡 LAN · " + (me ? (me.playerLabel || "you") : "spectating") + (age > 1000 ? " · host not responding…" : "") + "   Esc: menu · F2: side menu";
+        var txt = "📡 LAN · " + (me ? (me.playerLabel || "you") : "spectating") + (this.pingLabel() ? " · " + this.pingLabel() : "") + (age > 1000 && !this.lost ? " · host not responding…" : "") + "   Esc: menu · F2: side menu";
         ctx.save();
         ctx.font = "700 13px " + UI_FONT;
         var wdt = ctx.measureText(txt).width + 24;
@@ -1150,7 +1223,7 @@ var NetUI = {
             "#lan-panel .link{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#082f49;border:1px solid #0ea5e9;border-radius:10px;padding:10px 12px;margin:8px 0}" +
             "#lan-panel .link code{font-size:22px;font-weight:800;background:none;color:#e0f2fe;padding:0}" +
             "#lan-panel button.go{background:#16a34a}" +
-            "body.lan-client .top-bar-btn:not(#lan-btn),body.lan-client #level-select-dropdown,body.lan-client #mario-maker-dock{display:none!important}";
+            "body.lan-client #mario-maker-dock{display:none!important}";
         document.head.appendChild(css);
         var el = document.createElement("div");
         el.id = "lan-panel";

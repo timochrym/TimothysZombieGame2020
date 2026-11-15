@@ -418,7 +418,6 @@ var DevUI = {
             if (zl) zl.textContent = userZoom.toFixed(2) + "x";
         }
         DevUI.syncGame(panel);
-        topBarRefresh();
         var godBtn = document.getElementById("god-mode-btn");
         if (godBtn) {
             godBtn.classList.toggle("active", godMode);
@@ -556,29 +555,6 @@ SummonManager.buildUI = function() {
     var style = document.createElement("style");
     style.textContent = `
         :root { --dp-bg: rgba(10,16,24,0.94); --dp-line: rgba(130,180,210,0.22); --dp-accent: #22d3ee; --dp-accent2: #ffd23f; --dp-text: #e6f1f7; --dp-dim: #8aa3b5; }
-        /* Legacy right-hand menu bars are consolidated into the single unified SandboxUI menu */
-        #top-right-bar { position: fixed; top: 10px; right: 12px; z-index: 1000; display: none !important; gap: 6px; align-items: center; user-select: none; font-family: 'Segoe UI', Arial, sans-serif; opacity: .62; transition: opacity .2s; }
-        #top-right-bar:hover, #top-right-bar.menu-open, body.hub-open #top-right-bar, body.paused #top-right-bar { opacity: 1; }
-        body.studio-open #top-right-bar { display: none !important; }
-        .top-bar-btn { background: var(--dp-bg); color: var(--dp-text); border: 1px solid var(--dp-line); height: 36px; min-width: 38px; padding: 0 11px; font-size: 13px; font-weight: 700; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,0.35); transition: border-color .15s, background .15s; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-        .top-bar-btn:hover { border-color: var(--dp-accent); }
-        .top-bar-btn.active { background: linear-gradient(135deg, #ffd23f, #ff9f1c); color: #1a1205; border-color: #fff3; }
-        #coop-btn.active { background: linear-gradient(135deg, #22d3ee, #3b82f6); color: #04121c; }
-        #lan-btn.live { background: linear-gradient(135deg, #34d399, #059669); color: #03140d; }
-        @media (max-width: 1100px) { .top-bar-btn .lbl { display: none; } }
-        #top-menu { position: fixed; top: 52px; right: 12px; z-index: 1001; width: 300px; max-height: calc(100vh - 70px); overflow-y: auto; background: var(--dp-bg); border: 1px solid var(--dp-line); border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.6); padding: 8px; display: none !important; font-family: 'Segoe UI', Arial, sans-serif; color: var(--dp-text); }
-        #top-menu.open { display: none !important; }
-        #top-menu .tm-head { padding: 6px 8px 8px; border-bottom: 1px solid var(--dp-line); margin-bottom: 6px; }
-        #top-menu .tm-head b { display: block; font-size: 14px; color: #fde68a; } #top-menu .tm-head span { font-size: 12px; color: var(--dp-dim); }
-        #top-menu .tm-sec { font-size: 10px; font-weight: 800; letter-spacing: .1em; color: var(--dp-dim); text-transform: uppercase; margin: 8px 8px 3px; }
-        #top-menu button.tm { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; background: transparent; color: var(--dp-text); border: 0; border-radius: 9px; padding: 8px 10px; font: 600 13px inherit; cursor: pointer; }
-        #top-menu button.tm:hover { background: rgba(34,211,238,.12); }
-        #top-menu button.tm .ic { width: 22px; text-align: center; font-size: 16px; }
-        #top-menu button.tm .tx { flex: 1; } #top-menu button.tm .tx small { display: block; color: var(--dp-dim); font-weight: 500; font-size: 11px; }
-        #top-menu button.tm kbd { margin-left: auto; }
-        #top-menu button.tm.active { background: rgba(255,210,63,.16); }
-        #level-select-dropdown { width: calc(100% - 16px); margin: 2px 8px 6px; background: #0b1220; color: #7ff0b0; border: 1px solid var(--dp-line); border-radius: 9px; padding: 7px 8px; font: 600 13px inherit; }
-
         #mario-maker-dock { position: fixed; bottom: 166px; left: calc(50% - 215px); transform: translateX(-50%); z-index: 1000; background: var(--dp-bg); border: 1px solid var(--dp-line); border-radius: 16px; padding: 10px 14px; display: none; align-items: center; gap: 8px; box-shadow: 0 12px 34px rgba(0,0,0,.6); user-select: none; font-family: 'Segoe UI', Arial, sans-serif; max-width: calc(100vw - 460px); overflow-x: auto; }
         #mario-maker-dock.open { display: flex; }
         .mm-tile { flex: 0 0 auto; width: 72px; height: 64px; background: rgba(255,255,255,0.05); border: 1px solid var(--dp-line); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: grab; color: var(--dp-text); font-size: 11px; font-weight: 700; text-align: center; transition: transform .1s, border-color .1s, background .1s; }
@@ -662,102 +638,6 @@ SummonManager.buildUI = function() {
     document.head.appendChild(style);
 
     var stop = function(e) { e.stopPropagation(); };
-
-    // ---------- Top-right bar ----------
-    var topBar = document.createElement("div");
-    topBar.id = "top-right-bar";
-    topBar.addEventListener("mousedown", stop);
-    topBar.addEventListener("click", stop);
-
-    var mk = function(id, icon, label, title, fn) {
-        var b = document.createElement("button");
-        if (id) b.id = id;
-        b.className = "top-bar-btn";
-        b.innerHTML = icon + (label ? " <span class='lbl'>" + label + "</span>" : "");
-        b.title = title;
-        b.addEventListener("click", function(e) { e.stopPropagation(); fn(); this.blur(); });
-        topBar.appendChild(b);
-        return b;
-    };
-    mk("coop-btn", "👥", "Players", "Who's playing: humans, CPUs, teams, controls", function() { closeTopMenu(); PlayersUI.open(); });
-    mk("lan-btn", "📡", "LAN", "Play with other devices on the same Wi-Fi: host or join", function() { closeTopMenu(); NetUI.open(); });
-    mk("studio-btn", "🛠", "Studio", "Level Studio [B]: build, test and share levels", function() { closeTopMenu(); Studio.open(); });
-    var menuBtn = mk("top-menu-btn", "☰", "Menu", "Open game menu, tuning, inspector, and settings", function() {
-        if (typeof SandboxUI !== "undefined" && SandboxUI.isActive()) {
-            closeTopMenu();
-            SandboxUI.sideOpen = !SandboxUI.sideOpen;
-            SandboxUI.render();
-        } else {
-            toggleTopMenu();
-        }
-    });
-
-    // ---------- the ☰ menu ----------
-    var menu = document.createElement("div");
-    menu.id = "top-menu";
-    ["mousedown", "click", "wheel", "keydown"].forEach(function(ev) { menu.addEventListener(ev, function(e) { e.stopPropagation(); }); });
-    var row = function(id, icon, text, sub, key, fn) {
-        var b = document.createElement("button");
-        b.className = "tm"; if (id) b.id = id;
-        b.innerHTML = "<span class='ic'>" + icon + "</span><span class='tx'>" + text + (sub ? "<small>" + sub + "</small>" : "") + "</span>" + (key ? "<kbd>" + key + "</kbd>" : "");
-        b.addEventListener("click", function(e) { e.stopPropagation(); fn(b); });
-        menu.appendChild(b);
-        return b;
-    };
-    var sec = function(t, id) { var d = document.createElement("div"); d.className = "tm-sec"; if (id) d.id = id; d.textContent = t; menu.appendChild(d); return d; };
-    var head = document.createElement("div"); head.className = "tm-head"; head.id = "tm-head"; menu.appendChild(head);
-    sec("Play", "tm-sec-play");
-    row("", "🕹", "Arcade — switch game", "All the games made with this engine", "", function() { closeTopMenu(); if (typeof paused !== "undefined" && paused) closePause(); Hub.openHub(false); });
-    var lvlSelect = document.createElement("select");
-    lvlSelect.id = "level-select-dropdown";
-    lvlSelect.title = "Levels / courses of this game";
-    lvlSelect.addEventListener("change", function() { closeTopMenu(); LevelManager.selectLevel(this.value); this.blur(); });
-    menu.appendChild(lvlSelect);
-    row("tm-frontier", "🌲", "Wildwood Frontier", "Survival on the endless generated trail", "", function() { closeTopMenu(); LevelManager.selectLevel("infinite_frontier"); });
-    row("", "⏸", "Pause menu", "Restart, game options, levels", "Esc", function() { closeTopMenu(); if (typeof openPause === "function" && !paused) openPause(false); });
-    sec("Make & tune", "tm-sec-make");
-    row("tm-studio", "🛠", "Level Studio", "Build, play-test and share levels", "B", function() { closeTopMenu(); Studio.open(); });
-    row("summon-toggle-btn", "🧪", "Cheats & tuning", "Dev panel: sliders, spawning, god mode", "F2", function() {
-        closeTopMenu();
-        if (typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false) && typeof SandboxUI !== "undefined") {
-            SandboxUI.sideOpen = !SandboxUI.sideOpen;
-            if (SandboxUI.sideOpen) SandboxUI.sideTab = "controls";
-            SandboxUI.render();
-        } else {
-            SummonManager.togglePanel();
-        }
-    });
-    row("tm-mash", "🧩", "Mash-up", "Mix other games' parts into this one", "", function() {
-        closeTopMenu(); if (!SummonManager.isOpen) SummonManager.togglePanel(); DevUI.switchTab("game");
-        var m = document.getElementById("dp-mash"); if (m) setTimeout(function() { m.scrollIntoView({ block: "start" }); }, 50);
-    });
-    var god = row("god-mode-btn", "⚡", "God mode", "Invincible + unlimited everything", "V", function() { SummonManager.toggleGodMode(); DevUI.sync(); });
-    god.style.display = "none";
-    sec("Settings", "tm-sec-settings");
-    row("", "⚙", "Settings", "Sound, shake, graphics, theme", "", function() { closeTopMenu(); if (!paused) openPause(false); pauseActivate("settings"); });
-    row("", "🎮", "Controls", "Remap keys and gamepad buttons", "", function() { closeTopMenu(); if (typeof ControlsUI !== "undefined") ControlsUI.open(); });
-    row("tm-help", "❓", "Key help on screen", "Show / hide the control cheat-sheet", "H", function(b) { devOpts.showHelp = !devOpts.showHelp; b.classList.toggle("active", devOpts.showHelp); });
-    document.body.appendChild(menu);
-    window.toggleTopMenu = function() {
-        var open = !menu.classList.contains("open");
-        menu.classList.toggle("open", open); topBar.classList.toggle("menu-open", open);
-        if (open) {
-            if (typeof SummonManager !== "undefined") SummonManager.refreshLevelDropdown();
-            var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
-            var stEl = document.getElementById("tm-studio"); if (stEl) stEl.style.display = "none"; // already on top bar (#studio-btn)
-            var msEl = document.getElementById("tm-mash"); if (msEl) msEl.style.display = own ? "none" : "";
-            var frEl = document.getElementById("tm-frontier"); if (frEl) frEl.style.display = own ? "none" : "";
-            var ldEl = document.getElementById("level-select-dropdown"); if (ldEl) ldEl.style.display = (own || ldEl.options.length <= 1) ? "none" : "";
-            var g = GameModes.current, lvl = LevelManager.getCurrentLevel ? LevelManager.getCurrentLevel() : null;
-            var lvlTxt = (!own && lvl && lvl.name) ? lvl.name.replace(/^[^A-Za-z0-9]+/, "") : (g && g.tagline ? g.tagline : "");
-            head.innerHTML = "<b>" + (g ? g.title : "") + "</b><span>" + lvlTxt + "</span>";
-            var h = document.getElementById("tm-help"); if (h) h.classList.toggle("active", !!devOpts.showHelp);
-        }
-    };
-    window.closeTopMenu = function() { menu.classList.remove("open"); topBar.classList.remove("menu-open"); };
-    document.addEventListener("mousedown", function(e) { if (menu.classList.contains("open") && !menu.contains(e.target) && e.target !== menuBtn) closeTopMenu(); }, true);
-    document.addEventListener("keydown", function(e) { if (e.code === "Escape" && menu.classList.contains("open")) { closeTopMenu(); e.stopImmediatePropagation(); e.preventDefault(); } }, true);
-    document.body.appendChild(topBar);
 
     // ---------- Bottom palette dock ----------
     var dock = document.createElement("div");
@@ -1066,23 +946,15 @@ SummonManager.togglePanel = function() {
     this.isOpen = !this.isOpen;
     var panel = document.getElementById("summon-panel");
     var dock = document.getElementById("mario-maker-dock");
-    var godBtn = document.getElementById("god-mode-btn");
-    var devBtn = document.getElementById("summon-toggle-btn");
-
     if (this.isOpen) {
         panel.classList.add("open");
         if (!this.activeTab) this.activeTab = "game";
         DevUI.syncDock();
-        godBtn.style.display = "flex";
-        devBtn.classList.add("active");
-        this.refreshLevelDropdown();
         this.refreshObjectList();
         DevUI.sync();
     } else {
         panel.classList.remove("open");
         dock.classList.remove("open");
-        if (!godMode) godBtn.style.display = "none";
-        devBtn.classList.remove("active");
         this.showGrid = false;
         this.setToolMode("shoot");
     }
@@ -1378,55 +1250,3 @@ setInterval(function() {
     if (typeof SummonManager !== "undefined" && SummonManager.isOpen) DevUI.sync();
 }, 400);
 
-// keeps the compact top bar honest a few times a second: player count, LAN status, paused / arcade state
-function topBarRefresh() {
-        // keep the open Cheats & tuning panel in step with the game that's on
-        var sp = document.getElementById("summon-panel");
-        if (sp && sp.classList.contains("open")) {
-            if (typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false) && typeof SummonManager !== "undefined") {
-                SummonManager.togglePanel();
-            } else if (typeof DevUI !== "undefined" && DevUI.syncGame && !topBarRefresh.inSync) {
-                topBarRefresh.inSync = true; try { DevUI.syncGame(sp); } catch (e) {} topBarRefresh.inSync = false;
-            }
-        }
-        var coopBtn = document.getElementById("coop-btn");
-        if (coopBtn) {
-            coopBtn.classList.toggle("active", multiplayer || brawl.active);
-            var humans = characters.filter(function(c) { return c.isPlayer && !c.isCPU; }).length, cpus = characters.filter(function(c) { return c.isPlayer && c.isCPU; }).length;
-            if (GameModes.flag("ownScreen", false) && GameModes.has("seats")) {          // full-screen games: count their seats
-                humans = 0; cpus = 0;
-                GameModes.call("seats").forEach(function(st) { if (st.count) cpus += st.value; else if (st.value === "human") humans++; else if (st.value === "cpu") cpus++; });
-            }
-            if (typeof Net !== "undefined" && (Net.role === "host" || Net.role === "client")) {
-                var netN = Net.role === "host" ? (Net.peerCount() + 1) : ((Net.lobbyPlayers && Net.lobbyPlayers.length) || humans);
-                if (netN > humans) humans = netN;
-            }
-            var ch = "👥 <b>" + humans + "</b>" + (cpus ? "<span style='opacity:.8'>+" + cpus + "🤖</span>" : "") + " <span class='lbl'>" + (humans === 1 ? "player" : "players") + "</span>";
-            if (coopBtn.innerHTML !== ch) coopBtn.innerHTML = ch;
-            coopBtn.title = humans + " human" + (humans === 1 ? "" : "s") + (cpus ? " + " + cpus + " CPU" : "") + " — click to change who's playing";
-            var sbQp = document.getElementById("sb-quick-players"), sbTp = document.getElementById("sb-top-players");
-            var pTxt = "👥 " + humans + "P" + (cpus ? "+" + cpus + "🤖" : "");
-            if (sbQp && sbQp.textContent !== pTxt) sbQp.textContent = pTxt;
-            if (sbTp && sbTp.textContent !== pTxt) sbTp.textContent = pTxt;
-        }
-        var lanBtn = document.getElementById("lan-btn");
-        if (lanBtn && typeof Net !== "undefined") {
-            var live = Net.role === "host" || Net.role === "client";
-            lanBtn.classList.toggle("live", live);
-            var nLan = Net.role === "host" ? (Net.peerCount() + 1) : ((Net.lobbyPlayers && Net.lobbyPlayers.length) || 2);
-            var lTxt = Net.role === "host" ? "Hosting · " + nLan : (Net.role === "client" ? "Joined · " + nLan : "LAN");
-            var lh = "📡 <span class='lbl'>" + lTxt + "</span>";
-            if (lanBtn.innerHTML !== lh) lanBtn.innerHTML = lh;
-            var sbQl = document.getElementById("sb-quick-lan"), sbTl = document.getElementById("sb-top-lan");
-            if (sbQl && sbQl.textContent !== "📡 " + lTxt) sbQl.textContent = "📡 " + lTxt;
-            if (sbTl && sbTl.textContent !== "📡 " + lTxt) sbTl.textContent = "📡 " + lTxt;
-        }
-    var stBtn = document.getElementById("studio-btn");
-    if (stBtn) stBtn.style.display = GameModes.flag("ownScreen", false) ? "none" : "";
-    var sbLive = document.getElementById("sb-live-stat");
-    if (sbLive && typeof Mix !== "undefined" && GameModes.current && GameModes.current.id === "mix" && Mix.liveStat) {
-        if (sbLive.textContent !== Mix.liveStat) sbLive.textContent = Mix.liveStat;
-    }
-    document.body.classList.toggle("paused", typeof paused !== "undefined" && !!paused);
-    document.body.classList.toggle("hub-open", typeof Hub !== "undefined" && !!Hub.isOpen);
-}

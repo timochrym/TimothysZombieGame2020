@@ -476,7 +476,7 @@ GameModes.register({
     tagline: "Diep-style arena: shoot shapes for XP, level up, upgrade stats and evolve your tank.",
     color: "#60a5fa",
     firstLevel: "tanks_arena",
-    flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: true },
+    flags: { ownScreen: true, botSwap: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: true },
     overTitle: "TANK ARENA",
 
     seats: function() {

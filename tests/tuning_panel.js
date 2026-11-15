@@ -13,6 +13,7 @@ const { open } = require('./lib');
   for (const m of ['brawl', 'table', 'wheels', 'bedwars']) { await ev((m) => { GameModes.launch(m); }, m); await p.waitForTimeout(900); out[m] = await state(); }
   // change a setting through the panel: Wobble Wheels engine power
   await ev(() => GameModes.launch('wheels')); await p.waitForTimeout(800);
+  await ev(() => { if (!SummonManager.isOpen) SummonManager.togglePanel(); document.querySelector('.dp-tab[data-tab="game"]').click(); }); await p.waitForTimeout(300);   // a game change closes the panel
   const changed = await ev(() => { const el = document.querySelector('#dp-own-rows [data-own="0"]'); el.value = 2; el.dispatchEvent(new Event('input')); return Wheels.powerMult; });
   console.log(JSON.stringify(out, null, 1), 'wheels engine power set via panel:', changed, errs.slice(0, 3));
   await b.close();

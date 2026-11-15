@@ -490,7 +490,6 @@ GameModes.register({
     },
 
     menuItems: function(items) {
-        items.push({ id: "pt_ch", label: "Chamber:  ◀  " + (portalState.chamber + 1) + " / " + PORTAL_CHAMBERS.length + "  (" + portalState.unlocked + " unlocked)  ▶", hint: "Enter loads it", cycle: true });
         items.push({ id: "pt_select", label: "🗺 Chamber select…", hint: "all chambers and best times" });
         items.push({ id: "pt_restart", label: "Restart chamber  (R)", hint: "" });
     },
@@ -500,11 +499,6 @@ GameModes.register({
             var name = function(k) { var L = LevelManager.getAllLevels()[k] || {}; return (L.title || L.name || k).replace(/^[^A-Za-z0-9]+/, ""); };
             CourseSelect.open({ title: "🌀 Portal Lab — chambers", items: PORTAL_CHAMBERS.map(function(k, i) { return { name: name(k), best: portalState.best[k] ? portalState.best[k] + "s" : "", locked: i >= portalState.unlocked, current: k === LevelManager.currentLevelKey }; }),
                 onPick: function(i) { portalState.chamber = i; LevelManager.selectLevel(PORTAL_CHAMBERS[i]); } });
-            return true;
-        }
-        if (id === "pt_ch") {
-            if (dir) portalState.chamber = (portalState.chamber + dir + portalState.unlocked) % portalState.unlocked;
-            else { closePause(); LevelManager.selectLevel(PORTAL_CHAMBERS[portalState.chamber]); }
             return true;
         }
         if (id === "pt_restart") { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }

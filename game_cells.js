@@ -865,7 +865,7 @@ GameModes.register({
     tagline: "Agar-style arena: eat smaller blobs, split to lunge, dodge the big ones and the spiky viruses.",
     color: "#a78bfa",
     firstLevel: "cells_arena",
-    flags: { ownScreen: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: true },
+    flags: { ownScreen: true, botSwap: true, waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, scenery: false, coopToggle: true },
     overTitle: "BLOB ARENA",
 
     seats: function() {

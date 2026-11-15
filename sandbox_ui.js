@@ -8,7 +8,7 @@
 // ============================================================================
 var SandboxUI = {
     sideOpen: false,
-    sideTab: "controls", // controls | inspect | tools | games
+    sideTab: "game", // game | players | settings | tools | inspect | games
     gameSearch: "",
     rawFilter: "",
     rawOpen: false,
@@ -21,7 +21,6 @@ var SandboxUI = {
 
     rosterOpen: false,
     pauseOpen: false,
-    pauseTab: "creative",
 
     tool: "play", // play | inspect | select | drawFloor | drawPlat | drawWall | spawn | possess | grapple | delete
     selectedObj: null,
@@ -97,12 +96,23 @@ var SandboxUI = {
           .sb-glass { background: rgba(15, 23, 42, 0.93); backdrop-filter: blur(12px); border: 1px solid rgba(148, 163, 184, 0.25); box-shadow: 0 16px 40px rgba(0,0,0,0.55); }
           .sb-btn { background: rgba(30, 41, 59, 0.9); color: #e2e8f0; border: 1px solid rgba(148,163,184,0.25); border-radius: 8px; padding: 5px 9px; cursor: pointer; font-weight: 600; font-size: 12px; transition: 0.12s; }
           .sb-btn:hover { border-color: #38bdf8; color: #fff; }
+          .sb-btn[data-ping="good"] { border-color: #4ade80; } .sb-btn[data-ping="ok"] { border-color: #fbbf24; } .sb-btn[data-ping="bad"] { border-color: #f87171; color: #fecaca; }
           .sb-btn.active { background: #38bdf8; color: #0f172a; border-color: #38bdf8; font-weight: 800; }
           .sb-input { background: rgba(15, 23, 42, 0.95); color: #f8fafc; border: 1px solid rgba(148,163,184,0.3); border-radius: 8px; padding: 6px 9px; outline: none; font-size: 12px; width: 100%; }
           .sb-input:focus { border-color: #38bdf8; }
           .sb-card { background: rgba(30, 41, 59, 0.55); border: 1px solid rgba(148,163,184,0.18); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }
           .sb-sec { font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #38bdf8; margin: 8px 0 6px; }
           .sb-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+          .sb-prow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 5px; }
+          .sb-pmain { flex: 1; min-width: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; background: rgba(30, 41, 59, 0.75); color: #e2e8f0; border: 1px solid rgba(148,163,184,0.2); border-radius: 8px; padding: 7px 10px; cursor: pointer; font-size: 12px; font-weight: 700; }
+          .sb-pmain:hover, .sb-prow.sel .sb-pmain { border-color: #38bdf8; background: rgba(56,189,248,0.16); color: #fff; }
+          .sb-pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .sb-pval { color: #fde047; font-weight: 800; white-space: nowrap; max-width: 55%; overflow: hidden; text-overflow: ellipsis; }
+          .sb-pval.on { color: #4ade80; } .sb-pval.off { color: #94a3b8; }
+          .sb-parr { background: rgba(30, 41, 59, 0.9); color: #38bdf8; border: 1px solid rgba(148,163,184,0.25); border-radius: 8px; padding: 6px 8px; cursor: pointer; font-size: 11px; }
+          .sb-parr:hover { border-color: #38bdf8; }
+          .sb-phint { display: none; flex-basis: 100%; font-size: 10.5px; color: #7dd3fc; padding: 0 4px 2px; }
+          .sb-prow.sel .sb-phint, .sb-prow:hover .sb-phint { display: block; }
           .sb-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
           .sb-scroll::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.35); border-radius: 999px; }
         `;
@@ -420,6 +430,7 @@ var SandboxUI = {
 
         // Poll mode transitions & refresh live inspect telemetry
         setInterval(function() {
+            self.syncLabels();
             if (self.syncMode()) {
                 self.render();
             } else if (self.isActive()) {
@@ -435,6 +446,7 @@ var SandboxUI = {
         if (active !== this._lastMode || modeId !== this._lastModeId) {
             this._lastMode = active;
             this._lastModeId = modeId;
+            this.closeTransient();
             if (!active) {
                 this.spawnerOpen = false; this.rosterOpen = false; this.pauseOpen = false;
                 this.ctxMenu = null; this.piePos = null;
@@ -453,7 +465,7 @@ var SandboxUI = {
         return false;
     },
 
-    openPause: function() { this.pauseOpen = true; this.sideOpen = true; this.spawnerOpen = false; this.ctxMenu = null; this.render(); },
+    openPause: function() { this.pauseOpen = true; this.sideOpen = true; this.sideTab = "game"; this.navIdx = 0; this.spawnerOpen = false; this.ctxMenu = null; this.render(); },
     closePause: function() { this.pauseOpen = false; this.sideOpen = false; this.render(); },
 
     refreshInspectLive: function() {
@@ -537,11 +549,10 @@ var SandboxUI = {
         var posTarget = typeof EntityTakeover !== "undefined" ? EntityTakeover.target : null;
         var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
         var isOpen = this.sideOpen || this.pauseOpen;
-        if (this.pauseOpen && this.pauseTab) this.sideTab = this.pauseTab;
 
-        var pCount = (typeof LocalMP !== "undefined" && LocalMP.count) ? LocalMP.count() : ((typeof blueGuy !== "undefined" && blueGuy) ? 2 : 1);
-        var lanOnline = (typeof Net !== "undefined" && Net.online);
-        var lanLabel = lanOnline ? ("📡 LAN · " + (Net.role === "host" ? (Net.peerList().length + 1) : ((Net.lobbyPlayers || []).length || 2)) + "P") : "📡 LAN";
+        var pCount = this.playersCount().humans, pLabel = this.playersLabel();
+        var lanOnline = (typeof Net !== "undefined" && (Net.role === "host" || Net.role === "client"));
+        var lanLabel = this.lanLabel();
 
         // Single Unified Menu: Compact Top-Left Handle (when collapsed) OR Full Unified Drawer (when open)
         if (!isOpen) {
@@ -645,209 +656,53 @@ var SandboxUI = {
 
         this._root.innerHTML = html;
         this.bindDynamicEvents();
+        if (this.pauseOpen) this.applyNav();
         if (this.rosterOpen) this.renderRosterOnly();
         if (isOpen && this.sideTab === "inspect") this.refreshInspectLive();
     },
 
     renderSideDrawerHTML: function(sb, m) {
         var self = this;
-        var ts = typeof devOpts !== "undefined" ? (devOpts.timeScale || 1) : 1;
-        var isPaused = typeof paused !== "undefined" && paused;
         var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
-        var posTarget = typeof EntityTakeover !== "undefined" ? EntityTakeover.target : null;
-        var pCount = (typeof LocalMP !== "undefined" && LocalMP.count) ? LocalMP.count() : ((typeof blueGuy !== "undefined" && blueGuy) ? 2 : 1);
-        var lanOnline = (typeof Net !== "undefined" && Net.online);
-        var lanLabel = lanOnline ? ("📡 LAN · " + (Net.role === "host" ? (Net.peerList().length + 1) : ((Net.lobbyPlayers || []).length || 2)) + "P") : "📡 LAN";
+        var pCount = this.playersCount().humans, pLabel = this.playersLabel();
+        var lanOnline = (typeof Net !== "undefined" && (Net.role === "host" || Net.role === "client"));
+        var lanLabel = this.lanLabel();
         var liveStat = (m && m.id === "mix" && typeof Mix !== "undefined" && Mix.liveStat) ? Mix.liveStat : (m && m.tagline ? m.tagline : "");
-
-        var tabs = own ? [
-            ["controls", "🎛 Play & Tune"],
-            ["inspect", "🔍 Inspect"],
-            ["games", "🕹 Games"],
-            ["admin", "👑 Admin"]
-        ] : [
-            ["controls", "🎛 Ctrl"],
-            ["inspect", "🔍 Insp"],
-            ["tools", "🛠 Tool"],
-            ["games", "🕹 Game"],
-            ["admin", "👑 Admin"]
-        ];
-        if (own && this.sideTab === "tools") this.sideTab = "controls";
-
-        var body = "";
-        if (this.sideTab === "controls") body = this.renderSideControlsHTML(m);
-        else if (this.sideTab === "inspect") body = this.renderSideInspectHTML();
-        else if (this.sideTab === "tools") body = this.renderSideToolsHTML(sb);
-        else if (this.sideTab === "admin") body = this.renderAdminHTML();
+        var posTarget = typeof EntityTakeover !== "undefined" ? EntityTakeover.target : null;
+        var tabs = this.tabsFor(), cur = this.curTab();
+        this._nav = 0;
+        var body;
+        if (cur === "game") body = this.renderGameTabHTML(m);
+        else if (cur === "players") body = this.renderPlayersTabHTML();
+        else if (cur === "settings") body = this.renderSettingsTabHTML();
+        else if (cur === "tools") body = this.renderToolsHTML(sb);
+        else if (cur === "inspect") body = this.renderSideInspectHTML();
         else body = this.renderSideGamesHTML(m);
 
         return '<div class="sb-pe sb-glass" style="position:fixed;top:12px;left:12px;bottom:16px;width:296px;max-width:88vw;border-radius:14px;display:flex;flex-direction:column;overflow:hidden">' +
-            // Header
             '<div style="padding:10px 10px 8px;border-bottom:1px solid rgba(148,163,184,0.18);background:rgba(15,23,42,0.65)">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
-            '<span style="font-weight:900;font-size:13px;color:' + (m && m.color ? m.color : '#38bdf8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (m ? m.title : 'UNIVERSAL MENU') + '</span>' +
-            '<button class="sb-btn" style="padding:2px 7px" id="sb-side-close" title="Collapse Menu [F2 / ` / Esc]">✕</button>' +
-            '</div>' +
+            '<span style="font-weight:900;font-size:13px;color:' + (m && m.color ? m.color : '#38bdf8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (m ? m.title : 'MENU') + '</span>' +
+            '<button class="sb-btn" style="padding:2px 7px" id="sb-side-close" title="Close menu [Esc]">✕</button></div>' +
             (liveStat ? '<div id="sb-live-stat" style="font-size:11px;color:#cbd5e1;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + liveStat + '</div>' : '') +
-            // Session Row: Players, LAN, Studio / Sandbox tools
             '<div style="display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap">' +
-            '<button class="sb-btn ' + (pCount > 1 ? 'active' : '') + '" style="flex:1;padding:3px 6px;font-size:11px" id="sb-top-players">👥 ' + pCount + ' Player' + (pCount > 1 ? 's' : '') + '</button>' +
+            '<button class="sb-btn ' + (pCount > 1 ? 'active' : '') + '" style="flex:1;padding:3px 6px;font-size:11px" id="sb-top-players">' + pLabel + '</button>' +
             '<button class="sb-btn ' + (lanOnline ? 'active' : '') + '" style="flex:1;padding:3px 6px;font-size:11px" id="sb-top-lan">' + lanLabel + '</button>' +
-            (!own ? '<button class="sb-btn" style="padding:3px 6px;font-size:11px" id="sb-top-studio">🛠 Studio</button>' : '') +
-            '</div>' +
+            (!own ? '<button class="sb-btn" style="padding:3px 6px;font-size:11px" id="sb-top-studio">🛠 Studio</button>' : '') + '</div>' +
             (sb ? '<div style="display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap">' +
                 '<button class="sb-btn ' + (this.spawnerOpen ? 'active' : '') + '" style="flex:1;padding:3px 5px;font-size:10px" id="sb-top-spawn">🔍 Spawner</button>' +
                 '<button class="sb-btn ' + (this.rosterOpen ? 'active' : '') + '" style="flex:1;padding:3px 5px;font-size:10px" id="sb-top-roster">👥 Entities</button>' +
                 '<button class="sb-btn ' + (sandboxCfg.showFloor ? 'active' : '') + '" style="padding:3px 5px;font-size:10px" id="sb-top-floor">▦ Floor</button>' +
-                (posTarget ? '<button class="sb-btn active" style="padding:3px 5px;font-size:10px" id="sb-top-eject">↩ Eject</button>' : '') +
-                '</div>' : '') +
-            // Time Scale & Pause/Step Bar
-            '<div style="display:flex;gap:3px;align-items:center">' +
-            '<button class="sb-btn ' + (isPaused ? 'active' : '') + '" style="padding:3px 7px" id="sb-tm-pause" title="Pause / Resume">' + (isPaused ? '▶' : '⏸') + '</button>' +
-            '<button class="sb-btn" style="padding:3px 7px" id="sb-tm-step" title="Step +1 Frame">⏭</button>' +
-            [0.25, 0.5, 1, 2, 4].map(function(v) {
-                return '<button class="sb-btn ' + (Math.abs(ts - v) < 0.05 ? 'active' : '') + '" style="flex:1;padding:3px 2px;font-size:11px" data-ts="' + v + '">' + v + 'x</button>';
-            }).join("") +
-            '</div>' +
-            // Tabs
-            '<div style="display:grid;grid-template-columns:repeat(' + tabs.length + ',1fr);gap:3px;margin-top:8px">' +
+                (posTarget ? '<button class="sb-btn active" style="padding:3px 5px;font-size:10px" id="sb-top-eject">↩ Eject</button>' : '') + '</div>' : '') +
+            '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-top:4px">' +
             tabs.map(function(t) {
-                return '<button class="sb-btn ' + (self.sideTab === t[0] ? 'active' : '') + '" style="padding:5px 2px;font-size:10px" data-stab="' + t[0] + '">' + t[1] + '</button>';
-            }).join("") +
-            '</div></div>' +
-            // Scrollable Content
+                return '<button class="sb-btn ' + (cur === t[0] ? 'active' : '') + '" style="padding:5px 2px;font-size:11px" data-stab="' + t[0] + '">' + t[1] + ' ' + t[2] + '</button>';
+            }).join("") + '</div></div>' +
             '<div class="sb-scroll" style="flex:1;overflow-y:auto;padding:10px">' + body + '</div>' +
+            '<div style="padding:5px 10px;border-top:1px solid rgba(148,163,184,0.15);font-size:10px;color:#64748b;text-align:center">' +
+            (this.pauseOpen ? '↑↓ pick · ←→ change · Enter · Q/E tabs · Esc resume' : 'Esc pause menu · ✕ close') + '</div>' +
             '</div>';
     },
-
-    renderAdminHTML: function() {
-        var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
-        var mid = typeof GameModes !== "undefined" && GameModes.current ? GameModes.current.id : "";
-        var isIo = ["tanks", "cells", "snake", "mix"].indexOf(mid) !== -1;
-        var isGod = !!(typeof godMode !== "undefined" && godMode) || !!(typeof arenaCheats !== "undefined" && arenaCheats.god) || !!(typeof sandboxCfg !== "undefined" && sandboxCfg.invincible);
-        var unlimAmmo = typeof settings !== "undefined" && settings.ammo === "unlimited";
-        var grav = typeof devOpts !== "undefined" ? (devOpts.gravityMult || 1) : 1;
-        var isClient = typeof Net !== "undefined" && Net.role === "client";
-        var isHost = typeof Net !== "undefined" && Net.role === "host";
-        var html = '<div class="sb-sec">👑 Admin Commands</div>' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px">' +
-            (!own ? '<button class="sb-btn" id="sb-adm-boss">👑 Spawn Boss</button>' +
-            '<button class="sb-btn" id="sb-adm-horde">🧟 Summon Horde</button>' +
-            '<button class="sb-btn" id="sb-adm-heal">❤ Heal All</button>' : '') +
-            '<button class="sb-btn" id="sb-adm-respawn">🔄 Respawn All</button>' +
-            (isIo ? '<button class="sb-btn" id="sb-adm-swap">🔄 Swap Bot [V]</button>' : '') +
-            (!own ? '<button class="sb-btn" id="sb-adm-clearfoe">🧹 Clear Foes</button>' +
-            '<button class="sb-btn" style="color:#f87171" id="sb-adm-clearworld">💥 Clear World</button>' : '') +
-            '</div>' +
-            ((!own || isIo) ? '<div class="sb-sec">Global Rules</div><div class="sb-card">' +
-            '<label class="sb-row" style="cursor:pointer"><span>🛡 God Mode (All)</span><input type="checkbox" id="sb-adm-god" ' + (isGod ? 'checked' : '') + '></label>' +
-            (!own ? '<label class="sb-row" style="cursor:pointer"><span>∞ Unlimited Ammo</span><input type="checkbox" id="sb-adm-ammo" ' + (unlimAmmo ? 'checked' : '') + '></label>' +
-            '<div style="margin-bottom:2px"><div class="sb-row" style="margin-bottom:2px"><span>🌍 Gravity</span><strong>' + grav.toFixed(1) + 'x</strong></div>' +
-            '<input type="range" id="sb-adm-grav" min="0" max="2.5" step="0.1" value="' + grav + '" style="width:100%"></div>' : '') +
-            '</div>' : '');
-        if (isHost || isClient) {
-            var plist = isHost ? Net.peerList() : (Net.lobbyPlayers || []);
-            html += '<div class="sb-sec">📡 LAN Players (' + (plist.length + (isHost ? 1 : 0)) + ')</div><div class="sb-card">';
-            if (isHost) html += '<div class="sb-row"><span><strong>You (Host)</strong></span><span style="color:#4ade80">Host</span></div>';
-            if (plist.length) {
-                html += plist.map(function(p) {
-                    return '<div class="sb-row"><span>' + (p.name || 'Player') + '</span>' +
-                        (p.pid !== undefined ? '<button class="sb-btn" style="padding:2px 6px;font-size:10px" data-admresp="' + p.pid + '">Respawn</button>' : '') +
-                        '</div>';
-                }).join("");
-            } else if (!isHost) {
-                html += '<div style="color:#94a3b8;font-size:11px">Connected to ' + (Net.hostName || 'Host') + '</div>';
-            }
-            if (isClient) {
-                html += '<button class="sb-btn" style="width:100%;margin-top:6px;color:#f87171" id="sb-adm-leave">📡 Leave LAN Game</button>';
-            }
-            html += '</div>';
-        }
-        return html;
-    },
-
-    renderSideControlsHTML: function(m) {
-        var rows = (typeof GameTuning !== "undefined") ? GameTuning.rows() : [];
-        var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
-        var mid = m ? m.id : "";
-        var isIo = ["tanks", "cells", "snake", "mix"].indexOf(mid) !== -1;
-        var html = "";
-
-        if (rows.length) {
-            html += '<div class="sb-sec">Game Controls · ' + (m ? m.title : '') + '</div><div class="sb-card">';
-            html += rows.map(function(r, idx) {
-                var val = r.get ? r.get() : "";
-                if (r.type === "toggle") {
-                    return '<label class="sb-row" style="cursor:pointer"><span>' + r.label + '</span><input type="checkbox" data-gtune="' + idx + '" ' + (val ? 'checked' : '') + '></label>';
-                }
-                if (r.type === "choice") {
-                    if (mid === "mix" && r.label === "Play as") {
-                        return '<div style="margin-bottom:8px"><div style="font-size:11px;color:#94a3b8;margin-bottom:4px">Play as [Q to cycle]:</div>' +
-                            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px">' +
-                            (r.options || []).map(function(o) {
-                                var act = String(o[0]) === String(val);
-                                return '<button class="sb-btn ' + (act ? 'active' : '') + '" style="padding:5px 6px;font-size:11px" data-mixbody="' + o[0] + '">' + o[1] + '</button>';
-                            }).join("") +
-                            '</div><select class="sb-input" data-gtune="' + idx + '" style="display:none">' +
-                            (r.options || []).map(function(o) { return '<option value="' + o[0] + '" ' + (String(o[0]) === String(val) ? 'selected' : '') + '>' + o[1] + '</option>'; }).join("") +
-                            '</select></div>';
-                    }
-                    return '<div style="margin-bottom:7px"><div style="font-size:11px;color:#94a3b8;margin-bottom:2px">' + r.label + '</div>' +
-                        '<select class="sb-input" data-gtune="' + idx + '">' +
-                        (r.options || []).map(function(o) { return '<option value="' + o[0] + '" ' + (String(o[0]) === String(val) ? 'selected' : '') + '>' + o[1] + '</option>'; }).join("") +
-                        '</select></div>';
-                }
-                return '<div style="margin-bottom:7px"><div class="sb-row" style="margin-bottom:2px"><span>' + r.label + '</span><strong>' + val + '</strong></div>' +
-                    '<input type="range" style="width:100%" data-gtune="' + idx + '" min="' + r.min + '" max="' + r.max + '" step="' + (r.step || 1) + '" value="' + val + '"></div>';
-            }).join("");
-            html += '</div>';
-        }
-
-        // Universal Physics & Cheats (only in world games — .io games already have Invincible humans in Game Controls)
-        var isGod = !!(typeof godMode !== "undefined" && godMode) || !!(typeof arenaCheats !== "undefined" && arenaCheats.god);
-        var unlimAmmo = typeof settings !== "undefined" && settings.ammo === "unlimited";
-        var grav = typeof devOpts !== "undefined" ? (devOpts.gravityMult || 1) : 1;
-        var uz = typeof userZoom !== "undefined" ? userZoom : 1;
-        var hb = typeof devOpts !== "undefined" && !!devOpts.showHitboxes;
-
-        if (!own) {
-            html += '<div class="sb-sec">Universal Physics & Cheats</div><div class="sb-card">' +
-                '<label class="sb-row" style="cursor:pointer"><span>🛡 God Mode (Invincible)</span><input type="checkbox" id="sb-u-god" ' + (isGod ? 'checked' : '') + '></label>' +
-                '<label class="sb-row" style="cursor:pointer"><span>∞ Unlimited Ammo</span><input type="checkbox" id="sb-u-ammo" ' + (unlimAmmo ? 'checked' : '') + '></label>' +
-                '<label class="sb-row" style="cursor:pointer"><span>🟩 Show Hitboxes</span><input type="checkbox" id="sb-u-hb" ' + (hb ? 'checked' : '') + '></label>' +
-                '<div style="margin-bottom:6px"><div class="sb-row" style="margin-bottom:2px"><span>🌍 Gravity</span><strong>' + grav.toFixed(1) + 'x</strong></div>' +
-                '<input type="range" id="sb-u-grav" min="0" max="2.5" step="0.1" value="' + grav + '" style="width:100%"></div>' +
-                '<div><div class="sb-row" style="margin-bottom:2px"><span>🔎 Camera Zoom</span><strong>' + uz.toFixed(2) + 'x</strong></div>' +
-                '<input type="range" id="sb-u-zoom" min="0.4" max="2.2" step="0.05" value="' + uz + '" style="width:100%"></div>' +
-                '</div>';
-        }
-
-        var sndPct = typeof settings !== "undefined" ? Math.round((settings.sound || 0) * 100) : 70;
-        var shkPct = typeof settings !== "undefined" ? Math.round((settings.shake || 0) * 100) : 100;
-        var themeLbl = (typeof THEMES !== "undefined" && typeof currentTheme !== "undefined" && THEMES[currentTheme]) ? THEMES[currentTheme].label : (typeof currentTheme !== "undefined" ? currentTheme : "Classic");
-        var showHelp = typeof settings !== "undefined" && !!settings.showHelp;
-
-        html += '<div class="sb-sec">Audio & Display</div><div class="sb-card">' +
-            '<div style="margin-bottom:6px"><div class="sb-row" style="margin-bottom:2px"><span>🔊 Sound Volume</span><strong>' + (sndPct ? (sndPct + '%') : 'Muted') + '</strong></div>' +
-            '<input type="range" id="sb-set-vol" min="0" max="100" step="5" value="' + sndPct + '" style="width:100%"></div>' +
-            (!own ? '<div style="margin-bottom:6px"><div class="sb-row" style="margin-bottom:2px"><span>📳 Screen Shake</span><strong>' + (shkPct ? (shkPct + '%') : 'Off') + '</strong></div>' +
-            '<input type="range" id="sb-set-shake" min="0" max="200" step="25" value="' + shkPct + '" style="width:100%"></div>' : '') +
-            '<div class="sb-row" style="margin-bottom:4px"><span>🎨 Theme</span><button class="sb-btn" style="padding:2px 8px;font-size:11px" id="sb-set-theme">' + themeLbl + ' ▸</button></div>' +
-            '<label class="sb-row" style="cursor:pointer"><span>❓ Key Help Overlay</span><input type="checkbox" id="sb-set-help" ' + (showHelp ? 'checked' : '') + '></label>' +
-            '</div>';
-
-        html += '<div class="sb-sec">Quick Actions</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
-            (!own ? '<button class="sb-btn" id="sb-act-heal">❤ Heal All</button>' +
-            '<button class="sb-btn" id="sb-act-clear">🧹 Clear Foes</button>' : '') +
-            (isIo ? '<button class="sb-btn" id="sb-tl-swap">🔄 Swap Bot [V]</button>' +
-            '<button class="sb-btn ' + (this.tool === "inspect" ? "active" : "") + '" id="sb-act-inspect">🔍 Inspect</button>' : '') +
-            '<button class="sb-btn" id="sb-act-controls">🎮 Keybinds</button>' +
-            '<button class="sb-btn" id="sb-act-restart">🔄 Restart</button>' +
-            '<button class="sb-btn active" style="grid-column:1 / -1" id="sb-act-hub">🕹 Arcade Hub</button>' +
-            '</div>';
-        return html;
-    },
-
     renderSideInspectHTML: function() {
         var ui = typeof UniversalInspect !== "undefined" ? UniversalInspect : null;
         var sel = ui ? ui.selected : null;
@@ -1031,49 +886,310 @@ var SandboxUI = {
         }).join("");
     },
 
-    renderSideToolsHTML: function(sb) {
-        var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
-        var mid = typeof GameModes !== "undefined" && GameModes.current ? GameModes.current.id : "";
-        var isIo = ["tanks", "cells", "snake", "mix"].indexOf(mid) !== -1;
-        var tools = own ? [
-            ["play", "🎮 Play / Normal"],
-            ["inspect", "🔍 Inspect Anything"]
-        ] : [
-            ["play", "🎮 Play / Normal"],
-            ["inspect", "🔍 Inspect Anything"],
-            ["select", "✋ Select / Box"],
-            ["drawFloor", "🧱 Draw Floor"],
-            ["drawPlat", "➖ Draw Platform"],
-            ["drawWall", "🏰 Draw Wall"],
-            ["spawn", "➕ Spawn Selected"],
-            ["possess", "⚡ Possess Entity"],
-            ["grapple", "🪝 Grappling Hook"],
-            ["delete", "🗑 Delete"]
-        ];
-        var selCount = this.selectedGroup.filter(function(it) { return it && !it.dead; }).length;
-        var html = '<div class="sb-sec">Active Tool</div>' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px">' +
-            tools.map(function(t) {
-                return '<button class="sb-btn ' + (SandboxUI.tool === t[0] ? 'active' : '') + '" style="text-align:left;padding:6px 7px;font-size:11px" data-sbtool="' + t[0] + '">' + t[1] + '</button>';
+    // ========================================================================
+    // GAME-AWARE MENU
+    //   One drawer, one tab tree:  Game | Players | Settings | Tools | Inspect | Games
+    //   What each tab shows comes from the game's own flags (caps), never from a list of game names, so a game
+    //   without enemies or ammo never shows enemy or ammo tools. Rows in Game / Players / Settings come from
+    //   pauseItems() (frame.js): one source for the pause menu, so nothing is written twice.
+    // ========================================================================
+    TABS: [["game", "🎮", "Game"], ["players", "👥", "Players"], ["settings", "⚙", "Settings"], ["tools", "🛠", "Tools"], ["inspect", "🔍", "Inspect"], ["games", "🕹", "Games"]],
+    LEGACY_TABS: { controls: "game", admin: "tools", creative: "game", cheats: "tools", entities: "players", arcade: "games" },
+    SETTING_GROUPS: { stheme: "Look", sbright: "Look", sdetail: "Look", ssquare: "Look", s3d: "Look", shidpi: "Performance", sglow: "Performance", sfx: "Performance",
+        svol: "Sound & feel", sshake: "Sound & feel", shit: "Combat", sragdoll: "Combat", sammo: "Combat", scontrols: "Controls", help: "Controls" },
+    navIdx: 0,
+    _nav: 0,
+    editOpen: false,   // Tools tab: the editing tools (draw, select, spawn ...) stay folded unless the game is a sandbox
+
+    // How many humans / CPUs are playing (full-screen games count their seats; a LAN game counts everyone joined)
+    playersCount: function() {
+        var humans = characters.filter(function(c) { return c.isPlayer && !c.isCPU; }).length, cpus = characters.filter(function(c) { return c.isPlayer && c.isCPU; }).length;
+        if (GameModes.flag("ownScreen", false) && GameModes.has("seats")) {
+            humans = 0; cpus = 0;
+            GameModes.call("seats").forEach(function(st) { if (st.count) cpus += st.value; else if (st.value === "human") humans++; else if (st.value === "cpu") cpus++; });
+        }
+        if (typeof Net !== "undefined" && (Net.role === "host" || Net.role === "client")) {
+            var netN = Net.role === "host" ? (Net.peerCount() + 1) : ((Net.lobbyPlayers && Net.lobbyPlayers.length) || humans);
+            if (netN > humans) humans = netN;
+        }
+        return { humans: humans, cpus: cpus };
+    },
+    playersLabel: function() { var c = this.playersCount(); return "👥 " + c.humans + "P" + (c.cpus ? "+" + c.cpus + "🤖" : ""); },
+
+    // "📡 LAN" idle, "📡 Hosting · 3 · 12 ms" / "📡 Joined · 3 · 30 ms" while connected (ping = round trip to the host)
+    lanLabel: function() {
+        if (typeof Net === "undefined" || (Net.role !== "host" && Net.role !== "client")) return "📡 LAN";
+        var n = Net.role === "host" ? (Net.peerCount() + 1) : ((Net.lobbyPlayers && Net.lobbyPlayers.length) || 2);
+        var ping = Net.pingLabel ? Net.pingLabel() : "";
+        return "📡 " + (Net.role === "host" ? "Hosting" : "Joined") + " · " + n + (ping ? " · " + ping : "");
+    },
+
+    // keeps the Players / LAN buttons honest (called by the 220 ms timer and when the game changes)
+    syncLabels: function() {
+        if (!this._root) return;
+        var set = function(ids, txt, ping) { ids.forEach(function(id) { var b = document.getElementById(id); if (b) { if (b.textContent !== txt) b.textContent = txt; if (ping !== undefined) b.dataset.ping = ping; } }); };
+        set(["sb-quick-players", "sb-top-players"], this.playersLabel());
+        set(["sb-quick-lan", "sb-top-lan"], this.lanLabel(), typeof Net !== "undefined" && Net.pingClass ? Net.pingClass() : "");
+        var live = document.getElementById("sb-live-stat");
+        if (live && typeof Mix !== "undefined" && GameModes.current && GameModes.current.id === "mix" && Mix.liveStat && live.textContent !== Mix.liveStat) live.textContent = Mix.liveStat;
+    },
+
+    isClient: function() { return typeof Net !== "undefined" && Net.role === "client"; },
+
+    // what this game can do; a tool is offered only when the game uses it
+    caps: function() {
+        var F = function(n, d) { return GameModes.flag(n, d); };
+        var own = F("ownScreen", false);
+        var foes = !own && (F("waves", false) || F("enemyTools", false));
+        return { own: own, world: !own, foes: foes, hurt: foes || (!own && F("revive", false)), ammo: !own && F("ammo", false), botSwap: F("botSwap", false), sandbox: this.isSandbox() };
+    },
+
+    tabsFor: function() {
+        var client = this.isClient();
+        return this.TABS.filter(function(t) { return !(client && t[0] === "players"); });
+    },
+
+    curTab: function() {
+        var t = this.LEGACY_TABS[this.sideTab] || this.sideTab;
+        return this.tabsFor().some(function(x) { return x[0] === t; }) ? t : "game";
+    },
+
+    esc: function(v) { return String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); },
+
+    // "Sound volume:  ◀  60%  ▶"  ->  name "Sound volume", value "60%", a ◀ ▶ row
+    splitRow: function(it) {
+        var lab = String(it.label).replace(/\s{3,}/g, "  "), name = lab, val = "";
+        var m = /^(.*?):\s{2}(.*)$/.exec(lab);
+        if (m) { name = m[1]; val = m[2].replace(/^◀\s*/, "").replace(/\s*▶.*$/, "").trim(); }
+        var cyc = !!it.cycle || PAUSE_CYCLE_IDS.indexOf(it.id) !== -1;
+        return { name: name.trim(), val: val, cyc: cyc, onoff: /^(ON|OFF)\b/.test(val) ? (val.charAt(1) === "N" ? "on" : "off") : "" };
+    },
+
+    rowsHTML: function(items) {
+        var self = this, html = "", group = null;
+        items.forEach(function(it) {
+            var g = self.SETTING_GROUPS[it.id];
+            if (g && g !== group) { group = g; html += '<div class="sb-sec">' + g + '</div>'; }
+            var sp = self.splitRow(it);
+            html += '<div class="sb-prow" data-nav="' + (self._nav++) + '" data-pid="' + it.id + '"' + (sp.cyc ? ' data-cyc="1"' : '') + '>' +
+                '<button class="sb-pmain" data-pact="' + it.id + '"><span class="sb-pname">' + self.esc(sp.name) + '</span>' +
+                (sp.val ? '<span class="sb-pval ' + sp.onoff + '">' + self.esc(sp.val) + '</span>' : '') + '</button>' +
+                (sp.cyc ? '<button class="sb-parr" data-pact="' + it.id + '" data-pdir="-1">◀</button><button class="sb-parr" data-pact="' + it.id + '" data-pdir="1">▶</button>' : '') +
+                (it.hint ? '<div class="sb-phint">' + self.esc(it.hint) + '</div>' : '') + '</div>';
+        });
+        return html;
+    },
+
+    // ---- Game: resume / restart / level / the game's own rules and settings
+    renderGameTabHTML: function(m) {
+        var html = "";
+        if (typeof pauseConfirm !== "undefined" && pauseConfirm) {
+            return '<div class="sb-sec">Restart this run?</div>' + this.rowsHTML(pauseItems());
+        }
+        var rows = pauseMainItems().filter(function(i) { return !PAUSE_PLAYER_IDS[i.id] && i.id !== "settings" && i.id !== "dev" && i.id !== "cheats"; });
+        var arcade = rows.filter(function(i) { return i.id === "arcade"; });
+        rows = rows.filter(function(i) { return i.id !== "arcade"; });
+        html += this.rowsHTML(rows);
+        html += this.renderTuningHTML(m);
+        html += this.rowsHTML(arcade);
+        if (this.isClient()) html += this.renderLanHTML();
+        return html;
+    },
+
+    // ---- Players: who plays, characters, per-player weapon / speed / aim
+    renderPlayersTabHTML: function() {
+        var rows = pauseMainItems().filter(function(i) { return PAUSE_PLAYER_IDS[i.id]; })
+            .concat(pauseSettingsItems().filter(function(i) { return PAUSE_PLAYER_IDS[i.id]; }));
+        return this.rowsHTML(rows) + this.renderLanHTML();
+    },
+
+    // ---- Settings: look, performance, sound, controls (same for every game; rows the game cannot use are not listed)
+    renderSettingsTabHTML: function() {
+        var order = ["Look", "Sound & feel", "Performance", "Combat", "Controls"], self = this;
+        var rows = pauseSettingsItems().filter(function(i) { return !PAUSE_PLAYER_IDS[i.id] && i.id !== "back"; });
+        // keep rows of one group together (stable sort by group), so every header appears once
+        rows = rows.map(function(r, i) { return { r: r, g: order.indexOf(self.SETTING_GROUPS[r.id] || "Look"), i: i }; })
+            .sort(function(x, y) { return x.g - y.g || x.i - y.i; }).map(function(x) { return x.r; });
+        return this.rowsHTML(rows);
+    },
+
+    // ---- the game's own rules (GameTuning), shown at the end of the Game tab
+    renderTuningHTML: function(m) {
+        var rows = (typeof GameTuning !== "undefined") ? GameTuning.rows() : [];
+        var mid = m ? m.id : "";
+        var html = "";
+        if (rows.length) {
+            html += '<div class="sb-sec">Game Rules · ' + (m ? m.title : '') + '</div><div class="sb-card">';
+            html += rows.map(function(r, idx) {
+                var val = r.get ? r.get() : "";
+                if (r.type === "toggle") {
+                    return '<label class="sb-row" style="cursor:pointer"><span>' + r.label + '</span><input type="checkbox" data-gtune="' + idx + '" ' + (val ? 'checked' : '') + '></label>';
+                }
+                if (r.type === "choice") {
+                    if (mid === "mix" && r.label === "Play as") {
+                        return '<div style="margin-bottom:8px"><div style="font-size:11px;color:#94a3b8;margin-bottom:4px">Play as [Q to cycle]:</div>' +
+                            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px">' +
+                            (r.options || []).map(function(o) {
+                                var act = String(o[0]) === String(val);
+                                return '<button class="sb-btn ' + (act ? 'active' : '') + '" style="padding:5px 6px;font-size:11px" data-mixbody="' + o[0] + '">' + o[1] + '</button>';
+                            }).join("") +
+                            '</div><select class="sb-input" data-gtune="' + idx + '" style="display:none">' +
+                            (r.options || []).map(function(o) { return '<option value="' + o[0] + '" ' + (String(o[0]) === String(val) ? 'selected' : '') + '>' + o[1] + '</option>'; }).join("") +
+                            '</select></div>';
+                    }
+                    return '<div style="margin-bottom:7px"><div style="font-size:11px;color:#94a3b8;margin-bottom:2px">' + r.label + '</div>' +
+                        '<select class="sb-input" data-gtune="' + idx + '">' +
+                        (r.options || []).map(function(o) { return '<option value="' + o[0] + '" ' + (String(o[0]) === String(val) ? 'selected' : '') + '>' + o[1] + '</option>'; }).join("") +
+                        '</select></div>';
+                }
+                return '<div style="margin-bottom:7px"><div class="sb-row" style="margin-bottom:2px"><span>' + r.label + '</span><strong>' + val + '</strong></div>' +
+                    '<input type="range" style="width:100%" data-gtune="' + idx + '" min="' + r.min + '" max="' + r.max + '" step="' + (r.step || 1) + '" value="' + val + '"></div>';
+            }).join("");
+            html += '</div>';
+        }
+
+        return html;
+    },
+
+    // ---- LAN roster (host: who is here, respawn them; joiner: leave)
+    renderLanHTML: function() {
+        var isHost = typeof Net !== "undefined" && Net.role === "host";
+        if (!isHost && !this.isClient()) return "";
+        var plist = isHost ? Net.peerList() : (Net.lobbyPlayers || []);
+        var html = '<div class="sb-sec">📡 LAN players (' + (plist.length + (isHost ? 1 : 0)) + ')</div><div class="sb-card">';
+        if (isHost) html += '<div class="sb-row"><span><strong>You (Host)</strong></span><span style="color:#4ade80">Host</span></div>';
+        html += plist.map(function(p) {
+            return '<div class="sb-row"><span>' + SandboxUI.esc(p.name || "Player") + '</span>' +
+                (isHost && p.pid !== undefined ? '<button class="sb-btn" style="padding:2px 6px;font-size:10px" data-admresp="' + p.pid + '">Respawn</button>' : '') + '</div>';
+        }).join("");
+        if (!isHost && !plist.length) html += '<div style="color:#94a3b8;font-size:11px">Connected to ' + this.esc(Net.hostName || "Host") + '</div>';
+        if (this.isClient()) html += '<button class="sb-btn" style="width:100%;margin-top:6px;color:#f87171" id="sb-adm-leave">📡 Leave LAN game</button>';
+        return html + '</div>';
+    },
+
+    // ---- Tools: active tool, time, cheats, actions, selection, build helpers (each only when the game has it)
+    renderToolsHTML: function(sb) {
+        var c = this.caps(), self = this;
+        var tools = c.own ? [["play", "🎮 Play / Normal"], ["inspect", "🔍 Inspect Anything"]] : [
+            ["play", "🎮 Play / Normal"], ["inspect", "🔍 Inspect Anything"], ["select", "✋ Select / Box"], ["drawFloor", "🧱 Draw Floor"],
+            ["drawPlat", "➖ Draw Platform"], ["drawWall", "🏰 Draw Wall"], ["spawn", "➕ Spawn Selected"], ["possess", "⚡ Possess Entity"],
+            ["grapple", "🪝 Grappling Hook"], ["delete", "🗑 Delete"]];
+        var ts = typeof devOpts !== "undefined" ? (devOpts.timeScale || 1) : 1;
+        var isPaused = typeof paused !== "undefined" && paused;
+        var html = "";
+        html += '<div class="sb-sec">Time</div><div style="display:flex;gap:3px;align-items:center;margin-bottom:10px">' +
+            '<button class="sb-btn ' + (isPaused ? 'active' : '') + '" style="padding:3px 7px" id="sb-tm-pause" title="Pause / Resume">' + (isPaused ? '▶' : '⏸') + '</button>' +
+            '<button class="sb-btn" style="padding:3px 7px" id="sb-tm-step" title="Step +1 Frame">⏭</button>' +
+            [0.25, 0.5, 1, 2, 4].map(function(v) {
+                return '<button class="sb-btn ' + (Math.abs(ts - v) < 0.05 ? 'active' : '') + '" style="flex:1;padding:3px 2px;font-size:11px" data-ts="' + v + '">' + v + 'x</button>';
             }).join("") + '</div>';
-        if (!own) {
-            html += '<div class="sb-sec">Selection Tools (' + selCount + ' selected)</div>' +
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px">' +
+
+        // cheats: only the ones this game has (an .io game already lists "Invincible humans" in its own rules)
+        var rows = (typeof GameTuning !== "undefined") ? GameTuning.rows() : [];
+        var hasOwnGod = rows.some(function(r) { return /invincible/i.test(r.label); });
+        var isGod = !!(typeof godMode !== "undefined" && godMode) || !!(typeof arenaCheats !== "undefined" && arenaCheats.god) || !!(typeof sandboxCfg !== "undefined" && sandboxCfg.invincible);
+        var cheats = "";
+        if (!hasOwnGod) cheats += '<label class="sb-row" style="cursor:pointer"><span>🛡 God Mode (Invincible)</span><input type="checkbox" id="sb-u-god" ' + (isGod ? 'checked' : '') + '></label>';
+        if (c.ammo) cheats += '<label class="sb-row" style="cursor:pointer"><span>∞ Unlimited Ammo</span><input type="checkbox" id="sb-u-ammo" ' + (settings.ammo === "unlimited" ? 'checked' : '') + '></label>';
+        if (c.world) {
+            var grav = devOpts.gravityMult || 1, uz = typeof userZoom !== "undefined" ? userZoom : 1;
+            cheats += '<label class="sb-row" style="cursor:pointer"><span>🟩 Show Hitboxes</span><input type="checkbox" id="sb-u-hb" ' + (devOpts.showHitboxes ? 'checked' : '') + '></label>' +
+                '<div style="margin-bottom:6px"><div class="sb-row" style="margin-bottom:2px"><span>🌍 Gravity</span><strong>' + grav.toFixed(1) + 'x</strong></div>' +
+                '<input type="range" id="sb-u-grav" min="0" max="2.5" step="0.1" value="' + grav + '" style="width:100%"></div>' +
+                '<div><div class="sb-row" style="margin-bottom:2px"><span>🔎 Camera Zoom</span><strong>' + uz.toFixed(2) + 'x</strong></div>' +
+                '<input type="range" id="sb-u-zoom" min="0.4" max="2.2" step="0.05" value="' + uz + '" style="width:100%"></div>';
+        }
+        if (cheats) html += '<div class="sb-sec">Cheats</div><div class="sb-card">' + cheats + '</div>';
+
+        var acts = "";
+        if (c.hurt) acts += '<button class="sb-btn" id="sb-adm-heal">❤ Heal All</button>';
+        acts += '<button class="sb-btn" id="sb-adm-respawn">🔄 Respawn All</button>';
+        if (c.foes) acts += '<button class="sb-btn" id="sb-adm-boss">👑 Spawn Boss</button><button class="sb-btn" id="sb-adm-horde">🧟 Summon Horde</button><button class="sb-btn" id="sb-adm-clearfoe">🧹 Clear Foes</button>';
+        if (c.world && (c.foes || c.sandbox)) acts += '<button class="sb-btn" style="color:#f87171" id="sb-adm-clearworld">💥 Clear World</button>';
+        html += '<div class="sb-sec">Actions</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px">' + acts + '</div>';
+
+        // editing tools (draw, select, spawn, possess, grapple): folded away unless this is a sandbox or a tool is active
+        var showEdit = this.editOpen || c.sandbox || this.tool !== "play";
+        html += '<button class="sb-btn" style="width:100%;text-align:left;margin-bottom:8px" id="sb-tl-edit">✏ Editing tools ' + (showEdit ? "▾" : "▸") + '</button>';
+        if (showEdit) {
+            var toolGrid = '<div class="sb-sec">Active Tool</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px">' +
+                tools.map(function(t) {
+                    return '<button class="sb-btn ' + (self.tool === t[0] ? 'active' : '') + '" style="text-align:left;padding:6px 7px;font-size:11px" data-sbtool="' + t[0] + '">' + t[1] + '</button>';
+                }).join("") + '</div>';
+            html += toolGrid;
+            if (c.world) {
+            var selCount = this.selectedGroup.filter(function(it) { return it && !it.dead; }).length;
+            html += '<div class="sb-sec">Selection (' + selCount + ')</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px">' +
                 '<button class="sb-btn" style="font-size:11px" id="sb-sel-allobj">▦ All Objects</button>' +
-                '<button class="sb-btn" style="font-size:11px" id="sb-sel-allmob">🧟 All Enemies</button>' +
-                '<button class="sb-btn" style="font-size:11px;grid-column:span 2" id="sb-sel-clear">✕ Clear Selection</button>' +
-                '</div>';
-        }
-        if (!own || isIo) {
-            html += '<div class="sb-sec">' + (isIo ? 'Bot / Player Swap' : 'Character Swap &amp; Overlays') + '</div>' +
-                '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-swap">' + (isIo ? '🔄 Swap with Bot / Player [V]' : '🔄 Swap P1 ↔ P2 [V]') + '</button>';
-        }
-        if (!own) {
-            html += '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-spawn">🔍 Universal Spawner [B]</button>' +
+                (c.foes ? '<button class="sb-btn" style="font-size:11px" id="sb-sel-allmob">🧟 All Enemies</button>' : '<span></span>') +
+                '<button class="sb-btn" style="font-size:11px;grid-column:span 2" id="sb-sel-clear">✕ Clear Selection</button></div>' +
+                '<div class="sb-sec">Build &amp; Edit</div>' +
+                '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-spawn">🔍 Universal Spawner [B]</button>' +
                 '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-roster">👥 Entity Roster</button>' +
-                (sb ? '<button class="sb-btn" style="width:100%" id="sb-tl-floor">▦ Toggle Sandbox Floor</button>' : '');
+                (sb ? '<button class="sb-btn" style="width:100%;margin-bottom:5px" id="sb-tl-floor">▦ Toggle Sandbox Floor</button>' : '') +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">' +
+                '<button class="sb-btn" data-pact="dev">🛠 Level Studio</button>' +
+                '<button class="sb-btn" data-pact="cheats">⚙ Tuning panel</button></div>';
+        }
         }
         return html;
+    },
+
+    // ---- keyboard / gamepad inside the pause menu (the drawer is HTML, so it routes its own keys)
+    applyNav: function() {
+        var rows = this._root ? this._root.querySelectorAll(".sb-prow[data-nav]") : [];
+        var n = 0, list = [];
+        for (var i = 0; i < rows.length; i++) { rows[i].classList.remove("sel"); if (rows[i].dataset.nav >= 0) list.push(rows[i]); }
+        if (!list.length) return;
+        this.navIdx = Math.max(0, Math.min(list.length - 1, this.navIdx));
+        list[this.navIdx].classList.add("sel");
+        if (list[this.navIdx].scrollIntoView) list[this.navIdx].scrollIntoView({ block: "nearest" });
+    },
+
+    switchTab: function(dir) {
+        var tabs = this.tabsFor(), i = 0, cur = this.curTab();
+        for (var k = 0; k < tabs.length; k++) if (tabs[k][0] === cur) i = k;
+        this.sideTab = tabs[(i + dir + tabs.length) % tabs.length][0];
+        this.navIdx = 0;
+        this.render();
+    },
+
+    actRow: function(row, dir) {
+        if (!row) return;
+        if (typeof SFX !== "undefined") SFX.play("select");
+        pauseActivate(row.dataset.pid, dir || 0);
+        if (typeof paused !== "undefined" && this.pauseOpen && !paused) { this.pauseOpen = false; this.sideOpen = false; }
+        this.render();
+    },
+
+    // returns true when the key was used
+    menuKey: function(e) {
+        if (!this._root) return false;
+        var c = e.code, rows = this._root.querySelectorAll(".sb-prow[data-nav]:not([data-nav='-1'])"), n = rows.length, row = rows[this.navIdx];
+        var move = function(d) { SandboxUI.navIdx = n ? (SandboxUI.navIdx + d + n) % n : 0; SandboxUI.applyNav(); };
+        if (c === "ArrowDown" || c === "KeyS") move(1);
+        else if (c === "ArrowUp" || c === "KeyW") move(-1);
+        else if (c === "ArrowLeft" || c === "KeyA") { if (row && row.dataset.cyc) this.actRow(row, -1); else this.switchTab(-1); }
+        else if (c === "ArrowRight" || c === "KeyD") { if (row && row.dataset.cyc) this.actRow(row, 1); else this.switchTab(1); }
+        else if (c === "KeyQ") this.switchTab(-1);
+        else if (c === "KeyE" || c === "Tab") this.switchTab(e.shiftKey ? -1 : 1);
+        else if (c === "Enter" || c === "NumpadEnter" || c === "Space") this.actRow(row, 0);
+        else return false;
+        if (typeof SFX !== "undefined" && (c.indexOf("Arrow") === 0 || c === "KeyW" || c === "KeyS")) SFX.play("ui");
+        return true;
+    },
+
+    // everything transient (menus, pickers, selections) closes when the game changes, so nothing from one game shows in the next
+    closeTransient: function() {
+        if (typeof paused !== "undefined" && paused && typeof closePause === "function") closePause();
+        this.spawnerOpen = false; this.rosterOpen = false; this.ctxMenu = null; this.piePos = null; this.pauseOpen = false;
+        this.clearSelection();
+        this.navIdx = 0;
+        this.sideTab = "game";
+        if (typeof SummonManager !== "undefined" && SummonManager.isOpen) SummonManager.togglePanel();
+        if (typeof NetUI !== "undefined" && NetUI.isOpen && NetUI.isOpen()) NetUI.close();
+        if (typeof PlayersUI !== "undefined" && PlayersUI.close && PlayersUI.isOpen && PlayersUI.isOpen()) PlayersUI.close();
+        if (typeof ControlsUI !== "undefined" && ControlsUI.close && ControlsUI.isOpen && ControlsUI.isOpen()) ControlsUI.close();
     },
 
     renderSideGamesHTML: function(cur) {
@@ -1171,52 +1287,6 @@ var SandboxUI = {
             }).join("") + '</div></div></div>';
     },
 
-    renderPauseHTML: function() {
-        var self = this;
-        var isClient = typeof Net !== "undefined" && Net.role === "client";
-        var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
-        var mid = typeof GameModes !== "undefined" && GameModes.current ? GameModes.current.id : "";
-        var isIo = ["tanks", "cells", "snake", "mix"].indexOf(mid) !== -1;
-        var tabs = own
-            ? (isIo ? [["entities", "Bot / Player Swap"], ["arcade", "Switch Game"], ["admin", "👑 Admin"]] : [["arcade", "Switch Game"], ["admin", "👑 Admin"]])
-            : [["creative", "Creative Rules"], ["cheats", "Cheats & Physics"], ["entities", "Entity Controls"], ["arcade", "Switch Game"], ["admin", "👑 Admin"]];
-        if (!tabs.some(function(t) { return t[0] === self.pauseTab; })) self.pauseTab = tabs[0][0];
-        var body = "";
-        if (this.pauseTab === "creative" && !own) {
-            body = '<label style="display:flex;justify-content:space-between;padding:8px;background:rgba(15,23,42,0.6);border-radius:8px;margin-bottom:6px"><span>Floor Grid</span><input type="checkbox" id="sb-p-floor" ' + (sandboxCfg.showFloor ? "checked" : "") + '></label>' +
-                '<label style="display:flex;justify-content:space-between;padding:8px;background:rgba(15,23,42,0.6);border-radius:8px;margin-bottom:6px"><span>Noclip Flight</span><input type="checkbox" id="sb-p-noclip" ' + (sandboxCfg.noclip ? "checked" : "") + '></label>' +
-                '<label style="display:flex;justify-content:space-between;padding:8px;background:rgba(15,23,42,0.6);border-radius:8px;margin-bottom:6px"><span>Invincible (God Mode)</span><input type="checkbox" id="sb-p-inv" ' + (sandboxCfg.invincible ? "checked" : "") + '></label>';
-        } else if (this.pauseTab === "cheats" && !own) {
-            body = '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px"><span>Gravity</span><span>' + (devOpts.gravityMult || 1).toFixed(1) + 'x</span></div>' +
-                '<input type="range" id="sb-p-grav" min="0" max="2.5" step="0.1" value="' + (devOpts.gravityMult || 1) + '" style="width:100%"></div>' +
-                '<button class="sb-btn" style="width:100%;margin-bottom:6px" id="sb-p-clear">🧹 Clear All Objects &amp; Enemies</button>' +
-                '<button class="sb-btn" style="width:100%" id="sb-p-horde">🧟 Summon Test Horde</button>';
-        } else if (this.pauseTab === "entities") {
-            body = '<button class="sb-btn" style="width:100%;margin-bottom:6px" id="sb-p-swap">' + (isIo ? '🔄 Swap with Bot / Player [V]' : '🔄 Swap P1 ↔ P2 Characters') + '</button>' +
-                (!own ? '<button class="sb-btn" style="width:100%;margin-bottom:6px" id="sb-p-eject">↩ Eject to Hero</button>' +
-                '<button class="sb-btn" style="width:100%" id="sb-p-roster">👥 Open Entity Roster</button>' : '');
-        } else if (this.pauseTab === "admin") {
-            body = this.renderAdminHTML();
-        } else {
-            body = '<button class="sb-btn active" style="width:100%;margin-bottom:8px" id="sb-p-hub">🕹 ' + (isClient ? 'Open Games List' : 'Open Arcade Hub') + '</button>' +
-                (!own ? '<button class="sb-btn" style="width:100%;margin-bottom:8px" id="sb-p-reset">✨ Reset Blank World</button>' : '') +
-                (isClient ? '<button class="sb-btn" style="width:100%;color:#f87171" id="sb-p-leave">📡 Leave LAN Game</button>' : '');
-        }
-
-        return '<div class="sb-pe" style="position:fixed;inset:0;background:rgba(2,6,23,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center">' +
-            '<div class="sb-glass" style="width:560px;max-width:94vw;min-height:330px;max-height:85vh;border-radius:16px;display:grid;grid-template-columns:165px 1fr;overflow:hidden">' +
-            '<div style="background:rgba(15,23,42,0.9);padding:12px;border-right:1px solid rgba(148,163,184,0.2);display:flex;flex-direction:column;gap:4px">' +
-            '<div style="font-weight:900;color:#38bdf8;margin-bottom:6px">PAUSED</div>' +
-            tabs.map(function(t) {
-                return '<button class="sb-btn ' + (self.pauseTab === t[0] ? 'active' : '') + '" style="text-align:left" data-ptab="' + t[0] + '">' + t[1] + '</button>';
-            }).join("") +
-            (isClient ? '<button class="sb-btn" style="margin-top:auto;color:#f87171" id="sb-p-leave2">📡 Leave LAN</button>' : '') +
-            '<button class="sb-btn" style="' + (isClient ? 'margin-top:4px' : 'margin-top:auto') + '" id="sb-p-resume">▶ Resume</button>' +
-            '</div>' +
-            '<div class="sb-scroll" style="padding:16px;overflow-y:auto">' + body + '</div>' +
-            '</div></div>';
-    },
-
     bindDynamicEvents: function() {
         var self = this;
         var el = function(id) { return document.getElementById(id); };
@@ -1277,7 +1347,14 @@ var SandboxUI = {
             };
         });
         this._root.querySelectorAll("[data-stab]").forEach(function(b) {
-            b.onclick = function() { self.sideTab = b.dataset.stab; self.pauseTab = b.dataset.stab; self.render(); };
+            b.onclick = function() { self.sideTab = b.dataset.stab; self.navIdx = 0; self.render(); };
+        });
+        // Game / Players / Settings rows (and the Level Studio / tuning panel buttons in Tools): one handler for all
+        this._root.querySelectorAll("[data-pact]").forEach(function(b) {
+            b.onclick = function() { self.actRow({ dataset: { pid: b.dataset.pact } }, Number(b.dataset.pdir || 0)); };
+        });
+        this._root.querySelectorAll(".sb-prow[data-nav]").forEach(function(r) {
+            r.onmouseenter = function() { if (Number(r.dataset.nav) >= 0) { self.navIdx = Number(r.dataset.nav); self.applyNav(); } };
         });
 
         // Controls Tab: Game Tunables
@@ -1336,52 +1413,6 @@ var SandboxUI = {
             if (typeof userZoom !== "undefined") userZoom = Number(e.target.value);
             var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong");
             if (st) st.textContent = userZoom.toFixed(2) + "x";
-        };
-
-        // Audio & Display Settings
-        if (el("sb-set-vol")) el("sb-set-vol").oninput = function(e) {
-            var v = Number(e.target.value);
-            if (typeof settings !== "undefined") { settings.sound = v / 100; if (typeof saveSettings === "function") saveSettings(); }
-            var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong");
-            if (st) st.textContent = v ? (v + "%") : "Muted";
-        };
-        if (el("sb-set-shake")) el("sb-set-shake").oninput = function(e) {
-            var v = Number(e.target.value);
-            if (typeof settings !== "undefined") { settings.shake = v / 100; if (typeof saveSettings === "function") saveSettings(); }
-            var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong");
-            if (st) st.textContent = v ? (v + "%") : "Off";
-        };
-        if (el("sb-set-theme")) el("sb-set-theme").onclick = function() {
-            if (typeof THEME_ORDER !== "undefined" && typeof applyTheme === "function") {
-                var idx = (THEME_ORDER.indexOf(currentTheme) + 1) % THEME_ORDER.length;
-                applyTheme(THEME_ORDER[idx]);
-                self.render();
-            }
-        };
-        if (el("sb-set-help")) el("sb-set-help").onchange = function(e) {
-            if (typeof settings !== "undefined") { settings.showHelp = e.target.checked; if (typeof saveSettings === "function") saveSettings(); }
-        };
-
-        if (el("sb-act-heal") && typeof DevActions !== "undefined") el("sb-act-heal").onclick = function() { if (!self.sendNet({ k: "healAll" })) DevActions.healAll(); };
-        if (el("sb-act-clear") && typeof DevActions !== "undefined") el("sb-act-clear").onclick = function() { if (!self.sendNet({ k: "clearEnemies" })) DevActions.clearEnemies(); };
-        if (el("sb-act-inspect")) el("sb-act-inspect").onclick = function() {
-            self.tool = self.tool === "inspect" ? "play" : "inspect";
-            if (self.tool === "inspect") self.sideTab = "inspect";
-            self.render();
-        };
-        if (el("sb-act-controls")) el("sb-act-controls").onclick = function() {
-            if (typeof toggleControlMenu === "function") toggleControlMenu();
-        };
-        if (el("sb-act-restart")) el("sb-act-restart").onclick = function() {
-            if (!self.sendNet({ k: "restart" })) {
-                if (GameModes.has("onRestart")) GameModes.call("onRestart");
-                else if (typeof resetGame === "function") resetGame();
-            }
-            self.render();
-        };
-        if (el("sb-act-hub")) el("sb-act-hub").onclick = function() {
-            if (typeof Net !== "undefined" && Net.role === "client") { self.sideOpen = true; self.sideTab = "games"; self.render(); }
-            else if (typeof Hub !== "undefined") Hub.openHub(false);
         };
 
         // Inspect Tab
@@ -1525,10 +1556,7 @@ var SandboxUI = {
         if (el("sb-sel-allobj")) el("sb-sel-allobj").onclick = function() { self.selectAllObjects(); };
         if (el("sb-sel-allmob")) el("sb-sel-allmob").onclick = function() { self.selectAllEnemies(); };
         if (el("sb-sel-clear")) el("sb-sel-clear").onclick = function() { self.clearSelection(); self.render(); };
-        if (el("sb-tl-swap")) el("sb-tl-swap").onclick = function() {
-            if (!self.sendNet({ k: "swap" }) && typeof EntityTakeover !== "undefined") EntityTakeover.swapPlayers();
-            self.render();
-        };
+        if (el("sb-tl-edit")) el("sb-tl-edit").onclick = function() { self.editOpen = !self.editOpen; self.render(); };
         if (el("sb-tl-spawn")) el("sb-tl-spawn").onclick = function() { self.spawnerOpen = !self.spawnerOpen; self.render(); };
         if (el("sb-tl-roster")) el("sb-tl-roster").onclick = function() { self.rosterOpen = !self.rosterOpen; self.render(); };
         if (el("sb-tl-floor")) el("sb-tl-floor").onclick = function() {
@@ -1755,68 +1783,7 @@ var SandboxUI = {
             self.ctxMenu = null; self.render();
         };
 
-        // Pause menu
-        this._root.querySelectorAll("[data-ptab]").forEach(function(b) {
-            b.onclick = function() { self.pauseTab = b.dataset.ptab; self.render(); };
-        });
-        if (el("sb-p-resume")) el("sb-p-resume").onclick = function() {
-            if (typeof Net !== "undefined" && Net.role === "client") { self.pauseOpen = false; self.render(); }
-            else closePause();
-        };
-        if (el("sb-p-floor")) el("sb-p-floor").onchange = function(e) {
-            sandboxCfg.showFloor = e.target.checked; saveSandboxCfg();
-            if (!self.sendNet({ k: "floor", v: sandboxCfg.showFloor }) && typeof SandboxFloor !== "undefined") SandboxFloor.sync();
-        };
-        if (el("sb-p-noclip")) el("sb-p-noclip").onchange = function(e) {
-            sandboxCfg.noclip = e.target.checked; saveSandboxCfg();
-            self.sendNet({ k: "noclip", v: sandboxCfg.noclip });
-        };
-        if (el("sb-p-inv")) el("sb-p-inv").onchange = function(e) {
-            sandboxCfg.invincible = e.target.checked; saveSandboxCfg();
-            self.sendNet({ k: "god", v: sandboxCfg.invincible });
-        };
-        if (el("sb-p-grav")) el("sb-p-grav").oninput = function(e) {
-            devOpts.gravityMult = Number(e.target.value);
-            self.sendNet({ k: "grav", v: devOpts.gravityMult });
-            self.render();
-        };
-        if (el("sb-p-clear")) el("sb-p-clear").onclick = function() {
-            if (!self.sendNet({ k: "clearWorld" })) {
-                for (var i = 0; i < staticObjects.length; i++) staticObjects[i].dead = true;
-                for (var z = 0; z < zombies.length; z++) zombies[z].dead = true;
-                if (typeof rebuildAllObjects === "function") rebuildAllObjects();
-            }
-            if (typeof Net !== "undefined" && Net.role === "client") { self.pauseOpen = false; self.render(); } else closePause();
-        };
-        if (el("sb-p-horde")) el("sb-p-horde").onclick = function() {
-            if (!self.sendNet({ k: "horde" })) {
-                var ref = redGuy || { x: 0, y: 120 };
-                for (var i = 0; i < 6; i++) spawnZombie(null, ref.x + (i % 2 ? 1 : -1) * (400 + i * 70), ref.y + 180);
-            }
-            if (typeof Net !== "undefined" && Net.role === "client") { self.pauseOpen = false; self.render(); } else closePause();
-        };
-        if (el("sb-p-swap")) el("sb-p-swap").onclick = function() {
-            if (!self.sendNet({ k: "swap" }) && typeof EntityTakeover !== "undefined") EntityTakeover.swapPlayers();
-            if (typeof Net !== "undefined" && Net.role === "client") { self.pauseOpen = false; self.render(); } else closePause();
-        };
-        if (el("sb-p-eject")) el("sb-p-eject").onclick = function() { EntityTakeover.release(false); closePause(); };
-        if (el("sb-p-roster")) el("sb-p-roster").onclick = function() {
-            if (typeof Net !== "undefined" && Net.role === "client") self.pauseOpen = false; else closePause();
-            self.rosterOpen = true; self.render();
-        };
-        if (el("sb-p-hub")) el("sb-p-hub").onclick = function() {
-            if (typeof Net !== "undefined" && Net.role === "client") {
-                self.pauseOpen = false; self.sideOpen = true; self.sideTab = "games"; self.render();
-            } else { closePause(); Hub.openHub(false); }
-        };
-        if (el("sb-p-reset")) el("sb-p-reset").onclick = function() {
-            if (self.sendNet({ k: "resetBlank" })) { self.pauseOpen = false; self.render(); return; }
-            closePause(); LevelManager.selectLevel("sandbox_blank");
-        };
-        if (el("sb-p-leave")) el("sb-p-leave").onclick = function() { self.pauseOpen = false; self.render(); if (typeof Net !== "undefined") Net.disconnect(); };
-        if (el("sb-p-leave2")) el("sb-p-leave2").onclick = function() { self.pauseOpen = false; self.render(); if (typeof Net !== "undefined") Net.disconnect(); };
-
-        // Admin Tab (Side Drawer & Pause Menu)
+        // Tools tab actions
         if (el("sb-adm-boss")) el("sb-adm-boss").onclick = function() {
             if (!self.sendNet({ k: "admin", cmd: "spawnBoss" }) && typeof spawnZombie === "function") {
                 var ref = redGuy || { x: 0, y: 120 }; spawnZombie("BOSS_KING", ref.x + 240, ref.y + 120);
@@ -1840,10 +1807,6 @@ var SandboxUI = {
                 if (typeof Net !== "undefined" && Net.role === "host") for (var pk in Net.peers) if (!Net.peers[pk].ch || Net.peers[pk].ch.dead) Net.spawnRemoteHero(Net.peers[pk]);
             }
         };
-        if (el("sb-adm-swap")) el("sb-adm-swap").onclick = function() {
-            if (!self.sendNet({ k: "swap" }) && typeof EntityTakeover !== "undefined") EntityTakeover.swapPlayers();
-            self.render();
-        };
         if (el("sb-adm-clearfoe")) el("sb-adm-clearfoe").onclick = function() {
             if (!self.sendNet({ k: "clearEnemies" }) && typeof DevActions !== "undefined") DevActions.clearEnemies();
         };
@@ -1854,24 +1817,6 @@ var SandboxUI = {
                 for (var z = 0; z < zombies.length; z++) zombies[z].dead = true;
                 if (typeof rebuildAllObjects === "function") rebuildAllObjects();
             }
-        };
-        if (el("sb-adm-god")) el("sb-adm-god").onchange = function(e) {
-            var v = e.target.checked;
-            if (typeof godMode !== "undefined") godMode = v;
-            if (typeof arenaCheats !== "undefined") arenaCheats.god = v;
-            if (typeof sandboxCfg !== "undefined") sandboxCfg.invincible = v;
-            if (typeof creativeCfg !== "undefined") creativeCfg.invincible = v;
-            self.sendNet({ k: "god", v: v });
-        };
-        if (el("sb-adm-ammo")) el("sb-adm-ammo").onchange = function(e) {
-            if (typeof settings !== "undefined") { settings.ammo = e.target.checked ? "unlimited" : "limited"; if (typeof saveSettings === "function") saveSettings(); }
-            self.sendNet({ k: "ammo", v: e.target.checked });
-        };
-        if (el("sb-adm-grav")) el("sb-adm-grav").oninput = function(e) {
-            devOpts.gravityMult = Number(e.target.value);
-            self.sendNet({ k: "grav", v: devOpts.gravityMult });
-            var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong");
-            if (st) st.textContent = devOpts.gravityMult.toFixed(1) + "x";
         };
         this._root.querySelectorAll("[data-admresp]").forEach(function(b) {
             b.onclick = function() {

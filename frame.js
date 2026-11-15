@@ -1231,11 +1231,25 @@ function togglePause() {
 
 var PAUSE_CYCLE_IDS = ["skin0", "skin1", "bopp", "blvl", "bstk", "bstage", "svol", "sshake", "stheme", "sbright", "sweapon", "sragdoll", "sspeed", "sric"];
 
+// Which pause rows are about the players (everything else about the game itself lives in "game", the other settings in "settings")
+var PAUSE_PLAYER_IDS = { players: 1, mode: 1, skin0: 1, skin1: 1, swap: 1, sweapon: 1, sweapon2: 1, sspeed: 1, sspeed2: 1, saim: 1, saim2: 1, smatchp2: 1, sric: 1 };
+
 function pauseItems() {
+    if (pauseSub === "settings") return pauseSettingsItems();
+    if (pauseConfirm) {
+        return [
+            { id: "yes", label: "Yes - restart the run", hint: "Score and wave progress are lost" },
+            { id: "no", label: "No - go back", hint: "" }
+        ];
+    }
+    return pauseMainItems();
+}
+
+function pauseSettingsItems() {
     var own = GameModes.flag("ownScreen", false);
     var hasShoot = !own && GameModes.flag("shooting", true);
     var hasAmmo = !own && GameModes.flag("ammo", true);
-    if (pauseSub === "settings") {
+    {
         var ps1 = (typeof playerSettings !== "undefined" && playerSettings[0]) ? playerSettings[0] : { weapon: settings.weapon, heroSpeed: settings.heroSpeed, aimMode: "mouse" };
         var ps2 = (typeof playerSettings !== "undefined" && playerSettings[1]) ? playerSettings[1] : { weapon: settings.weapon, heroSpeed: settings.heroSpeed, aimMode: "auto" };
         var sItems = [
@@ -1278,12 +1292,10 @@ function pauseItems() {
         );
         return sItems;
     }
-    if (pauseConfirm) {
-        return [
-            { id: "yes", label: "Yes - restart the run", hint: "Score and wave progress are lost" },
-            { id: "no", label: "No - go back", hint: "" }
-        ];
-    }
+}
+
+function pauseMainItems() {
+    var own = GameModes.flag("ownScreen", false);
     var items = [];
     var inBrawl = brawl.active;
     if (!pauseFromGameOver) items.push({ id: "resume", label: "Resume", hint: "Esc" });
@@ -1305,8 +1317,7 @@ function pauseItems() {
         items.push({ id: "skin0", label: "Player 1 character:  ◀  " + skinName(heroSkins[0]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
         items.push({ id: "skin1", label: "Player 2 character:  ◀  " + skinName(heroSkins[1]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
     }
-    var isIoMode = GameModes.current && ["mix", "tanks", "cells", "snake"].indexOf(GameModes.current.id) !== -1;
-    if (!own || isIoMode) items.push({ id: "swap", label: "🔄 Swap P1 ↔ P2 Characters", hint: "Swap positions, skins, settings, or possess next hero (V)" });
+    if (!own || GameModes.flag("botSwap", false)) items.push({ id: "swap", label: "🔄 Swap P1 ↔ P2 Characters", hint: "Swap positions, skins, settings, or possess next hero (V)" });
     if (!inBrawl && !GameModes.has("menuItems") && pauseLevelKeys.length > 1) {
         var lvlName = LevelManager.getAllLevels()[pauseLevelKeys[pauseLevelIdx]];
         var curLvl = LevelManager.getCurrentLevel();
@@ -1419,7 +1430,7 @@ function pauseActivate(id, dir) {
     else if (id === "cheats") {
         closePause();
         if (GameModes.flag("ownScreen", false) && typeof SandboxUI !== "undefined") {
-            SandboxUI.sideOpen = true; SandboxUI.sideTab = "controls"; SandboxUI.render();
+            SandboxUI.sideOpen = true; SandboxUI.sideTab = "game"; SandboxUI.render();
         } else if (!SummonManager.isOpen) {
             SummonManager.togglePanel();
         }
@@ -1428,6 +1439,8 @@ function pauseActivate(id, dir) {
 }
 
 function pauseKey(e) {
+    // the HTML pause menu (drawer) owns the keys while it is showing; the canvas menu is only for the game-over screen
+    if (typeof SandboxUI !== "undefined" && SandboxUI.pauseOpen) { if (SandboxUI.menuKey(e) && e.preventDefault) e.preventDefault(); return; }
     var items = pauseItems();
     var c = e.code;
     if (typeof SFX !== "undefined" && (c === "ArrowUp" || c === "ArrowDown" || c === "KeyW" || c === "KeyS")) SFX.play("ui");
@@ -1440,6 +1453,7 @@ function pauseKey(e) {
 }
 
 function pauseHover(mx, my) {
+    if (typeof SandboxUI !== "undefined" && SandboxUI.pauseOpen) return;
     for (let i = 0; i < pauseRects.length; i++) {
         var r = pauseRects[i];
         if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) { pauseIndex = r.idx !== undefined ? r.idx : i; return; }
@@ -1447,6 +1461,7 @@ function pauseHover(mx, my) {
 }
 
 function pauseClick(mx, my) {
+    if (typeof SandboxUI !== "undefined" && SandboxUI.pauseOpen) return false;
     var items = pauseItems();
     for (let i = 0; i < pauseRects.length; i++) {
         var r = pauseRects[i];
@@ -1548,7 +1563,6 @@ var tickAccumulator = 0;
 var lowFpsSeconds = 0;
 function tick() {
     if (typeof ControlsUI !== "undefined") ControlsUI.poll();
-    if (typeof topBarRefresh === "function" && (++tick.n || (tick.n = 1)) % 15 === 0) { try { topBarRefresh(); } catch (e) {} }
     if (typeof Pads !== "undefined") Pads.poll();
     if (typeof Net !== "undefined" && Net.role === "client") { Net.clientTick(); return; }
     if (typeof Studio !== "undefined" && Studio.isOpen) { Studio.tick(); return; }

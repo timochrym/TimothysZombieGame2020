@@ -389,8 +389,6 @@ GameModes.register({
     },
 
     menuItems: function(items) {
-        var n = Math.max(0, RACE_COURSES.indexOf(LevelManager.currentLevelKey));
-        items.push({ id: "rc_course", label: "Course:  ◀  " + (n + 1) + " / " + RACE_COURSES.length + "  ▶", hint: "", cycle: true });
         items.push({ id: "rc_select", label: "🗺 Course select…", hint: "all courses, best times, medals" });
         items.push({ id: "rc_restart", label: "Restart run  (R)", hint: "" });
         items.push({ id: "rc_ghost", label: "Ghost:  " + (Race.ghostOn ? "ON" : "OFF"), hint: "G" });
@@ -398,12 +396,6 @@ GameModes.register({
     },
 
     onMenu: function(id, dir) {
-        if (id === "rc_course") {
-            var n = Math.max(0, RACE_COURSES.indexOf(LevelManager.currentLevelKey));
-            n = (n + (dir || 1) + RACE_COURSES.length) % RACE_COURSES.length;
-            closePause(); LevelManager.selectLevel(RACE_COURSES[n]);
-            return true;
-        }
         if (id === "rc_select") {
             var name = function(k) { var L = LevelManager.getAllLevels()[k] || {}; return (L.title || L.name || k).replace(/^[^A-Za-z0-9]+/, ""); };
             CourseSelect.open({ title: "🏃 Parkour Rush — courses", items: RACE_COURSES.map(function(k) { return { name: name(k), best: raceSave.best[k] ? raceFmt(raceSave.best[k]) + "s" : "", medal: raceSave.medals[k] || 0, current: k === LevelManager.currentLevelKey }; }),
