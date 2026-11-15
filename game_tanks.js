@@ -202,7 +202,7 @@ var Tanks = {
                 var spd = (7 + 0.9 * k.st[3]) * (C.sp || 1) * (B.thrust ? 0.8 : 1);
                 var bx = k.x + ca * r * 1.6 * (B.len || 1) - sa * off, by = k.y + sa * r * 1.6 * (B.len || 1) + ca * off;
                 var blife = 110 + k.st[3] * 6;
-                Tanks.bullets.push({ x: bx, y: by, vx: ca * spd + k.vx * 0.5, vy: sa * spd + k.vy * 0.5, r: 9 * (r / 30) * (C.size || 1) * (B.w ? Math.min(1.4, B.w * 0.8) : 1), dmg: (5.5 + 1.6 * k.st[5]) * (C.dm || 1) * mf, pen: (1 + 0.8 * k.st[4]) * (C.size || 1), owner: k, life: blife, maxLife: blife });
+                Tanks.bullets.push({ x: bx, y: by, vx: ca * spd + k.vx * 0.5, vy: sa * spd + k.vy * 0.5, r: 9 * (C.size || 1) * (B.w ? Math.min(1.4, B.w * 0.8) : 1), dmg: (5.5 + 1.6 * k.st[5]) * (C.dm || 1) * mf, pen: (1 + 0.8 * k.st[4]) * (C.size || 1), owner: k, life: blife, maxLife: blife });
                 var rec = (C.recoil || 0.35) * (B.thrust ? 2.2 : 1);
                 k.vx -= ca * rec * 0.3; k.vy -= sa * rec * 0.3;
                 k.recoilT = 4;
@@ -578,7 +578,7 @@ GameModes.register({
                     var ox = Math.cos(me.ang + 1.57) * ((B.off || 0) * ks / 30), oy = Math.sin(me.ang + 1.57) * ((B.off || 0) * ks / 30);
                     Tanks.bullets.push({
                         x: me.x + ox + Math.cos(ang) * blen, y: me.y + oy + Math.sin(ang) * blen,
-                        vx: Math.cos(ang) * bsp, vy: Math.sin(ang) * bsp, r: bw * 0.65,
+                        vx: Math.cos(ang) * bsp, vy: Math.sin(ang) * bsp, r: 9 * (cls.size || 1) * (B.w ? Math.min(1.4, B.w * 0.8) : 1),
                         owner: me, dmg: bdmg, _pred: true, _born: now
                     });
                 }

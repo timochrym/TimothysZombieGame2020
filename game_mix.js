@@ -1540,7 +1540,7 @@ GameModes.register({
                         var ox = Math.cos(m.ref.ang + 1.57) * ((B.off || 0) * ks0 / 30), oy = Math.sin(m.ref.ang + 1.57) * ((B.off || 0) * ks0 / 30);
                         Tanks.bullets.push({
                             x: m.ref.x + ox + Math.cos(ang) * blen, y: m.ref.y + oy + Math.sin(ang) * blen,
-                            vx: Math.cos(ang) * bsp, vy: Math.sin(ang) * bsp, r: bw * 0.65,
+                            vx: Math.cos(ang) * bsp, vy: Math.sin(ang) * bsp, r: 9 * (cls.size || 1) * (B.w ? Math.min(1.4, B.w * 0.8) : 1),
                             owner: m.ref, dmg: bdmg, _pred: true, _born: now
                         });
                     }
