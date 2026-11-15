@@ -653,7 +653,7 @@ var Mix = {
                             var bkC = cpGrid[rowC | gx];
                             if (!bkC || !bkC.length) continue;
                             for (let q = 0; q < bkC.length; q++) {
-                                var f0 = bkC[q]; if (f0._gone || (f0.from === k && this.t - f0.born < 180)) continue;
+                                var f0 = bkC[q]; if (f0._gone || f0.sting || (f0.from === k && this.t - f0.born < 180)) continue;
                                 var fdx = f0.x - kx, fdy = f0.y - ky;
                                 if (fdx * fdx + fdy * fdy < ks2) { k.mixMass += f0.m * (f0.lump ? 0.8 : 0.35); f0._gone = true; cpGone = true; S.crossFood++; }
                             }
@@ -678,6 +678,10 @@ var Mix = {
                 } else {
                     var limT = ks - r2 * 0.4;
                     if (km > b2.m * 1.25 && limT > 0 && d2sq < limT * limT && !Cells.protectedNow(b2.pl)) {
+                        if (b2.m <= 32 && !b2.pl.chain && !(k.inv > 0) && !arenaProtected(k)) {
+                            Tanks.hurt(k, 5, { name: b2.pl.name });
+                            this.burst(b2.x, b2.y, "#f43f5e", "spark", "STING! -5", 28);
+                        }
                         k.mixMass += b2.m; km = k.mixMass; ks = tankS[i] = Tanks.size(k);
                         Tanks.gainXp(k, 10 + Math.round(b2.m * 0.3)); S.tankAteBlob++;
                         this.burst(b2.x, b2.y, k.color, "ring", "ATE BLOB!", ks + 20);
@@ -712,6 +716,32 @@ var Mix = {
         for (let i = cp0.length - 1; i >= 0; i--) {
             var ep = cp0[i];
             if (!ep.ejected || ep._gone || ep._hitOnce || (ep.vx * ep.vx + ep.vy * ep.vy <= 4)) continue;
+            if (ep.sting) {
+                var stingHit = false;
+                for (let ti = 0; ti < tanks.length; ti++) {
+                    var kt = tanks[ti];
+                    if (!kt.alive || kt.inv > 0 || arenaProtected(kt)) continue;
+                    var sr = tankS[ti] + 8;
+                    if ((ep.x - kt.x) * (ep.x - kt.x) + (ep.y - kt.y) * (ep.y - kt.y) < sr * sr) {
+                        Tanks.hurt(kt, 5, { name: ep.ownerPl ? ep.ownerPl.name : "Tiny blob" });
+                        kt.vx += (ep.vx || 0) * 0.15; kt.vy += (ep.vy || 0) * 0.15;
+                        this.burst(ep.x, ep.y, "#f43f5e", "spark", "STING! -5", 24);
+                        ep._gone = true; ep.eaten = true; cpGone = true; stingHit = true; break;
+                    }
+                }
+                if (stingHit) continue;
+                for (let bi = 0; bi < blobs.length; bi++) {
+                    var bt = blobs[bi];
+                    if (bt.dead || bt.pl === ep.ownerPl || Cells.protectedNow(bt.pl)) continue;
+                    var srb = blobR[bi] + 6;
+                    if ((ep.x - bt.x) * (ep.x - bt.x) + (ep.y - bt.y) * (ep.y - bt.y) < srb * srb) {
+                        bt.m = Math.max(12, bt.m - 4); blobR[bi] = Cells.rad(bt.m, bt);
+                        this.burst(ep.x, ep.y, "#f43f5e", "spark", "STING! -4", 22);
+                        ep._gone = true; ep.eaten = true; cpGone = true; stingHit = true; break;
+                    }
+                }
+                if (stingHit) continue;
+            }
             var hw = null, isHeadEj = false;
             for (let wj = 0; wj < worms.length; wj++) {
                 var wCand = worms[wj];
@@ -773,24 +803,27 @@ var Mix = {
             var w4 = Snake.hitBody(b4.x, b4.y, r4 * 0.45, null);
             if (!w4 || !w4.alive) continue;
             S.blobPopped++;
-            if (b4.m < 25) {                                                   // tiny blob: worm absorbs it whole
-                w4.len += b4.m * 0.35; this.wormXp(w4, b4.m * 0.45);
-                this.burst(b4.x, b4.y, w4.color, "spark", "+EAT", 28);
+            if (b4.m < 25) {                                                   // tiny blob: worm absorbs it whole, but tiny non-chain blobs sting it
+                var stingW = !b4.pl.chain ? 4 : 0;
+                w4.len = Math.max(12, w4.len + b4.m * 0.35 - stingW); this.wormXp(w4, b4.m * 0.45);
+                this.burst(b4.x, b4.y, stingW ? "#f43f5e" : w4.color, "spark", stingW ? "STING! -4" : "+EAT", 28);
                 this.note(b4.pl.human !== undefined || w4.human !== undefined, w4.name + " ate " + b4.pl.name, w4.color);
                 this._blobGone(blobs, b4, w4.name); anyDead = true; continue;
             }
             var hd = w4.segs[0], adx = b4.x - hd.x, ady = b4.y - hd.y, away = Math.sqrt(adx * adx + ady * ady) || 1;
             var headEatDist = (wormR[worms.indexOf(w4)] || 14) + r4 * 0.85;
             if (!b4.pl.chain && b4.m <= Math.max(30, w4.len * 0.32) && adx * adx + ady * ady < headEatDist * headEatDist) {
-                w4.len += b4.m * 0.35; this.wormXp(w4, b4.m * 0.5);
-                this.burst(b4.x, b4.y, w4.color, "spark", "+EAT", 30);
+                w4.len = Math.max(12, w4.len + b4.m * 0.35 - 4); this.wormXp(w4, b4.m * 0.5);
+                this.burst(b4.x, b4.y, "#f43f5e", "spark", "STING! -4", 30);
                 this.note(b4.pl.human !== undefined || w4.human !== undefined, w4.name + " ate " + b4.pl.name, w4.color);
                 this._blobGone(blobs, b4, w4.name); anyDead = true; continue;
             }
-            if (b4.m < 80) {                                                   // medium blobs bounce off, worm nibbles a bit for points
+            if (b4.m < 80) {                                                   // medium blobs bounce off, worm nibbles a bit; tiny <= 32 sting back
                 var nib = Math.min(b4.m * 0.12, 7 + (w4.mx ? w4.mx.st[0] * 1.5 : 0));
                 b4.m = Math.max(15, b4.m - nib); blobR[i] = Cells.rad(b4.m, b4);
-                w4.len += nib * 0.35; this.wormXp(w4, nib * 0.45);
+                var stingB = (b4.m <= 32 && !b4.pl.chain) ? 4 : 0;
+                w4.len = Math.max(12, w4.len + nib * 0.35 - stingB); this.wormXp(w4, nib * 0.45);
+                if (stingB) this.burst(b4.x, b4.y, "#f43f5e", "spark", "STING! -4", 26);
                 b4.vx += adx / away * 8; b4.vy += ady / away * 8; b4.popCd = 30;
                 continue;
             }

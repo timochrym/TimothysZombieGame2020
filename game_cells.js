@@ -370,10 +370,15 @@ var Cells = {
         for (let k = 0; k < this.pellets.length; k++) if (this.pellets[k].ejected && this.pellets[k].ownerPl === pl) active++;
         for (let i = 0; i < me.length && active < 6; i++) {
             var b = me[i];
-            if (b.m < 32) continue;
+            if (b.m < 16) continue;
             var dx = pl.aimX - b.x, dy = pl.aimY - b.y, L = Math.hypot(dx, dy) || 1, r = this.rad(b.m);
-            b.m -= 14;
-            this.pellets.push({ x: b.x + dx / L * (r + 14), y: b.y + dy / L * (r + 14), m: 11, col: pl.color, vx: dx / L * 26, vy: dy / L * 26, ejected: true, ownerPl: pl });
+            if (b.m < 32) {
+                b.m -= 4;
+                this.pellets.push({ x: b.x + dx / L * (r + 10), y: b.y + dy / L * (r + 10), m: 4, r: 6, col: pl.color, vx: dx / L * 22, vy: dy / L * 22, ejected: true, sting: true, ownerPl: pl });
+            } else {
+                b.m -= 14;
+                this.pellets.push({ x: b.x + dx / L * (r + 14), y: b.y + dy / L * (r + 14), m: 11, col: pl.color, vx: dx / L * 26, vy: dy / L * 26, ejected: true, ownerPl: pl });
+            }
             active++;
         }
     },
@@ -454,6 +459,10 @@ var Cells = {
                 }
             }
             b.x += dx / L * sp + b.vx; b.y += dy / L * sp + b.vy;
+            var bStepDist = (b._px !== undefined) ? Math.hypot(b.x - b._px, b.y - b._py) : 0;
+            if (bStepDist > 55 || Math.hypot(b.vx, b.vy) > 65) pl._fastTicks = (pl._fastTicks || 0) + 1;
+            else if (pl._fastTicks > 0) pl._fastTicks = Math.max(0, pl._fastTicks - 0.1);
+            b._px = b.x; b._py = b.y;
             b.vx *= 0.9; b.vy *= 0.9;
             if (b.mergeT > 0) b.mergeT--;
             if (cellsCfg.decay > 0 && b.m > 35) b.m -= b.m * cellsCfg.decay * (cellsCfg.decayGrow ? 1 + b.m / 800 : 1);
@@ -461,6 +470,14 @@ var Cells = {
             bRads[i] = r;
             b.x = Math.max(-CEL.W / 2 + r * 0.5, Math.min(CEL.W / 2 - r * 0.5, b.x));
             b.y = Math.max(-CEL.H / 2 + r * 0.5, Math.min(CEL.H / 2 - r * 0.5, b.y));
+        }
+        for (let pi = 0; pi < this.players.length; pi++) {
+            var dp = this.players[pi];
+            if (!dp.alive) continue;
+            var dCnt = this.mine(dp).length;
+            if (dp._prevCnt !== undefined && dCnt > dp._prevCnt) dp._dupBurst = (dp._dupBurst || 0) + (dCnt - dp._prevCnt);
+            else if (dp._dupBurst > 0) dp._dupBurst = Math.max(0, dp._dupBurst - 0.08);
+            dp._prevCnt = dCnt;
         }
         // own pieces: push apart until they may merge, then merge on overlap (stay lined up while Shift held)
         for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++) {
@@ -497,7 +514,8 @@ var Cells = {
             if (e.m < f.m * eatRatio) continue;
             var rd = Math.hypot(f.x - e.x, f.y - e.y);
             if (rd < bRads[i] - bRads[j] * 0.4) {
-                e.m += Math.max(f.m, arenaPopDmg(f.pl, e.pl)); bRads[i] = this.rad(e.m); f.dead = true;
+                var gainM = (f.m <= 32 && !f.pl.chain) ? (f.m * 0.4 - 5) : Math.max(f.m, arenaPopDmg(f.pl, e.pl));
+                e.m = Math.max(14, e.m + gainM); bRads[i] = this.rad(e.m); f.dead = true;
                 if (e.pl.human !== undefined && typeof SFX !== "undefined") SFX.play("kill", e.x, e.y, 0.6);
                 if (!this.mine(f.pl).some(function(q) { return !q.dead; })) this.die(f.pl, e.pl);
             }

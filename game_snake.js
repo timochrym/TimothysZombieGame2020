@@ -131,6 +131,7 @@ var Snake = {
         w.splitOwner = owner;
         w.rejoinCd = this.REJOIN_FRAMES;
         w.splitCd = this.SPLIT_FRAMES;
+        w._dupBurst = (w._dupBurst || 0) + 1;
         var w2 = {
             name: w.name, color: w.color, human: w.human, pid: w.pid,
             alive: true, gone: false, slowed: false, len: backLen, ang: hitAng, want: hitAng,
@@ -519,6 +520,9 @@ var Snake = {
             var boosting = (w.kbT > 0 || w.kbSlowT > 0) ? false : (w.boost && w.len > 14);
             var kbSlowMult = (w.kbT <= 0 && w.kbSlowT > 0) ? 0.52 : 1;
             var sp = (w.kbT > 0 ? w.kbSpeed : (boosting ? 6.2 : 3.2)) * arenaSpeed(w) * (w.kbT > 0 ? 1 : (w.slowed ? this.BRAKE_FACTOR : 1)) * kbSlowMult;
+            if (w.kbT <= 0 && sp > 22) w._fastTicks = (w._fastTicks || 0) + 1;
+            else if (w._fastTicks > 0) w._fastTicks = Math.max(0, w._fastTicks - 0.1);
+            if (w._dupBurst > 0) w._dupBurst = Math.max(0, w._dupBurst - 0.02);
             if (w.kbT > 0) w.kbSpeed = Math.max(5.5, w.kbSpeed * 0.95);
             if (boosting && this.t % 4 === 0) { w.len -= 1; var tl = w.segs[w.segs.length - 1]; this.addPellet(tl.x, tl.y, 1, w.color); }
             var snkDec = (typeof cellsCfg !== "undefined") ? cellsCfg.decay : 0.0000333;
