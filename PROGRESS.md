@@ -57,6 +57,17 @@ tabs and a clear menu tree, improve LAN packets, then feel, performance and code
 Fastest way to perfect each game: one shared engine fix at a time (so every game gets it), a test per fix, then one
 short play-through list from you per game. Your notes on what feels off are the part no test can replace.
 
+## 2026-11-15 (2): blob split eats half of a worm that is inside it - DONE, on main
+Asked: "Splitting inside while a snake is in you should half the snake's length and add it to agario." In Arena Mix, when a
+blob splits (Space) and a worm overlaps it (head within 95% of the blob radius, or any body segment within 70%), that worm
+loses half its length (never below 12; worms of 14 or less are left alone) and the blob gains that much mass BEFORE it
+divides, so both halves share it. Each worm is halved once per split press, even if two blobs of the player hold it. Pieces
+of a split worm are halved one by one. Spawn-protected worms and the player's own worm are skipped. Feedback: ring
+"GULP +N", a log / banner line, a sound; `Mix.lastSwallow = {taken, before, worms, t}`. Code: `Mix.splitSwallow` (game_mix.js),
+called from `Cells.split` (game_cells.js). Test: `tests/blob_split_eat.js` (staged cases + a real Space keypress).
+Note: the older rule "a blob touching a worm pops" and the worm's nibble still run too; in the live test the pop rule is
+switched off with `popCd` so the split rule is measured alone. Bubble worms do not split (they lunge), so nothing happens.
+
 ## 2026-11-15: split worms (spike cut, head-to-tail rejoin, brake key) - DONE, on main
 Asked (spec from another agent / the user): a pushed spike cuts a worm in two; pieces rejoin only head to tail with
 leeway; a key slows the outer piece. Built in `game_snake.js` (rules), `game_mix.js` (spike hit, camera, HUD, leaderboard),

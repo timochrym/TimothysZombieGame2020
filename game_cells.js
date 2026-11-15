@@ -346,6 +346,7 @@ var Cells = {
             var b = me[i];
             if (b.m < 36) continue;
             var dx = pl.aimX - b.x, dy = pl.aimY - b.y, L = Math.hypot(dx, dy) || 1;
+            if (typeof Mix !== "undefined" && Mix.on && Mix.splitSwallow) Mix.splitSwallow(pl, b);      // Arena Mix: a worm inside this blob is halved and eaten, then the blob divides
             b.m /= 2;
             var nb = { pl: pl, x: b.x + dx / L * this.rad(b.m), y: b.y + dy / L * this.rad(b.m), m: b.m, vx: dx / L * 24, vy: dy / L * 24, mergeT: 540 };
             b.mergeT = 540;

@@ -169,6 +169,33 @@ var Mix = {
             if (wm && !wm.alive && ++wm.deadT > 60 && again) { var nw = Snake.spawn({ old: wm, name: wm.name, color: wm.color, human: "lan" }); if (nw) { nw.pid = p.pid; nw.kills = 0; } }
         });
     },
+    // Splitting a blob with a worm INSIDE it (its head or body overlaps the blob): the worm loses half its length (never
+    // below 12) and the blob gains that much mass BEFORE it divides, so both halves share it. Each worm is halved once per
+    // split press. Spawn-protected worms (and the player's own worm) are left alone.
+    splitSwallow: function(pl, b) {
+        var r = Cells.rad(b.m), W = Snake.worms, taken = 0, hit = 0, stamp = this.t, before = 0;
+        for (let i = 0; i < W.length; i++) {
+            var w = W[i];
+            if (!w.alive || w.gone || w.safeT > 0 || w.len <= 14 || w._swallowT === stamp || arenaProtected(w)) continue;
+            if (w.human !== undefined && w.human === pl.human) continue;
+            var h = w.segs[0], inside = Math.hypot(h.x - b.x, h.y - b.y) < r * 0.95;
+            for (let q = 2; !inside && q < w.segs.length; q += 2) { var s = w.segs[q]; if (Math.hypot(s.x - b.x, s.y - b.y) < r * 0.7) inside = true; }
+            if (!inside) continue;
+            var half = Math.min(w.len * 0.5, w.len - 12);
+            if (half < 2) continue;
+            before += w.len; w.len -= half; w._swallowT = stamp;
+            if (w.segs.length > Math.round(w.len)) w.segs.length = Math.max(2, Math.round(w.len));       // the tail end goes first
+            taken += half; hit++;
+        }
+        if (taken <= 0) return;
+        b.m += taken;
+        this.lastSwallow = { taken: Math.round(taken), before: Math.round(before), worms: hit, t: this.t };       // for the HUD and the tests
+        this.stat.splitEat = (this.stat.splitEat || 0) + 1;
+        this.burst(b.x, b.y, pl.color || "#4ade80", "ring", "GULP +" + Math.round(taken), Math.max(60, r));
+        this.note(pl.human !== undefined, pl.name + " ate half of " + hit + " worm" + (hit > 1 ? "s" : "") + " (+" + Math.round(taken) + " mass)", pl.color || "#4ade80");
+        if (pl.human !== undefined && typeof SFX !== "undefined") SFX.play("kill", b.x, b.y, 0.7);
+    },
+
     // A pushed (launched / moving) spike that hits the SIDE of a worm cuts it in two: same owner, colour, stats. The
     // spike is used up. Near the head or the tail (or a short worm) it just passes. See Snake.splitWorm for the rules.
     spikeSplit: function() {
@@ -1282,7 +1309,7 @@ var Mix = {
         ctx.fillStyle = "rgba(15,23,42,0.84)";
         ctx.fillRect(0, cssH - 30, cssW, 30);
         var bHint = "WASD move · Mouse aim & shoot · E autofire · 1-8 upgrades · Q switch body · V swap bot · Esc menu";
-        if (mixCfg.body === "blob") bHint = "Mouse steers · Space split · W eject mass (feeds spikes!) · Q switch body · V swap bot · Esc menu";
+        if (mixCfg.body === "blob") bHint = "Mouse steers · Space split (a worm inside you is halved and eaten) · W eject mass (feeds spikes!) · Q switch body · V swap bot · Esc menu";
         else if (mixCfg.body === "chain") bHint = "Mouse steers · Hold Space boost · W toggle Snake/Bubble form · Q switch body · V swap bot · Esc menu";
         else if (mixCfg.body === "worm") bHint = "Mouse steers · Hold Click/Space boost · 1/2/3 upgrade · R slows the outer worm (when split) · Q switch body · V swap bot";
         uiText(bHint, cssW / 2, cssH - 11, 12, "rgba(226,232,240,0.9)", "center", "700");

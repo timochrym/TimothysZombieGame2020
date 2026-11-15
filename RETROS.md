@@ -6,6 +6,24 @@ absolute FPS is lower than on a real GPU; compare numbers against each other, no
 
 ---
 
+## Blob split eats half of a worm inside it (Arena Mix)
+
+**Asked:** "Splitting inside while a snake is in you should half the snake's length and add it to agario."
+**Shipped:** `Mix.splitSwallow`, called from `Cells.split` just before a blob divides. A worm that overlaps the blob (head or
+body) loses half its length (floor 12) and the blob gains it as mass, so both halves share it. Once per worm per press;
+spawn-protected worms, tiny worms (14 or less) and the player's own worm are skipped. Ring + message + sound.
+**Checked:** `tests/blob_split_eat.js`: head inside (60 -> 30, blob 100 -> 130 in two halves of 65), body inside, outside,
+blob too small to split, length floor (20 -> 12), tiny and protected worms, two worms (both halved), two blobs holding one
+worm (halved once), a second press, split-worm pieces, own worm safe, bubble worm, and a real Space keypress. `verify_mix.py` passes.
+**Went wrong:** two test mistakes. A worm I staged "outside" crossed the blob with its body. The live check read blob mass
+200 ms after the press, but the worm's head nibbles the blob (an existing rule), so the number drifted; the game now records
+what was swallowed and the test checks that exact value (half of the worm's length at that moment).
+**Left:** the exchange rate is 1 length = 1 mass (my guess). With an older rule a blob touching a worm already pops, so a
+worm usually sits inside a blob only right after a pop or while the pop is on cooldown. Say if split-eating should
+work without that.
+
+---
+
 ## Split worms: spike cut, head-to-tail rejoin, brake key
 
 **Asked:** a spike pushed into a worm's side splits it into two worms of one player; they rejoin only head to tail (with
