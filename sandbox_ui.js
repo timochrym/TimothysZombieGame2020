@@ -1049,6 +1049,7 @@ var SandboxUI = {
             html += '<div class="sb-sec">Game Rules · ' + (m ? m.title : '') + '</div><div class="sb-card">';
             html += rows.map(function(r, idx) {
                 var val = r.get ? r.get() : "";
+                if (r.type === "button") return '<button class="sb-btn" style="width:100%;margin:2px 0 7px" data-gbtn="' + idx + '">' + r.label + '</button>';
                 if (r.type === "toggle") {
                     return '<label class="sb-row" style="cursor:pointer"><span>' + r.label + '</span><input type="checkbox" data-gtune="' + idx + '" ' + (val ? 'checked' : '') + '></label>';
                 }
@@ -1401,6 +1402,11 @@ var SandboxUI = {
             };
             inp.oninput = handler;
             if (inp.tagName === "SELECT" || inp.type === "checkbox") inp.onchange = handler;
+        });
+
+        this._root.querySelectorAll("[data-gbtn]").forEach(function(b) {          // action rows: one click runs the row's fn
+            var r = gRows[Number(b.dataset.gbtn)];
+            if (r && r.fn) b.onclick = function() { r.fn(); self.render(); };
         });
 
         this._root.querySelectorAll("[data-mixbody]").forEach(function(b) {

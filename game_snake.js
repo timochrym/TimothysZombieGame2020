@@ -32,6 +32,19 @@ function arenaPopDmg(victim, by) {
     return 0;
 }
 
+// Worm split settings (menu panel -> Game Rules). pieces: how many pieces "Split worm now" makes. rejoin: off = pieces never recombine.
+var snakeCfg = { pieces: 2, rejoin: true };
+try { var _sc = JSON.parse(localStorage.getItem("timsWormSplitCfg") || "null"); if (_sc) { if (typeof _sc.pieces === "number") snakeCfg.pieces = Math.max(2, Math.min(30, _sc.pieces | 0)); if (typeof _sc.rejoin === "boolean") snakeCfg.rejoin = _sc.rejoin; } } catch (e) {}
+function saveSnakeCfg() { try { localStorage.setItem("timsWormSplitCfg", JSON.stringify(snakeCfg)); } catch (e) {} }
+// the three menu rows: how many pieces, may they rejoin, and the button itself
+function wormSplitRows() {
+    return [
+        { label: "Split worm into (pieces)", type: "range", min: 2, max: 30, step: 1, localOnly: true, get: function() { return snakeCfg.pieces; }, set: function(v) { snakeCfg.pieces = Math.max(2, Math.min(30, v | 0)); saveSnakeCfg(); }, note: "as many as you want (a short worm makes fewer)" },
+        { label: "Pieces can rejoin (head to tail)", type: "toggle", localOnly: true, get: function() { return snakeCfg.rejoin; }, set: function(v) { snakeCfg.rejoin = !!v; saveSnakeCfg(); }, note: "off = split pieces never recombine" },
+        { label: "✂ Split my worm now", type: "button", localOnly: true, fn: function() { return Snake.splitMine(); } }
+    ];
+}
+
 var Snake = {
     worms: [], pellets: [], grid: {}, t: 0, cam: { x: 0, y: 0, z: 1 },
 
@@ -196,7 +209,7 @@ var Snake = {
     //     within (radiusA + radiusB) x 1.35, and not before `rejoinCd` (2 s) has run out;
     //   - hold the brake key (R, P2: Right Shift) to slow the split worm whose head is furthest from the screen centre.
     _kinSeq: 0,
-    SPLIT_MIN_LEN: 30, SPLIT_MIN_PIECE: 8, SPLIT_MAX_PIECES: 4, REJOIN_FRAMES: 120, SPLIT_FRAMES: 90, REJOIN_LEEWAY: 1.35, BRAKE_FACTOR: 0.45,
+    SPLIT_MIN_LEN: 30, SPLIT_MIN_PIECE: 8, SPLIT_MAX_PIECES: 30, MANUAL_MIN_PIECE: 3, REJOIN_FRAMES: 120, SPLIT_FRAMES: 90, REJOIN_LEEWAY: 1.35, BRAKE_FACTOR: 0.45,
 
     kinOf: function(w) {
         if (!w.kinId) return [w];
@@ -242,6 +255,45 @@ var Snake = {
         return B;
     },
 
+    // Cut worm w into n pieces of about equal length at once (the menu button). A piece needs at least MANUAL_MIN_PIECE
+    // segments, so a short worm makes fewer than asked. Returns how many pieces the worm is in now (1 = nothing happened).
+    splitInto: function(w, n) {
+        if (!w || !w.alive || w.gone) return 1;
+        var S = w.segs.length, room = this.SPLIT_MAX_PIECES - this.kinOf(w).length + 1;
+        n = Math.max(2, Math.min(n | 0, room, Math.floor(S / this.MANUAL_MIN_PIECE)));
+        if (n < 2 || S < 2 * this.MANUAL_MIN_PIECE) return 1;
+        if (!w.kinId) w.kinId = ++this._kinSeq;
+        var segs = w.segs, total = w.len, per = Math.floor(S / n), extra = S - per * n, at = 0, sign = 1;
+        var base = {}; for (var key in w) base[key] = w[key];                  // everything the pieces inherit: owner, name, colour, stats, power-ups
+        for (let i = 0; i < n; i++) {
+            var size = per + (i < extra ? 1 : 0), part = segs.slice(at, at + size); at += size;
+            var piece = w;
+            if (i > 0) {
+                piece = {}; for (var k2 in base) piece[k2] = base[k2];
+                var t0 = part[0], t1 = part[1] || part[0];
+                piece.ang = Math.atan2(t0.y - t1.y, t0.x - t1.x) + sign * (0.6 + 0.25 * Math.floor((i - 1) / 2)); sign = -sign;   // fan out
+                piece.want = piece.ang; piece.boost = false; piece.boosting = false; piece.kills = 0; piece.deadT = 0; piece.cpuT = 0; piece._dmgLog = null;
+                piece.alive = true; piece.gone = false; piece.slowed = false; piece.safeT = Math.max(piece.safeT || 0, 30);
+                this.worms.push(piece);
+            }
+            piece.segs = part; piece.len = total * size / S; piece.mxLast = piece.len;
+            piece.rejoinCd = this.REJOIN_FRAMES; piece.splitCd = this.SPLIT_FRAMES;
+        }
+        return n;
+    },
+    // the menu button: split the local player's main worm into snakeCfg.pieces
+    splitMine: function() {
+        var w = this.localWorm(0);
+        if (!w || !w.alive) { if (typeof showBanner === "function") showBanner("No worm to split", "Play as a worm first", "#fca5a5"); return 1; }
+        var want = snakeCfg.pieces, got = this.splitInto(w, want), pieces = this.kinOf(w).length;
+        if (typeof showBanner === "function") {
+            if (got < 2) showBanner("Too short to split", "grow a little first", "#fca5a5");
+            else showBanner("SPLIT into " + got + (got < want ? " (all it can)" : ""), snakeCfg.rejoin ? "head to tail rejoins" : "rejoining is off", "#4ade80");
+        }
+        if (got >= 2 && typeof Mix !== "undefined" && Mix.on && Mix.burst) Mix.burst(w.segs[0].x, w.segs[0].y, "#4ade80", "ring", "SPLIT ×" + pieces, 70);
+        return got;
+    },
+
     // front keeps its head and gets rear's whole body as its new tail; rear is absorbed (no death, no kill)
     rejoin: function(front, rear) {
         front.segs = front.segs.concat(rear.segs);
@@ -253,6 +305,7 @@ var Snake = {
     },
     // head -> tail check for every pair of kin worms
     kinStep: function() {
+        if (!snakeCfg.rejoin) return;                       // the menu switch: split pieces never recombine
         var W = this.worms, leeway = this.REJOIN_LEEWAY;
         for (let i = 0; i < W.length; i++) {
             var a = W[i];
@@ -524,7 +577,7 @@ var Snake = {
         if (k.length < 2) return;
         var cd = Math.max.apply(null, k.map(function(q) { return q.rejoinCd || 0; }));
         var held = this.brakeHeld(me);
-        var txt = "SPLIT ×" + k.length + " · hold R: slow the outer worm" + (held ? " (braking)" : "") + " · " + (cd > 0 ? "rejoin in " + Math.ceil(cd / 60) + " s" : "rejoin: touch a worm's head to the other's tail");
+        var txt = "SPLIT ×" + k.length + " · hold R: slow the outer worm" + (held ? " (braking)" : "") + " · " + (!snakeCfg.rejoin ? "rejoining is OFF" : (cd > 0 ? "rejoin in " + Math.ceil(cd / 60) + " s" : "rejoin: touch a worm's head to the other's tail"));
         uiPanel(cssW / 2 - 250, cssH - 74, 500, 28, "#4ade80", 0.85);
         uiText(txt, cssW / 2, cssH - 55, 12, held ? "#fde047" : "#bbf7d0", "center", "800");
     },

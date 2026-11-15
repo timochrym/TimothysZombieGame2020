@@ -1661,7 +1661,7 @@ GameModes.register({
                 if (typeof Net !== "undefined" && Net.role === "client") { Mix._lanBody = String(v); mixCfg.body = String(v); }
                 else Mix.setBody(String(v));
             } }
-        ].concat(arenaRows(), [
+        ].concat(wormSplitRows(), arenaRows(), [
             { label: "CPU tanks", type: "range", min: 0, max: 14, step: 1, get: function() { return TNK.CPUS; }, set: function(v) { TNK.CPUS = v; }, note: "next arena" },
             { label: "CPU blobs", type: "range", min: 0, max: 40, step: 1, get: function() { return cellsCfg.bots; }, set: function(v) { cellsCfg.bots = v; saveCellsCfg(); }, note: "changes live" },
             { label: "Max bubbles per player (0 = unlimited)", type: "range", min: 0, max: 64, step: 1, get: function() { return cellsCfg.maxCells || 0; }, set: function(v) { cellsCfg.maxCells = v; saveCellsCfg(); }, note: "0 = no limit" },

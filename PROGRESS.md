@@ -57,6 +57,17 @@ tabs and a clear menu tree, improve LAN packets, then feel, performance and code
 Fastest way to perfect each game: one shared engine fix at a time (so every game gets it), a test per fix, then one
 short play-through list from you per game. Your notes on what feels off are the part no test can replace.
 
+## 2026-11-15 (3): "Split worm" in the menu panel - number of pieces and a no-rejoin switch - DONE (branch, not main)
+Asked: add an option to split the worm in the menu panel; into as many pieces as wanted; an option to disable recombining.
+Menu panel -> Game tab -> "Game Rules" (Worm Arena and Arena Mix), now at the TOP of the list: slider "Split worm into
+(pieces)" 2-30 (saved), switch "Pieces can rejoin (head to tail)" (saved, default on), button "Split my worm now".
+`Snake.splitInto(w, n)` cuts the main worm into n near-equal pieces at once (each >= 3 segments, so a worm of 24 gives at
+most 8; total length kept; pieces share owner, name, colour, stats; they fan out). Rejoin off: `Snake.kinStep` returns at
+once, so pieces never recombine (the HUD hint says "rejoining is OFF"). The spike split cap rose from 4 to 30 pieces.
+New row type "button" (`r.fn`) in `sandbox_ui.js` and the old cheats panel (`devpanel.js`). Test: `tests/worm_split_menu.js`
+(real slider, button and checkbox clicks). Limits: host or single player only (LAN joiners cannot use the button).
+Rules: `AGENT-RULES.md` now applies: session branch only; checklist in `reviews/TimothysZombieGame2020/`.
+
 ## 2026-11-15 (2): blob split eats half of a worm that is inside it - DONE, on main
 Asked: "Splitting inside while a snake is in you should half the snake's length and add it to agario." In Arena Mix, when a
 blob splits (Space) and a worm overlaps it (head within 95% of the blob radius, or any body segment within 70%), that worm

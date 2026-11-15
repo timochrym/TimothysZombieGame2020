@@ -80,9 +80,9 @@ function arenaRows() { return [
     { label: "Invincible humans", type: "toggle", get: function() { return arenaCheats.god; }, set: function(v) { arenaCheats.god = v; } },
     { label: "Human speed", type: "range", min: 0.5, max: 3, step: 0.25, get: function() { return arenaCheats.speed; }, set: function(v) { arenaCheats.speed = v; } }
 ]; }
-GAME_TUNABLES.snake = arenaRows().concat([
+GAME_TUNABLES.snake = (typeof wormSplitRows === "function" ? wormSplitRows() : []).concat(arenaRows(), [
     { label: "Human length", type: "range", min: 14, max: 600, step: 10, get: function() { var w = Snake.worms.find(arenaHuman); return w ? Math.round(w.len) : 24; }, set: function(v) { Snake.worms.filter(arenaHuman).forEach(function(w) { w.len = v; }); } }
-]);
+  ]);
 GAME_TUNABLES.cells = [
     // ---- game settings (saved) ----
     { label: "CPU blobs", type: "range", min: 0, max: 40, step: 1, get: function() { return cellsCfg.bots; }, set: function(v) { cellsCfg.bots = v; saveCellsCfg(); }, note: "changes live" },

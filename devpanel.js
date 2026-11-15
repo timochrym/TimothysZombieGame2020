@@ -366,18 +366,20 @@ var DevUI = {
             this.ownFor = id; this.ownRows = rows;
             document.getElementById("dp-own-title").textContent = (GameModes.current.title || id) + " — its own settings";
             rowsEl.innerHTML = rows.map(function(r, i) {
+                if (r.type === "button") return '<button class="dp-btn" data-own="' + i + '" data-ownbtn="1" style="width:100%;margin:3px 0">' + r.label + '</button>';
                 if (r.type === "toggle") return '<label class="dp-toggle"><input type="checkbox" data-own="' + i + '"><span class="dp-switch"></span><span>' + r.label + '</span></label>';
                 if (r.type === "choice") return '<div class="dp-row"><label>' + r.label + '</label><select class="dp-select" data-own="' + i + '">' + r.options.map(function(o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join("") + '</select></div>';
                 return '<div class="dp-row" title="' + (r.note || "") + '"><label>' + r.label + '</label><input type="range" class="dp-range" data-own="' + i + '" min="' + r.min + '" max="' + r.max + '" step="' + r.step + '"><span class="dp-val" data-own-val="' + i + '"></span></div>';
             }).join("") + (rows.some(function(r) { return r.note; }) ? '<p class="dp-hint">Some take effect from the next match.</p>' : "");
             rowsEl.querySelectorAll("[data-own]").forEach(function(el) {
                 var r = rows[Number(el.dataset.own)];
+                if (el.dataset.ownbtn) { el.addEventListener("click", function() { if (r.fn) r.fn(); }); return; }
                 var apply = function() { var v = el.type === "checkbox" ? el.checked : Number(el.value); r.set(v); DevUI.toast(r.label + ": " + (el.type === "checkbox" ? (v ? "on" : "off") : (r.type === "choice" ? el.options[el.selectedIndex].text : v))); };
                 el.addEventListener(el.type === "range" ? "input" : "change", apply);
             });
         }
         rowsEl.querySelectorAll("[data-own]").forEach(function(el) {
-            if (document.activeElement === el) return;
+            if (document.activeElement === el || el.dataset.ownbtn) return;
             var r = DevUI.ownRows[Number(el.dataset.own)], v = r.get();
             if (el.type === "checkbox") el.checked = !!v; else el.value = v;
             var lab = rowsEl.querySelector('[data-own-val="' + el.dataset.own + '"]'); if (lab) lab.textContent = String(v);
