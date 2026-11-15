@@ -367,7 +367,9 @@ var Mix = {
                 var rawBlobDmg = effDmg * (bl.pl.chain ? 1.05 : 1.3);
                 var actualBlobDmg = Math.min(bl.m, rawBlobDmg);
                 bl.m -= rawBlobDmg; used = true; S.bulletBlob++;
-                bl.vx = (bl.vx || 0) + (bu.vx || 0) * 0.16; bl.vy = (bl.vy || 0) + (bu.vy || 0) * 0.16;
+                var bDmgLv = (bu.owner && bu.owner.st) ? bu.owner.st[4] : 0;
+                var bPush = 0.28 + bDmgLv * 0.03;
+                bl.vx = (bl.vx || 0) + (bu.vx || 0) * bPush; bl.vy = (bl.vy || 0) + (bu.vy || 0) * bPush;
                 this.burst(bux, buy, bl.pl.color || "#a78bfa", "spark", "", 22);
                 if (bu.owner && bu.owner.alive) {
                     arenaRecordDmg(bl.pl, bu.owner, actualBlobDmg);
@@ -404,8 +406,8 @@ var Mix = {
                     var rawHDmg = wormBaseDmg * 0.85 * wormDmgMult * (1 - 0.1 * (w.mx ? w.mx.st[1] : 0));
                     var actualHDmg = Math.min(w.len, rawHDmg);
                     w.len -= rawHDmg; used = true; S.bulletWorm++;
-                    h.x += (bu.vx || 0) * 0.35; h.y += (bu.vy || 0) * 0.35;
-                    Snake.hitKnockback(w, Math.atan2(bu.vy || 0, bu.vx || 1), 9 + dmgLv * 0.8, 10, 60);
+                    h.x += (bu.vx || 0) * 0.5; h.y += (bu.vy || 0) * 0.5;
+                    Snake.hitKnockback(w, Math.atan2(bu.vy || 0, bu.vx || 1), 14 + dmgLv * 1.1, 16, 75);
                     this.burst(bux, buy, w.color, "spark", "", 24);
                     if (bu.owner && bu.owner.alive) {
                         arenaRecordDmg(w, bu.owner, actualHDmg);
@@ -434,6 +436,7 @@ var Mix = {
                             var actualBDmg = Math.min(hitW.len, rawBDmg);
                             hitW.len -= rawBDmg;
                             used = true; S.bulletWorm++;
+                            Snake.hitKnockback(hitW, Math.atan2(bu.vy || 0, bu.vx || 1), 9 + dmgLv * 0.7, 10, 45);
                             this.burst(bux, buy, hitW.color, "spark", "", 18);
                             if (bu.owner && bu.owner.alive) {
                                 arenaRecordDmg(hitW, bu.owner, actualBDmg);
@@ -1379,7 +1382,7 @@ var Mix = {
         var bHint = "WASD move · Mouse aim & shoot · E autofire · 1-8 upgrades · Q switch body · V swap bot · Esc menu";
         if (mixCfg.body === "blob") bHint = "Mouse steers · Click shoot mini tanks · Space split · W eject · E spawn mini tank · Q body · V swap · Esc menu";
         else if (mixCfg.body === "chain") bHint = "Mouse steers · Hold Space boost · W toggle Snake/Bubble form · Q switch body · V swap bot · Esc menu";
-        else if (mixCfg.body === "worm") bHint = "Mouse steers · Hold Click/Space boost · 1/2/3 upgrade · R slows the outer worm (when split) · Q switch body · V swap bot";
+        else if (mixCfg.body === "worm") bHint = "Mouse steers · Hold Click/Space boost · W/E throw mass · 1/2/3 upgrade · R slow outer · Q body · V swap";
         uiText(bHint, cssW / 2, cssH - 11, 12, "rgba(226,232,240,0.9)", "center", "700");
     },
 
@@ -1766,7 +1769,10 @@ GameModes.register({
         if (code === "KeyV" || code === "BracketRight") { return Mix.swapCharacter(); }
         if (code === "KeyQ") { Mix.nextBody(1); return true; }
         if (mixCfg.body === "blob" && code === "KeyE") { var mb = Mix.me(); if (mb && mb.kind === "blob" && mb.alive) { Cells.spawnMiniTank(mb.ref); return true; } }
-        if (mixCfg.body === "worm") { var wi = ["Digit1", "Digit2", "Digit3"].indexOf(code), me = Mix.me(); if (wi >= 0 && me && me.alive) { Mix.wormStat(me.ref, wi); return true; } }
+        if (mixCfg.body === "worm") {
+            if (code === "KeyE" || code === "KeyW") { var meW = Mix.me(); if (meW && meW.alive) { Snake.eject(meW.ref); return true; } }
+            var wi = ["Digit1", "Digit2", "Digit3"].indexOf(code), me = Mix.me(); if (wi >= 0 && me && me.alive) { Mix.wormStat(me.ref, wi); return true; }
+        }
         if (mixCfg.body === "tank") { var tk = GameModes.get("tanks"); if (tk && tk.onKey) return tk.onKey(code); }
         return false;
     },

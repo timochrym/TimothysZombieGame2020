@@ -73,7 +73,7 @@ var Snake = {
         w.name = o.name; w.color = o.color; w.human = o.human; w.alive = true; w.len = 24; w.ang = ang; w.want = ang;
         w.boost = false; w.segs = []; w.kills = w.kills || 0; w.deadT = 0; w.cpuT = 0; w._dmgLog = null;
         w.kinId = 0; w.slowed = false; w.rejoinCd = 0; w.splitCd = 0; w.gone = false;         // a fresh worm is on its own again
-        w.kbT = 0; w.kbSpeed = 0; w.kbSlowT = 0; w.splitOwner = null; w.isSplitChild = false;
+        w.kbT = 0; w.kbSpeed = 0; w.kbSlowT = 0; w.ejectCd = 0; w.splitOwner = null; w.isSplitChild = false;
         w.safeT = o.human !== undefined ? 120 : 0;          // humans get 2 s of spawn protection
         for (let i = 0; i < w.len; i++) w.segs.push({ x: x - Math.cos(ang) * i * SNK.SEG, y: y - Math.sin(ang) * i * SNK.SEG });
         if (!o.old) this.worms.push(w);
@@ -83,6 +83,22 @@ var Snake = {
     radius: function(w) { return ((w && w._sbScale) ? w._sbScale : 1) * (9 + Math.min(22, Math.sqrt(w.len) * 0.9)); },
     rad: function(w) { return this.radius(w); },
     sizeDmgScale: function(w) { return w ? Math.min(1.45, Math.pow(Math.max(0.15, w.len / 100), 1.45)) : 1; },
+    eject: function(w) {
+        if (!w || !w.alive || w.gone || w.len < 22 || (w.ejectCd && w.ejectCd > 0) || !w.segs || !w.segs.length) return false;
+        var cost = Math.min(8, Math.max(4, Math.round(w.len * 0.06)));
+        w.len -= cost;
+        w.ejectCd = 14;
+        var h = w.segs[0], r = this.radius(w) + 12;
+        var ca = Math.cos(w.ang), sa = Math.sin(w.ang);
+        var px = h.x + ca * r, py = h.y + sa * r;
+        this.pellets.push({
+            x: px, y: py, v: Math.max(3, cost * 0.85), r: 8,
+            col: w.color, vx: ca * 13, vy: sa * 13,
+            ejectT: 18, ownerWorm: w
+        });
+        if (w.human !== undefined && typeof SFX !== "undefined") SFX.play("whoosh", px, py, 0.35, 1.3);
+        return true;
+    },
     hitKnockback: function(w, hitAng, spd, dur, slowDur) {
         if (!w || !w.alive) return;
         w.ang = hitAng; w.want = hitAng; w.kbAng = hitAng;
@@ -121,7 +137,7 @@ var Snake = {
             boost: false, segs: backSegs, kills: 0, deadT: 0, cpuT: 0,
             _dmgLog: null, safeT: 14, mx: w.mx,
             kinId: w.kinId, rejoinCd: this.REJOIN_FRAMES, splitCd: this.SPLIT_FRAMES,
-            splitOwner: owner, isSplitChild: true, kbT: 0, kbSpeed: 0, kbSlowT: 0
+            splitOwner: owner, isSplitChild: true, kbT: 0, kbSpeed: 0, kbSlowT: 0, ejectCd: 0
         };
         this.worms.push(w2);
         this.hitKnockback(w2, hitAng, 16, 28, 120);
@@ -137,12 +153,18 @@ var Snake = {
                 w.boost = !!pad.shoot;
             } else if (WASDleftPressed || WASDrightPressed) { w.want = w.ang + (WASDrightPressed ? 0.09 : -0.09); w.keyMode = true; }
             else if (!w.keyMode || Snake.mouseMoved) { var hs = this.toScreen(w.segs[0].x, w.segs[0].y); w.want = Math.atan2(mouseY - hs[1], mouseX - hs[0]); w.keyMode = false; }
-            w.boost = !!(pad && pad.active && pad.shoot) || mouseDown || SpacePressed || WASDupPressed;
+            w.boost = !!(pad && pad.active && pad.shoot) || mouseDown || SpacePressed;
+            var ej0 = WASDupPressed || !!(pad && pad.active && pad.interact);
+            if (ej0 && !w._ejPrev) this.eject(w);
+            w._ejPrev = ej0;
         } else if (w.human === 1) {
             var pad2 = (typeof Pads !== "undefined") ? Pads.state[1] : null;
             if (pad2 && pad2.active && (pad2.left || pad2.right || pad2.aim)) { var bx = pad2.aim ? pad2.aim[0] : (pad2.right ? 1 : -1), by = pad2.aim ? pad2.aim[1] : 0; w.want = Math.atan2(by, bx); }
             else if (ULDRleftPressed || ULDRrightPressed) w.want = w.ang + (ULDRrightPressed ? 0.09 : -0.09);
             w.boost = ULDRupPressed || !!PlayerInput[1].kbShoot || !!(pad2 && pad2.active && pad2.shoot);
+            var ej1 = !!PlayerInput[1].kbInteract || !!(pad2 && pad2.active && pad2.interact);
+            if (ej1 && !w._ejPrev) this.eject(w);
+            w._ejPrev = ej1;
         } else if (w.human === "lan") {
             var x = Net.peerX(w.pid);
             if (x.a !== undefined) w.want = x.a;
@@ -463,11 +485,21 @@ var Snake = {
         this.t++;
         this.buildGrid();
         this.brakeStep();
+        for (let pi = 0; pi < this.pellets.length; pi++) {
+            var mp = this.pellets[pi];
+            if (mp.ejectT > 0) mp.ejectT--;
+            if (mp.vx || mp.vy) {
+                mp.x += mp.vx; mp.y += mp.vy;
+                mp.vx *= 0.91; mp.vy *= 0.91;
+                if (Math.abs(mp.vx) < 0.08 && Math.abs(mp.vy) < 0.08) { mp.vx = 0; mp.vy = 0; }
+            }
+        }
         for (let k = 0; k < this.worms.length; k++) {
             var w = this.worms[k];
             if (w.gone) continue;
             if (w.rejoinCd > 0) w.rejoinCd--;
             if (w.splitCd > 0) w.splitCd--;
+            if (w.ejectCd > 0) w.ejectCd--;
             if (!w.alive) {
                 w.deadT++;
                 if (w.human === undefined && !w.isSplitChild && w.deadT > 180) this.spawn({ old: w, name: w.name, color: w.color });
@@ -511,7 +543,9 @@ var Snake = {
             var r = this.radius(w), rPull = r + 14, rEat = r + 6, rEat2 = rEat * rEat, rWall = SNK.R - r;
             var ps = this.pellets;
             for (let i = ps.length - 1; i >= 0; i--) {
-                var p = ps[i], dxp = p.x - nh.x, dyp = p.y - nh.y;
+                var p = ps[i];
+                if (p.ejectT > 0 && p.ownerWorm === w) continue;
+                var dxp = p.x - nh.x, dyp = p.y - nh.y;
                 if (dxp < rPull && dxp > -rPull && dyp < rPull && dyp > -rPull) {
                     // pellets get sucked in for a frame or two before they disappear
                     if (dxp * dxp + dyp * dyp < rEat2) {
