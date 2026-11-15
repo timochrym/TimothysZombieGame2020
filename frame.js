@@ -26,23 +26,23 @@ function createMap() {
     // Always add the Infinite Subterranean Bedrock Base Floor ~2 screens down (top = -1600, bottom = -2400)
     // plus return Mega-Bounce Geysers so falling off any level lands on a playable deep floor!
     if (!brawlStage) {
-    Object.addBox(0, -2000, 12000, 800, "#2b2d42", {
+    GameObject.addBox(0, -2000, 12000, 800, "#2b2d42", {
         name: "Infinite Bedrock Floor",
         texture: "castle_stone",
         isInfiniteBase: true,
         baseOffsetX: 0
     });
-    Object.addBumper(-960, -1580, 240, 40, 38, "#ff2e63", {
+    GameObject.addBumper(-960, -1580, 240, 40, 38, "#ff2e63", {
         name: "Deep Return Geyser W",
         isInfiniteBase: true,
         baseOffsetX: -960
     });
-    Object.addBumper(0, -1580, 240, 40, 38, "#ff2e63", {
+    GameObject.addBumper(0, -1580, 240, 40, 38, "#ff2e63", {
         name: "Deep Return Geyser C",
         isInfiniteBase: true,
         baseOffsetX: 0
     });
-    Object.addBumper(960, -1580, 240, 40, 38, "#ff2e63", {
+    GameObject.addBumper(960, -1580, 240, 40, 38, "#ff2e63", {
         name: "Deep Return Geyser E",
         isInfiniteBase: true,
         baseOffsetX: 960
@@ -51,7 +51,7 @@ function createMap() {
 
     var currentLvl = (typeof LevelManager !== "undefined") ? LevelManager.getCurrentLevel() : null;
     if (currentLvl && currentLvl.layout) {
-        Object.loadMap(currentLvl.layout);
+        GameObject.loadMap(currentLvl.layout);
     }
     // Remember the arena's enclosure so nothing can ever leave it
     levelBounds = null;
@@ -64,6 +64,8 @@ function createMap() {
         levelBounds = { minX: lw.x + lw.w / 2, maxX: rw.x - rw.w / 2, topY: lw.y + lw.h / 2 - 40, floorY: -1500 };
     }
     GameModes.call("setupLevel", currentLvl);
+    // games that don't load gadgets themselves still get the level's gadgets (Level Studio levels in Survival etc.)
+    if (currentLvl && currentLvl.gadgets && currentLvl.gadgets.length && typeof Gadgets !== "undefined" && Gadgets.list.length === 0) Gadgets.load(currentLvl.gadgets);
     if (currentLvl && currentLvl.isProcedural && typeof WorldGenerator !== "undefined") {
         WorldGenerator.reset();
         WorldGenerator.update(0);
@@ -110,6 +112,7 @@ function createPlayers() {
 
 function rebuildAllObjects() {
     if (typeof StaticGrid !== "undefined") StaticGrid.build();
+    if (typeof DynGrid !== "undefined") DynGrid.build();
     allObjects = [];
     for (let i = 0; i < staticObjects.length; i++) {
         if (!staticObjects[i].dead) allObjects.push(staticObjects[i]);
@@ -238,7 +241,7 @@ function enforceContainment() {
         // Heroes: remember the last safe standing spot, and rescue them if they ever fall beneath the world
         if (c.isPlayer && !brawl.active) {
             if (c.onGround && c.y > -1250) { c.lastSafeX = c.x; c.lastSafeY = c.y; }
-            if (c.y < -1350 && c.lastSafeX !== undefined) {
+            if (c.y < -1350 && c.lastSafeX !== undefined && !GameModes.flag("deepWorld", false)) {
                 c.x = c.lastSafeX;
                 c.y = c.lastSafeY + 60;
                 c.xspeed = c.yspeed = 0;
@@ -246,7 +249,7 @@ function enforceContainment() {
                 Components.addFloatingText("RESCUED!", c.x, c.y + 90, "#7ff0ff", 20);
             }
         }
-        if (c.y < -1700 && !c.isPlayer) {
+        if (c.y < -1700 && !c.isPlayer && !GameModes.flag("deepWorld", false)) {
             // fell through the world: put the enemy back on the battlefield near a hero
             var anchor = redGuy;
             for (let h = 0; h < characters.length; h++) if (!characters[h].isZombie) anchor = characters[h];
@@ -470,6 +473,7 @@ function toggleMultiplayer() {
 
 
 function resetGame() {
+    ArcadeStats.start();
     lazers = [];
     particles = [];
     powerUps = [];
@@ -489,10 +493,10 @@ function resetGame() {
     screenShake = 0;
     gameOver = false;
     lastStandTimer = -1;
-    banners = [];
-    Help.reset();
+    helpTimer = devOpts.showHelp ? 60 * 12 : 0;
     createMap();
     createPlayers();
+    if (typeof Net !== "undefined") Net.afterPlayersCreated();
     if (!brawl.active && GameModes.flag("waves", true)) startLevel(1);
     else { levelTransitionTimer = 0; zombiesRemainingToSpawn = 0; }
     rebuildAllObjects();
@@ -504,6 +508,8 @@ function resetGame() {
         SummonManager.refreshObjectList();
     }
     GameModes.call("onReset");
+    if (typeof Studio !== "undefined") Studio.afterReset();
+    if (typeof Mashup !== "undefined") Mashup.afterReset();
 }
 
 // Partner revive: hold your interact key next to a fallen (undead) teammate
@@ -563,7 +569,8 @@ function updateCamera() {
     var heroes = [];
     var modeTargets = GameModes.call("cameraTargets");
     if (modeTargets && modeTargets.length) heroes = modeTargets;
-    else for (let i = 0; i < characters.length; i++) if (!characters[i].dead) heroes.push(characters[i]);
+    else for (let i = 0; i < characters.length; i++) if (!characters[i].dead && !characters[i].isRemote) heroes.push(characters[i]);
+    if (heroes.length === 0) for (let i = 0; i < characters.length; i++) if (!characters[i].dead) heroes.push(characters[i]);
     if (heroes.length === 0) heroes.push(redGuy);
 
     var focusX = 0, focusY = 0, wTotal = 0;
@@ -575,9 +582,16 @@ function updateCamera() {
     }
     focusX /= wTotal;
     focusY /= wTotal;
+    if (typeof UniversalInspect !== "undefined" && UniversalInspect.followTarget) {
+        var ft = UniversalInspect.followTarget;
+        if (ft.isDead && ft.isDead()) UniversalInspect.followTarget = null;
+        else if (ft.pos) { var fp = ft.pos(); focusX = fp.x; focusY = fp.y; }
+    }
 
     // Dynamic zoom: zoom out to keep both heroes in frame
-    var desired = baseZoom * userZoom;
+    var desired = baseZoom * userZoom * (typeof Feel !== "undefined" ? Feel.zoomMult() : 1);
+    var modeZoom = GameModes.call("cameraZoom");        // a game can ask for a closer (>1) or wider (<1) view
+    if (modeZoom) desired *= modeZoom;
     if (heroes.length > 1) {
         var minHX = Infinity, maxHX = -Infinity, minHY = Infinity, maxHY = -Infinity;
         for (let hi = 0; hi < heroes.length; hi++) {
@@ -598,8 +612,9 @@ function updateCamera() {
     var shakeX = 0;
     var shakeY = 0;
     if (screenShake > 0) {
-        shakeX = (Math.random() - 0.5) * screenShake * 2 * settings.shake;
-        shakeY = (Math.random() - 0.5) * screenShake * 2 * settings.shake;
+        var calmK = (typeof Feel !== "undefined" && Feel.calm()) ? 0.6 : 1;
+        shakeX = (Math.random() - 0.5) * screenShake * 2 * settings.shake * calmK;
+        shakeY = (Math.random() - 0.5) * screenShake * 2 * settings.shake * calmK;
         screenShake *= 0.85;
         if (screenShake < 0.4) screenShake = 0;
     }
@@ -657,7 +672,7 @@ function uiPanel(x, y, pw, ph, accent, alpha) {
     ctx.fillStyle = "rgba(0,0,0,0.35)";
     uiRoundRect(x + 3, y + 5, pw, ph, 14);
     ctx.fill();
-    ctx.fillStyle = "rgba(9, 14, 22, " + (alpha || 0.86) + ")";
+    ctx.fillStyle = Theme.panel(alpha || 0.86);
     uiRoundRect(x, y, pw, ph, 14);
     ctx.fill();
     ctx.lineWidth = 2;
@@ -685,6 +700,11 @@ function uiBar(x, y, bw, bh, pct, color, bg) {
 function uiText(txt, x, y, size, color, align, weight) {
     ctx.save();
     ctx.font = (weight || "700") + " " + size + "px " + UI_FONT;
+    // small hint lines (control legends) shrink to fit instead of running off the screen on narrow windows
+    if (size <= 14 && (align === "center") && typeof cssW === "number") {
+        var tw = ctx.measureText(txt).width, room = Math.min(2 * x, 2 * (cssW - x)) - 16;
+        if (tw > room && room > 40) { size = Math.max(8, Math.floor(size * room / tw)); ctx.font = (weight || "700") + " " + size + "px " + UI_FONT; }
+    }
     ctx.textAlign = align || "left";
     ctx.textBaseline = "alphabetic";
     ctx.lineJoin = "round";
@@ -705,8 +725,8 @@ function drawKeyLegend(ch, x, y) {
         [["W A S D", "move"], ["F", "shoot"], ["X", "reload"], ["SPACE", "jetpack"], ["L-SHIFT", "dash"], ["E", "revive"]];
     if (brawl.active) {
         items = p2 ?
-            [["← ↑ ↓ →", "move/jump"], ["ENTER", "blaster"], ["R-SHIFT", "dash hit"], ["/", "smash"]] :
-            [["W A S D", "move/jump"], ["F", "blaster"], ["L-SHIFT", "dash hit"], ["E", "smash"]];
+            [["← ↑ ↓ →", "move/jump"], ["ENTER", settings.weapon === "fists" ? "punch" : "blaster"], ["R-SHIFT", "dash hit"], ["/", "smash"]] :
+            [["W A S D", "move/jump"], ["F", settings.weapon === "fists" ? "punch" : "blaster"], ["L-SHIFT", "dash hit"], ["E", "smash"]];
     }
     var widths = [];
     ctx.save();
@@ -822,14 +842,9 @@ function drawHeroCard(ch, x, y) {
 
 function drawHUD() {
     if (!redGuy) return;
-    if (GameModes.has("drawHUD")) { GameModes.call("drawHUD"); drawBanners(); drawCrosshair(); Help.draw(); return; }
-    if (brawl.active) { drawBrawlHUD(); Help.draw(); return; }
-    drawSurvivalHUD();
-    Help.draw();
-}
-
-// The original Zombie Survival HUD (waves, score, XP, frontier distance, hero cards)
-function drawSurvivalHUD() {
+    if (typeof Mashup !== "undefined") Mashup.drawHUD();
+    if (GameModes.has("drawHUD")) { GameModes.call("drawHUD"); drawBanners(); drawCrosshair(); return; }
+    if (brawl.active) { drawBrawlHUD(); return; }
     ctx.textBaseline = "alphabetic";
 
     // ---------- Top-left: wave / score card ----------
@@ -875,6 +890,7 @@ function drawSurvivalHUD() {
 
     // ---------- Hero cards ----------
     var cardY = h - 166;
+    heroCardsAt = { y: cardY, t: performance.now() };     // the build bar reads this to stay off the cards
     drawHeroCard(redGuy, 14, cardY);
     if (multiplayer && blueGuy) drawHeroCard(blueGuy, w - 344, cardY);
     if (multiplayer) {
@@ -893,6 +909,37 @@ function drawSurvivalHUD() {
                 uiText("Hold " + (hh.playerIndex === 0 ? "[E]" : "[/]") + " to REVIVE", ch.x * cameraScaleX + xc, (-ch.y - ch.s2 * 0.5) * cameraScaleY + yc - 62, 14, "#a7f3d0", "center", "800");
             }
         }
+    }
+
+    // ---------- Controls cheat-sheet ----------
+    if (devOpts.showHelp && helpTimer > 0 && !(typeof SummonManager !== "undefined" && SummonManager.isOpen) && !(typeof TouchUI !== "undefined" && TouchUI.on && !TouchUI.helpAsked)) {
+        helpTimer--;
+        var fade = Math.min(1, helpTimer / 60);
+        var hw = multiplayer ? 640 : 560;
+        var hy = h - 150;
+        // not enough room between the hero cards (bottom corners)? sit above them instead of on top of them
+        if (w - 2 * (14 + 340) < hw) { hw = Math.min(hw, w - 28); hy = h - 300; }
+        var hx = w / 2 - hw / 2;
+        ctx.save();
+        ctx.globalAlpha = fade;
+        uiPanel(hx, hy, hw, 132, "rgba(120,170,200,0.4)", 0.8);
+        if (multiplayer) {
+            uiText("PLAYER 1", hx + 24, hy + 28, 14, "#ff7b80", "left", "900");
+            uiText("WASD move/jump   F shoot   Space jetpack", hx + 24, hy + 50, 12, "#dbe7f0", "left", "600");
+            uiText("L-Shift dash   E shockwave / hold: revive   G grab", hx + 24, hy + 68, 12, "#dbe7f0", "left", "600");
+            uiText("Stairs: hold UP to climb, DOWN to step off · mouse also aims for P1", hx + 24, hy + 86, 11, "#8ba2b4", "left", "600");
+            uiText("PLAYER 2", hx + 340, hy + 28, 14, "#6cb8ff", "left", "900");
+            uiText("Arrows move/jump   Enter shoot   . jetpack", hx + 340, hy + 50, 12, "#dbe7f0", "left", "600");
+            uiText("R-Shift dash   / shockwave / hold: revive   , grab", hx + 340, hy + 68, 12, "#dbe7f0", "left", "600");
+        } else {
+            uiText("WASD move/jump   Mouse aim + click or F shoot   Arrows: twin-stick fire", hx + 24, hy + 28, 12, "#dbe7f0", "left", "700");
+            uiText("Space jetpack   L-Shift dash   E shockwave   R-click/G grab & throw crates or BODIES", hx + 24, hy + 50, 12, "#dbe7f0", "left", "700");
+            uiText("Stairs: hold UP to climb, DOWN to step off.   Esc: pause menu (character, co-op, restart, levels)", hx + 24, hy + 72, 12, "#ffd23f", "left", "800");
+        }
+        uiText("Esc pause menu (restart · co-op · levels · settings) · 🎮 controllers supported · H hide · B dev mode · +/- zoom", hx + hw / 2, hy + 116, 11, "#8ba2b4", "center", "600");
+        ctx.restore();
+    } else {
+        uiText("H: controls", w / 2, h - 12, 11, "rgba(200,220,235,0.55)", "center", "600");
     }
 
     // ---------- Wave title ----------
@@ -934,8 +981,16 @@ function drawSurvivalHUD() {
 }
 
 function frame() {
+    ArcadeStats.tick();
     ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
+    // modes with their own full screen (grid sims, board games) skip the platformer world entirely
+    if (GameModes.flag("ownScreen", false) && GameModes.has("screenFrame")) {
+        GameModes.call("screenFrame"); drawBanners();
+        if (typeof UniversalInspect !== "undefined") UniversalInspect.drawOverlay();
+        if (typeof Net !== "undefined" && Net.role === "host") Net.hostFrame();     // keeps LAN clients told which game is on
+        return;
+    }
 
     // Draw Multi-Layer Repeating Parallax Background Mosaic & Non-Colliding Background Trees
     if (typeof BackgroundMosaic !== "undefined") {
@@ -950,7 +1005,8 @@ function frame() {
     }
 
     var wavesPaused = (typeof SummonManager !== "undefined" && SummonManager.pauseWaves);
-    if (!wavesPaused && !brawl.active && GameModes.flag("waves", true)) {
+    var mashWaves = typeof Mashup !== "undefined" && Mashup.mix.waves === true;       // mash-up: zombies even in Brawl
+    if (!wavesPaused && (!brawl.active || mashWaves) && GameModes.flag("waves", true)) {
         if (zombiesRemainingToSpawn > 0) {
             zombieSpawnTimer--;
             if (zombieSpawnTimer <= 0 && countHunters() < devOpts.maxEnemies && !gameOver) {
@@ -986,18 +1042,30 @@ function frame() {
     var gNow = gravity * (devOpts.gravityMult || 1);
     for (let i = 0; i < characters.length; i++) characters[i].gravity = gNow;
     for (let i = 0; i < zombies.length; i++) zombies[i].gravity = gNow;
-    for (let i = 0; i < movingObjects.length; i++) movingObjects[i].gravity = gNow;
+    for (let i = 0; i < movingObjects.length; i++) movingObjects[i].gravity = gNow * (movingObjects[i].gravityMult !== undefined ? movingObjects[i].gravityMult : 1);   // balloons float (negative)
 
     // Verlet ragdolls step first so knocked-down characters follow their bodies this frame
     if (typeof Ragdolls !== "undefined") Ragdolls.update();
     if (typeof Gadgets !== "undefined") Gadgets.preUpdate();
+    if (typeof Pathfinder !== "undefined" && Pathfinder.beginFrame) Pathfinder.beginFrame();
+    if (typeof Vehicles !== "undefined") Vehicles.preUpdate();
     GameModes.call("preUpdate");
 
+    var netHosting = typeof Net !== "undefined" && Net.role === "host";
+    var posTargets = (typeof EntityTakeover !== "undefined" && EntityTakeover.targets) ? EntityTakeover.targets : [typeof EntityTakeover !== "undefined" ? EntityTakeover.target : null, null];
     for (let i = 0; i < characters.length; i++) {
         if (!characters[i].dead) {
-            Components.moveTypeFinder(characters[i]);
-            Components.shootLazer(characters[i]);
+            var supP1 = posTargets[0] && posTargets[0] !== characters[i] && characters[i] === redGuy;
+            var supP2 = posTargets[1] && posTargets[1] !== characters[i] && characters[i] === blueGuy;
+            if (supP1 || supP2) {
+                characters[i].leftPressed = characters[i].rightPressed = characters[i].upPressed = characters[i].downPressed = false;
+            } else {
+                Components.moveTypeFinder(characters[i]);
+                Components.shootLazer(characters[i]);
+            }
+            if (netHosting) Net.evOwner = characters[i].netPid || 0;     // joiners already played their own hero's movement effects
             characters[i].move();
+            if (netHosting) Net.evOwner = 0;
         }
     }
 
@@ -1005,8 +1073,12 @@ function frame() {
         if (zombies[i].dead) {
             zombies.splice(i, 1);
         } else {
-            Components.moveTypeFinder(zombies[i]);
-            Components.shootLazer(zombies[i]);
+            if (zombies[i]._possessed && typeof EntityTakeover !== "undefined") {
+                EntityTakeover.drive(zombies[i], zombies[i]._possessedBy || 0);
+            } else {
+                Components.moveTypeFinder(zombies[i]);
+                Components.shootLazer(zombies[i]);
+            }
             zombies[i].move();
         }
     }
@@ -1018,13 +1090,21 @@ function frame() {
     updateBrawl();
     if (typeof Gadgets !== "undefined") Gadgets.update();
     GameModes.call("update");
+    if (typeof Mashup !== "undefined") Mashup.tick();
+    if (typeof Build !== "undefined") Build.update();
+    if (typeof Feel !== "undefined") Feel.update();
+    if (typeof Vehicles !== "undefined") Vehicles.update();
 
-    // Draw Static Map Objects
+    GameModes.call("drawBack");          // mode backdrops (behind the level pieces, over the scenery)
+    // Draw Static Map Objects (2.5D view: every side face first, then the fronts)
+    if (typeof Depth !== "undefined" && Depth.on()) Depth.drawSides(staticObjects.concat(movingObjects));
     for (let i = 0; i < staticObjects.length; i++) {
         staticObjects[i].staticObject();
     }
 
+    if (typeof Build !== "undefined") Build.drawWorld();
     if (typeof Gadgets !== "undefined") Gadgets.draw();
+    if (typeof Vehicles !== "undefined") Vehicles.drawWorld();
     GameModes.call("drawWorld");
 
     // Draw Stick Ninja Afterimages
@@ -1061,6 +1141,10 @@ function frame() {
     Components.updateParticles();
     Components.drawEffects();
     GameModes.call("drawFront");
+    if (typeof Fight !== "undefined") Fight.drawAll();
+    if (typeof Mashup !== "undefined") Mashup.drawFront();
+    if (typeof Build !== "undefined") Build.drawFront();
+    if (typeof Feel !== "undefined") Feel.drawFront();
     Components.updateFloatingTexts();
 
     if (devOpts.showHitboxes) drawHitboxes();
@@ -1072,7 +1156,20 @@ function frame() {
         SummonManager.drawOverlay();
     }
 
+    // Enforce UniversalInspect freeze/pin
+    var pinList = [].concat(characters, zombies, movingObjects);
+    for (let pi = 0; pi < pinList.length; pi++) {
+        var pe = pinList[pi];
+        if (pe && pe._sbFrozen) { pe.x = pe._sbPinX; pe.y = pe._sbPinY; pe.xspeed = 0; pe.yspeed = 0; }
+    }
+    if (typeof Ball !== "undefined" && Ball._sbFrozen) { Ball.x = Ball._sbPinX; Ball.y = Ball._sbPinY; Ball.vx = 0; Ball.vy = 0; }
+
     drawHUD();
+    if (typeof Build !== "undefined") Build.drawHUD();
+    if (typeof PlayersBadge !== "undefined") PlayersBadge.draw();
+    if (typeof UniversalInspect !== "undefined") UniversalInspect.drawOverlay();
+    if (typeof SandboxUI !== "undefined" && SandboxUI.drawOverlay) SandboxUI.drawOverlay();
+    if (typeof Net !== "undefined" && Net.role === "host") Net.hostFrame();
 }
 
 document.addEventListener("keydown", keyDownHandler, false);
@@ -1087,6 +1184,346 @@ if (typeof LevelManager !== "undefined") LevelManager.init();
 resetGame();
 if (typeof Pathfinder !== "undefined") Pathfinder.init();
 if (typeof SummonManager !== "undefined") SummonManager.init();
+
+// ============================================================================
+// PAUSE MENU (Esc). Restart, co-op, level changes and dev tools live here - never on a single stray key.
+// ============================================================================
+var paused = false;
+var pauseIndex = 0;
+var pauseConfirm = false;
+var pauseRects = [];
+var pauseSnap = null;
+var pauseFromGameOver = false;
+var pauseSub = null; // null = main menu, "settings" = settings page
+var pauseLevelKeys = [];
+var pauseLevelIdx = 0;
+var gameOverTimer = 0;
+
+function openPause(fromGameOver) {
+    pauseFromGameOver = !!fromGameOver;
+    pauseConfirm = false;
+    pauseIndex = 0;
+    pauseSnap = document.createElement("canvas");
+    pauseSnap.width = canvas.width;
+    pauseSnap.height = canvas.height;
+    pauseSnap.getContext("2d").drawImage(canvas, 0, 0);
+    pauseLevelKeys = [];
+    var all = LevelManager.getAllLevels();
+    for (var k in all) if (GameModes.modeOf(all[k]) === GameModes.current.id) pauseLevelKeys.push(k);
+    pauseLevelIdx = Math.max(0, pauseLevelKeys.indexOf(LevelManager.currentLevelKey));
+    paused = true;
+    for (let i = 0; i < PlayerInput.length; i++) PlayerInput[i].shoot = PlayerInput[i].jet = PlayerInput[i].interact = false;
+    if (typeof SandboxUI !== "undefined" && SandboxUI.isActive() && !fromGameOver) SandboxUI.openPause();
+}
+
+function closePause() {
+    paused = false;
+    pauseSub = null;
+    pauseSnap = null;
+    pauseConfirm = false;
+    if (typeof SandboxUI !== "undefined") SandboxUI.closePause();
+}
+
+function togglePause() {
+    if (paused) closePause();
+    else openPause(false);
+}
+
+var PAUSE_CYCLE_IDS = ["skin0", "skin1", "bopp", "blvl", "bstk", "bstage", "svol", "sshake", "stheme", "sbright", "sweapon", "sragdoll", "sspeed", "sric"];
+
+function pauseItems() {
+    var own = GameModes.flag("ownScreen", false);
+    var hasShoot = !own && GameModes.flag("shooting", true);
+    var hasAmmo = !own && GameModes.flag("ammo", true);
+    if (pauseSub === "settings") {
+        var ps1 = (typeof playerSettings !== "undefined" && playerSettings[0]) ? playerSettings[0] : { weapon: settings.weapon, heroSpeed: settings.heroSpeed, aimMode: "mouse" };
+        var ps2 = (typeof playerSettings !== "undefined" && playerSettings[1]) ? playerSettings[1] : { weapon: settings.weapon, heroSpeed: settings.heroSpeed, aimMode: "auto" };
+        var sItems = [
+            { id: "stheme", label: "Theme:  ◀  " + Theme.c.label + "  ▶", hint: "Sky, hills, panels and backgrounds in every game" },
+            { id: "sbright", label: "Brightness:  ◀  " + Math.round(settings.bright * 100) + "%  ▶", hint: "Lighter or darker screen, every game" },
+            { id: "svol", label: "Sound volume:  ◀  " + (settings.volume <= 0 ? "OFF" : Math.round(settings.volume * 100) + "%") + "  ▶", hint: "◀ ▶ adjust" },
+            { id: "sshake", label: "Screen shake:  ◀  " + Math.round(settings.shake * 100) + "%  ▶", hint: "◀ ▶ adjust (0% = off)" },
+            { id: "shidpi", label: "Sharp hi-DPI graphics:  " + (settings.hiDPI ? (renderScaleAutoReduced ? "ON (auto-reduced for speed)" : "ON") : "OFF"), hint: "Turn off if the game runs slowly" },
+            { id: "sglow", label: "Glow effects:  " + (settings.glow ? (glowAutoDisabled ? "ON (auto-reduced for speed)" : "ON") : "OFF"), hint: "Turn off for more FPS on slower computers" },
+            { id: "sfx", label: "Effects:  " + (settings.fx === "full" ? "Full (every number & spark)" : "Calm (merged numbers, fewer sparks)"), hint: "Calm keeps busy waves readable" }
+        ];
+        if (hasShoot) {
+            sItems.push(
+                { id: "sweapon", label: "P1 Weapon:  ◀  " + FIGHT_WEAPONS.find(function(o) { return o[0] === ps1.weapon; })[1].replace(/ \(.*/, "") + "  ▶", hint: ps1.weapon === "fists" ? "Fire = punch, punch, kick · UP+fire uppercut · air DOWN+fire ground pound" : "Fire shoots · switch to Fists for melee" },
+                { id: "sweapon2", label: "P2 Weapon:  ◀  " + FIGHT_WEAPONS.find(function(o) { return o[0] === ps2.weapon; })[1].replace(/ \(.*/, "") + "  ▶", hint: "Matches P1 options — P2's own weapon" },
+                { id: "sric", label: "Bouncing bullets:  ◀  " + (settings.ricochet ? settings.ricochet + " bounce" + (settings.ricochet > 1 ? "s" : "") : "OFF") + "  ▶", hint: "Shots ricochet off walls" }
+            );
+        }
+        if (hasAmmo) {
+            sItems.push({ id: "sammo", label: "Ammo:  " + (settings.ammo === "limited" ? "Limited (reload)" : "Unlimited"), hint: "Limited = magazine, reload and ammo packs" });
+        }
+        if (!own) {
+            sItems.push(
+                { id: "sragdoll", label: "Ragdoll when you get hit:  ◀  " + FIGHT_RAGDOLL.find(function(o) { return o[0] === settings.hitRagdoll; })[1] + "  ▶", hint: "How long a big hit knocks your hero over" },
+                { id: "shit", label: "Hit-stop on big hits:  " + (settings.hitStop ? "ON" : "OFF"), hint: "Freezes a few frames on heavy impacts" },
+                { id: "sspeed", label: "P1 Hero speed:  ◀  " + ({ normal: "Normal", fast: "Fast", turbo: "Turbo" })[ps1.heroSpeed] + "  ▶", hint: "How fast P1 runs" },
+                { id: "sspeed2", label: "P2 Hero speed:  ◀  " + ({ normal: "Normal", fast: "Fast", turbo: "Turbo" })[ps2.heroSpeed] + "  ▶", hint: "How fast P2 runs" },
+                { id: "saim", label: "P1 Aim mode:  ◀  " + ps1.aimMode.toUpperCase() + "  ▶", hint: "Mouse, Auto-aim, or Movement direction" },
+                { id: "saim2", label: "P2 Aim mode:  ◀  " + ps2.aimMode.toUpperCase() + "  ▶", hint: "Mouse, Auto-aim, or Movement direction" },
+                { id: "smatchp2", label: "Match P2 settings to P1", hint: "Copies P1 weapon, speed, aim mode, and character skin to P2" },
+                { id: "sdetail", label: "Character detail when zoomed in:  " + (settings.charDetail !== false ? "ON" : "OFF"), hint: "Shading, highlights and shine on big characters" },
+                { id: "s3d", label: "3D view (2.5D):  " + (settings.view3d ? "ON" : "OFF"), hint: "Looks only: blocks get depth, gameplay stays 2D" },
+                { id: "ssquare", label: "Character look:  " + (settings.squareChars ? "Classic squares" : "Detailed"), hint: "Classic squares = the original 2020 blocky look" }
+            );
+        }
+        sItems.push(
+            { id: "scontrols", label: "Controls: remap keys & buttons  ▸", hint: "P1 / P2 keys and gamepad buttons (1:1 matched)" },
+            { id: "help", label: "Controls help:  " + (devOpts.showHelp ? "ON" : "OFF"), hint: "Shows the key cheat-sheet" },
+            { id: "back", label: "◀  Back", hint: "Esc" }
+        );
+        return sItems;
+    }
+    if (pauseConfirm) {
+        return [
+            { id: "yes", label: "Yes - restart the run", hint: "Score and wave progress are lost" },
+            { id: "no", label: "No - go back", hint: "" }
+        ];
+    }
+    var items = [];
+    var inBrawl = brawl.active;
+    if (!pauseFromGameOver) items.push({ id: "resume", label: "Resume", hint: "Esc" });
+    else items.push({ id: "again", label: GameModes.current.againLabel || (inBrawl ? "Rematch" : "Play again"), hint: inBrawl ? "Applies the settings below" : "Start a fresh run" });
+    items.push({ id: "arcade", label: "🕹  Arcade - switch game  (" + (GameModes.current ? GameModes.current.title : "") + ")", hint: "Pick any game made with this engine" });
+    if (GameModes.has("menuItems")) { GameModes.call("menuItems", items); }
+    if (inBrawl) {
+        var sName = LevelManager.getAllLevels()[brawlCfg.stage];
+        items.push({ id: "bopp", label: "Opponents:  ◀  " + brawlOpponentLabel() + "  ▶", hint: "Applies on Rematch - PvP or CPU fighters" });
+        items.push({ id: "blvl", label: "CPU skill:  ◀  " + BRAWL_CPU_NAMES[brawlCfg.cpuLevel] + "  ▶", hint: "Applies on Rematch" });
+        items.push({ id: "bstk", label: "Stocks:  ◀  " + brawlCfg.stocks + "  ▶", hint: "Lives per fighter - applies on Rematch" });
+        items.push({ id: "bstage", label: "Stage:  ◀  " + (sName ? sName.name.replace(/^[^A-Za-z]+/, "") : "?") + "  ▶", hint: "Applies on Rematch" });
+        if (!pauseFromGameOver) items.push({ id: "again", label: "Rematch", hint: "Start a new match with these settings" });
+    } else if (GameModes.flag("coopToggle", true)) {
+        items.push({ id: "mode", label: "Players:  " + (multiplayer ? "2-player co-op" : "Solo") + "   ▶  " + (multiplayer ? "Solo" : "Co-op"), hint: "Enter switches mode (restarts the run)" });
+    }
+    if (typeof PlayersUI !== "undefined") items.splice(Math.min(items.length, 2), 0, { id: "players", label: "👥 Players & CPUs…   " + PlayersUI.summary(), hint: "Who is human, who is CPU, teams and controls" });
+    if (!own) {
+        items.push({ id: "skin0", label: "Player 1 character:  ◀  " + skinName(heroSkins[0]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
+        items.push({ id: "skin1", label: "Player 2 character:  ◀  " + skinName(heroSkins[1]) + "  ▶", hint: "◀ ▶ or Enter to change - applies instantly" });
+    }
+    var isIoMode = GameModes.current && ["mix", "tanks", "cells", "snake"].indexOf(GameModes.current.id) !== -1;
+    if (!own || isIoMode) items.push({ id: "swap", label: "🔄 Swap P1 ↔ P2 Characters", hint: "Swap positions, skins, settings, or possess next hero (V)" });
+    if (!inBrawl && !GameModes.has("menuItems") && pauseLevelKeys.length > 1) {
+        var lvlName = LevelManager.getAllLevels()[pauseLevelKeys[pauseLevelIdx]];
+        var curLvl = LevelManager.getCurrentLevel();
+        items.push({ id: "level", label: "🗺 Level select…   " + (curLvl ? curLvl.name : ""), hint: pauseLevelKeys.length + " levels - click one to play it" });
+        if (!pauseFromGameOver) items.push({ id: "restart", label: "Restart run", hint: "Asks for confirmation" });
+    }
+    items.push({ id: "settings", label: "Settings  ▸", hint: "Theme, brightness, sound, screen shake, graphics, help" });
+    if (typeof Studio !== "undefined" && Studio.playtesting) items.unshift({ id: "studio_back", label: "◀ Back to Level Studio", hint: "Your level is unchanged ( ` )" });
+    if (!own) items.push({ id: "dev", label: "🛠 Level Studio (editor)", hint: "Same as pressing B" });
+    items.push({ id: "cheats", label: "Cheats & tuning panel", hint: "God mode, sliders, spawning" });
+    return items;
+}
+
+function pauseActivate(id, dir) {
+    if (id === "scontrols") { if (typeof ControlsUI !== "undefined") ControlsUI.open(); return; }
+    if (typeof SFX !== "undefined") SFX.play("select");
+    if (id === "settings") { pauseSub = "settings"; pauseIndex = 0; return; }
+    if (id === "back") { pauseSub = null; pauseIndex = 0; return; }
+    if (id === "svol") { SFX.setVolume(Math.round((settings.volume + (dir || 1) * 0.1) * 10) / 10); if (settings.volume > 1) SFX.setVolume(1); return; }
+    if (id === "sweapon") {
+        var nw1 = (typeof playerSettings !== "undefined" ? playerSettings[0].weapon : settings.weapon) === "fists" ? "blaster" : "fists";
+        if (typeof playerSettings !== "undefined") { playerSettings[0].weapon = nw1; savePlayerSettings(); }
+        Fight.set("weapon", nw1); return;
+    }
+    if (id === "sweapon2") {
+        if (typeof playerSettings !== "undefined") {
+            playerSettings[1].weapon = playerSettings[1].weapon === "fists" ? "blaster" : "fists";
+            savePlayerSettings();
+        }
+        return;
+    }
+    if (id === "sammo") { Fight.set("ammo", settings.ammo === "limited" ? "unlimited" : "limited"); return; }
+    if (id === "sragdoll") { var rl = FIGHT_RAGDOLL.map(function(o) { return o[0]; }); Fight.set("hitRagdoll", rl[(rl.indexOf(settings.hitRagdoll) + (dir || 1) + rl.length) % rl.length]); return; }
+    if (id === "stheme") { Theme.cycle(dir || 1); return; }
+    if (id === "sbright") { Theme.stepBright(dir || 1); return; }
+    if (id === "sshake") { settings.shake = Math.max(0, Math.min(1, Math.round((settings.shake + (dir || 1) * 0.25) * 4) / 4)); saveSettings(); return; }
+    if (id === "sglow") { settings.glow = !settings.glow; glowAutoDisabled = false; saveSettings(); return; }
+    if (id === "sspeed") {
+        var sl = ["normal", "fast", "turbo"];
+        var ns1 = sl[(sl.indexOf(settings.heroSpeed) + (dir || 1) + 3) % 3];
+        settings.heroSpeed = ns1;
+        if (typeof playerSettings !== "undefined") { playerSettings[0].heroSpeed = ns1; savePlayerSettings(); }
+        else saveSettings();
+        return;
+    }
+    if (id === "sspeed2") {
+        if (typeof playerSettings !== "undefined") {
+            var sl2 = ["normal", "fast", "turbo"];
+            playerSettings[1].heroSpeed = sl2[(sl2.indexOf(playerSettings[1].heroSpeed) + (dir || 1) + 3) % 3];
+            savePlayerSettings();
+        }
+        return;
+    }
+    if (id === "saim" || id === "saim2") {
+        if (typeof playerSettings !== "undefined") {
+            var idxA = id === "saim2" ? 1 : 0;
+            var al = ["mouse", "auto", "move"];
+            playerSettings[idxA].aimMode = al[(al.indexOf(playerSettings[idxA].aimMode) + (dir || 1) + 3) % 3];
+            savePlayerSettings();
+        }
+        return;
+    }
+    if (id === "smatchp2") {
+        if (typeof matchPlayerSettings === "function") matchPlayerSettings(0, 1);
+        if (typeof showBanner === "function") showBanner("SETTINGS MATCHED", "P2 now matches P1", "#38bdf8");
+        return;
+    }
+    if (id === "sfx") { settings.fx = settings.fx === "full" ? "calm" : "full"; saveSettings(); return; }
+    if (id === "sric") { settings.ricochet = (settings.ricochet + (dir || 1) + 4) % 4; saveSettings(); return; }
+    if (id === "sdetail") { settings.charDetail = settings.charDetail === false; saveSettings(); return; }
+    if (id === "s3d") { settings.view3d = !settings.view3d; saveSettings(); return; }
+    if (id === "ssquare") { settings.squareChars = !settings.squareChars; saveSettings(); return; }
+    if (id === "shit") { settings.hitStop = !settings.hitStop; saveSettings(); return; }
+    if (id === "shidpi") { settings.hiDPI = !settings.hiDPI; renderScaleAutoReduced = false; saveSettings(); applyCanvasSize(); xcMaster = w / 2; ycMaster = h / 2; return; }
+    if (GameModes.call("onMenu", id, dir)) return;
+    if (id === "arcade") { closePause(); Hub.openHub(false); return; }
+    if (id === "players") { closePause(); PlayersUI.open(); return; }
+    if (id === "resume") closePause();
+    else if (id === "again" || id === "yes") {
+        closePause();
+        if (GameModes.has("onRestart")) { GameModes.call("onRestart"); return; }
+        if (brawl.active && LevelManager.currentLevelKey !== brawlCfg.stage) LevelManager.selectLevel(brawlCfg.stage);
+        else resetGame();
+    }
+    else if (id === "no") { pauseConfirm = false; pauseIndex = 0; }
+    else if (id === "restart") { pauseConfirm = true; pauseIndex = 1; }
+    else if (id === "skin0") cycleSkin(0, dir || 1);
+    else if (id === "skin1") cycleSkin(1, dir || 1);
+    else if (id === "swap") { if (typeof EntityTakeover !== "undefined") EntityTakeover.swapPlayers(); closePause(); }
+    else if (id === "gmode") {
+        closePause();
+        if (brawl.active) LevelManager.selectLevel("classic_arena");
+        else LevelManager.selectLevel(brawlCfg.stage);
+    }
+    else if (id === "bopp") cycleBrawlOpponents(dir || 1);
+    else if (id === "blvl") { brawlCfg.cpuLevel = ((brawlCfg.cpuLevel - 1 + (dir || 1) + 3) % 3) + 1; saveBrawlCfg(); }
+    else if (id === "bstk") { brawlCfg.stocks = Math.max(1, Math.min(9, brawlCfg.stocks + (dir || 1))); saveBrawlCfg(); }
+    else if (id === "bstage") cycleBrawlStage(dir || 1);
+    else if (id === "mode") { closePause(); toggleMultiplayer(); }
+    else if (id === "level") {
+        // one grid of every level: click (or arrows + Enter) plays it. The old row only cycled a name until you pressed
+        // Enter, so with a mouse nothing ever loaded.
+        var all = LevelManager.getAllLevels(), keys = pauseLevelKeys.slice();
+        CourseSelect.open({ title: "🗺 " + ((GameModes.current && GameModes.current.title) || "Levels") + " — levels", note: "Picking a level starts a fresh run there.",
+            items: keys.map(function(k) { return { name: all[k] ? all[k].name : k, sub: all[k] && all[k].custom ? "your level" : (k === LevelManager.currentLevelKey ? "playing now" : "click to play"), current: k === LevelManager.currentLevelKey }; }),
+            onPick: function(i) { if (paused) closePause(); LevelManager.selectLevel(keys[i]); } });
+    }
+    else if (id === "help") { devOpts.showHelp = !devOpts.showHelp; helpTimer = devOpts.showHelp ? 60 * 14 : 0; }
+    else if (id === "dev") { closePause(); Studio.open(); }
+    else if (id === "cheats") {
+        closePause();
+        if (GameModes.flag("ownScreen", false) && typeof SandboxUI !== "undefined") {
+            SandboxUI.sideOpen = true; SandboxUI.sideTab = "controls"; SandboxUI.render();
+        } else if (!SummonManager.isOpen) {
+            SummonManager.togglePanel();
+        }
+    }
+    else if (id === "studio_back") { closePause(); Studio.endPlaytest(); }
+}
+
+function pauseKey(e) {
+    var items = pauseItems();
+    var c = e.code;
+    if (typeof SFX !== "undefined" && (c === "ArrowUp" || c === "ArrowDown" || c === "KeyW" || c === "KeyS")) SFX.play("ui");
+    if (c === "ArrowUp" || c === "KeyW") pauseIndex = (pauseIndex - 1 + items.length) % items.length;
+    else if (c === "ArrowDown" || c === "KeyS") pauseIndex = (pauseIndex + 1) % items.length;
+    else if (c === "ArrowLeft" || c === "KeyA") { var li = items[pauseIndex].id; if (PAUSE_CYCLE_IDS.indexOf(li) !== -1 || items[pauseIndex].cycle) pauseActivate(li, -1); }
+    else if (c === "ArrowRight" || c === "KeyD") { var ri = items[pauseIndex].id; if (PAUSE_CYCLE_IDS.indexOf(ri) !== -1 || items[pauseIndex].cycle) pauseActivate(ri, 1); }
+    else if (c === "Enter" || c === "NumpadEnter" || c === "Space") pauseActivate(items[pauseIndex].id, 0);
+    e.preventDefault();
+}
+
+function pauseHover(mx, my) {
+    for (let i = 0; i < pauseRects.length; i++) {
+        var r = pauseRects[i];
+        if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) { pauseIndex = r.idx !== undefined ? r.idx : i; return; }
+    }
+}
+
+function pauseClick(mx, my) {
+    var items = pauseItems();
+    for (let i = 0; i < pauseRects.length; i++) {
+        var r = pauseRects[i];
+        if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+            i = r.idx !== undefined ? r.idx : i;
+            pauseIndex = i;
+            var dir = 0;
+            if (PAUSE_CYCLE_IDS.indexOf(items[i].id) !== -1 || items[i].cycle) dir = (mx > r.x + r.w / 2) ? 1 : -1;
+            pauseActivate(items[i].id, dir);
+            return true;
+        }
+    }
+    return false;
+}
+
+var pauseScroll = 0, pauseHoverXY = null, heroCardsAt = null;
+function drawPauseMenu() {
+    if (!pauseSnap) return;
+    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+    ctx.drawImage(pauseSnap, 0, 0, cssW, cssH);
+    ctx.fillStyle = "rgba(4, 8, 14, 0.72)";
+    ctx.fillRect(0, 0, w, h);
+    if (typeof SandboxUI !== "undefined" && SandboxUI.pauseOpen) return;
+
+    var items = pauseItems();
+    if (pauseIndex >= items.length) pauseIndex = 0;
+    // fits any window: below the top bar, rows shrink to a minimum and the list scrolls past that
+    var top = 58, compact = h < 640;
+    var pw = Math.min(560, w - 24), headH = compact ? 84 : 112, footH = 30;
+    var avail = h - top - 12 - headH - footH;
+    var rowH = Math.max(34, Math.min(56, Math.floor(avail / items.length)));
+    var visN = Math.max(3, Math.min(items.length, Math.floor(avail / rowH)));
+    if (pauseIndex < pauseScroll) pauseScroll = pauseIndex;
+    if (pauseIndex >= pauseScroll + visN) pauseScroll = pauseIndex - visN + 1;
+    pauseScroll = Math.max(0, Math.min(items.length - visN, pauseScroll));
+    var ph = headH + visN * rowH + footH;
+    var px = w / 2 - pw / 2, py = Math.max(top, Math.min(h / 2 - ph / 2, h - ph - 8));
+    uiPanel(px, py, pw, ph, pauseFromGameOver ? "#ff4d5e" : "#22d3ee", 0.96);
+    var title = pauseSub === "settings" ? "SETTINGS" : pauseConfirm ? "RESTART?" : (pauseFromGameOver ? (GameModes.current.overTitle || (brawl.active ? "GAME!" : "OVERRUN")) : "PAUSED");
+    uiText(title, w / 2, py + (compact ? 42 : 56), compact ? 32 : 42, pauseFromGameOver ? "#ff4d5e" : "#ffd23f", "center", "900");
+    var sub = GameModes.has("overSub") ? GameModes.call("overSub", pauseFromGameOver) : brawl.active ? ("Brawl  ·  " + (brawl.stage ? brawl.stage.name.replace(/^[^A-Za-z]+/, "") : "")) : ("Wave " + level + "  ·  Score " + score + "  ·  " + (multiplayer ? "Co-op" : "Solo"));
+    uiText((GameModes.current && pauseSub !== "settings" ? GameModes.current.title + "  ·  " : "") + sub, w / 2, py + (compact ? 66 : 86), compact ? 12 : 14, "#a8c0d0", "center", "700");
+
+    // mouse hover picks the row under the pointer
+    if (pauseHoverXY && (pauseHoverXY[0] !== mouseX || pauseHoverXY[1] !== mouseY)) {
+        for (let k = 0; k < pauseRects.length; k++) { var hr = pauseRects[k]; if (mouseX >= hr.x && mouseX <= hr.x + hr.w && mouseY >= hr.y && mouseY <= hr.y + hr.h) pauseIndex = hr.idx; }
+    }
+    pauseHoverXY = [mouseX, mouseY];
+
+    pauseRects = [];
+    var listY = py + headH;
+    for (let n = 0; n < visN; n++) {
+        var i = pauseScroll + n, it = items[i];
+        if (!it) break;
+        var ry = listY + n * rowH, rh = rowH - 6;
+        var sel = (i === pauseIndex);
+        ctx.save();
+        ctx.fillStyle = sel ? "rgba(34, 211, 238, 0.22)" : "rgba(255,255,255,0.05)";
+        uiRoundRect(px + 20, ry, pw - 40, rh, 10);
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = sel ? "#22d3ee" : "rgba(255,255,255,0.08)";
+        ctx.stroke();
+        ctx.restore();
+        var fs = Math.max(14, Math.min(19, rh * 0.42)), hasHint = sel && it.hint && rh >= 40;
+        uiText(it.label, w / 2, ry + (hasHint ? rh * 0.5 : rh * 0.5 + fs * 0.35), fs, sel ? "#ffffff" : "#c3d5e2", "center", "800");
+        if (hasHint) uiText(it.hint, w / 2, ry + rh - 6, 11, "#7ff0ff", "center", "600");
+        if (it.id === "skin0" || it.id === "skin1") {
+            var si = (it.id === "skin0") ? 0 : 1;
+            drawSkinPreview(heroSkins[si], px + 54, ry + rh / 2, Math.min(40, rh - 4), si === 0 ? "#ff5a5f" : "#3da5ff", "P" + (si + 1));
+        }
+        pauseRects.push({ x: px + 20, y: ry, w: pw - 40, h: rh, idx: i });
+    }
+    if (pauseScroll > 0) uiText("▲ more", px + pw - 30, listY - 6, 11, "#7ff0ff", "right", "800");
+    if (pauseScroll + visN < items.length) uiText("▼ more", px + pw - 30, listY + visN * rowH + 8, 11, "#7ff0ff", "right", "800");
+    uiText(w < 520 ? "↑↓ select · ←→ change · Enter · Esc" : "↑ ↓ select    ← → change (or click the left / right half)    Enter confirm    Esc resume", w / 2, py + ph - 10, 12, "#8ba2b4", "center", "600");
+}
 
 function drawHitboxes() {
     ctx.save();
@@ -1110,14 +1547,17 @@ function drawHitboxes() {
 var tickAccumulator = 0;
 var lowFpsSeconds = 0;
 function tick() {
+    if (typeof ControlsUI !== "undefined") ControlsUI.poll();
+    if (typeof topBarRefresh === "function" && (++tick.n || (tick.n = 1)) % 15 === 0) { try { topBarRefresh(); } catch (e) {} }
     if (typeof Pads !== "undefined") Pads.poll();
-    UI.sync();
-    if (typeof Hub !== "undefined" && Hub.isOpen) { Hub.draw(); return; }
-    if (Menu.isOpen && paused) { Menu.draw(); return; }
+    if (typeof Net !== "undefined" && Net.role === "client") { Net.clientTick(); return; }
+    if (typeof Studio !== "undefined" && Studio.isOpen) { Studio.tick(); return; }
+    if (typeof Hub !== "undefined" && Hub.isOpen) { Hub.draw(); if (typeof Net !== "undefined") Net.hostIdle(); return; }
+    if (paused) { drawPauseMenu(); return; }
     if (hitStopFrames > 0) { hitStopFrames--; return; }   // impact freeze: hold the last image
     if (gameOver) {
         gameOverTimer++;
-        if (gameOverTimer > 150) { gameOverTimer = 0; Menu.open(true); return; }
+        if (gameOverTimer > 150) { gameOverTimer = 0; openPause(true); return; }
     } else {
         gameOverTimer = 0;
     }
@@ -1132,7 +1572,6 @@ function tick() {
         framesThisSecond++;
     }
     if (tickAccumulator > 4) tickAccumulator = 0;
-    if (Menu.isOpen) Menu.draw();   // live overlay (only when the world keeps running, e.g. during a LAN match)
     var nowT = Date.now();
     if (nowT - lastSecondStamp >= 1000) {
         measuredFPS = framesThisSecond;
@@ -1167,5 +1606,17 @@ function gameLoop(now) {
 requestAnimationFrame(gameLoop);
 
 // Boot into the Arcade game-select screen
-UI.init();
 if (typeof Hub !== "undefined") Hub.openHub(true);
+
+// mouse wheel moves through a long pause menu
+(function() {
+    var cv = typeof canvas !== "undefined" ? canvas : document.querySelector("canvas");
+    if (!cv) return;
+    cv.addEventListener("wheel", function(e) {
+        if (!paused) return;
+        var n = pauseItems().length;
+        pauseIndex = Math.max(0, Math.min(n - 1, pauseIndex + (e.deltaY > 0 ? 1 : -1)));
+        pauseHoverXY = [mouseX, mouseY];
+        e.preventDefault();
+    }, { passive: false });
+})();

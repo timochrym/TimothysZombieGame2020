@@ -5,8 +5,9 @@
 //   into crate forts. Topple towers, crush zombies, earn up to 3 stars per fort.
 // ============================================================================
 var SIEGE_LEVELS = [];
-var siegeSave = Store.load("timsRagdollSiege", { stars: {}, best: {}, level: 0 });
-function saveSiege() { Store.set("timsRagdollSiege", siegeSave); }
+var siegeSave = { stars: {}, best: {}, level: 0, birds: true };
+try { var _ss = JSON.parse(localStorage.getItem("timsRagdollSiege") || "null"); if (_ss) { for (var _k2 in _ss) siegeSave[_k2] = _ss[_k2]; } } catch (e) {}
+function saveSiege() { try { localStorage.setItem("timsRagdollSiege", JSON.stringify(siegeSave)); } catch (e) {} }
 
 var SIEGE_ANCHOR = { x: -700, y: 330 };
 var SIEGE_MAX_PULL = 230;
@@ -18,10 +19,137 @@ var AMMO = {
     bomb:  { name: "Bomb", color: "#f97316", desc: "Click / Space again to detonate" }
 };
 
+// ---- BIRDS mode (pause menu): round birds with a tap ability, and fort blocks that crack and shatter ----
+var BIRDS = {
+    red:   { name: "Rocky", color: "#ef4444", r: 28, mass: 6, desc: "Just hits hard" },
+    split: { name: "Trio", color: "#38bdf8", r: 22, mass: 4, desc: "Tap: split into three" },
+    dash:  { name: "Zip", color: "#facc15", r: 24, mass: 5, desc: "Tap: speed burst" },
+    heavy: { name: "Boulder", color: "#334155", r: 36, mass: 14, desc: "Tap: slam straight down" },
+    bomb:  { name: "Boomer", color: "#1f2937", r: 30, mass: 7, desc: "Tap: explode" }
+};
+var SIEGE_MATS = { Crate: { hp: 70, name: "wood" }, Plank: { hp: 28, name: "glass" } };
+function siegeBirdFor(type, i) { return type === "heavy" ? "heavy" : (type === "bomb" ? "bomb" : ["red", "split", "dash"][i % 3]); }
+
+function siegeDrawBird(rd) {
+    var p = rd.pts[0], B = BIRDS[rd.birdType] || BIRDS.red, k = cameraScaleX;
+    var sx = wsx(p.x), sy = wsy(p.y), r = p.r * k;
+    var vx = p.x - p.px, vy = p.y - p.py, ang = Math.atan2(-vy, vx || 0.001);
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.fillStyle = B.color; ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill(); ctx.stroke();
+    // tail tuft opposite the flight direction
+    ctx.beginPath(); ctx.moveTo(-Math.cos(ang) * r, -Math.sin(ang) * r); ctx.lineTo(-Math.cos(ang - 0.4) * r * 1.5, -Math.sin(ang - 0.4) * r * 1.5); ctx.lineTo(-Math.cos(ang + 0.4) * r * 1.5, -Math.sin(ang + 0.4) * r * 1.5); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.beginPath(); ctx.ellipse(0, r * 0.35, r * 0.6, r * 0.4, 0, 0, 7); ctx.fill();
+    var fx = Math.cos(ang), fy = Math.sin(ang);
+    for (let e = -1; e <= 1; e += 2) {
+        var ex = fx * r * 0.35 + -fy * e * r * 0.32, ey = fy * r * 0.35 + fx * e * r * 0.32 - r * 0.18;
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(ex, ey, r * 0.24, 0, 7); ctx.fill();
+        ctx.fillStyle = "#0a0f16"; ctx.beginPath(); ctx.arc(ex + fx * r * 0.08, ey + fy * r * 0.08, r * 0.11, 0, 7); ctx.fill();
+    }
+    ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = Math.max(2, r * 0.12);
+    ctx.beginPath(); ctx.moveTo(-r * 0.5, -r * 0.62); ctx.lineTo(r * 0.5, -r * 0.42); ctx.stroke();         // angry brow
+    ctx.fillStyle = "#f59e0b"; ctx.beginPath(); ctx.moveTo(fx * r * 0.7 - fy * r * 0.18, fy * r * 0.7 + fx * r * 0.18); ctx.lineTo(fx * r * 1.25, fy * r * 1.25); ctx.lineTo(fx * r * 0.7 + fy * r * 0.18, fy * r * 0.7 - fx * r * 0.18); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (rd.birdType === "bomb") { ctx.fillStyle = "#f97316"; ctx.beginPath(); ctx.arc(0, -r * 1.05, r * 0.18, 0, 7); ctx.fill(); }
+    ctx.restore();
+}
+
+function siegeMakeBird(type, x, y, vx, vy) {
+    var B = BIRDS[type];
+    var rd = new Ragdoll({ kind: "bird", thick: B.mass }, 1);
+    rd.addPoint(x, y, B.r);
+    rd.setVelocity(vx, vy);
+    rd.birdType = type;
+    rd.drawFn = siegeDrawBird;
+    rd.life = rd.maxLife = 900;
+    rd.thrownBy = redGuy;
+    rd.projectileTimer = 400;
+    rd.gScale = SIEGE_GRAV; rd.drag = 0.999;
+    rd._lastSp = Math.hypot(vx, vy);
+    Ragdolls.list.push(rd);
+    return rd;
+}
+
+function siegeBirdAbility(rd) {
+    if (!rd || rd.abilityUsed) return;
+    rd.abilityUsed = true;
+    var p = rd.pts[0], vx = p.x - p.px, vy = p.y - p.py;
+    if (rd.birdType === "split") {
+        for (let s = -1; s <= 1; s += 2) {
+            var a = Math.atan2(vy, vx) + s * 0.22, sp = Math.hypot(vx, vy);
+            var b = siegeMakeBird("split", p.x, p.y + s * 20, Math.cos(a) * sp, Math.sin(a) * sp);
+            b.abilityUsed = true;
+        }
+        Components.spawnSparks(p.x, p.y, "#38bdf8", 10);
+    } else if (rd.birdType === "dash") {
+        p.px = p.x - vx * 2.1; p.py = p.y - vy * 2.1; rd.gScale = 0.2;
+        Components.spawnSparks(p.x, p.y, "#facc15", 10);
+    } else if (rd.birdType === "heavy") {
+        p.px = p.x - vx * 0.2; p.py = p.y + 34; rd.gScale = 1;
+    } else if (rd.birdType === "bomb") {
+        siegeDetonate();
+        return;
+    }
+    if (typeof SFX !== "undefined") SFX.play("whoosh", p.x, p.y);
+}
+
+// wood and glass crack from hard knocks (velocity changes) and shatter
+function siegeBlockDamage() {
+    for (let i = 0; i < movingObjects.length; i++) {
+        var o = movingObjects[i];
+        if (o.dead || o.sgHP === undefined) continue;
+        if (o._sgCd > 0) { o._sgCd--; o._pvx = o.xspeed; o._pvy = o.yspeed; continue; }
+        var dv = Math.hypot(o.xspeed - (o._pvx || 0), o.yspeed - (o._pvy || 0));
+        o._pvx = o.xspeed; o._pvy = o.yspeed;
+        if (dv > 5) {
+            o.sgHP -= (dv - 5) * 9;
+            if (o.sgHP <= 0) {
+                o.dead = true;
+                var col = o.sgMat === "glass" ? "#bae6fd" : "#c98c4a";
+                for (let k = 0; k < 8; k++) { if (particles.length >= 120) particles.shift(); particles.push({ x: o.x + (Math.random() - 0.5) * o.w, y: o.y + (Math.random() - 0.5) * o.h, w: 14, h: 14, xspeed: (Math.random() - 0.5) * 12, yspeed: 3 + Math.random() * 9, poly: Math.makeHitbox(14, 14), color: col, life: 40 }); }
+                if (typeof SFX !== "undefined") SFX.play(o.sgMat === "glass" ? "fizzle" : "kill", o.x, o.y, 0.6, o.sgMat === "glass" ? 1.6 : 0.9);
+                Siege.score += 250;
+                Components.addFloatingText("+250", o.x, o.y + 20, o.sgMat === "glass" ? "#bae6fd" : "#fde68a", 15);
+                SiegeSleep.wakeAround(o.x, o.y, 220);
+            }
+        }
+    }
+}
+
+// stone: birds that hit it hard (and explosions) wear it down; at 0 it shatters and what it held up falls
+function siegeStoneHit(o, dmg) {
+    if (o.dead || o.sgHP === undefined || dmg <= 0) return;
+    o.sgHP -= dmg; o.hitFlash = 6;
+    if (o.sgHP > 0) return;
+    Build.destroy(o, null, false);
+    Siege.score += 500;
+    Components.addFloatingText("+500", o.x, o.y + 30, "#e5e7eb", 16);
+    SiegeSleep.wakeAround(o.x, o.y, Math.max(o.w, o.h) + 200);
+}
+function siegeStoneDamage() {
+    var stones = staticObjects.filter(function(o) { return o.sgMat === "stone" && !o.dead; });
+    if (!stones.length) return;
+    for (let r = 0; r < Ragdolls.list.length; r++) {
+        var rd = Ragdolls.list[r];
+        if (!rd.birdType) continue;
+        var p = rd.pts[0], sp = Math.hypot(p.x - p.px, p.y - p.py);
+        if (sp < 6 || (rd._stoneCd || 0) > Siege.tick) continue;
+        for (let k = 0; k < stones.length; k++) {
+            var o = stones[k];
+            if (Math.abs(p.x - o.x) < o.w / 2 + p.r + 4 && Math.abs(p.y - o.y) < o.h / 2 + p.r + 4) {
+                siegeStoneHit(o, (sp - 5) * (rd.birdType === "heavy" ? 45 : 14));
+                rd._stoneCd = Siege.tick + 20;
+                break;
+            }
+        }
+    }
+}
+
 var Siege = {
-    phase: "aim", pick: null, shots: [], shotIdx: 0, rd: null, rdType: null, flightT: 0, settleT: 0,
+    phase: "aim", shots: [], shotIdx: 0, rd: null, rdType: null, flightT: 0, settleT: 0,
     angle: 40, power: 0.75, dragging: false, wasMouse: false, wasFire: false,
-    score: 0, kills: 0, enemyTotal: 0, resultT: 0, won: false
+    score: 0, kills: 0, enemyTotal: 0, resultT: 0, won: false,
+    trail: [], introT: 0
 };
 
 // ---- building pieces ----
@@ -158,6 +286,16 @@ function siegeFire() {
     var type = Siege.shots[Siege.shotIdx];
     if (!type || Siege.phase !== "aim") return;
     var v = siegeLaunchVel(), pp = [SIEGE_ANCHOR.x, SIEGE_ANCHOR.y + 10];   // released at the fork
+    Siege.trail = [];                                                      // the last shot's dotted path stays until the next one
+    if (siegeSave.birds) {
+        var bt = siegeBirdFor(type, Siege.shotIdx);
+        var brd = siegeMakeBird(bt, pp[0], pp[1], v[0], v[1]);
+        Siege.rd = brd; Siege.rdType = bt === "bomb" ? "bomb" : "bird";
+        Siege.phase = "flight"; Siege.flightT = 0; Siege.settleT = 0;
+        Siege.shotIdx++;
+        if (typeof SFX !== "undefined") SFX.play("sling");
+        return;
+    }
     // a throw-away character only used to dress the ragdoll
     var box = Math.makeHitbox(s1, s2);
     var tmp;
@@ -203,18 +341,13 @@ GameModes.register({
         coopToggle: false, dash: false, playerControl: false, enemiesPassive: true },
     overTitle: "FORT DESTROYED!",
     againLabel: "Retry this fort",
-    restartLabel: "Retry fort",
-    ui: {
-        levelPicker: false,
-        help: [["drag mouse", "pull back & release"], ["W / S", "aim up / down"], ["A / D", "less / more power"], ["Space", "fire"], ["click / Space", "detonate a bomb"], ["R-click / Tab", "swap shot"], ["R", "retry fort"]]
-    },
 
     setupLevel: function(lvl) {
         var sg = lvl.siege;
         Siege.phase = "aim"; Siege.shots = sg.ammo.slice(); Siege.shotIdx = 0; Siege.rd = null;
-        Siege.pick = null;
         Siege.score = 0; Siege.kills = 0; Siege.resultT = 0; Siege.won = false; Siege.dragging = false;
         Siege.angle = 40; Siege.power = 0.75; Siege.wasMouse = mouseDown; Siege.wasFire = true;
+        Siege.trail = []; Siege.introT = 120;                                 // open on the fort, then pan back to the sling
         siegeSave.level = Math.max(0, SIEGE_LEVELS.indexOf(LevelManager.currentLevelKey)); saveSiege();
         zombies.length = 0;
         for (let i = 0; i < sg.enemies.length; i++) {
@@ -228,6 +361,18 @@ GameModes.register({
         }
         Siege.enemyTotal = sg.enemies.length;
         SiegeSleep.init();
+        for (let i = 0; i < movingObjects.length; i++) {
+            var o = movingObjects[i], m = siegeSave.birds ? SIEGE_MATS[o.name] : null;
+            if (!m) { o.sgHP = undefined; continue; }
+            o.sgHP = o.sgMax = m.hp; o.sgMat = m.name; o._sgCd = 90;
+            if (m.name === "glass") { o.color = "#93c5fd"; o.texture = "glass"; }
+        }
+        // Birds: fort stone is breakable too (never the stone the slingshot stands on)
+        for (let i = 0; i < staticObjects.length; i++) {
+            var so = staticObjects[i];
+            so.sgHP = undefined;
+            if (siegeSave.birds && so.name === "Stone" && so.x > SIEGE_ANCHOR.x + 300) { so.sgHP = so.sgMax = 240; so.sgMat = "stone"; so._sgCd = 0; }
+        }
     },
 
     createPlayers: function() {
@@ -253,22 +398,44 @@ GameModes.register({
         }
     },
 
-    onExplosion: function(x, y, radius) { SiegeSleep.wakeAround(x, y, radius * 1.3); },
+    onExplosion: function(x, y, radius) {
+        SiegeSleep.wakeAround(x, y, radius * 1.3);
+        staticObjects.slice().forEach(function(o) { if (o.sgMat === "stone" && Math.hypot(o.x - x, o.y - y) < radius + Math.max(o.w, o.h) / 2) siegeStoneHit(o, 160); });
+    },
 
     update: function() {
         SiegeSleep.update();
+        if (siegeSave.birds) { siegeBlockDamage(); Siege.tick = (Siege.tick || 0) + 1; siegeStoneDamage(); }
         // remember enemy velocities for next frame's impact check
         for (let i = 0; i < zombies.length; i++) { zombies[i]._pvx = zombies[i].xspeed; zombies[i]._pvy = zombies[i].yspeed; }
         var alive = siegeEnemiesLeft();
         var killedNow = Siege.enemyTotal - alive;
         if (killedNow > Siege.kills) { Siege.score += (killedNow - Siege.kills) * 1000; Siege.kills = killedNow; }
+        for (let i = 0; i < zombies.length; i++) { var dz = zombies[i]; if (dz.dead && !dz._sgScored) { dz._sgScored = true; Components.addFloatingText("+1000", dz.x, dz.y + 60, "#86efac", 18); } }
 
         // ---- input ----
         var md = mouseDown, fresh = md && !Siege.wasMouse;
         Siege.wasMouse = md;
-        var fireKey = SpacePressed || EnterPressed;
+        var spad = (typeof Pads !== "undefined") ? Pads.state[0] : null;
+        var fireKey = SpacePressed || EnterPressed || !!(spad && spad.active && spad.shoot);
+        if (spad && spad.active && Siege.phase === "aim") {
+            // gamepad: stick / D-pad up-down aims, left-right sets power, RT fires
+            if (spad.up) Siege.angle = Math.min(80, Siege.angle + 0.8);
+            if (spad.down) Siege.angle = Math.max(-10, Siege.angle - 0.8);
+            if (spad.right) Siege.power = Math.min(1, Siege.power + 0.012);
+            if (spad.left) Siege.power = Math.max(0.15, Siege.power - 0.012);
+        }
         var fireFresh = fireKey && !Siege.wasFire;
         Siege.wasFire = fireKey;
+        if (Siege.introT > 0) {
+            Siege.introT--;
+            if (fresh || fireFresh) Siege.introT = 0;     // any press skips the fly-by
+            return;
+        }
+        if (Siege.phase === "flight" && Siege.rd && Ragdolls.list.indexOf(Siege.rd) !== -1 && Siege.flightT % 3 === 0 && Siege.trail.length < 220) {
+            var tr = Siege.rd, big = (Siege.flightT / 3) % 3 === 0;
+            Siege.trail.push({ x: tr.pts.length === 1 ? tr.pts[0].x : tr.centerX(), y: tr.pts.length === 1 ? tr.pts[0].y : tr.centerY(), big: big });
+        }
 
         if (Siege.phase === "aim") {
             // keyboard aim
@@ -292,6 +459,7 @@ GameModes.register({
         } else if (Siege.phase === "flight") {
             Siege.flightT++;
             if (Siege.rdType === "bomb" && (fresh || fireFresh) && Siege.flightT > 6) siegeDetonate();
+            else if (Siege.rdType === "bird" && (fresh || fireFresh) && Siege.flightT > 6) siegeBirdAbility(Siege.rd);
             var rd = Siege.rd;
             // bombs also go off on a hard landing
             if (rd && Siege.rdType === "bomb" && Siege.flightT > 20 && (rd.grounded || rd.projectileTimer <= 0) && !rd.detonated) {
@@ -316,6 +484,7 @@ GameModes.register({
             Siege.settleT++;
             if (!moving || Siege.settleT > 300) {
                 if (alive === 0) this.endLevel(true);
+                else if (Siege.shotIdx >= Siege.shots.length && gameCheats.siegeUnlimited) { Siege.shots.push(Siege.shots[Siege.shots.length - 1]); Siege.phase = "aim"; Siege.rd = null; }
                 else if (Siege.shotIdx >= Siege.shots.length) this.endLevel(false);
                 else { Siege.phase = "aim"; Siege.rd = null; }
             }
@@ -335,6 +504,7 @@ GameModes.register({
         var stars = 0;
         if (won) {
             Siege.score += left * 1500;
+            for (let b = 0; b < left; b++) Components.addFloatingText("+1500", SIEGE_ANCHOR.x + b * 50, SIEGE_ANCHOR.y + 140 + b * 30, "#fde047", 20);
             stars = left >= 2 ? 3 : (left >= 1 ? 2 : 1);
             siegeSave.stars[key] = Math.max(siegeSave.stars[key] || 0, stars);
             siegeSave.best[key] = Math.max(siegeSave.best[key] || 0, Siege.score);
@@ -375,6 +545,7 @@ GameModes.register({
     cameraTargets: function() {
         var lvl = LevelManager.getCurrentLevel();
         var fx = lvl.siege ? lvl.siege.focusX : 700;
+        if (Siege.introT > 50) return [{ x: fx - 150, y: 200 }, { x: fx + 350, y: 420 }];
         var pts = [{ x: SIEGE_ANCHOR.x - 150, y: 150 }, { x: fx + 350, y: 300 }];
         if (Siege.rd && Ragdolls.list.indexOf(Siege.rd) !== -1) pts.push({ x: Siege.rd.centerX(), y: Math.min(1600, Siege.rd.centerY()) });
         return pts;
@@ -385,6 +556,8 @@ GameModes.register({
         var k = cameraScaleX;
         var ax = SIEGE_ANCHOR.x, ay = SIEGE_ANCHOR.y;
         ctx.save();
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        for (let i = 0; i < Siege.trail.length; i++) { var tp = Siege.trail[i]; ctx.beginPath(); ctx.arc(wsx(tp.x), wsy(tp.y), (tp.big ? 5 : 3) * Math.max(0.6, k), 0, 7); ctx.fill(); }
         ctx.lineCap = "round";
         ctx.strokeStyle = "#5b3a1e"; ctx.lineWidth = 16 * k;
         ctx.beginPath(); ctx.moveTo(wsx(ax), wsy(200)); ctx.lineTo(wsx(ax), wsy(ay - 50)); ctx.lineTo(wsx(ax - 26), wsy(ay + 10)); ctx.stroke();
@@ -419,7 +592,10 @@ GameModes.register({
             var pp = siegePouch();
             var type = Siege.shots[Siege.shotIdx];
             // loaded shot: a little pixel-art body in the pouch
-            if (type) {
+            if (type && siegeSave.birds) {
+                var bt = siegeBirdFor(type, Siege.shotIdx);
+                siegeDrawBird({ pts: [{ x: pp[0], y: pp[1], px: pp[0] - 1, py: pp[1], r: BIRDS[bt].r }], birdType: bt });
+            } else if (type) {
                 var col = AMMO[type].color;
                 PixelArt.draw(PixelArt.sprites.shot, wsx(pp[0]) - 18 * k, wsy(pp[1]) - 18 * k, 4 * k, { b: col, f: "#f2c9a0", e: "#0a0f16", w: type === "bomb" ? "#ffd23f" : col });
             }
@@ -428,6 +604,23 @@ GameModes.register({
         }
         ctx.strokeStyle = "#7a4d26"; ctx.lineWidth = 12 * k;
         ctx.beginPath(); ctx.moveTo(wsx(ax), wsy(ay - 50)); ctx.lineTo(wsx(ax + 26), wsy(ay + 10)); ctx.stroke();
+        // cracks on hurt wood / glass (Birds): more lines the closer the block is to breaking
+        ctx.lineWidth = Math.max(1, 2 * k);
+        var crackList = movingObjects.concat(staticObjects.filter(function(q) { return q.sgMat === "stone"; }));
+        for (let i = 0; i < crackList.length; i++) {
+            var o = crackList[i];
+            if (o.dead || o.sgHP === undefined || o.sgHP >= o.sgMax * 0.8) continue;
+            var n = Math.min(5, 1 + Math.floor((1 - o.sgHP / o.sgMax) * 5)), seed = (o.id || i) * 9301 + 49297;
+            var rnd = function() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+            ctx.strokeStyle = o.sgMat === "glass" ? "rgba(255,255,255,0.85)" : "rgba(40,22,8,0.85)";
+            var cx = wsx(o.x), cy = wsy(o.y), hw = o.w / 2 * k, hh = o.h / 2 * k;
+            for (let c = 0; c < n; c++) {
+                var px = cx + (rnd() - 0.5) * hw * 0.6, py = cy + (rnd() - 0.5) * hh * 0.6, a = rnd() * 6.28;
+                ctx.beginPath(); ctx.moveTo(px, py);
+                for (let s = 0; s < 3; s++) { a += (rnd() - 0.5) * 1.2; px += Math.cos(a) * hw * 0.35; py += Math.sin(a) * hh * 0.35; px = Math.max(cx - hw, Math.min(cx + hw, px)); py = Math.max(cy - hh, Math.min(cy + hh, py)); ctx.lineTo(px, py); }
+                ctx.stroke();
+            }
+        }
         // enemy hp pips
         for (let i = 0; i < zombies.length; i++) {
             var z = zombies[i];
@@ -452,27 +645,38 @@ GameModes.register({
         for (let i = 0; i < Siege.shots.length; i++) {
             var t = Siege.shots[i], used = i < Siege.shotIdx, cur = i === Siege.shotIdx && Siege.phase === "aim";
             ctx.globalAlpha = used ? 0.25 : 1;
-            PixelArt.draw(PixelArt.sprites.shot, tx + i * 30, ty - 14 + (cur ? -3 : 0), 2.5, { b: AMMO[t].color, f: "#f2c9a0", e: "#0a0f16", w: t === "bomb" ? "#ffd23f" : AMMO[t].color });
+            if (siegeSave.birds) {
+                var BB = BIRDS[siegeBirdFor(t, i)];
+                ctx.fillStyle = BB.color; ctx.strokeStyle = "#e2e8f0"; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(tx + i * 30 + 10, ty - 6 + (cur ? -3 : 0), 9, 0, 7); ctx.fill(); ctx.stroke();
+            } else PixelArt.draw(PixelArt.sprites.shot, tx + i * 30, ty - 14 + (cur ? -3 : 0), 2.5, { b: AMMO[t].color, f: "#f2c9a0", e: "#0a0f16", w: t === "bomb" ? "#ffd23f" : AMMO[t].color });
             ctx.globalAlpha = 1;
         }
         var nxt = Siege.shots[Siege.shotIdx];
-        if (Siege.phase === "aim" && nxt) uiText("NEXT: " + AMMO[nxt].name.toUpperCase() + " - " + AMMO[nxt].desc, 30 + Siege.shots.length * 30 + 10, ty, 11, AMMO[nxt].color, "left", "800");
+        if (Siege.phase === "aim" && nxt && !siegeSave.birds) uiText("NEXT: " + AMMO[nxt].name.toUpperCase() + " - " + AMMO[nxt].desc, 30 + Siege.shots.length * 30 + 10, ty, 11, AMMO[nxt].color, "left", "800");
+        if (Siege.phase === "aim" && nxt && siegeSave.birds) { var NB = BIRDS[siegeBirdFor(nxt, Siege.shotIdx)]; uiText("NEXT BIRD: " + NB.name.toUpperCase() + " - " + NB.desc, 30 + Siege.shots.length * 30 + 10, ty, 11, NB.color === "#1f2937" || NB.color === "#334155" ? "#cbd5e1" : NB.color, "left", "800"); }
+        if (Siege.phase === "flight" && Siege.rdType === "bird" && Siege.rd && !Siege.rd.abilityUsed && Siege.rd.birdType !== "red") uiText("CLICK / SPACE: " + BIRDS[Siege.rd.birdType].desc.replace("Tap: ", "").toUpperCase(), cssW / 2, 110, 22, "#fde047", "center", "900");
         if (Siege.phase === "flight" && Siege.rdType === "bomb" && Siege.rd) uiText("CLICK / SPACE TO DETONATE!", cssW / 2, 110, 24, "#f97316", "center", "900");
-        if (Siege.phase === "aim") uiText("angle " + Math.round(Siege.angle) + "°   power " + Math.round(Siege.power * 100) + "%", cssW / 2, 100, 16, "#e2e8f0", "center", "800");
+        if (Siege.introT > 0) uiText("Fort " + (n + 1) + ": " + (lvl.title || "") + "  ·  " + siegeEnemiesLeft() + " zombies  ·  click to skip", cssW / 2, 110, 20, "#fde68a", "center", "900");
+        else if (Siege.phase === "aim") uiText("angle " + Math.round(Siege.angle) + "°   power " + Math.round(Siege.power * 100) + "%", cssW / 2, 100, 16, "#e2e8f0", "center", "800");
+        uiText("Drag the mouse to pull & release to fire · or W/S aim, A/D power, Space fire · right-click/Tab swap shot · R retry · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
     },
 
-    menuRows: function() {
-        var cur = function() { return Math.max(0, SIEGE_LEVELS.indexOf(LevelManager.currentLevelKey)); };
-        var pick = null;
-        var rows = [];
-        if (Menu.over && Siege.won && cur() + 1 < SIEGE_LEVELS.length) {
-            rows.push({ label: "Next fort", icon: "▶", hint: "Fort " + (cur() + 2), act: function() { closePause(); LevelManager.selectLevel(SIEGE_LEVELS[cur() + 1]); } });
-        }
-        rows.push({ label: "Fort", icon: "🏰", cycle: true, hint: "◀ ▶ choose, Enter loads it",
-            value: function() { var n = Siege.pick !== null ? Siege.pick : cur(); return (n + 1) + " / " + SIEGE_LEVELS.length + "  " + "★".repeat(siegeStarsFor(SIEGE_LEVELS[n])) + "☆".repeat(3 - siegeStarsFor(SIEGE_LEVELS[n])); },
-            act: function(d) { Siege.pick = ((Siege.pick !== null ? Siege.pick : cur()) + d + SIEGE_LEVELS.length) % SIEGE_LEVELS.length; },
-            go: function() { var n = Siege.pick !== null ? Siege.pick : cur(); closePause(); LevelManager.selectLevel(SIEGE_LEVELS[n]); } });
-        return rows;
+    menuItems: function(items) {
+        var n = Math.max(0, SIEGE_LEVELS.indexOf(LevelManager.currentLevelKey));
+        if (pauseFromGameOver && Siege.won && n + 1 < SIEGE_LEVELS.length) items.unshift({ id: "sg_next", label: "Next fort ▶", hint: "Fort " + (n + 2) });
+        items.push({ id: "sg_level", label: "Fort:  ◀  " + (n + 1) + " / " + SIEGE_LEVELS.length + "  " + "★".repeat(siegeStarsFor(SIEGE_LEVELS[n])) + "  ▶", hint: "", cycle: true });
+        if (!pauseFromGameOver) items.push({ id: "sg_retry", label: "Retry fort  (R)", hint: "" });
+        items.push({ id: "sg_birds", label: "Ammo:  ◀  " + (siegeSave.birds ? "Birds (abilities, breakable blocks)" : "Ragdolls") + "  ▶", hint: "Restarts the fort", cycle: true });
+    },
+
+    onMenu: function(id, dir) {
+        var n = Math.max(0, SIEGE_LEVELS.indexOf(LevelManager.currentLevelKey));
+        if (id === "sg_next") { closePause(); LevelManager.selectLevel(SIEGE_LEVELS[n + 1]); return true; }
+        if (id === "sg_level") { n = (n + (dir || 1) + SIEGE_LEVELS.length) % SIEGE_LEVELS.length; closePause(); LevelManager.selectLevel(SIEGE_LEVELS[n]); return true; }
+        if (id === "sg_retry") { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
+        if (id === "sg_birds") { siegeSave.birds = !siegeSave.birds; saveSiege(); closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
+        return false;
     }
 });
 

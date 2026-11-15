@@ -1,0 +1,55 @@
+// LAN performance: a host in Survival (waves on) + 2 joiners. Prints snapshot size, bytes/second, the host's cost per
+// snapshot, both sides' FPS, and the joiner's input delay (key down -> own hero moves on the joiner's own screen).
+const { spawn } = require('child_process'); const path = require('path'); const { chromium } = require('playwright');
+const PORT = 8097;
+const srv = spawn(process.execPath, [path.resolve(__dirname, '..', 'server.js'), String(PORT)], { stdio: 'ignore' }); srv.unref();
+process.on('exit', () => { try { srv.kill(); } catch (e) {} });
+const init = () => { const O = Object; window.__O = { is: O.is, keys: O.keys, entries: O.entries, gp: O.getPrototypeOf, values: O.values, assign: O.assign };
+  window.addEventListener('load', () => { Object.is = __O.is; Object.keys = __O.keys; Object.entries = __O.entries; Object.getPrototypeOf = __O.gp; Object.values = __O.values; Object.assign = __O.assign; }); };
+(async () => {
+  await new Promise(r => setTimeout(r, 1000));
+  const b = await chromium.launch();
+  const mk = async (tag) => { const p = await b.newPage({ viewport: { width: 1100, height: 650 } }); const errs = []; p.on('pageerror', e => errs.push(tag + ': ' + e.message)); await p.addInitScript(init); await p.goto('http://localhost:' + PORT + '/'); await p.waitForTimeout(1200); return { p, errs }; };
+  const H = await mk('host'), C = await mk('client'), C2 = await mk('client2');
+  await H.p.evaluate(() => { Hub.close(); GameModes.launch('survival'); }); await H.p.waitForTimeout(800);
+  await H.p.evaluate(() => Net.connect('host', 'Tim')); await H.p.waitForTimeout(500);
+  await C.p.evaluate(() => Net.connect('client', 'Bob')); await C2.p.evaluate(() => Net.connect('client', 'Ann'));
+  await C.p.waitForTimeout(2500);
+  await H.p.evaluate(() => { godMode = true; SummonManager.pauseWaves = true; zombies.length = 0; }); await C.p.waitForTimeout(400);
+  // input delay on the joiner (measured on a quiet field, so enemies shoving the hero don't blur the number): press D, time until its own hero starts to move on its own screen (5 tries)
+  const delays = [];
+  for (let i = 0; i < 5; i++) {
+    await C.p.waitForTimeout(500);
+    const d = await C.p.evaluate(() => new Promise(res => { const me = Net.myChar(); if (!me) return res(-1); const x0 = me.x, t0 = performance.now();
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD', key: 'd', bubbles: true })); document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD', key: 'd', bubbles: true }));
+      const iv = setInterval(() => { const m = Net.myChar(); if (m && Math.abs(m.x - x0) > 0.5) { clearInterval(iv); res(Math.round(performance.now() - t0)); } else if (performance.now() - t0 > 2000) { clearInterval(iv); res(2000); } }, 2); }));
+    await C.p.evaluate(() => { window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyD', key: 'd', bubbles: true })); document.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyD', key: 'd', bubbles: true })); });
+    delays.push(d);
+  }
+  // a busy scene: 14 enemies
+  await H.p.evaluate(() => { for (let i = 0; i < 14; i++) spawnZombie(undefined, redGuy.x + (i % 2 ? 1 : -1) * (300 + i * 60), redGuy.y + 200); });
+  await H.p.evaluate(() => { window.__nb = []; window.__nt = []; const hf = Net.hostFrame; Net.hostFrame = function() { const t = performance.now(); const r = hf.apply(this, arguments); const dt = performance.now() - t; if (this.tickNo % (this.snapEvery || 2) === 0) { __nt.push(dt); __nb.push(this.lastSnapBytes || 0); } return r; }; });
+  await H.p.waitForTimeout(5000);
+  const host = await H.p.evaluate(() => { const avg = a => a.reduce((x, y) => x + y, 0) / Math.max(1, a.length); return { snaps: __nb.length, avgBytes: Math.round(avg(__nb)), maxBytes: Math.max(...__nb), kbPerSec: Math.round(__nb.reduce((x, y) => x + y, 0) / 5 / 1024), msPerSnap: +avg(__nt).toFixed(2), fps: measuredFPS, zombies: zombies.length, statics: staticObjects.length }; });
+  await C.p.keyboard.down('KeyD'); await C.p.waitForTimeout(700); await C.p.keyboard.up('KeyD');     // run through the crowd, then stop
+  const cl = await C.p.evaluate(() => ({ fps: measuredFPS, me: !!Net.myChar(), predicted: Net.predictOn, broken: Net.predBroken, err: Math.round(Net.predErr || 0), stat: Net.predStat }));
+  // do host and joiner agree on where the joiner's hero is once it stops?
+  await C.p.waitForTimeout(900);
+  const hx = await H.p.evaluate(() => characters.filter(c => c.isRemote).map(c => Math.round(c.x))[0]);
+  const cx = await C.p.evaluate(() => Math.round(Net.myChar().x));
+  const dbg = await C.p.evaluate(() => { const m = Net.myChar(); return { on: Net.predictOn, hx: Math.round(m._hx), x: Math.round(m.x), tx: m._tx === undefined ? 'u' : Math.round(m._tx), dead: m.dead, rag: m.ragdollTimer, live: !!m.liveRagdoll, hs: m.hitstun, stag: m.staggerTimer, pause: Net.predPause, bad: Net.predBad, stat: Net.predStat, hsp: [m._hxspeed, m._hyspeed], sp: [m.xspeed, m.yspeed], nid: m._nid, myNid: Net.myNid }; });
+  const hdbg = await H.p.evaluate(() => characters.filter(c => c.isRemote).map(c => ({ x: Math.round(c.x), nid: c._nid, dead: c.dead, rag: c.ragdollTimer, lbl: c.playerLabel })));
+  // Brawl over LAN: the joiner runs around while a CPU hits it (knockback / tumble = the host takes the hero back)
+  await H.p.evaluate(() => { godMode = false; GameModes.launch('brawl'); }); await C.p.waitForTimeout(5500);
+  await C.p.keyboard.down('KeyD'); await C.p.waitForTimeout(900); await C.p.keyboard.up('KeyD');
+  await C.p.keyboard.down('KeyA'); await C.p.waitForTimeout(900); await C.p.keyboard.up('KeyA'); await C.p.waitForTimeout(1200);
+  const brawlR = await C.p.evaluate(() => { const m = Net.myChar(); return { mode: GameModes.current.id, me: !!m, local: Net.predictOn, broken: Net.predBroken, gap: m ? Math.round(Math.hypot(m.x - m._hx, m.y - m._hy)) : -1, stat: Net.predStat }; });
+  const med = delays.slice().sort((a, b) => a - b)[2];
+  const out = { host, inputDelayMs: delays, medianDelay: med, client: cl, agree: { host: hx, joiner: cx, diff: Math.abs(hx - cx) }, brawl: brawlR, dbg: Math.abs(hx - cx) > 6 ? [dbg, hdbg] : undefined };
+  console.log(JSON.stringify(out, null, 1));
+  const errs = [...H.errs, ...C.errs, ...C2.errs]; console.log(errs.slice(0, 8));
+  // baseline before local movement + packet diet: 5097 B/packet, 145 KB/s, 80 ms
+  const ok = host.avgBytes < 3000 && med <= 34 && out.agree.diff <= 6 && !cl.broken && !brawlR.broken && brawlR.me && !errs.length;
+  console.log(ok ? 'PASS' : 'FAIL');
+  await b.close(); process.exit(ok ? 0 : 1);
+})();

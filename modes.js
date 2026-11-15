@@ -9,7 +9,7 @@
 //   id, title, tagline, color, firstLevel        identity + which level to load from the Arcade
 //   flags: {                                      engine features to switch on/off for this game
 //     waves, revive, jetpack, shooting, ability, ammo, playerControl, noBedrock, scenery, enemiesPassive,
-//     coopToggle, dash, wallJump, airJumps, bigPads, flight
+//     coopToggle, dash, wallJump, airJumps, bigPads, flight, building, buildFree
 //   }
 //   onActivate() / onDeactivate()                 entering / leaving this game
 //   setupLevel(lvl)                               after the level geometry loads (build gadgets, balls ...)
@@ -21,16 +21,24 @@
 //   drawFront()                                   after characters (in front)
 //   drawHUD()                                     replaces the standard HUD
 //   cameraTargets()                               -> [{x, y}] points the camera should keep in frame
+//   cameraZoom()                                  -> zoom multiplier (>1 closer), or nothing for the normal zoom
 //   cpuThink(ch)                                  AI for CPU-controlled heroes (ch.isCPU)
 //   onSecondary(ch)                               right-click / alt-fire -> return true to consume
 //   onKey(code, e)                                keyboard hook -> return true to consume
+//   onPad(padIndex, button, ch)                   gamepad button pressed (standard mapping numbers) -> return true to consume
+//   onClick(wx, wy, button)                       mouse click in world coordinates -> return true to consume
 //   onDamage(ch, amount, kx, ky, attacker)        a character is damaged -> return true to consume
+//   onStomp(hero, foe)                            hero landed on an enemy's head -> return true to replace the
+//                                                 default stomp (35 dmg + bounce); hero still gets contact i-frames
+//   onEnemyDamage(foe, amount, kx, ky, attacker)  an enemy is damaged -> return true to consume (custom deaths / no loot)
+//   canShoot(ch) / canBreak(ch)                   may this hero fire / smash bricks right now
+//   enemyAI(z)                                    drive an enemy yourself (set z.left/right/upPressed) -> return true
+//   onBlockHit(ch, g) / onCoin(ch, g) / onGoal(ch, g, frac) / onBrickBreak(ch, g)   platform gadget events
+//   onContact(hero, foe)                          hero touches an enemy (not a stomp) -> return true to skip contact damage
 //   onExplosion(x, y, radius, power)              any explosion in the world
 //   onExit(ch, gadget) / onHazard(ch, gadget)     gadget events (level exit reached / spikes touched)
-//   ui: { edit, dev, players, net, levelPicker, restart, enemies, help }   what menus / tools this game offers
-//   toolbarItems()                                game-specific toolbar buttons [{id, icon, label, title, run(), active()}]
-//   menuRows(over)                                extra pause-menu rows {label, value, hint, cycle, toggle, act(dir), go(), tab}
-//   overTitle / overSub(over) / againLabel / restartLabel / onRestart()   game-over screen text and restart behaviour
+//   menuItems(items) / onMenu(id, dir)            add / handle pause-menu rows (row.cycle = true for ◀ ▶)
+//   overTitle / overSub(over) / againLabel / onRestart()   game-over screen text + restart behaviour
 // ============================================================================
 var GameModes = {
     list: [],
@@ -39,9 +47,14 @@ var GameModes = {
 
     register: function(mode) {
         mode.flags = mode.flags || {};
-        this.list.push(mode);
+        if (mode.firstInHub) {
+            this.list.unshift(mode);
+            this.current = mode;
+        } else {
+            this.list.push(mode);
+            if (!this.current) this.current = mode;
+        }
         this.byId[mode.id] = mode;
-        if (!this.current) this.current = mode;
         return mode;
     },
 
@@ -51,13 +64,14 @@ var GameModes = {
         var next = this.byId[id] || this.byId.survival;
         if (next === this.current) return;
         if (this.current && this.current.onDeactivate) this.current.onDeactivate();
-        Progress.swap(this.current, next);
         this.current = next;
         if (next.onActivate) next.onActivate();
-        if (typeof UI !== "undefined") UI.onModeChange();
+        if (typeof topBarRefresh === "function") topBarRefresh();
+        if (typeof SandboxUI !== "undefined" && SandboxUI.syncMode && SandboxUI.syncMode()) SandboxUI.render();
     },
 
     flag: function(name, def) {
+        if (typeof Mashup !== "undefined") { var o = Mashup.override(name); if (o !== undefined) return o; }     // mash-up mix-ins win
         var f = this.current && this.current.flags;
         return (f && f[name] !== undefined) ? f[name] : def;
     },
@@ -83,21 +97,9 @@ var GameModes = {
         if (!m) return;
         var key = (typeof m.firstLevel === "function") ? m.firstLevel() : m.firstLevel;
         if (key && LevelManager.getAllLevels()[key]) LevelManager.selectLevel(key);
+        if (typeof topBarRefresh === "function") topBarRefresh();
+        if (typeof SandboxUI !== "undefined" && SandboxUI.syncMode && SandboxUI.syncMode()) SandboxUI.render();
         try { localStorage.setItem("timsArcadeLastGame", id); } catch (e) {}
-    }
-};
-
-// RPG progression (level, XP, coins, damage bonus) belongs to Zombie Survival only: it is parked while another
-// game runs, so nothing earned there leaks into (or out of) other games.
-var Progress = {
-    stash: null,
-    keeps: function(m) { return !!(m && m.flags && m.flags.progression); },
-    swap: function(from, to) {
-        if (this.keeps(from)) this.stash = { heroLevel: heroLevel, heroXP: heroXP, heroXPNext: heroXPNext, coins: coins, rpgDamageMult: rpgDamageMult };
-        if (this.keeps(to)) {
-            var st = this.stash;
-            if (st) { heroLevel = st.heroLevel; heroXP = st.heroXP; heroXPNext = st.heroXPNext; coins = st.coins; rpgDamageMult = st.rpgDamageMult; }
-        } else { heroLevel = 1; heroXP = 0; heroXPNext = 100; coins = 0; rpgDamageMult = 1; }
     }
 };
 
@@ -115,28 +117,7 @@ GameModes.register({
     tagline: "The original. Waves, co-op, revive, castles, the endless frontier.",
     color: "#55ff88",
     firstLevel: "classic_arena",
-    flags: { waves: true, revive: true, jetpack: true, shooting: true, ability: true, ammo: true, scenery: true, progression: true },
-    ui: {
-        edit: true, enemies: true,
-        help: function() {
-            if (multiplayer) return [
-                { title: "PLAYER 1", color: "#ff7b80", items: [["WASD", "move · jump"], ["F", "shoot"], ["Space", "jetpack"], ["Shift", "dash"], ["E", "shockwave · revive"], ["G", "grab"]] },
-                { title: "PLAYER 2", color: "#6cb8ff", items: [["← ↑ →", "move · jump"], ["Enter", "shoot"], [".", "jetpack"], ["R-Shift", "dash"], ["/", "shockwave · revive"], [",", "grab"]] }
-            ];
-            return [["WASD", "move · jump"], ["F / click", "shoot (mouse aims)"], ["Space", "jetpack"], ["Shift", "dash"], ["E", "shockwave"], ["G / R-click", "grab · throw"],
-                ["Hold ↑", "climb stairs"], ["B", "dev tools"], ["+ / -", "zoom"], ["H", "hide this"]];
-        }
-    },
-    toolbarItems: function() {
-        return [
-            { id: "coop", icon: "👥", label: function() { return multiplayer ? "Co-op" : "Solo"; }, title: "Solo or 2-player co-op (restarts the run)",
-              run: function() { toggleMultiplayer(); }, active: function() { return multiplayer; } },
-            { id: "frontier", icon: "🌲", label: function() { return LevelManager.currentLevelKey === "infinite_frontier" ? "Arena" : "Frontier"; },
-              title: "Switch between the arena and the endless frontier",
-              run: function() { LevelManager.selectLevel(LevelManager.currentLevelKey === "infinite_frontier" ? "classic_arena" : "infinite_frontier"); },
-              active: function() { return LevelManager.currentLevelKey === "infinite_frontier"; } }
-        ];
-    }
+    flags: { waves: true, revive: true, jetpack: true, shooting: true, ability: true, ammo: true, scenery: true, building: true }
 });
 
 GameModes.register({
@@ -145,28 +126,7 @@ GameModes.register({
     tagline: "Smash-style party fighting. Knock rivals off the stage.",
     color: "#ffd23f",
     firstLevel: function() { return brawlCfg.stage; },
-    flags: { waves: false, revive: false, jetpack: false, shooting: true, ability: true, ammo: false, noBedrock: true, scenery: false },
-    restartLabel: "Rematch",
-    ui: {
-        edit: true, levelPicker: false,
-        help: function() {
-            return [
-                { title: "PLAYER 1", color: "#ff7b80", items: [["WASD", "move · jump"], ["F / click", "attack"], ["Shift", "dash"], ["E", "shockwave"], ["G", "grab"]] },
-                { title: "PLAYER 2", color: "#6cb8ff", items: [["← ↑ →", "move · jump"], ["Enter", "attack"], ["R-Shift", "dash"], ["/", "shockwave"], [",", "grab"]] }
-            ];
-        }
-    },
-    menuRows: function() {
-        return [
-            { tab: "players", label: "Opponents", cycle: true, icon: "🥊", value: function() { return brawlOpponentLabel(); }, hint: "Applies on Rematch - PvP or CPU fighters", act: function(d) { cycleBrawlOpponents(d); } },
-            { label: "CPU skill", cycle: true, icon: "🤖", value: function() { return BRAWL_CPU_NAMES[brawlCfg.cpuLevel]; }, hint: "Applies on Rematch",
-              act: function(d) { brawlCfg.cpuLevel = ((brawlCfg.cpuLevel - 1 + d + 3) % 3) + 1; saveBrawlCfg(); } },
-            { label: "Stocks", cycle: true, icon: "❤", value: function() { return brawlCfg.stocks; }, hint: "Lives per fighter - applies on Rematch",
-              act: function(d) { brawlCfg.stocks = Math.max(1, Math.min(9, brawlCfg.stocks + d)); saveBrawlCfg(); } },
-            { label: "Stage", cycle: true, icon: "🏝", value: function() { var st = LevelManager.getAllLevels()[brawlCfg.stage]; return st ? st.name.replace(/^[^A-Za-z]+/, "") : "?"; }, hint: "Applies on Rematch",
-              act: function(d) { cycleBrawlStage(d); } }
-        ];
-    }
+    flags: { waves: false, revive: false, jetpack: false, shooting: true, ability: true, ammo: false, noBedrock: true, scenery: false }
 });
 
 // ============================================================================
@@ -216,3 +176,6 @@ var ModeKit = {
         return items;
     }
 };
+
+// Game-specific cheats (Cheats panel -> Game tab -> "This game"). Runs that use a time/score cheat don't save records.
+var gameCheats = { raceFreeze: false, portalAnywhere: false, siegeUnlimited: false, platLives: false, brawlTaken: 1 };

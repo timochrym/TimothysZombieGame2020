@@ -68,6 +68,8 @@ Flags switch shared engine features. A flag you leave out keeps the engine defau
 | `airJumps` | 1 | Extra jumps in the air (0 = no double jump) |
 | `bigPads` | off | Bounce pads and portal flings may exceed the normal vertical speed cap |
 | `flight` | off | Double-tap jump to fly (W/S rise and sink). Also available in any game via the dev panel's **Creative flight** toggle |
+| `noEnemyBars` | off | Hide enemy health bars (stomp-based games) |
+| `ownScreen` | off | The mode draws the whole screen itself: each frame calls its `screenFrame()` hook instead of simulating and drawing the platformer world (grid sims, board games — Sand Lab). Input: the usual key flags, `mouseX`/`mouseY` (screen px), `mouseDown`, and `onKey` / `onClick` |
 
 A mode can change its own flags at runtime. For example, Zombie Ball sets
 `this.flags.playerControl = (Sport.phase === "play")` during kick-off.
@@ -86,11 +88,21 @@ Every hook is optional. The engine calls `GameModes.call("hook", ...)` at these 
 | `update()` | Every frame, after physics and collisions |
 | `drawWorld()` / `drawFront()` | Draw behind characters / in front of them |
 | `drawHUD()` | Replaces the whole standard HUD |
-| `cameraTargets()` | Return `[{x, y}, ...]` points the camera keeps in frame |
+| `cameraTargets / cameraZoom()` | Return `[{x, y}, ...]` points the camera keeps in frame |
 | `cpuThink(ch)` | Set inputs for CPU heroes (`ch.isCPU`) |
 | `onSecondary(ch)` | Right-click / LB. Return `true` to consume it |
 | `onKey(code, e)` | Key pressed. Return `true` to consume it |
 | `onDamage(ch, amount, kx, ky, attacker)` | A character is hurt. Return `true` to cancel the damage |
+| `onStomp(hero, foe)` | A hero landed on an enemy's head (engine-wide head stomps: 35 x `rpgDamageMult` damage, bounce higher while jump is held, ~10 frames without contact damage). Return `true` to replace the default damage + bounce |
+| `onEnemyDamage(foe, amount, kx, ky, attacker)` | An enemy is hurt. Return `true` to handle it yourself (custom deaths, no Survival loot) |
+| `canShoot(ch)` / `canBreak(ch)` | May this hero fire right now / smash bricks |
+| `enemyAI(z)` | Drive an enemy yourself (set its `left/right/upPressed`); return `true` to skip the built-in AI |
+| `onBlockHit(ch, g)` / `onCoin(ch, g)` / `onGoal(ch, g, frac)` / `onBrickBreak(ch, g)` | Platform gadget events |
+| `screenDraw()` / `netInput()` | Full-screen games on LAN: `screenDraw` draws the synced state on a client (no simulation); `netInput` returns extra client controls, read on the host with `Net.peerX(pid)`. Seat helpers: `Net.seatPeers(list)`, `Net.peerButtons(pid)`, `Net.peerList()` |
+| `drawBack()` | Draw a backdrop behind the level pieces but over the scenery (Stomp Squad's cave course) |
+| `onCheckpoint(ch, g)` | A hero touched a checkpoint gadget (every new touch; splits in Parkour Rush) |
+| `runMult(ch)` -> number | Multiplies a player's run speed cap each frame (Stomp Squad: hold RUN for ×1.55) |
+| `onContact(hero, foe)` | A hero touches an enemy from the side/below. Return `true` to skip the default contact damage (e.g. star power) |
 | `onExplosion(x, y, radius, power)` | Any explosion |
 | `onExit(ch, gadget)` / `onHazard(ch, gadget)` | A hero reaches an exit gadget / touches spikes. Return `true` from `onHazard` to cancel the kill |
 | `menuItems(items)` / `onMenu(id, dir)` | Add pause-menu rows. Set `cycle: true` for ◀ ▶ rows; `dir` is ±1 for the arrows and empty for Enter |
@@ -142,6 +154,10 @@ Activators power every gadget whose `id` is in their `links`.
 | `exit` | | Calls the mode's `onExit` |
 | `sign` | `text` | Tutorial speech bubble |
 
+Platform gadgets (used by Stomp Squad, available to any game and the editor): `qblock { x, y, item: coin|power|coins5|star|life }`
+(hit from below), `brick { x, y, item? }` (breaks when `canBreak`, otherwise bumps; knocks out enemies standing on it),
+`coin { x, y }`, `goalpole { x, y, h }` (grab height -> `onGoal`, then `onExit`).
+
 ## Other shared systems
 
 - **Ragdolls** (`ragdoll.js`): `Ragdolls.spawnFrom(character, {vx, vy, spin, corpse, life})`.
@@ -154,6 +170,79 @@ Activators power every gadget whose `id` is in their `links`.
   `sling`, `clear`, `whistle` and `fizzle`.
 - **Saving**: each game keeps its own `localStorage` key (`timsCrateLab`, `timsPortalLab`,
   `timsZombieBallCfg`, `timsParkourRush`, `timsRagdollSiege`).
+
+## Vehicles (`vehicles.js`)
+
+Gadgets `car { x, y, color }`, `rail { x, y, w, dy }` and `minecart { x, y, cars }` (all in Level Studio → Vehicles).
+E (interact) near one gets in/out (it takes priority over the shockwave there). Cars are Verlet bodies (rolling wheels,
+traction along the surface, run-over damage); the driver can shoot from the window. Rail pieces whose ends meet
+join into one line; carts roll along it, slopes speed them up, A/D push, a train is a cart with `cars > 1`.
+
+## Feel (`feel.js`)
+
+Z (P1) / M (P2) punch: short-range hit with ragdoll knockback, hit-stop and a camera zoom kick (`Feel.zoomMult()`
+feeds `updateCamera`). G / right-click with nothing else in reach grabs a player or enemy (`ch.heldChar`,
+`o.grabbedBy`); grab again to throw them as a ragdoll; they wriggle free after 6 s. Settings: hero speed
+(Normal / Fast / Turbo via `Feel.speedMult()`), effects Calm (default: damage numbers on the same spot add up,
+half the sparks, 10 texts max, softer shake) or Full, bouncing bullets (0-3 ricochets off solid pieces).
+Every object has `weight` (default 1, editable on crates in Level Studio): pushes, throws, explosions and ragdoll
+impacts are divided by it.
+
+## Building (`build.js`)
+
+Flag `building: true` turns it on (Survival, Creative, Bed Wars); `buildFree: true` makes it free (Creative).
+C / ; toggle build mode, 1-4 / [ pick block, wall, floor, ramp; T cycles wood / stone / metal (60 / 150 / 280 HP);
+click / F / Enter places at the grid-snapped ghost (hold to spam), right-click / G / , takes a piece back for half.
+Placed pieces are ordinary statics with `buildHP`; bullets (`Build.damage`), explosions (`Build.onExplosion`) and
+enemies pushing on them wear them down. Every change calls `Pathfinder.invalidateRect`. Survival kills give wood
+(and sometimes stone). Hooks: `buildCost(ch, piece, mat)`, `canBuild(ch)`, `onBuild(ch, obj)`, `onBreakPiece(obj, by)`.
+Works for LAN players (toggle/piece/material and the aim point travel in the input packet).
+
+## Level Studio (`studio.js`)
+
+B (or the 🛠 button / pause menu) opens the editor; the old developer panel lives on as **🧪 Cheats & tuning**.
+The document `{ name, mode, waves, ents }` is the source of truth; each entity has `cat`: `layout` (GameObject.loadMap
+format), `gadget` (Gadgets format; movers store `dx2/dy2` relative to their start), `enemy` `{ power }`, `item`
+`{ power }`, `spawn` `{ player }`. `Studio.docToDef(doc)` turns it into a normal level definition (with `studioSpawns`
+for enemies/items, spawned by `Studio.afterReset()` at the end of `resetGame`). Saving also registers the level in
+`LevelManager.customLevels`, so it shows up in the level list. While editing, `simFrozen` is true and `tick()` calls
+`Studio.tick()` instead of `frame()`. During play-test, exits and goal poles return to the editor.
+Opening from a game calls `Studio.park()`, which keeps references to every world array (statics, characters, zombies,
+gadgets, vehicles, ragdolls...) so `rebuild()` can replace them freely; `close()` hands them back with `unpark()` and
+the game carries on exactly where it was. A play-test replaces the world for real, so after one, closing reloads the
+level you came from. The start card (`showStart`) picks what to edit; side-panel widths (`Studio.lw/rw`, Tab hides
+them) drive the editing camera.
+`createMap()` now loads a level's `gadgets` for any game whose `setupLevel` didn't.
+Game-specific pieces: a palette category can carry a third element, the list of modes it's for (`["Wobble Wheels",
+[...], ["wheels"]]`), so it only shows when the document's rules are that game. Their entities use their own `cat`
+("wtrap", "wfinish") and `docToDef` / `docFromLevel` convert them to / from the game's level fields (`traps`,
+`finishX`, `cps`); add the same three things (palette, bbox + marker, conversion) to bring another game in.
+
+## LAN multiplayer (`server.js` + `net.js`)
+
+- **Run it:** double-click **Start LAN Game** (.bat / .command), press **Start LAN game** in the Control Panel
+  (`updater_addons/lan.py`, a documented add-on command; it runs server.js in the background on a free port from 8080,
+  remembers it in `lan.pid`, **Stop LAN game** ends it), or `node server.js [port] [--open]`. `--open` opens
+  `/?lan=host`, which opens the LAN panel and hosts at once; a busy port moves to the next one, and a second launch finds
+  the running server through `/lan-info` and just reopens the page. Everyone else opens the printed
+  `http://<your-ip>:8080` and presses **Join**. The LAN panel probes `/lan-info` while open: as a file or from a plain
+  server (the Control Panel's own Start server) it shows the two one-click ways to start instead of Host / Join.
+- **Addresses:** `lanAddressInfo()` ranks this computer's IPv4 addresses (192.168 → 10 → 172.16-31, virtual adapters
+  like WSL / Hyper-V / VirtualBox / VPNs last, 169.254 dropped); `/lan-info` and the host's welcome send them in that
+  order and the panel's join link is the first. **Windows firewall:** `Allow LAN (Windows firewall).bat` (admin) removes
+  the block rules a cancelled "Allow Node.js?" prompt leaves and allows node.exe for the local subnet.
+- **Model:** host-authoritative. The host runs the normal game; each joiner gets a hero (`ch.isRemote`, `ch.netPid`,
+  `playerIndex` 2+). `Components.moveTypeFinder` feeds remote heroes from `Net.applyRemoteInput` (keys, mouse-aim world point
+  or pad angle, dash/grab/reload counters). Clients run no simulation: `tick()` calls `Net.clientTick()`, which draws the host's
+  world from snapshots with its own camera on its own hero, and the HUD shows that hero.
+- **Snapshots** (every 2 ticks): every character, enemy, crate, level piece (every 20 ticks), bullet, pickup, ragdoll and gadget,
+  delta-encoded per field; HUD globals (`NET_GLOBALS`); `brawl`; and the sounds / floating texts / sparks / rings that happened.
+  A new joiner triggers a full snapshot.
+- **CPUs:** a joiner takes over a CPU slot if there is one (keeps team / stocks), and the CPU takes it back when they leave.
+- **Mode hooks:** `addNetPlayer(slot, peer)` -> return a hero to use instead of the default; `netState()` -> JSON of private
+  HUD state, applied on clients with `applyNetState(json)`.
+- **Limits:** up to 16 players per server; the host's camera follows the people at the host's screen; only the host changes
+  games, levels and settings.
 
 ## Difficulty and rewards
 
@@ -170,3 +259,23 @@ chests. The dev panel's sliders (enemy damage, enemy health, power-up rate) mult
   adaptive-quality fallback (glow first, then resolution) keep slow machines at 60 FPS.
 - Settled ragdolls sleep. Siege forts use their own crate sleeping (`SiegeSleep`) so tall stacks
   cost nothing until something hits them.
+
+
+## Per-game tuning (`tunables.js`)
+
+The Cheats & tuning panel's Game tab follows the game that's on. A mode can define `tunables()` returning rows
+`{ label, type: "range" | "toggle" | "choice", get(), set(v), min, max, step, options, note }`; modes without one use
+`GAME_TUNABLES[id]` (Brawl, Zombie Ball, Table Games, Bed Brawl, Wobble Wheels, Party Board, Rent Rush, Creative).
+They show as "<GAME> — its own settings" at the top. The shared rows are tagged with what they need
+(`DevUI.NEED`: waves / enemies / world / coop, or `data-need` on a section) and `GameTuning.applies(need)` hides the
+ones that would do nothing in the current game; the panel says how many are hidden. Next steps in the same spirit:
+an `inspect(x, y)` hook so the Inspect tab can select game objects (riders, beds, pool balls…), and a `studio` hook
+so more games can be built in the Level Studio.
+
+## Game inspector (`inspect.js`)
+
+In the Cheats & tuning panel's ✋ Edit mode a click asks the game first: `mode.inspect(x, y)` or `GAME_INSPECT[id]`,
+then the generic inspectors (any hero / CPU player, any ragdoll), then the old block / crate / enemy inspector. A hit
+is described as `{ title, sub, pos(), fields: [rows like tunables], actions: [{ label, fn }] }` and shown as a card on
+the Inspect tab (values refresh live, the object gets a dashed outline in the world). Full-screen games show
+`mode.matchState()` / `GAME_MATCH_STATE[id]` (a list of [label, value]) instead.

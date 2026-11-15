@@ -14,6 +14,11 @@ var SKINS = [
     { id: "cap", name: "Cap Hero" }
 ];
 
+["NORMAL", "SPITTER", "LEAPER", "EXPLODER", "TANK", "SLIME", "MINI_SLIME", "BAT", "ARCHER", "KNIGHT", "MAGE", "BOSS_KING"].forEach(function(id) {
+    SKINS.push({ id: "npc:" + id, name: id.toLowerCase().replace(/_/g, " ") });
+});
+["crate", "ball", "barrel"].forEach(function(id) { SKINS.push({ id: "object:" + id, name: "Living " + id }); });
+
 var heroSkins = ["original", "original", "stick", "brawler"];
 try {
     var savedSkins = JSON.parse(localStorage.getItem("timsZombieGameSkins") || "null");
@@ -40,6 +45,9 @@ function cycleSkin(playerIdx, dir) {
 // Drawing helpers (all coordinates are in a design space where the character box is 80 x 80,
 // origin at the centre, +y downward; everything is scaled by S/80 and drawn onto `ctx`)
 // ---------------------------------------------------------------------------
+// 0..1: how much extra detail to draw (set per character from its on-screen size; big = more detail)
+var SKIN_DETAIL = 0;
+
 function skinSeg(x1, y1, x2, y2, lw, col, flash) {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -49,6 +57,17 @@ function skinSeg(x1, y1, x2, y2, lw, col, flash) {
     ctx.strokeStyle = flash ? "#ffffff" : col;
     ctx.lineWidth = lw;
     ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    if (SKIN_DETAIL > 0 && !flash && typeof col === "string" && col[0] === "#") {
+        // shading: a darker under-edge and a light top-edge highlight along the limb
+        var dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+        if (ny > 0) { nx = -nx; ny = -ny; }
+        ctx.globalAlpha = 0.55 * SKIN_DETAIL;
+        ctx.strokeStyle = Components.shade(col, -45); ctx.lineWidth = lw * 0.35;
+        ctx.beginPath(); ctx.moveTo(x1 - nx * lw * 0.3, y1 - ny * lw * 0.3); ctx.lineTo(x2 - nx * lw * 0.3, y2 - ny * lw * 0.3); ctx.stroke();
+        ctx.strokeStyle = Components.shade(col, 60); ctx.lineWidth = lw * 0.22;
+        ctx.beginPath(); ctx.moveTo(x1 + nx * lw * 0.25, y1 + ny * lw * 0.25); ctx.lineTo(x2 + nx * lw * 0.25, y2 + ny * lw * 0.25); ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
 }
 
 function skinPoly(pts, fill, flash) {
@@ -69,6 +88,19 @@ function skinCirc(x, y, r, fill, flash, outline) {
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fillStyle = flash ? "#ffffff" : fill;
     ctx.fill();
+    if (SKIN_DETAIL > 0 && !flash && r > 3 && typeof fill === "string" && fill[0] === "#") {
+        // round shading + a specular shine on heads, hands and joints
+        ctx.save();
+        ctx.clip();
+        ctx.globalAlpha = 0.35 * SKIN_DETAIL;
+        ctx.fillStyle = Components.shade(fill, -50);
+        ctx.beginPath(); ctx.arc(x + r * 0.35, y + r * 0.4, r, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 0.65 * SKIN_DETAIL;
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath(); ctx.ellipse(x - r * 0.38, y - r * 0.42, r * 0.28, r * 0.17, -0.6, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+    }
     if (outline !== false) {
         ctx.lineWidth = 3;
         ctx.strokeStyle = "#0a0f16";
@@ -86,6 +118,20 @@ function skinLimb(ax, ay, bx, by, bend, lw, col, flash) {
 
 // st: { facing:+1/-1, phase, moving(0..1), air, rising, aimX, aimY (unit, screen space), color, firing, flash, t }
 function drawHeroSkin(skin, cx, cy, S, st) {
+    if (skin.indexOf("npc:") === 0) { drawEnemySkin(skin.slice(4), cx, cy, S, st); return; }
+    if (skin.indexOf("object:") === 0) {
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate((st.phase || 0) * 0.08);
+        var r = S * 0.42;
+        ctx.fillStyle = st.flash ? "#fff" : (skin === "object:ball" ? "#f8fafc" : "#a86f3c");
+        ctx.strokeStyle = "#283443"; ctx.lineWidth = Math.max(2, S / 25);
+        if (skin === "object:ball") { ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+        else { ctx.fillRect(-r, -r, r * 2, r * 2); ctx.strokeRect(-r, -r, r * 2, r * 2);
+            ctx.beginPath(); ctx.moveTo(-r, skin === "object:barrel" ? -r/2 : -r); ctx.lineTo(r, skin === "object:barrel" ? -r/2 : r);
+            ctx.moveTo(-r, skin === "object:barrel" ? r/2 : r); ctx.lineTo(r, skin === "object:barrel" ? r/2 : -r); ctx.stroke(); }
+        ctx.fillStyle = "#111827"; ctx.fillRect(-r * 0.45, -r * 0.3, r * 0.18, r * 0.25); ctx.fillRect(r * 0.27, -r * 0.3, r * 0.18, r * 0.25);
+        ctx.restore(); return;
+    }
+    SKIN_DETAIL = (typeof settings === "undefined" || settings.charDetail !== false) ? Math.max(0, Math.min(1, (S - 70) / 50)) : 0;
     ctx.save();
     ctx.translate(cx, cy);
     var k = S / 80;
@@ -127,8 +173,8 @@ function drawHeroSkin(skin, cx, cy, S, st) {
         var hx = lean + ax * 26, hy = -9 + bob + ay * 26;
         skinLimb(lean, -9 + bob, hx, hy, ay * -4, lw - 1, col, fl);
         // blaster
-        skinSeg(hx, hy, hx + ax * 13, hy + ay * 13, 7, "#334155", fl);
-        if (st.firing) skinCirc(hx + ax * 17, hy + ay * 17, 6, "#fff3a0", false, false);
+        if (!st.fists) skinSeg(hx, hy, hx + ax * 13, hy + ay * 13, 7, "#334155", fl);
+        if (st.firing && !st.fists) skinCirc(hx + ax * 17, hy + ay * 17, 6, "#fff3a0", false, false);
         // head + headband ribbon
         skinCirc(lean, -24 + bob, 11, "#0a0f16", false, false);
         skinCirc(lean, -24 + bob, 8.5, fl ? "#ffffff" : "#f8fafc", false, false);
@@ -157,7 +203,7 @@ function drawHeroSkin(skin, cx, cy, S, st) {
         skinSeg(f * 10, 9 + bob, f * 15 + Math.sin(ph * 2) * 3, 20 + bob, 4, col, fl);
         // arms: muscular bare arms, red wristbands. Firing = two-handed energy thrust
         var sx0 = -15, sx1 = 15, sy = -9 + bob;
-        if (st.firing) {
+        if (st.firing && !st.fists) {
             skinLimb(sx0, sy, ax * 28 - 4, sy + ay * 28, ay * 4, 10, skin1, fl);
             skinLimb(sx1, sy, ax * 28 + 4, sy + ay * 28, ay * 4, 10, skin1, fl);
             skinCirc(ax * 38, sy + ay * 38, 9, "#a5f3fc", false);
@@ -199,9 +245,9 @@ function drawHeroSkin(skin, cx, cy, S, st) {
         skinCirc(-f * 12 - sw * 0.4, st.air ? -24 : 5 + bob, 6, fl ? "#fff" : "#ffffff", false);
         var gx = 13 + ax * 24, gy = -8 + bob + ay * 24;
         skinLimb(13, -8 + bob, gx, gy, ay * -3, 8, col, fl);
-        skinSeg(gx, gy, gx + ax * 12, gy + ay * 12, 7, "#334155", fl);
+        if (!st.fists) skinSeg(gx, gy, gx + ax * 12, gy + ay * 12, 7, "#334155", fl);
         skinCirc(gx, gy, 6, fl ? "#fff" : "#ffffff", false);
-        if (st.firing) skinCirc(gx + ax * 17, gy + ay * 17, 6, "#fff3a0", false, false);
+        if (st.firing && !st.fists) skinCirc(gx + ax * 17, gy + ay * 17, 6, "#fff3a0", false, false);
         // head: face, nose, cap with brim + emblem
         skinCirc(0, -27 + bob, 12.5, skin2, fl);
         skinCirc(f * 11, -25 + bob, 3.6, "#f2b88a", fl, false);
@@ -282,6 +328,7 @@ function enemyHand(st, i, nx, ny) {
 }
 
 function drawEnemySkin(skin, cx, cy, S, st) {
+    SKIN_DETAIL = (typeof settings === "undefined" || settings.charDetail !== false) ? Math.max(0, Math.min(1, (S - 70) / 50)) : 0;
     ctx.save();
     ctx.translate(cx, cy);
     var k = S / 80;

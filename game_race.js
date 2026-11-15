@@ -5,11 +5,12 @@
 //   Best times + a ghost of your best run are saved per course. 2 players race head-to-head.
 // ============================================================================
 var RACE_COURSES = [];
-var raceSave = Store.load("timsParkourRush", { best: {}, ghost: {}, medals: {}, course: 0 });
-function saveRace() { Store.set("timsParkourRush", raceSave); }
+var raceSave = { best: {}, ghost: {}, medals: {}, splits: {}, course: 0 };
+try { var _rs = JSON.parse(localStorage.getItem("timsParkourRush") || "null"); if (_rs) { for (var _k in _rs) raceSave[_k] = _rs[_k]; } } catch (e) {}
+function saveRace() { try { localStorage.setItem("timsParkourRush", JSON.stringify(raceSave)); } catch (e) {} }
 
 var Race = {
-    phase: "ready", timer: 0, time: 0, pick: null,   // pick = course chosen in the menu (Enter loads it)
+    phase: "ready", timer: 0, time: 0,
     finish: {},        // playerIndex -> frames
     rec: [], ghost: null, ghostOn: true,
     newBest: false, endTimer: 0
@@ -199,18 +200,14 @@ GameModes.register({
         coopToggle: true, dash: true, wallJump: true, airJumps: 1, enemiesPassive: true, playerControl: true, bigPads: true },
     overTitle: "COURSE COMPLETE",
     againLabel: "Run it again",
-    restartLabel: "Restart run",
-    ui: {
-        levelPicker: false,
-        help: [["A / D", "run"], ["W", "jump (again in the air)"], ["Shift", "dash"], ["into a wall + W", "wall-jump"], ["hold W", "climb stairs"], ["R", "restart run"], ["G", "ghost on / off"]]
-    },
 
     setupLevel: function(lvl) {
         Gadgets.load(lvl.gadgets);
         raceSave.course = Math.max(0, RACE_COURSES.indexOf(LevelManager.currentLevelKey));
-        Race.pick = null;
         Race.phase = "ready"; Race.timer = 150; Race.time = 0;
         Race.finish = {}; Race.rec = []; Race.newBest = false; Race.endTimer = 0; Race.hurry = undefined;
+        Race.splits = []; Race.splitShow = null; Race.cheated = gameCheats.raceFreeze;
+        if (!raceSave.splits) raceSave.splits = {};
         var g = raceSave.ghost[LevelManager.currentLevelKey];
         Race.ghost = (g && g.length) ? g : null;
     },
@@ -232,7 +229,7 @@ GameModes.register({
 
     update: function() {
         if (Race.phase === "run") {
-            Race.time++;
+            if (gameCheats.raceFreeze) Race.cheated = true; else Race.time++;
             // record P1 every 2 frames for the ghost
             if (redGuy && Race.time % 2 === 0 && Race.finish[0] === undefined && Race.rec.length < 12000) {
                 Race.rec.push(Math.round(redGuy.x), Math.round(redGuy.y));
@@ -246,6 +243,19 @@ GameModes.register({
         if (Race.phase === "done" && --Race.endTimer <= 0) { Race.phase = "results"; gameOver = true; }
         // 2-player: once someone finishes, the other gets 10 seconds
         if (Race.phase === "run" && multiplayer && Race.hurry !== undefined && --Race.hurry <= 0) this.finishRace();
+    },
+
+    // speedrun splits: P1's time at each checkpoint vs the splits of the best run
+    onCheckpoint: function(c, g) {
+        if (Race.phase !== "run" || c.playerIndex !== 0) return;
+        var cps = Gadgets.list.filter(function(q) { return q.type === "checkpoint"; }).sort(function(a, b) { return a.x - b.x; });
+        var i = cps.indexOf(g);
+        if (i < 0 || Race.splits[i] !== undefined) return;
+        Race.splits[i] = Race.time;
+        var old = (raceSave.splits[LevelManager.currentLevelKey] || [])[i];
+        var d = old !== undefined ? (Race.time - old) / 60 : null;
+        Race.splitShow = { i: i, t: Race.time, d: d, until: Race.time + 180 };
+        if (d !== null) Components.addFloatingText((d <= 0 ? "-" : "+") + Math.abs(d).toFixed(2), c.x, c.y + 150, d <= 0 ? "#4ade80" : "#f87171", 22);
     },
 
     onExit: function(c, g) {
@@ -266,10 +276,11 @@ GameModes.register({
         var key = LevelManager.currentLevelKey;
         var t = Race.finish[0];
         if (t !== undefined) {
-            if (!raceSave.best[key] || t < raceSave.best[key]) {
+            if (!Race.cheated && (!raceSave.best[key] || t < raceSave.best[key])) {
                 Race.newBest = true;
                 raceSave.best[key] = t;
                 raceSave.ghost[key] = Race.rec.slice();
+                raceSave.splits[key] = Race.splits.slice();
             }
             raceSave.medals[key] = Math.max(raceSave.medals[key] || 0, raceMedal(key, t));
             saveRace();
@@ -289,6 +300,18 @@ GameModes.register({
 
     onKey: function(code) {
         if (code === "KeyR") { LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
+        // T: straight back to your last checkpoint (the clock keeps running; not counted as a fall)
+        if (code === "KeyT" && redGuy && !redGuy.dead && Race.phase === "run") {
+            var c = redGuy;
+            // no checkpoint yet: back to the start of the course (never to an unset spawn = NaN)
+            var start = LevelManager.getCurrentLevel().spawnP1 || [0, 120];
+            c.x = c.respawnX !== undefined ? c.respawnX : start[0]; c.y = c.respawnY !== undefined ? c.respawnY : start[1] + 40;
+            c.xspeed = c.yspeed = 0; c.invulnTimer = 30;
+            if (c.liveRagdoll && typeof Ragdolls !== "undefined") { Ragdolls.remove(c.liveRagdoll); c.liveRagdoll = null; c.ragdollTimer = 0; }
+            Components.spawnSparks(c.x, c.y, "#7ff0ff", 10);
+            Components.addFloatingText("↩ CHECKPOINT", c.x, c.y + 90, "#7ff0ff", 18);
+            return true;
+        }
         if (code === "KeyG") { Race.ghostOn = !Race.ghostOn; return true; }
         return false;
     },
@@ -325,11 +348,28 @@ GameModes.register({
         uiText("🥇 " + par[0] + "s   🥈 " + par[1] + "s   🥉 " + par[2] + "s" + (raceSave.medals[key] ? "   earned: " + MEDAL_NAMES[raceSave.medals[key]] : ""), 30, 110, 11, "#64748b", "left", "700");
         // big timer
         uiText(raceFmt(Race.time), cssW / 2, 96, 34, Race.phase === "run" ? "#ffffff" : "#ffd23f", "center", "900");
+        if (Race.splitShow && Race.time < Race.splitShow.until) {
+            var sp = Race.splitShow, good = sp.d !== null && sp.d <= 0;
+            uiPanel(cssW / 2 - 110, 138, 220, 34, sp.d === null ? "#38bdf8" : (good ? "#4ade80" : "#f87171"), 0.9);
+            uiText("CP " + (sp.i + 1) + "  " + raceFmt(sp.t) + (sp.d === null ? "" : "   " + (good ? "-" : "+") + Math.abs(sp.d).toFixed(2)), cssW / 2, 161, 16, sp.d === null ? "#e2e8f0" : (good ? "#86efac" : "#fca5a5"), "center", "900");
+        }
+        // speed lines when you're really moving
+        if (redGuy && !redGuy.dead && Race.phase === "run") {
+            var spd = Math.hypot(redGuy.xspeed, redGuy.yspeed);
+            if (spd > 13) {
+                var a = Math.min(0.35, (spd - 13) * 0.04), dir = redGuy.xspeed >= 0 ? 1 : -1;
+                ctx.strokeStyle = "rgba(255,255,255," + a.toFixed(3) + ")"; ctx.lineWidth = 2;
+                for (let i = 0; i < 14; i++) {
+                    var ly = ((i * 97 + Race.time * 3) % cssH), lx = (i % 2 ? cssW - 40 : 40) + ((Race.time * 23 + i * 61) % 120) * -dir, len = 60 + (i * 37) % 90;
+                    ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx - dir * len, ly); ctx.stroke();
+                }
+            }
+        }
         if (Race.phase === "ready") {
             var c = Math.ceil(Race.timer / 50);
             uiText(c > 0 ? String(c) : "GO!", cssW / 2, cssH / 2 - 40, 110, "#38bdf8", "center", "900");
         }
-        if (Race.hurry !== undefined && Race.phase === "run") uiText("HURRY! " + Math.ceil(Race.hurry / 60), cssW / 2, 132, 20, "#ff6b6b", "center", "900");
+        if (Race.hurry !== undefined && Race.phase === "run") uiText("HURRY! " + Math.ceil(Race.hurry / 60), cssW / 2, 196, 20, "#ff6b6b", "center", "900");
         // course progress bar
         var exitG = null;
         for (let i = 0; i < Gadgets.list.length; i++) if (Gadgets.list[i].type === "exit") exitG = Gadgets.list[i];
@@ -344,19 +384,39 @@ GameModes.register({
             if (Race.ghost && Race.ghostOn) { var gi = Math.min(Math.floor(Race.time / 2), Race.ghost.length / 2 - 1) * 2; mark(Race.ghost[gi], "rgba(165,243,252,0.7)", 5); }
             for (let i = 0; i < characters.length; i++) mark(characters[i].x, characters[i].color || "#fff", 7);
         }
+        uiText("A/D run · W jump · Shift dash · wall-jump · hold W for stairs · T last checkpoint · R restart · G ghost " + (Race.ghostOn ? "on" : "off") + " · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
         for (let i = 0; i < characters.length; i++) if (!characters[i].dead) drawEdgeIndicator(characters[i].x, characters[i].y, characters[i].color, characters[i].playerLabel);
     },
 
-    menuRows: function() {
-        var cur = function() { return Race.pick !== null ? Race.pick : Math.max(0, RACE_COURSES.indexOf(LevelManager.currentLevelKey)); };
-        return [
-            { label: "Course", icon: "🏁", cycle: true, hint: "◀ ▶ choose, Enter loads it",
-              value: function() { return (cur() + 1) + " / " + RACE_COURSES.length; },
-              act: function(d) { Race.pick = (cur() + d + RACE_COURSES.length) % RACE_COURSES.length; },
-              go: function() { closePause(); LevelManager.selectLevel(RACE_COURSES[cur()]); } },
-            { label: "Ghost of your best run", icon: "👻", toggle: function() { return Race.ghostOn; }, hint: "G", act: function() { Race.ghostOn = !Race.ghostOn; } },
-            { label: "Erase best time + ghost", icon: "🗑", hint: "this course only", danger: true,
-              act: function() { var k = LevelManager.currentLevelKey; delete raceSave.best[k]; delete raceSave.ghost[k]; delete raceSave.medals[k]; saveRace(); Race.ghost = null; } }
-        ];
+    menuItems: function(items) {
+        var n = Math.max(0, RACE_COURSES.indexOf(LevelManager.currentLevelKey));
+        items.push({ id: "rc_course", label: "Course:  ◀  " + (n + 1) + " / " + RACE_COURSES.length + "  ▶", hint: "", cycle: true });
+        items.push({ id: "rc_select", label: "🗺 Course select…", hint: "all courses, best times, medals" });
+        items.push({ id: "rc_restart", label: "Restart run  (R)", hint: "" });
+        items.push({ id: "rc_ghost", label: "Ghost:  " + (Race.ghostOn ? "ON" : "OFF"), hint: "G" });
+        items.push({ id: "rc_clear", label: "Erase best time + ghost", hint: "this course" });
+    },
+
+    onMenu: function(id, dir) {
+        if (id === "rc_course") {
+            var n = Math.max(0, RACE_COURSES.indexOf(LevelManager.currentLevelKey));
+            n = (n + (dir || 1) + RACE_COURSES.length) % RACE_COURSES.length;
+            closePause(); LevelManager.selectLevel(RACE_COURSES[n]);
+            return true;
+        }
+        if (id === "rc_select") {
+            var name = function(k) { var L = LevelManager.getAllLevels()[k] || {}; return (L.title || L.name || k).replace(/^[^A-Za-z0-9]+/, ""); };
+            CourseSelect.open({ title: "🏃 Parkour Rush — courses", items: RACE_COURSES.map(function(k) { return { name: name(k), best: raceSave.best[k] ? raceFmt(raceSave.best[k]) + "s" : "", medal: raceSave.medals[k] || 0, current: k === LevelManager.currentLevelKey }; }),
+                onPick: function(i) { LevelManager.selectLevel(RACE_COURSES[i]); } });
+            return true;
+        }
+        if (id === "rc_restart") { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
+        if (id === "rc_ghost") { Race.ghostOn = !Race.ghostOn; return true; }
+        if (id === "rc_clear") {
+            var k = LevelManager.currentLevelKey;
+            delete raceSave.best[k]; delete raceSave.ghost[k]; delete raceSave.medals[k]; saveRace(); Race.ghost = null;
+            return true;
+        }
+        return false;
     }
 });

@@ -5,11 +5,8 @@
 // ============================================================================
 var PUZZLE_ROOMS = [];
 var puzzleState = { room: 0, unlocked: 1, time: 0, done: false, doneTimer: 0, best: {} };
-(function() {
-    var sv = Store.get("timsCrateLab", null);
-    if (sv) { puzzleState.unlocked = sv.unlocked || 1; puzzleState.best = sv.best || {}; puzzleState.room = Math.min(sv.room || 0, puzzleState.unlocked - 1); }
-})();
-function savePuzzle() { Store.set("timsCrateLab", { unlocked: puzzleState.unlocked, best: puzzleState.best, room: puzzleState.room }); }
+try { var _ps = JSON.parse(localStorage.getItem("timsCrateLab") || "null"); if (_ps) { puzzleState.unlocked = _ps.unlocked || 1; puzzleState.best = _ps.best || {}; puzzleState.room = Math.min(_ps.room || 0, puzzleState.unlocked - 1); } } catch (e) {}
+function savePuzzle() { try { localStorage.setItem("timsCrateLab", JSON.stringify({ unlocked: puzzleState.unlocked, best: puzzleState.best, room: puzzleState.room })); } catch (e) {} }
 
 function puzzleRoom(n, title, left, right, spawn, extra, gadgets) {
     var key = "lab_" + n;
@@ -119,6 +116,49 @@ puzzleRoom(7, "Final Exam", -2100, 2100, [-1900, 60],
     ]);
 PUZZLE_ROOMS.noBaseFloor.lab_7 = true;
 
+// one hint per room (H shows it; offered after 45 s)
+var PUZZLE_HINTS = [
+    "Carry the crate onto the plate and leave it there — the door stays open while it's weighed down.",
+    "Put one crate next to the ledge, throw the second on top of it, then hop up crate by crate.",
+    "Pull the lever, then wait for the platform to come to YOUR side before stepping on.",
+    "One crate on each plate. Throw the far crate rather than walking it over.",
+    "Stand in the fan and hold jump to rise; drift left onto the shelf for the key.",
+    "Grab a TNT barrel, get close to the cracked wall and throw it. Keep your distance from the blast!",
+    "Leave the crate on the plate — the lift only runs while it's pressed. Then ride it up.",
+    "Crate on the plate first, then the lever, ride across, and use the fan for the blue key."
+];
+
+// wiring: a line from every plate / lever to what it powers, lit while it's on
+function puzzleDrawWires() {
+    var L = Gadgets.list, k = cameraScaleX, t = puzzleState.time;
+    ctx.save();
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    for (let i = 0; i < L.length; i++) {
+        var a = L[i];
+        if (!a.links || !a.links.length || (a.type !== "plate" && a.type !== "switch")) continue;
+        for (let j = 0; j < L.length; j++) {
+            var b = L[j];
+            if (!b.id || a.links.indexOf(b.id) === -1) continue;
+            var bx = b.obj ? b.obj.x : b.x, by = b.obj ? b.obj.y - (b.obj.h || 0) / 2 : b.y;
+            if (b.type === "door" || b.type === "lockdoor") by = b.y - (b.h || 0) / 2 + 20;
+            if (b.type === "door" || b.type === "lockdoor") by = Math.max(a.y, by) + 140;   // a junction box on the door
+            var ay = a.y + 6, x0 = wsx(a.x), y0 = wsy(ay), x1 = wsx(bx), y1 = wsy(by), yr = wsy(Math.max(ay, by) + 140);
+            if (b.type === "door" || b.type === "lockdoor") yr = y1;
+            ctx.lineWidth = Math.max(2, 5 * k);
+            ctx.strokeStyle = "rgba(10,15,22,0.7)"; ctx.setLineDash([]);
+            ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, yr); ctx.lineTo(x1, yr); ctx.lineTo(x1, y1); ctx.stroke();
+            ctx.lineWidth = Math.max(1.5, 3 * k);
+            ctx.strokeStyle = a.active ? "#4ade80" : "rgba(148,163,184,0.55)";
+            ctx.setLineDash([10 * k + 2, 8 * k + 2]); ctx.lineDashOffset = a.active ? -t * 1.5 : 0;   // current flows when on
+            ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, yr); ctx.lineTo(x1, yr); ctx.lineTo(x1, y1); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = a.active ? "#4ade80" : "#64748b";
+            ctx.beginPath(); ctx.arc(x1, y1, Math.max(3, 6 * k), 0, 7); ctx.fill();
+        }
+    }
+    ctx.restore();
+}
+
 GameModes.register({
     id: "puzzle",
     title: "CRATE LAB",
@@ -128,11 +168,6 @@ GameModes.register({
     flags: { waves: false, revive: false, jetpack: false, shooting: true, ability: false, ammo: false, noBedrock: false, scenery: false, coopToggle: true, wallJump: false, airJumps: 1, enemiesPassive: true },
     overTitle: "LAB COMPLETE!",
     againLabel: "Play from room 1",
-    restartLabel: "Start over from room 1",
-    ui: {
-        levelPicker: false,
-        help: [["A / D", "move"], ["W", "jump"], ["G / R-click", "grab a crate"], ["click", "throw"], ["E", "pull lever"], ["R", "restart room"]]
-    },
 
     setupLevel: function(lvl) {
         // rooms with pits replace the full floor with segments
@@ -146,6 +181,7 @@ GameModes.register({
         puzzleState.room = PUZZLE_ROOMS.indexOf(LevelManager.currentLevelKey);
         puzzleState.time = 0;
         puzzleState.done = false;
+        puzzleState.hint = false;
     },
 
     createPlayers: function() {
@@ -187,8 +223,28 @@ GameModes.register({
         return true;
     },
 
+    // remember where every crate starts, so T can put them back without restarting the room
+    onReset: function() {
+        puzzleState.crateHome = movingObjects.filter(function(o) { return o.movable && /Crate|TNT/.test(o.name || ""); }).map(function(o) { return [o, o.x, o.y]; });
+    },
+
+    resetCrates: function() {
+        var n = 0;
+        (puzzleState.crateHome || []).forEach(function(h) {
+            var o = h[0];
+            if (movingObjects.indexOf(o) === -1) return;            // blown up: only R brings those back
+            if (o.heldBy) { o.heldBy.heldObject = null; o.heldBy = null; o.noCollide = false; }
+            o.x = h[1]; o.y = h[2]; o.xspeed = 0; o.yspeed = 0; n++;
+            Components.spawnSparks(o.x, o.y, "#d9a05b", 6);
+        });
+        if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+        if (redGuy) Components.addFloatingText(n ? "CRATES RESET" : "NO CRATES TO RESET", redGuy.x, redGuy.y + 100, "#d9a05b", 18);
+    },
+
     onKey: function(code) {
         if (code === "KeyR") { LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
+        if (code === "KeyT") { this.resetCrates(); return true; }
+        if (code === "KeyH") { puzzleState.hint = !puzzleState.hint; return true; }
         return false;
     },
 
@@ -198,21 +254,41 @@ GameModes.register({
 
     onRestart: function() { puzzleState.room = 0; LevelManager.selectLevel(PUZZLE_ROOMS[0]); },
 
+    drawWorld: function() { puzzleDrawWires(); },
+
     drawHUD: function() {
         var lvl = LevelManager.getCurrentLevel();
+        var hint = PUZZLE_HINTS[puzzleState.room];
+        if (hint && puzzleState.hint) {
+            uiPanel(cssW / 2 - 400, cssH - 110, 800, 54, "#fde047", 0.92);
+            uiText("💡 " + hint, cssW / 2, cssH - 78, 13, "#fef9c3", "center", "800");
+        } else if (hint && !puzzleState.done && puzzleState.time > 45 * 60) uiText("Stuck? Press H for a hint", cssW / 2, cssH - 44, 14, "#fde047", "center", "900");
         uiPanel(14, 14, 380, 92, "#d9a05b");
         uiText("CRATE LAB", 30, 46, 24, "#f4c27a", "left", "900");
         uiText("ROOM " + (puzzleState.room + 1) + "/" + PUZZLE_ROOMS.length + "  ·  " + (lvl.title || ""), 30, 70, 14, "#e2e8f0", "left", "800");
         uiText("⏱ " + (puzzleState.time / 60).toFixed(1) + "s   ★ " + Gadgets.starsGot + "/" + Gadgets.starsTotal + "   ☠ " + Gadgets.deaths + (Gadgets.keys["#facc15"] || Gadgets.keys["#38bdf8"] ? "   🔑" : ""), 30, 94, 13, "#94a3b8", "left", "700");
+        uiText("G / right-click grab · click throw · E lever · H hint · T crates back · R restart room · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.7)", "center", "700");
     },
 
-    menuRows: function() {
-        return [
-            { label: "Room", icon: "🧪", cycle: true, hint: "◀ ▶ choose, Enter loads it",
-              value: function() { return (puzzleState.room + 1) + " / " + PUZZLE_ROOMS.length + "  (" + puzzleState.unlocked + " unlocked)"; },
-              act: function(d) { puzzleState.room = (puzzleState.room + d + puzzleState.unlocked) % puzzleState.unlocked; },
-              go: function() { closePause(); LevelManager.selectLevel(PUZZLE_ROOMS[puzzleState.room]); } },
-            { label: "Restart this room  (R)", icon: "↻", act: function() { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); } }
-        ];
+    menuItems: function(items) {
+        items.push({ id: "pz_room", label: "Room:  ◀  " + (puzzleState.room + 1) + " / " + PUZZLE_ROOMS.length + "  (" + puzzleState.unlocked + " unlocked)  ▶", hint: "Enter loads the room", cycle: true });
+        items.push({ id: "pz_select", label: "🗺 Room select…", hint: "all rooms and best times" });
+        items.push({ id: "pz_restart", label: "Restart this room  (R)", hint: "" });
+    },
+
+    onMenu: function(id, dir) {
+        if (id === "pz_room") {
+            if (dir) { puzzleState.room = (puzzleState.room + dir + puzzleState.unlocked) % puzzleState.unlocked; }
+            else { closePause(); LevelManager.selectLevel(PUZZLE_ROOMS[puzzleState.room]); }
+            return true;
+        }
+        if (id === "pz_select") {
+            var name = function(k) { var L = LevelManager.getAllLevels()[k] || {}; return (L.title || L.name || k).replace(/^[^A-Za-z0-9]+/, ""); };
+            CourseSelect.open({ title: "📦 Crate Lab — rooms", items: PUZZLE_ROOMS.map(function(k, i) { return { name: name(k), best: puzzleState.best[k] ? puzzleState.best[k] + "s" : "", locked: i >= puzzleState.unlocked, current: k === LevelManager.currentLevelKey }; }),
+                onPick: function(i) { puzzleState.room = i; LevelManager.selectLevel(PUZZLE_ROOMS[i]); } });
+            return true;
+        }
+        if (id === "pz_restart") { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
+        return false;
     }
 });

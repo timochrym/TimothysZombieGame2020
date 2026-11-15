@@ -1,17 +1,14 @@
 // ============================================================================
 // GAME: PORTAL LAB  -  test chambers with a two-portal gun
 //   F / left-click / RT  = BLUE portal      G / right-click / LB = ORANGE portal      E / Y = grab crate
-//   Portals only stick to WHITE panels. Momentum is conserved: "speedy thing goes in, speedy thing comes out."
+//   Portals only stick to WHITE panels. Momentum is conserved: fall fast into one portal, fly fast out of the other.
 //   Glass blocks bodies but lets the portal beam through. Co-op: each player gets their own portal pair.
 // ============================================================================
 var PORTAL_LEN = 170;
 var PORTAL_CHAMBERS = [];
-var portalState = { chamber: 0, unlocked: 1, time: 0, done: false, doneTimer: 0 };
-(function() {
-    var sv = Store.get("timsPortalLab", null);
-    if (sv) { portalState.unlocked = sv.unlocked || 1; portalState.chamber = Math.min(sv.chamber || 0, portalState.unlocked - 1); }
-})();
-function savePortal() { Store.set("timsPortalLab", { unlocked: portalState.unlocked, chamber: portalState.chamber }); }
+var portalState = { chamber: 0, unlocked: 1, time: 0, done: false, doneTimer: 0, best: {} };
+try { var _pp = JSON.parse(localStorage.getItem("timsPortalLab") || "null"); if (_pp) { portalState.unlocked = _pp.unlocked || 1; portalState.best = _pp.best || {}; portalState.chamber = Math.min(_pp.chamber || 0, portalState.unlocked - 1); } } catch (e) {}
+function savePortal() { try { localStorage.setItem("timsPortalLab", JSON.stringify({ unlocked: portalState.unlocked, chamber: portalState.chamber, best: portalState.best })); } catch (e) {} }
 
 var Portals = {
     pairs: {},
@@ -20,7 +17,23 @@ var Portals = {
     colors: [["#38bdf8", "#fb923c"], ["#a78bfa", "#f43f5e"]],
     tick: 0,
 
-    clear: function() { this.pairs = {}; this.beams = []; this.fixed = null; },
+    clear: function() { this.pairs = {}; this.beams = []; this.fixed = null; this.syncNavLinks(); },
+
+    // tell the pathfinder about every complete portal pair (walk into one mouth, come out of the other)
+    syncNavLinks: function() {
+        if (typeof Pathfinder === "undefined" || !Pathfinder.addLink) return;
+        Pathfinder.clearLinks("portal");
+        for (var ow in this.pairs) {
+            var pr = this.pairFor(Number(ow));
+            if (!pr[0] || !pr[1]) continue;
+            for (let k = 0; k < 2; k++) {
+                var P = pr[k], Q = pr[1 - k];
+                // floor portals are entered from above, wall portals from the side they face
+                Pathfinder.addLink(P.x + P.nx * 30, P.y + (P.ny > 0.5 ? 0 : -40), Q.x + Q.nx * 60, Q.y + (Q.ny > 0.5 ? 10 : -40), "teleport", { tag: "portal" });
+            }
+        }
+        Pathfinder.refreshLinks();
+    },
 
     pairFor: function(owner) {
         if (!this.pairs[owner]) this.pairs[owner] = [null, null];
@@ -58,17 +71,12 @@ var Portals = {
         if (!ch || ch.dead) return;
         var lvl = LevelManager.getCurrentLevel();
         if (which === 1 && lvl.onlyBlue) { Components.addFloatingText("This chamber has a fixed orange portal", ch.x, ch.y + 90, "#fb923c", 14); return; }
-        var dx, dy;
-        if (ch.playerIndex === 0 && useMouseAim && !ch.padAiming) {
-            var m = Components.getMouseWorldPos();
-            dx = m[0] - ch.x; dy = m[1] - (ch.y + 10);
-        } else { var rad = Math.radians(ch.degree); dx = Math.sin(rad); dy = Math.cos(rad); }
-        var l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+        var d = this.aimDir(ch), dx = d[0], dy = d[1];
         var col = this.colors[Math.min(1, ch.playerIndex)][which];
         var hit = this.raycast(ch.x, ch.y + 10, dx, dy);
         var endX = hit ? hit.x : ch.x + dx * 3600, endY = hit ? hit.y : ch.y + 10 + dy * 3600;
         this.beams.push({ x1: ch.x, y1: ch.y + 10, x2: endX, y2: endY, color: col, life: 14 });
-        if (!hit || !hit.obj.portalable) { this.fizzle(endX, endY, col); return; }
+        if (!hit || !(hit.obj.portalable || gameCheats.portalAnywhere)) { this.fizzle(endX, endY, col); return; }
         var o = hit.obj, half = PORTAL_LEN / 2;
         if (hit.nx !== 0) {
             if (o.h < PORTAL_LEN + 10) { this.fizzle(endX, endY, col); return; }
@@ -87,8 +95,50 @@ var Portals = {
         }
         var pair = this.pairFor(ch.playerIndex);
         pair[which] = { x: hit.x, y: hit.y, nx: hit.nx, ny: hit.ny, len: PORTAL_LEN, color: col, born: this.tick };
+        this.syncNavLinks();
         if (typeof SFX !== "undefined") SFX.play("portal", hit.x, hit.y, 1, which ? 0.8 : 1.15);
         Components.spawnSparks(hit.x, hit.y, col, 8);
+    },
+
+    // the direction a hero's portal gun points: the mouse for P1, otherwise the stick / keyboard aim angle
+    aimDir: function(ch) {
+        var dx, dy;
+        if (ch.playerIndex === 0 && useMouseAim && !ch.padAiming) { var m = Components.getMouseWorldPos(); dx = m[0] - ch.x; dy = m[1] - (ch.y + 10); }
+        else { var rad = Math.radians(ch.degree); dx = Math.sin(rad); dy = Math.cos(rad); }
+        var l = Math.hypot(dx, dy) || 1;
+        return [dx / l, dy / l];
+    },
+
+    // aim reticle for every local hero (mouse, gamepad stick or P2 keys): where the beam would land and
+    // whether a portal would stick there
+    drawAim: function() {
+        if (portalState.done) return;
+        for (let i = 0; i < characters.length; i++) {
+            var c = characters[i];
+            if (c.isPlayer && !c.isCPU && !c.isRemote && !c.dead) this.drawAimFor(c);
+        }
+    },
+
+    drawAimFor: function(ch) {
+        var d = this.aimDir(ch), dx = d[0], dy = d[1];
+        var hit = this.raycast(ch.x, ch.y + 10, dx, dy);
+        if (!hit) return;
+        var o = hit.obj, ok = !!(o.portalable || gameCheats.portalAnywhere) && (hit.nx !== 0 ? o.h >= PORTAL_LEN + 10 : o.w >= PORTAL_LEN + 10);
+        var sx = wsx(hit.x), sy = wsy(hit.y), k = cameraScaleX;
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1; ctx.setLineDash([4, 8]);
+        ctx.beginPath(); ctx.moveTo(wsx(ch.x), wsy(ch.y + 10)); ctx.lineTo(sx, sy); ctx.stroke(); ctx.setLineDash([]);
+        if (ok) {
+            // a ghost of the portal outline on the face (left half blue, right half orange = "either fits")
+            var half = PORTAL_LEN / 2 * k, vert = hit.nx !== 0, C = this.colors[Math.min(1, ch.playerIndex)];
+            ctx.lineWidth = 3; ctx.globalAlpha = 0.75;
+            ctx.strokeStyle = C[0]; ctx.beginPath(); ctx.ellipse(sx, sy, vert ? 7 : half, vert ? half : 7, 0, Math.PI * 0.5, Math.PI * 1.5); ctx.stroke();
+            ctx.strokeStyle = C[1]; ctx.beginPath(); ctx.ellipse(sx, sy, vert ? 7 : half, vert ? half : 7, 0, -Math.PI * 0.5, Math.PI * 0.5); ctx.stroke();
+        } else {
+            ctx.strokeStyle = "rgba(248,113,113,0.85)"; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(sx - 8, sy - 8); ctx.lineTo(sx + 8, sy + 8); ctx.moveTo(sx + 8, sy - 8); ctx.lineTo(sx - 8, sy + 8); ctx.stroke();
+        }
+        ctx.restore();
     },
 
     fizzle: function(x, y, col) {
@@ -100,6 +150,7 @@ var Portals = {
     teleportAll: function() {
         var ents = [];
         for (let i = 0; i < characters.length; i++) if (!characters[i].dead && !characters[i].liveRagdoll) ents.push(characters[i]);
+        for (let i = 0; i < zombies.length; i++) if (!zombies[i].dead && !zombies[i].liveRagdoll) ents.push(zombies[i]);
         for (let i = 0; i < movingObjects.length; i++) if (!movingObjects[i].dead && !movingObjects[i].heldBy) ents.push(movingObjects[i]);
         for (let i = 0; i < ents.length; i++) {
             var e = ents[i];
@@ -238,7 +289,7 @@ function chamber(n, title, spawn, layout, gadgets, extra) {
 }
 
 // 1 - one fixed orange portal: just place blue and walk through
-chamber(0, "Hello, Portal", [-1100, 60], [
+chamber(0, "First Light", [-1100, 60], [
     pBox(-1400, 1400, -400, 0, { name: "Floor" }),
     pBox(-1600, -1400, -400, 1600, { name: "Left Wall", p: true }),
     pBox(1400, 1600, -400, 1600, { name: "Right Wall" }),
@@ -276,7 +327,7 @@ chamber(2, "Step Right Up", [-1100, 60], [
 ]);
 
 // 4 - momentum fling across the spike pit
-chamber(3, "Speedy Thing", [300, 1140], [
+chamber(3, "Fling Theory", [300, 1140], [
     pBox(-2000, -1300, -800, -600, { name: "Pit Floor" }),
     pBox(-1300, -500, -800, 0, { name: "Exit Platform" }),
     pBox(-500, -400, -800, 2300, { name: "Glass", glass: true }),
@@ -287,20 +338,20 @@ chamber(3, "Speedy Thing", [300, 1140], [
     pBox(2000, 2200, -1000, 2500, { name: "Right Wall" }),
     pBox(-2200, 2200, 2300, 2500, { name: "Ceiling" })
 ], [
-    { type: "sign", x: 200, y: 1100, text: "Speedy thing goes in, speedy thing comes out!\nBlue at the bottom of the shaft, orange on the far left wall\n(through the glass), then jump into the shaft." },
+    { type: "sign", x: 200, y: 1100, text: "Fall fast, fly fast: speed carries through a portal!\nBlue at the bottom of the shaft, orange on the far left wall\n(through the glass), then jump into the shaft." },
     { type: "spikes", x: -1650, y: -600, w: 700 },
     { type: "exit", x: -800, y: 0 }
 ]);
 
 // 5 - fetch the crate from the sealed alcove
-chamber(4, "Companion Crate", [-200, 60], [
+chamber(4, "Crate Courier", [-200, 60], [
     pBox(-1600, 1600, -400, 0, { name: "Floor" }),
     pBox(-1800, -1600, -400, 1800, { name: "Left Wall", p: true }),
     pBox(1600, 1800, -400, 1800, { name: "Right Wall" }),
     pBox(-1800, 1800, 1600, 1800, { name: "Ceiling" }),
     pBox(-1600, -850, 800, 900, { name: "Alcove Glass", glass: true }),
     pBox(-890, -850, 900, 1600, { name: "Alcove Glass", glass: true }),
-    { type: "crate", name: "Companion Crate", x: -1200, y: 960, size: 80, color: "#f472b6", texture: "crate_plank" }
+    { type: "crate", name: "Courier Crate", x: -1200, y: 960, size: 80, color: "#f472b6", texture: "crate_plank" }
 ], [
     { type: "sign", x: 100, y: 0, text: "The crate is sealed in the glass alcove up high.\nOne portal low on the white wall, one INSIDE the alcove (shoot through the glass).\nGrab the crate with E, portal back out, put it on the plate." },
     { type: "plate", x: 450, y: 0, w: 170, links: ["d5"] },
@@ -311,17 +362,12 @@ chamber(4, "Companion Crate", [-200, 60], [
 GameModes.register({
     id: "portal",
     title: "PORTAL LAB",
-    tagline: "Two-portal gun test chambers. Momentum is conserved. Cake not included.",
+    tagline: "Two-portal gun puzzle rooms. Momentum is conserved.",
     color: "#38bdf8",
     firstLevel: function() { return PORTAL_CHAMBERS[Math.min(portalState.chamber, portalState.unlocked - 1)]; },
     flags: { waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, noBedrock: true, scenery: false, coopToggle: true, dash: false, wallJump: false, airJumps: 0, enemiesPassive: true },
     overTitle: "TESTING COMPLETE",
     againLabel: "Restart from chamber 1",
-    restartLabel: "Start over from chamber 1",
-    ui: {
-        levelPicker: false,
-        help: [["A / D", "move"], ["W", "jump"], ["F / click", "blue portal"], ["G / R-click", "orange portal"], ["E", "grab a crate"], ["R", "restart chamber"]]
-    },
 
     setupLevel: function(lvl) {
         Portals.clear();
@@ -386,7 +432,8 @@ GameModes.register({
         if (portalState.done) return;
         portalState.done = true;
         portalState.doneTimer = 130;
-        var c = portalState.chamber;
+        var c = portalState.chamber, bk = PORTAL_CHAMBERS[c], bt = Math.round(portalState.time / 6) / 10;
+        if (bk && (!portalState.best[bk] || bt < portalState.best[bk])) portalState.best[bk] = bt;
         portalState.unlocked = Math.max(portalState.unlocked, Math.min(PORTAL_CHAMBERS.length, c + 2));
         portalState.chamber = Math.min(PORTAL_CHAMBERS.length - 1, c + 1);
         savePortal();
@@ -398,16 +445,24 @@ GameModes.register({
 
     onKey: function(code) {
         if (code === "KeyR") { LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
+        if (code === "KeyX") {      // close your own portals (the fixed orange one stays)
+            var pr = Portals.pairFor(0);
+            for (let j = 0; j < 2; j++) if (pr[j] && pr[j] !== Portals.fixed) { Components.spawnSparks(pr[j].x, pr[j].y, pr[j].color, 6); pr[j] = null; }
+            Portals.syncNavLinks();
+            if (typeof SFX !== "undefined") SFX.play("fizzle");
+            return true;
+        }
         return false;
     },
 
     overSub: function(over) {
-        return over ? ("All " + PORTAL_CHAMBERS.length + " test chambers complete. The cake is still a lie.") : ("Test chamber " + (portalState.chamber + 1) + " / " + PORTAL_CHAMBERS.length);
+        return over ? ("All " + PORTAL_CHAMBERS.length + " test chambers complete. Lab notes filed.") : ("Test chamber " + (portalState.chamber + 1) + " / " + PORTAL_CHAMBERS.length);
     },
 
     onRestart: function() { portalState.chamber = 0; LevelManager.selectLevel(PORTAL_CHAMBERS[0]); },
 
     drawWorld: function() { Portals.draw(); },
+    drawFront: function() { Portals.drawAim(); },
 
     drawHUD: function() {
         var lvl = LevelManager.getCurrentLevel();
@@ -431,15 +486,28 @@ GameModes.register({
             }
             px += 80;
         }
+        uiText("F / click BLUE · G / right-click ORANGE · E grab · X close portals · R restart · Esc menu", cssW / 2, cssH - 16, 12, "rgba(220,230,240,0.75)", "center", "700");
     },
 
-    menuRows: function() {
-        return [
-            { label: "Chamber", icon: "🧪", cycle: true, hint: "◀ ▶ choose, Enter loads it",
-              value: function() { return (portalState.chamber + 1) + " / " + PORTAL_CHAMBERS.length + "  (" + portalState.unlocked + " unlocked)"; },
-              act: function(d) { portalState.chamber = (portalState.chamber + d + portalState.unlocked) % portalState.unlocked; },
-              go: function() { closePause(); LevelManager.selectLevel(PORTAL_CHAMBERS[portalState.chamber]); } },
-            { label: "Restart chamber  (R)", icon: "↻", act: function() { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); } }
-        ];
+    menuItems: function(items) {
+        items.push({ id: "pt_ch", label: "Chamber:  ◀  " + (portalState.chamber + 1) + " / " + PORTAL_CHAMBERS.length + "  (" + portalState.unlocked + " unlocked)  ▶", hint: "Enter loads it", cycle: true });
+        items.push({ id: "pt_select", label: "🗺 Chamber select…", hint: "all chambers and best times" });
+        items.push({ id: "pt_restart", label: "Restart chamber  (R)", hint: "" });
+    },
+
+    onMenu: function(id, dir) {
+        if (id === "pt_select") {
+            var name = function(k) { var L = LevelManager.getAllLevels()[k] || {}; return (L.title || L.name || k).replace(/^[^A-Za-z0-9]+/, ""); };
+            CourseSelect.open({ title: "🌀 Portal Lab — chambers", items: PORTAL_CHAMBERS.map(function(k, i) { return { name: name(k), best: portalState.best[k] ? portalState.best[k] + "s" : "", locked: i >= portalState.unlocked, current: k === LevelManager.currentLevelKey }; }),
+                onPick: function(i) { portalState.chamber = i; LevelManager.selectLevel(PORTAL_CHAMBERS[i]); } });
+            return true;
+        }
+        if (id === "pt_ch") {
+            if (dir) portalState.chamber = (portalState.chamber + dir + portalState.unlocked) % portalState.unlocked;
+            else { closePause(); LevelManager.selectLevel(PORTAL_CHAMBERS[portalState.chamber]); }
+            return true;
+        }
+        if (id === "pt_restart") { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
+        return false;
     }
 });

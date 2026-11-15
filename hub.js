@@ -10,6 +10,22 @@ var HUB_ICONS = {
     portal: { s: ["...bbbb...", "..b....b..", ".b......b.", ".b..oo..b.", ".b.o..o.b.", ".b.o..o.b.", ".b..oo..b.", ".b......b.", "..b....b..", "...bbbb..."], p: { b: "#38bdf8", o: "#fb923c" } },
     siege: { s: ["w.......w.", "w.......w.", ".w.....w..", ".w.....w..", "..wsssw...", "...www....", "....w.....", "....w.....", "....w.....", "...www...."], p: { w: "#9c6644", s: "#e5e7eb" } },
     creative: { s: ["....ww....", "...wwww...", "....ww....", "c...ww...c", "cccwwwwccc", "c..wwww..c", "....ww....", "...wwww...", "gggggggggg", "dddddddddd"], p: { w: "#e0f2fe", c: "#7dd3fc", g: "#4ade80", d: "#92400e" } },
+    platform: { s: ["oooooooooo", "o.yyyyyy.o", "o.yy..yy.o", "o.....yy.o", "o....yy..o", "o...yy...o", "o...yy...o", "o........o", "o...yy...o", "oooooooooo"], p: { o: "#b45309", ".": "#f59e0b", y: "#fef3c7" } },
+    bedwars: { s: ["..........", "..........", "ww........", "wwrrrrrrrr", "wwrrrrrrrr", "rrrrrrrrrr", "b........b", "b........b", "..........", ".........."], p: { w: "#f8fafc", r: "#ef4444", b: "#7f1d1d" } },
+    dummy: { s: ["...yy.....", "...yy.....", "..yyyy....", ".y.yy.y...", "...yy...b.", "...yy..bbb", "..y..y.bbb", ".y....y.b.", ".y....y...", ".........."], p: { y: "#facc15", b: "#f97316" } },
+    wheels: { s: ["..........", "....hh....", "....hh....", "...bbbb...", "..b.bb.b..", "..oooooo..", ".kkk..kkk.", "k...kk...k", "k...kk...k", ".kkk..kkk."], p: { h: "#fde68a", b: "#3b82f6", o: "#f97316", k: "#111827" } },
+    terra: { s: ["..........", "...gg.....", "..gggg....", "...ww.....", "gggwwggggg", "dddddddddd", "ddsdddssdd", "sssyssssss", "ss..ssyss.", "ssssssssss"], p: { g: "#4f8a33", w: "#8b5a2b", d: "#7c4a26", s: "#6b7280", y: "#d4a017" } },
+    powder: { s: ["..........", "....ss....", "...ssss...", "..s.ss.s..", "....ss....", "...ssss...", "..ssssss..", ".wwssssww.", "wwwwssswww", "wwwwwwwwww"], p: { s: "#d6ba70", w: "#3884e6" } },
+    snake: { s: ["..........", ".pppp.....", "p....p....", "p.ee.p....", ".pppp.p...", "......p...", ".....p....", "....p...o.", "...p...ooo", "..pppp..o."], p: { p: "#f472b6", e: "#ffffff", o: "#fbbf24" } },
+    cells: { s: ["..........", "...pppp...", "..pppppp..", ".pp.pp.pp.", ".pppppppp.", ".pppppppp.", "..pppppp..", "...pppp.gg", "........gg", "..........."], p: { p: "#a78bfa", g: "#4ade80" } },
+    mix: { s: ["..........", ".bbb..gggg", ".bbbbb....", ".bbb......", "......pppp", ".yyy.pppppp", "y...y.pppp", "y.....y...", ".yyyyy....", ".........."], p: { b: "#60a5fa", g: "#94a3b8", p: "#a78bfa", y: "#f472b6" } },
+    tanks: { s: ["..........", "..........", "....gggggg", "..bbbggggg", ".bbbbbb...", ".bbbbbb...", ".bbbbbb...", "..bbbb....", "..........", ".........."], p: { b: "#60a5fa", g: "#94a3b8" } },
+    jetpack: { s: ["..........", "...ff.....", "..gfff....", "..gfff....", "..gfff....", "..g.ff....", "..o.......", ".ooo......", "..o.......", ".........."], p: { f: "#ff5a5f", g: "#64748b", o: "#fb923c" } },
+    table: { s: ["gggggggggg", "gw......wg", "gw..ww..wg", "g.r....b.g", "g...ow...g", "g.r....b.g", "gw..ww..wg", "gw......wg", "gggggggggg", ".........."], p: { g: "#22c55e", w: "#f8fafc", r: "#ef4444", b: "#3b82f6", o: "#0a0f16" } },
+    words: { s: ["..........", ".yyyyyyyy.", ".y......y.", ".y.ww.w.y.", ".y......y.", ".y.w.ww.y.", ".y......y.", ".yyyyyyyy.", "....yy....", "...yyyy..."], p: { y: "#fde047", w: "#f8fafc" } },
+    party: { s: ["..........", ".wwww.....", ".w..w.yy..", ".w.bw.yy..", ".wwww.....", "....r.....", "..r...b...", ".b..y...r.", "..........", ".........."], p: { w: "#f8fafc", b: "#3b82f6", r: "#ef4444", y: "#fde047" } },
+    property: { s: ["..........", "....rr....", "...rrrr...", "..rrrrrr..", ".rrrrrrrr.", "..wwwwww..", "..wwddww..", "..wwddww..", "..wwddww..", "gggggggggg"], p: { r: "#ef4444", w: "#f8fafc", d: "#92400e", g: "#16a34a" } },
+    sandbox: { s: ["....cc....", "....cc....", "..c.ww.c..", "...wwww...", "ccwwwwwwcc", "...wwww...", "..c.ww.c..", "....cc....", "....cc....", ".bbbbbbbb."], p: { c: "#38bdf8", w: "#e0f2fe", b: "#1e293b" } },
     race: { s: ["pkwkwkwk..", "pwkwkwkw..", "pkwkwkwk..", "pwkwkwkw..", "p.........", "p.........", "p.........", "p.........", "p.........", "pp........"], p: { p: "#e5e7eb", k: "#111827", w: "#f8fafc" } }
 };
 
@@ -24,12 +40,13 @@ var Hub = {
     games: function() { return GameModes.list.filter(function(m) { return !m.hidden; }); },
 
     openHub: function(boot) {
+        if (typeof ArcadeStats !== "undefined") ArcadeStats.save();
         this.isOpen = true;
         this.boot = !!boot;
         var games = this.games();
         var last = null;
         try { last = localStorage.getItem("timsArcadeLastGame"); } catch (e) {}
-        var cur = boot ? (last || "survival") : (GameModes.current ? GameModes.current.id : "survival");
+        var cur = boot ? (last || "sandbox") : (GameModes.current ? GameModes.current.id : "sandbox");
         this.idx = Math.max(0, games.findIndex(function(g) { return g.id === cur; }));
         for (let i = 0; i < PlayerInput.length; i++) PlayerInput[i].shoot = PlayerInput[i].jet = PlayerInput[i].interact = false;
         mouseDown = false;
@@ -70,6 +87,7 @@ var Hub = {
 
     click: function(mx, my) {
         if (typeof SFX !== "undefined") SFX.unlock();
+        if (my < 132 || my > cssH - 46) return;            // cards scrolled out of view can't be clicked
         for (let i = 0; i < this.rects.length; i++) {
             var r = this.rects[i];
             if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) { this.choose(i); return; }
@@ -110,12 +128,20 @@ var Hub = {
 
         var games = this.games();
         var cols = this.cols();
-        var cw = Math.min(290, (W - 80 - (cols - 1) * 22) / cols), ch = 200;
+        var cw = Math.min(290, (W - 80 - (cols - 1) * 22) / cols), ch = games.length > 12 ? 168 : 200;
         var rows = Math.ceil(games.length / cols);
         var totalW = cols * cw + (cols - 1) * 22;
         var x0 = W / 2 - totalW / 2;
-        var y0 = Math.max(150, Math.min(170, H / 2 - (rows * (ch + 22)) / 2 + 40));
-        if (y0 + rows * (ch + 22) > H - 60) { ch = Math.max(150, (H - 60 - y0) / rows - 22); }
+        // the grid scrolls once there are more games than fit: keep the selected row in view
+        var viewTop = 140, viewBot = H - 46, viewH = viewBot - viewTop, rowH = ch + 22, contentH = rows * rowH;
+        var selRow = Math.floor(this.idx / cols), want = this.scroll || 0;
+        if (selRow * rowH - want < 0) want = selRow * rowH;
+        if ((selRow + 1) * rowH - want > viewH) want = (selRow + 1) * rowH - viewH;
+        want = Math.max(0, Math.min(Math.max(0, contentH - viewH + 10), want));
+        this.scroll = (this.scroll || 0) + (want - (this.scroll || 0)) * 0.25;
+        var y0 = contentH <= viewH ? Math.max(viewTop + 10, H / 2 - contentH / 2 + 40) : viewTop + 16 - this.scroll;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(0, viewTop - 8, W, viewH + 8); ctx.clip();
         this.rects = [];
         for (let i = 0; i < games.length; i++) {
             var m = games[i];
@@ -140,7 +166,14 @@ var Hub = {
                 var px = Math.min(7, (ch - 110) / 10);
                 PixelArt.draw(ic.s, cx + cw / 2 - 5 * px, cy + 18 + bob, px, ic.p);
             }
+            if (m.firstInHub) {
+                ctx.fillStyle = m.color || "#38bdf8";
+                uiRoundRect(cx + cw - 76, cy + 10 + bob, 66, 18, 6);
+                ctx.fill();
+                uiText("#1 · NEW", cx + cw - 43, cy + 23 + bob, 10, "#0b1020", "center", "900");
+            }
             uiText(m.title, cx + cw / 2, cy + ch - 62 + bob, 18, sel ? (m.color || "#fff") : "#e2e8f0", "center", "900");
+            if (m.flags && m.flags.ownScreen && !m.screenDraw && typeof Net !== "undefined" && Net.role === "host") uiText("local only (no LAN yet)", cx + cw / 2, cy + 16 + bob, 11, "#fca5a5", "center", "800");
             // wrapped tagline
             ctx.font = "600 12px " + UI_FONT;
             var words = (m.tagline || "").split(" "), line = "", lines = [];
@@ -150,8 +183,17 @@ var Hub = {
             }
             if (line) lines.push(line);
             for (let li = 0; li < Math.min(2, lines.length); li++) uiText(lines[li], cx + cw / 2, cy + ch - 38 + li * 15 + bob, 12, "#94a3b8", "center", "600");
+            var statsText = ArcadeStats.summary(m.id);
+            ctx.font = "700 10px " + UI_FONT;
+            var statsSize = Math.min(10, 10 * (cw - 20) / Math.max(1, ctx.measureText(statsText).width));
+            uiText(statsText, cx + cw / 2, cy + ch - 6 + bob, statsSize, "#a5b4fc", "center", "700");
             if (sel) uiText("▶ PRESS ENTER", cx + cw / 2, cy - 8 + bob, 12, m.color || "#22d3ee", "center", "900");
             ctx.restore();
+        }
+        ctx.restore();
+        if (contentH > viewH) {
+            if (this.scroll > 4) uiText("▲ more", W / 2, viewTop + 4, 12, "#a5b4fc", "center", "900");
+            if (this.scroll < contentH - viewH - 4) uiText("▼ more games", W / 2, viewBot - 4, 13, "#a5b4fc", "center", "900");
         }
         // scanlines
         ctx.fillStyle = "rgba(0,0,0,0.12)";
@@ -159,3 +201,15 @@ var Hub = {
         uiText("← → ↑ ↓ choose  ·  Enter / click / (A) play  ·  " + (this.boot ? "Esc quick-start" : "Esc back"), W / 2, H - 22, 13, "#a5b4fc", "center", "700");
     }
 };
+
+// mouse wheel scrolls the arcade grid a row at a time
+(function() {
+    var cv = typeof canvas !== "undefined" ? canvas : document.querySelector("canvas");
+    if (!cv) return;
+    cv.addEventListener("wheel", function(e) {
+        if (!Hub.isOpen) return;
+        var n = Hub.games().length, c = Hub.cols();
+        Hub.idx = Math.max(0, Math.min(n - 1, Hub.idx + (e.deltaY > 0 ? c : -c)));
+        e.preventDefault();
+    }, { passive: false });
+})();

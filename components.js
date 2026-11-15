@@ -76,7 +76,9 @@ class Components {
             object.leftPressed = object.rightPressed = object.upPressed = object.downPressed = false;
             return;
         }
-        if (object.isPlayer) {
+        if (object.isPlayer && object.isRemote) {
+            Net.applyRemoteInput(object);
+        } else if (object.isPlayer) {
             var inp = object.input;
             if (object.playerIndex === 0) {
                 object.upPressed = WASDupPressed;
@@ -97,6 +99,10 @@ class Components {
                 } else {
                     object.shootPressed = inp.shoot;
                 }
+            } else if (object.padOnly) {
+                object.upPressed = object.downPressed = object.leftPressed = object.rightPressed = false;
+                object.shootPressed = inp.shoot;
+                object.abilityPressed = inp.interact;
             } else {
                 object.upPressed = ULDRupPressed;
                 object.downPressed = ULDRdownPressed;
@@ -143,7 +149,7 @@ class Components {
             }
         }
 
-        if (object.isPlayer) {
+        if (object.isPlayer && !(object.isRemote && object.netAim)) {
             Components.directionArrow(object);
             // Right stick aims directly (twin-stick)
             var padA = (typeof Pads !== "undefined") ? Pads.state[object.playerIndex] : null;
@@ -261,6 +267,7 @@ class Components {
     }
 
     static healthBar(object) {
+        if (object.isZombie && GameModes.flag("noEnemyBars", false)) return;      // e.g. Stomp Squad: stomp-based foes show no bars
         if (typeof brawl !== "undefined" && brawl.active && object.isPlayer) {
             // Brawl: a name tag with the damage percent instead of a health bar
             var bcx = object.x * cameraScaleX + xc;
@@ -382,7 +389,10 @@ class Components {
             object.abilityCooldown = (godMode || devOpts.infiniteAmmo) ? 10 : 150;
         }
 
+        if (object.isPlayer && object.buildMode) { object.buildWant = !!object.shootPressed; return; }
         if (object.isPlayer && !GameModes.flag("shooting", true)) return;
+        if (typeof Fight !== "undefined" && Fight.fists(object)) { Fight.update(object); return; }
+        if (object.isPlayer && GameModes.has("canShoot") && !GameModes.call("canShoot", object)) return;
         var canEnemyShoot = (object.isPlayer || object.zombiePower == "SPITTER" || object.zombiePower == "ARCHER" || object.zombiePower == "MAGE" || object.zombiePower == "BOSS_KING");
         if (object.isZombie && !canEnemyShoot && object.moveType == "ZOMBIE") {
             return;
@@ -618,8 +628,21 @@ class Components {
                         if (hit.explosive) {
                             hit.takeDamage(l.damage);
                         }
+                        if (hit.buildHP !== undefined && typeof Build !== "undefined") Build.damage(hit, l.damage, l.owner);
                         Components.spawnSparks(l.x, l.y, l.color, 3);
-                        removeLazer = true;
+                        // bouncing bullets: reflect off the face we came through instead of disappearing
+                        if (l.bounces === undefined) l.bounces = (typeof Feel !== "undefined") ? Feel.ricochets() : 0;
+                        if (l.bounces > 0 && !hit.movable && !hit.explosive) {
+                            l.bounces--;
+                            var px0 = l.x - l.xspeed, py0 = l.y - l.yspeed;
+                            var hw0 = (hit.w || 40) / 2, hh0 = (hit.h || 40) / 2;
+                            if (hit.isRamp) { var sxv = l.xspeed; l.xspeed = l.yspeed * (hit.rampDir === "left" ? -1 : 1); l.yspeed = sxv * (hit.rampDir === "left" ? -1 : 1); }
+                            else if (px0 < hit.x - hw0 || px0 > hit.x + hw0) l.xspeed = -l.xspeed;
+                            else l.yspeed = -l.yspeed;
+                            l.x = px0; l.y = py0;
+                            l.life = Math.max(l.life, 30);
+                            if (typeof SFX !== "undefined") SFX.play("ui", l.x, l.y, 0.25, 1.8);
+                        } else removeLazer = true;
                     }
                 }
             }
@@ -811,7 +834,18 @@ class Components {
     }
 
     static addFloatingText(text, x, y, color = "#ffffff", size = 18) {
-        if (floatingTexts.length >= 18) floatingTexts.shift();
+        var calm = typeof Feel !== "undefined" && Feel.calm();
+        // calm: damage numbers landing on the same spot add up into one number instead of a pile
+        if (calm && /^-?\d+$/.test(String(text))) {
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                var f = floatingTexts[i];
+                if (f.num !== undefined && f.life > 25 && Math.abs(f.x - x) < 80 && Math.abs(f.y - y) < 90) {
+                    f.num += Number(text); f.text = String(f.num); f.life = Math.max(f.life, 50); f.size = Math.min(26, f.size + 1);
+                    return;
+                }
+            }
+        }
+        if (floatingTexts.length >= (calm ? 10 : 18)) floatingTexts.shift();
         floatingTexts.push({
             text: text,
             x: x + (Math.random() - 0.5) * 20,
@@ -820,7 +854,8 @@ class Components {
             color: color,
             size: size,
             life: 62,
-            maxLife: 62
+            maxLife: 62,
+            num: /^-?\d+$/.test(String(text)) ? Number(text) : undefined
         });
     }
 
@@ -852,6 +887,7 @@ class Components {
     }
 
     static spawnSparks(x, y, color, count) {
+        if (typeof Feel !== "undefined" && Feel.calm()) count = Math.ceil(count * 0.5);
         for (let i = 0; i < count; i++) {
             if (particles.length >= 60) particles.shift();
             var sz = 6 + Math.random() * 6;
@@ -875,6 +911,7 @@ class Components {
         if (typeof Ragdolls !== "undefined") Ragdolls.explode(x, y, radius * 1.15, Math.min(17, 4 + Math.abs(damage) * 0.28));
         GameModes.call("onExplosion", x, y, radius, Math.min(17, 4 + Math.abs(damage) * 0.28));
         if (typeof Gadgets !== "undefined") Gadgets.onExplosion(x, y, radius);
+        if (typeof Build !== "undefined") Build.onExplosion(x, y, radius, damage, source);
         if (typeof SFX !== "undefined") SFX.play(Math.abs(damage) >= 20 ? "explode" : "kill", x, y, Math.min(1, radius / 300));
 
         for (let i = 0; i < count; i++) {
@@ -910,8 +947,9 @@ class Components {
                         obj.takeDamage(damage * (1 - dist / radius * 0.5), nx * force, ny * force + 6, source);
                     }
                 } else if (obj.movable) {
-                    obj.xspeed += nx * force;
-                    obj.yspeed += ny * force + 6;
+                    var ow = obj.weight || 1;
+                    obj.xspeed += nx * force / ow;
+                    obj.yspeed += (ny * force + 6) / ow;
                     if (obj.explosive) {
                         obj.takeDamage(damage * 0.8);
                     }
@@ -1097,6 +1135,7 @@ class Components {
         zombie.rightPressed = false;
         zombie.shootPressed = false;
         if (zombie.frozenTimer > 0 || zombie.ragdollTimer > 0 || zombie.staggerTimer > 0) return;
+        if (GameModes.has("enemyAI") && GameModes.call("enemyAI", zombie)) return;
         if (GameModes.flag("enemiesPassive", false)) return;
 
         zombie.aiTick = (zombie.aiTick || 0) + 1;
@@ -1189,6 +1228,7 @@ class Components {
             zombie.batTimer = (zombie.batTimer || 0) + 1;
             if (zombie.batState == "hover") {
                 var hx = target.x + Math.sin(zombie.aiTick * 0.02 + zombie.id) * 160, hyy = target.y + 190 + Math.sin(zombie.aiTick * 0.05 + zombie.id) * 30;
+                if (typeof Pathfinder !== "undefined" && Pathfinder.flySteer) { var fw = Pathfinder.flySteer(zombie, hx, hyy); hx = fw.x; hyy = fw.y; }
                 if (hx > zombie.x + 14) zombie.rightPressed = true; else if (hx < zombie.x - 14) zombie.leftPressed = true;
                 if (hyy > zombie.y + 12) zombie.upPressed = true; else if (hyy < zombie.y - 12) zombie.downPressed = true;
                 if (zombie.batTimer > 90 && Math.abs(dxT) < 190 && dyT < -80 && !zombie.specialCd) {

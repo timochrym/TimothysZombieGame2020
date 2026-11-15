@@ -3,7 +3,6 @@ class SummonManager {
     static init() {
         this.isOpen = false;
         this.toolMode = "shoot"; // "shoot" | "place" | "select"
-        this.activeTab = "game";
         this.spawnType = "box";
         this.spawnW = 480;
         this.spawnH = 80;
@@ -71,6 +70,11 @@ class SummonManager {
 
     static toggleGodMode() {
         godMode = !godMode;
+        var btn = document.getElementById("god-mode-btn");
+        if (btn) {
+            btn.classList.toggle("active", godMode);
+            var tx = btn.querySelector(".tx"); if (tx) tx.innerHTML = "God mode" + (godMode ? " — ON" : "") + "<small>Invincible + unlimited everything</small>";
+        }
         if (redGuy) {
             for (let i = 0; i < characters.length; i++) if (godMode && characters[i].isZombie) characters[i].reviveAsHuman();
             redGuy.health = redGuy.maxHealth;
@@ -210,13 +214,13 @@ class SummonManager {
             copy = new Character(obj.name, zBox, zBox, obj.color, [obj.x + offsetX, obj.y + offsetY], obj.maxspeed, obj.slower, obj.gravity, obj.bounciness, obj.speed, obj.moveType, obj.maxHealth, obj.lazerType, obj.isZombie, obj.zombiePower);
             zombies.push(copy);
         } else if (obj.isRamp) {
-            copy = Object.addRamp(obj.x + offsetX, obj.y + offsetY, w, h, obj.rampDir, obj.color, { name: obj.name, texture: obj.texture });
+            copy = GameObject.addRamp(obj.x + offsetX, obj.y + offsetY, w, h, obj.rampDir, obj.color, { name: obj.name, texture: obj.texture });
         } else if (obj.isBumper) {
-            copy = Object.addBumper(obj.x + offsetX, obj.y + offsetY, w, h, obj.bounceForce, obj.color, { name: obj.name, texture: obj.texture });
+            copy = GameObject.addBumper(obj.x + offsetX, obj.y + offsetY, w, h, obj.bounceForce, obj.color, { name: obj.name, texture: obj.texture });
         } else if (obj.movable) {
-            copy = Object.addCrate(obj.x + offsetX, obj.y + offsetY, w, obj.color, { w: w, h: h, explosive: obj.explosive, bounciness: obj.bounciness, name: obj.name, texture: obj.texture });
+            copy = GameObject.addCrate(obj.x + offsetX, obj.y + offsetY, w, obj.color, { w: w, h: h, explosive: obj.explosive, bounciness: obj.bounciness, name: obj.name, texture: obj.texture });
         } else {
-            copy = Object.addBox(obj.x + offsetX, obj.y + offsetY, w, h, obj.color, { name: obj.name, texture: obj.texture });
+            copy = GameObject.addBox(obj.x + offsetX, obj.y + offsetY, w, h, obj.color, { name: obj.name, texture: obj.texture });
         }
         rebuildAllObjects();
         this.selectObject(copy);
@@ -452,7 +456,13 @@ class SummonManager {
                     }
                 }
 
-                // 2. Otherwise check if clicking an object body (Alt/Shift/Ctrl + Drag = Duplicate & Drag!)
+                // 2. Something the game itself is made of (beds, riders, fighters, pets...) - see inspect.js
+                if (typeof GameInspect !== "undefined" && !(e.altKey || e.shiftKey || e.ctrlKey || e.metaKey)) {
+                    var gi = GameInspect.find(wx, wy);
+                    if (gi) { this.selectGameItem(gi); return true; }
+                }
+
+                // 3. Otherwise check if clicking an object body (Alt/Shift/Ctrl + Drag = Duplicate & Drag!)
                 var hit = this.getObjectAtWorld(wx, wy);
                 if (hit && (e.altKey || e.shiftKey || e.ctrlKey || e.metaKey)) {
                     var dup = this.cloneObject(hit, 0, 0);
@@ -566,6 +576,11 @@ class SummonManager {
     }
 
     static drawOverlay() {
+        // outline the game object picked in the Inspect tab
+        if (typeof GameInspect !== "undefined" && GameInspect.sel && GameInspect.sel.pos && this.isOpen) {
+            try { var gp = GameInspect.sel.pos(), r = 46 * cameraScaleX + 10 + Math.sin(performance.now() * 0.008) * 4;
+                ctx.save(); ctx.strokeStyle = "#22d3ee"; ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.beginPath(); ctx.arc(wsx(gp[0]), wsy(gp[1]), r, 0, 7); ctx.stroke(); ctx.restore(); } catch (e) {}
+        }
         var isPlacingOrDragging = (this.paletteDragging || this.toolMode == "place" || this.draggingObject || this.resizingObject || this.showGrid);
         if (isPlacingOrDragging) {
             this.drawWorldGrid();

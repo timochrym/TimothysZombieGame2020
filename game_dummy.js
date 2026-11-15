@@ -1,0 +1,389 @@
+// ============================================================================
+// GAME: CRASH LAB  (dummy)  -  abuse a crash-test dummy, score the damage
+//   A floppy test dummy (Verlet ragdoll) in a lab full of ramps, pads and spikes. Pick a tool with 1-9
+//   (or the mouse wheel) and click: blaster, grab & fling, TNT, bomb, cannon launch, bounce pad, spike
+//   block, heavy weight, wrecking ball. Every hard hit is measured from how suddenly each body part
+//   changes speed; the head counts most. R = new dummy. Beat your best total.
+// ============================================================================
+var DUMMY_TOOLS = [
+    { id: "blaster", label: "Blaster", icon: "🔫", hint: "click to shoot" },
+    { id: "hand", label: "Grab & fling", icon: "✋", hint: "drag the dummy, let go to throw" },
+    { id: "tnt", label: "TNT", icon: "🧨", hint: "place a barrel (shoot it)" },
+    { id: "bomb", label: "Bomb", icon: "💣", hint: "instant blast" },
+    { id: "cannon", label: "Cannon", icon: "🎯", hint: "launch the dummy at the cursor" },
+    { id: "pad", label: "Bounce pad", icon: "⏫", hint: "place a pad" },
+    { id: "spike", label: "Spike block", icon: "🔺", hint: "place spikes" },
+    { id: "weight", label: "Heavy weight", icon: "🏋", hint: "drop a weight from above" },
+    { id: "ball", label: "Wrecking ball", icon: "⚫", hint: "swing a ball from the ceiling" }
+];
+var dummySave = { best: 0, stairs: 0, scn: {} };
+try { var _ds = JSON.parse(localStorage.getItem("timsCrashLab") || "null"); if (_ds) { dummySave.best = _ds.best || 0; dummySave.stairs = _ds.stairs || 0; dummySave.scn = _ds.scn || {}; } } catch (e) {}
+function saveDummy() { try { localStorage.setItem("timsCrashLab", JSON.stringify(dummySave)); } catch (e) {} }
+// one-push scenarios: push once, the score runs until the dummy comes to rest; best saved per scenario
+var DUMMY_SCN = {
+    crash_stairs: { name: "Stair Drop", start: [-1700, 1520] },
+    crash_cliff: { name: "Cliff Fall", start: [-1620, 2120] }
+};
+var DUMMY_SCN_ORDER = [["crash_lab", "Sandbox (all tools)"], ["crash_stairs", "Stair Drop (one push, score)"], ["crash_cliff", "Cliff Fall (one push, score)"]];
+function dummyChallenge() { return !!DUMMY_SCN[LevelManager.currentLevelKey]; }
+function dummyScnBest(set) {
+    var k = LevelManager.currentLevelKey;
+    if (set !== undefined) { if (k === "crash_stairs") dummySave.stairs = set; else dummySave.scn[k] = set; saveDummy(); }
+    return k === "crash_stairs" ? dummySave.stairs : (dummySave.scn[k] || 0);
+}
+
+var Dummy = {
+    rd: null, tool: 0, total: 0, combo: 0, comboT: 0, bones: 0, parts: [0, 0, 0], tick: 0,
+    drag: null, balls: [], spikes: [], lastV: [],
+    PART: function(i) { return i === 0 ? 0 : (i <= 2 ? 1 : 2); },     // head / torso / limbs
+    MULT: [2.5, 1.2, 0.8]
+};
+
+(function() {
+    var L = ModeKit.room(-2400, 2400, 2200, { tex: "lab_metal", color: "#334155", floorTex: "lab_metal", floorColor: "#475569" });
+    L.push({ type: "ramp", name: "Launch Ramp", x: -1500, y: 200, w: 600, h: 400, dir: "right", color: "#64748b", texture: "lab_metal" });
+    L.push({ type: "box", name: "Ledge", x: -900, y: 380, w: 300, h: 40, color: "#475569", texture: "lab_metal", kind: "block" });
+    L.push({ type: "box", name: "Pillar", x: 800, y: 300, w: 120, h: 600, color: "#334155", texture: "lab_metal", kind: "wall" });
+    L.push({ type: "box", name: "High Shelf", x: 1500, y: 1100, w: 500, h: 40, color: "#475569", texture: "lab_metal", kind: "block" });
+    L.push({ type: "bumper", name: "Bounce Pad", x: 300, y: 20, w: 240, h: 40, bounce: 30 });
+    L.push({ type: "crate", name: "Crate", x: 1200, y: 40, size: 80 });
+    L.push({ type: "crate", name: "TNT Barrel", x: 1700, y: 40, size: 70, explosive: true });
+    ModeKit.addLevel("crash_lab", { name: "🧪 Crash Lab", mode: "dummy", wavesEnabled: false, spawnP1: [-300, 60], spawnP2: [-200, 60], layout: L, title: "Crash Lab" });
+})();
+(function() {
+    var L = ModeKit.room(-2400, 2400, 2600, { tex: "lab_metal", color: "#334155", floorTex: "lab_metal", floorColor: "#475569" });
+    L.push({ type: "box", name: "Top Landing", x: -1900, y: 700, w: 800, h: 1400, color: "#475569", texture: "stone_block", kind: "block" });
+    for (let i = 0; i < 14; i++) {
+        var top = 1400 - (i + 1) * 100, x0 = -1500 + i * 84;
+        if (top <= 0) break;
+        L.push({ type: "box", name: "Step", x: x0 + 42, y: top / 2, w: 84, h: top, color: "#64748b", texture: "stone_block", kind: "block" });
+    }
+    L.push({ type: "bumper", name: "Bounce Pad", x: 700, y: 20, w: 240, h: 40, bounce: 30 });
+    L.push({ type: "box", name: "Wall", x: 1500, y: 300, w: 100, h: 600, color: "#334155", texture: "metal_plate", kind: "wall" });
+    L.push({ type: "crate", name: "Crate", x: 300, y: 40, size: 80 }, { type: "crate", name: "Crate", x: 300, y: 121, size: 80 });
+    ModeKit.addLevel("crash_stairs", { name: "🧪 Crash Lab: Stair Drop", mode: "dummy", wavesEnabled: false, spawnP1: [-2100, 1480], spawnP2: [-2200, 1480], layout: L, title: "Stair Drop" });
+})();
+(function() {
+    // Cliff Fall: a sheer drop of 2000 with rock outcrops sticking out of the face, pads and crates at the bottom
+    var L = ModeKit.room(-2400, 2400, 2900, { tex: "lab_metal", color: "#334155", floorTex: "lab_metal", floorColor: "#475569" });
+    L.push({ type: "box", name: "Cliff", x: -1900, y: 1000, w: 800, h: 2000, color: "#57534e", texture: "stone_raw", kind: "block" });
+    [[-1420, 1600, 160], [-1440, 1150, 200], [-1400, 750, 140], [-1450, 380, 220]].forEach(function(o) {
+        L.push({ type: "box", name: "Outcrop", x: o[0], y: o[1], w: o[2], h: 50, color: "#78716c", texture: "stone_raw", kind: "block" });
+    });
+    L.push({ type: "bumper", name: "Bounce Pad", x: -900, y: 20, w: 260, h: 40, bounce: 34 });
+    L.push({ type: "bumper", name: "Bounce Pad", x: 200, y: 20, w: 260, h: 40, bounce: 30 });
+    L.push({ type: "crate", name: "Crate", x: -500, y: 40, size: 80 }, { type: "crate", name: "Crate", x: -500, y: 121, size: 80 }, { type: "crate", name: "Crate", x: 700, y: 40, size: 80 });
+    L.push({ type: "crate", name: "TNT Barrel", x: 1100, y: 40, size: 70, explosive: true });
+    L.push({ type: "box", name: "Wall", x: 1700, y: 300, w: 100, h: 600, color: "#334155", texture: "metal_plate", kind: "wall" });
+    ModeKit.addLevel("crash_cliff", { name: "🧪 Crash Lab: Cliff Fall", mode: "dummy", wavesEnabled: false, spawnP1: [-2100, 2080], spawnP2: [-2200, 2080], layout: L, title: "Cliff Fall" });
+})();
+
+function dummySpawn(x, y) {
+    if (Dummy.rd) Ragdolls.remove(Dummy.rd);
+    var fake = { x: x, y: y, s1: 80, s2: 80, zombiePower: "DUMMY", originalColor: "#facc15", lastFacing: 1, xspeed: 0, yspeed: 0 };
+    var rd = Ragdolls.spawnFrom(fake, { vx: 0, vy: 0, spin: 0 });
+    rd.life = -1;
+    rd.style.body = "#facc15"; rd.style.limb = "#fbbf24"; rd.style.head = "#fde047"; rd.style.face = "hero"; rd.style.dead = false;
+    rd.style.acc = "headband"; rd.style.accColor = "#111827"; rd.style.sprite = null;
+    rd.isDummy = true;
+    Dummy.rd = rd;
+    Dummy.lastV = [];
+    Dummy.total = 0; Dummy.combo = 0; Dummy.bones = 0; Dummy.parts = [0, 0, 0];
+    Dummy.grace = 45;
+    Dummy.run = dummyChallenge() ? "aim" : null; Dummy.calmT = 0; Dummy.runT = 0;
+}
+
+// damage heat-map: each body group drifts from test-dummy yellow to bruised red as it takes damage
+function dummyTint(rd) {
+    var mix = function(a, b, t) {
+        var pa = [1, 3, 5].map(function(i) { return parseInt(a.substr(i, 2), 16); }), pb = [1, 3, 5].map(function(i) { return parseInt(b.substr(i, 2), 16); });
+        return "rgb(" + pa.map(function(v, i) { return Math.round(v + (pb[i] - v) * t); }).join(",") + ")";
+    };
+    rd.style.head = mix("#fde047", "#dc2626", Math.min(1, Dummy.parts[0] / 260));
+    rd.style.body = mix("#facc15", "#b91c1c", Math.min(1, Dummy.parts[1] / 360));
+    rd.style.limb = mix("#fbbf24", "#991b1b", Math.min(1, Dummy.parts[2] / 520));
+}
+
+// a point resting on / launched by a bounce pad is bouncing, not crashing
+function dummyOnPad(p) {
+    for (let i = 0; i < staticObjects.length; i++) {
+        var s = staticObjects[i];
+        if (!s.isBumper || s.dead) continue;
+        if (Math.abs(p.x - s.x) < s.w / 2 + p.r + 10 && Math.abs((p.y - p.r) - (s.y + s.h / 2)) < 40) return true;
+    }
+    return false;
+}
+
+function dummyHurt(amount, x, y, part) {
+    if (amount <= 0) return;
+    Dummy.total += amount;
+    Dummy.combo += amount;
+    Dummy.comboT = 90;
+    Dummy.parts[part] += amount;
+    if (!dummyChallenge() && Dummy.total > dummySave.best) { dummySave.best = Math.round(Dummy.total); saveDummy(); }
+    if (amount > 45 && typeof Juice !== "undefined" && Juice.slowMo && Dummy.tick - (Dummy.lastSlow || -999) > 120) { Dummy.lastSlow = Dummy.tick; Juice.slowMo(35, 0.35); }
+    if (amount > 8) Components.addFloatingText("-" + Math.round(amount), x, y + 40, part === 0 ? "#f87171" : "#fde68a", Math.min(28, 14 + amount * 0.25));
+}
+
+GameModes.register({
+    id: "dummy",
+    title: "CRASH LAB",
+    tagline: "Launch, blast and fling a crash-test dummy. Every bone-rattling hit is scored.",
+    color: "#facc15",
+    firstLevel: "crash_lab",
+    flags: { waves: false, revive: false, jetpack: true, shooting: true, ability: false, ammo: false, noBedrock: false, scenery: false,
+        coopToggle: true, dash: true, wallJump: true, airJumps: 1 },
+    overTitle: "CRASH LAB",
+
+    setupLevel: function() { Dummy.rd = null; Dummy.balls = []; Dummy.spikes = []; Dummy.drag = null; Dummy.tick = 0; },
+    onReset: function() { var sc = DUMMY_SCN[LevelManager.currentLevelKey]; if (sc) dummySpawn(sc.start[0], sc.start[1]); else dummySpawn(-400, 300); },
+
+    onDamage: function() { return true; },
+    onPad: function(i, b) {
+        if (b === 7 && Dummy.tool !== 0 && redGuy) {
+            // gamepad: use the tool at the point the right stick aims at
+            var rad = Math.radians(redGuy.degree || 90);
+            if (DUMMY_TOOLS[Dummy.tool].id === "hand") return true;
+            mouseDown = false;
+            return this.onClick(redGuy.x + Math.sin(rad) * 380, redGuy.y + Math.cos(rad) * 380, 0);
+        }
+        if (b === 8) { Dummy.tool = (Dummy.tool + 1) % DUMMY_TOOLS.length; return true; } if (b === 3) { this.onKey("KeyR"); return true; } return false; },                    // the testers never get hurt
+    canShoot: function() { return Dummy.tool === 0; },
+
+    cameraTargets: function() {
+        var t = [];
+        // Stair Drop: follow the dummy itself, close up (cameraZoom), a little ahead and below so the next steps show
+        if (dummyChallenge() && Dummy.rd) return [{ x: Dummy.rd.centerX() + 120, y: Dummy.rd.centerY() - 60 }];
+        if (redGuy && !redGuy.dead) t.push(redGuy);
+        if (Dummy.rd) t.push({ x: Dummy.rd.centerX(), y: Dummy.rd.centerY(), isZombie: false });
+        return t;
+    },
+
+    cameraZoom: function() { return dummyChallenge() && Dummy.rd ? 1.5 : 0; },
+
+    onKey: function(code) {
+        var m = /^Digit([1-9])$/.exec(code);
+        if (m) { Dummy.tool = Math.min(DUMMY_TOOLS.length - 1, Number(m[1]) - 1); return true; }
+        if (code === "KeyR") { if (dummyChallenge()) this.onReset(); else dummySpawn(redGuy ? redGuy.x + 200 : 0, 500); return true; }
+        return false;
+    },
+
+    onClick: function(wx, wy, button) {
+        if (button !== 0) return false;
+        var t = DUMMY_TOOLS[Dummy.tool].id, rd = Dummy.rd;
+        if (dummyChallenge()) {
+            // one push per run: harder the further from the dummy you click
+            if (!rd || Dummy.run !== "aim") return true;
+            var pcx = rd.centerX(), pcy = rd.centerY(), pdx = wx - pcx, pdy = wy - pcy, pL = Math.hypot(pdx, pdy) || 1, pw = Math.min(30, 6 + pL / 18);
+            rd.addVelocity(pdx / pL * pw, pdy / pL * pw);
+            Dummy.run = "go"; Dummy.total = 0; Dummy.parts = [0, 0, 0]; Dummy.bones = 0; Dummy.grace = 3; Dummy.runT = 0;
+            if (typeof SFX !== "undefined") SFX.play("whoosh", pcx, pcy);
+            return true;
+        }
+        if (t === "blaster") return false;
+        if (t === "hand" && rd) {
+            var best = -1, bd = 140;
+            for (let i = 0; i < rd.pts.length; i++) { var d = Math.hypot(rd.pts[i].x - wx, rd.pts[i].y - wy); if (d < bd) { bd = d; best = i; } }
+            if (best >= 0) Dummy.drag = { i: best };
+        } else if (t === "tnt") { GameObject.addCrate(wx, wy, 70, "#e84545", { explosive: true, name: "TNT Barrel" }); rebuildAllObjects(); }
+        else if (t === "bomb") { Components.blowUp(wx, wy, "#ff6b00", 26, 320, -40, null); screenShake = Math.max(screenShake, 8); }
+        else if (t === "cannon" && rd) {
+            var cx = rd.centerX(), cy = rd.centerY(), dx = wx - cx, dy = wy - cy, L = Math.hypot(dx, dy) || 1;
+            rd.addVelocity(dx / L * 32, dy / L * 32 + 4);
+            Components.spawnSparks(cx, cy, "#fde68a", 10);
+            if (typeof SFX !== "undefined") SFX.play("explode", cx, cy, 0.6, 1.4);
+        }
+        else if (t === "pad") { GameObject.addBumper(Math.round(wx / 40) * 40, Math.round(wy / 40) * 40, 200, 40, 32, "#ff2e63", { name: "Bounce Pad" }); rebuildAllObjects(); }
+        else if (t === "spike") { var s = GameObject.addBox(Math.round(wx / 40) * 40, Math.round(wy / 40) * 40, 160, 40, "#94a3b8", { name: "Spike Block", texture: "hazard", kind: "block" }); s.isSpike = true; Dummy.spikes.push(s); rebuildAllObjects(); }
+        else if (t === "weight") { var w = GameObject.addCrate(wx, wy + 700, 120, "#1f2937", { name: "Heavy Weight", texture: "cart_iron", bounciness: -0.05 }); w.oneTon = true; w.yspeed = -6; rebuildAllObjects(); }
+        else if (t === "ball") {
+            var top = (levelBounds ? levelBounds.topY : 2000) - 40;
+            var fakeB = { x: wx, y: wy, s1: 80, s2: 80, zombiePower: "BALL", lastFacing: 1 };
+            var bl = new Ragdoll({ kind: "ball" }, 1);
+            bl.addPoint(wx, top, 4);            // anchor
+            bl.addPoint(wx - 500, top - 400, 70); // ball, swung out to the left
+            bl.addStick(0, 1, 1);
+            bl.pinned = { x: wx, y: top };
+            bl.life = -1; bl.heavy = true;
+            bl.drawFn = function(r) {
+                var a = r.pts[0], b = r.pts[1];
+                // a chain of links, then an iron ball with a highlight
+                var ax = wsx(a.x), ay = wsy(a.y), bx2 = wsx(b.x), by2 = wsy(b.y), L = Math.hypot(bx2 - ax, by2 - ay), n = Math.max(4, Math.round(L / 14)), ang = Math.atan2(by2 - ay, bx2 - ax);
+                ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 2.5;
+                for (let i = 0; i < n; i++) { var t = (i + 0.5) / n; ctx.save(); ctx.translate(ax + (bx2 - ax) * t, ay + (by2 - ay) * t); ctx.rotate(ang + (i % 2 ? Math.PI / 2 : 0) * 0); ctx.beginPath(); ctx.ellipse(0, 0, L / n * 0.6, i % 2 ? 2 : 4, 0, 0, 7); ctx.stroke(); ctx.restore(); }
+                var br = b.r * cameraScaleX;
+                ctx.fillStyle = TextureManager.getPattern("cart_iron") || "#111827"; ctx.beginPath(); ctx.arc(bx2, by2, br, 0, 7); ctx.fill();
+                var sh = ctx.createRadialGradient(bx2 - br * 0.35, by2 - br * 0.35, br * 0.1, bx2, by2, br);
+                sh.addColorStop(0, "rgba(255,255,255,0.35)"); sh.addColorStop(0.5, "rgba(0,0,0,0)"); sh.addColorStop(1, "rgba(0,0,0,0.55)");
+                ctx.fillStyle = sh; ctx.fill();
+                ctx.strokeStyle = "#1f2937"; ctx.lineWidth = 3; ctx.stroke();
+            };
+            Ragdolls.list.push(bl);
+            Dummy.balls.push(bl);
+        }
+        return true;
+    },
+
+    preUpdate: function() {
+        Dummy.tick++;
+        // wrecking balls stay hung from the ceiling
+        for (let i = 0; i < Dummy.balls.length; i++) { var b = Dummy.balls[i]; b.pts[0].x = b.pts[0].px = b.pinned.x; b.pts[0].y = b.pts[0].py = b.pinned.y; b.wake(); }
+        // dragging with the hand tool
+        var rd = Dummy.rd;
+        if (Dummy.drag && rd) {
+            if (!mouseDown) {
+                Dummy.drag = null;
+                // cap the throw so a twitchy flick isn't a teleport
+                for (let i = 0; i < rd.pts.length; i++) {
+                    var q = rd.pts[i], vx = q.x - q.px, vy = q.y - q.py, sp = Math.hypot(vx, vy);
+                    if (sp > 24) { q.px = q.x - vx / sp * 24; q.py = q.y - vy / sp * 24; }
+                }
+                Dummy.grace = 4;
+            }
+            else { var m = Components.getMouseWorldPos(), p = rd.pts[Dummy.drag.i]; p.x = m[0]; p.y = m[1]; rd.wake(); }
+        }
+    },
+
+    update: function() {
+        var rd = Dummy.rd;
+        if (!rd) return;
+        if (Ragdolls.list.indexOf(rd) === -1) { dummySpawn(-400, 300); return; }
+        if (Dummy.grace > 0) Dummy.grace--;
+        var padHit = false;
+        for (let i = 0; i < rd.pts.length && !padHit; i++) padHit = dummyOnPad(rd.pts[i]);
+        var scoring = Dummy.grace === 0 && !Dummy.drag && !rd.heldBy && !padHit && (!dummyChallenge() || Dummy.run === "go");
+        // blaster bolts that hit the dummy
+        for (let l = lazers.length - 1; l >= 0; l--) {
+            var lz = lazers[l];
+            if (lz.team === 0 || lz.dmHit) continue;
+            for (let i = 0; i < rd.pts.length; i++) {
+                var bp = rd.pts[i];
+                if (Math.hypot(lz.x - bp.x, lz.y - bp.y) < bp.r + 12) {
+                    lz.dmHit = true;
+                    dummyHurt(6 * Dummy.MULT[Dummy.PART(i)], bp.x, bp.y, Dummy.PART(i));
+                    rd.impulseAt(lz.x, lz.y, lz.xspeed * 0.25, lz.yspeed * 0.25, 60);
+                    lazers.splice(l, 1);
+                    break;
+                }
+            }
+        }
+        // damage = how suddenly each part changes velocity (Verlet: velocity = position - previous position)
+        for (let i = 0; i < rd.pts.length; i++) {
+            var p = rd.pts[i], vx = p.x - p.px, vy = p.y - p.py;
+            var lv = Dummy.lastV[i];
+            if (lv && scoring) {
+                var dv = Math.hypot(vx - lv[0], vy - lv[1]);
+                if (dv > 5.5) {
+                    var part = Dummy.PART(i);
+                    dummyHurt((dv - 5.5) * 1.6 * Dummy.MULT[part], p.x, p.y, part);
+                    if (dv > 20 && part === 2 && Dummy.tick - (Dummy.lastCrack || 0) > 20) { Dummy.bones++; Dummy.lastCrack = Dummy.tick; Components.addFloatingText("CRACK!", p.x, p.y + 70, "#f8fafc", 22); if (typeof SFX !== "undefined") SFX.play("bonk", p.x, p.y, 0.8, 0.7); }
+                }
+            }
+            Dummy.lastV[i] = [vx, vy];
+        }
+        // spike blocks
+        for (let s = 0; s < Dummy.spikes.length; s++) {
+            var sp = Dummy.spikes[s];
+            if (sp.dead) continue;
+            for (let i = 0; i < rd.pts.length; i++) {
+                var q = rd.pts[i];
+                if (Math.abs(q.x - sp.x) < sp.w / 2 + q.r && Math.abs(q.y - sp.y) < sp.h / 2 + q.r + 6 && Dummy.tick % 6 === 0) dummyHurt(4 * Dummy.MULT[Dummy.PART(i)], q.x, q.y, Dummy.PART(i));
+            }
+        }
+        // wrecking balls smack the dummy
+        for (let b = 0; b < Dummy.balls.length; b++) {
+            var ball = Dummy.balls[b].pts[1], bvx = ball.x - ball.px, bvy = ball.y - ball.py;
+            for (let i = 0; i < rd.pts.length; i++) {
+                var q2 = rd.pts[i], d = Math.hypot(q2.x - ball.x, q2.y - ball.y);
+                if (d < ball.r + q2.r) {
+                    var nx = (q2.x - ball.x) / (d || 1), ny = (q2.y - ball.y) / (d || 1);
+                    q2.x = ball.x + nx * (ball.r + q2.r); q2.y = ball.y + ny * (ball.r + q2.r);
+                    q2.px = q2.x - bvx * 1.4; q2.py = q2.y - bvy * 1.4;
+                    rd.wake();
+                }
+            }
+        }
+        dummyTint(rd);
+        if (Dummy.run === "go") {
+            Dummy.runT++;
+            var sp = Math.abs(rd.velX()) + Math.abs(rd.velY());
+            Dummy.calmT = sp < 0.8 ? Dummy.calmT + 1 : 0;
+            if (Dummy.calmT > 90 || Dummy.runT > 60 * 20) {
+                Dummy.run = "done";
+                var sc = Math.round(Dummy.total), nb = sc > dummyScnBest();
+                if (nb) dummyScnBest(sc);
+                showBanner("SCORE " + sc, nb ? "NEW BEST!  ·  R to go again" : "best " + dummyScnBest() + "  ·  R to go again", "#facc15");
+                if (typeof SFX !== "undefined") SFX.play(nb ? "clear" : "select");
+            }
+        }
+        if (Dummy.comboT > 0 && --Dummy.comboT === 0) { if (Dummy.combo > 150) showBanner("COMBO " + Math.round(Dummy.combo), "", "#facc15"); Dummy.combo = 0; }
+    },
+
+    drawWorld: function() {
+        var k = cameraScaleX;
+        for (let s = 0; s < Dummy.spikes.length; s++) {
+            var sp = Dummy.spikes[s];
+            if (sp.dead) continue;
+            var n = Math.round(sp.w / 32), l = wsx(sp.x - sp.w / 2), t = wsy(sp.y + sp.h / 2);
+            var steel = ctx.createLinearGradient(0, t - 26 * k, 0, t);
+            steel.addColorStop(0, "#f8fafc"); steel.addColorStop(1, "#64748b");
+            ctx.fillStyle = steel; ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 1.5;
+            for (let i = 0; i < n; i++) { var bx = l + i * sp.w * k / n; ctx.beginPath(); ctx.moveTo(bx, t); ctx.lineTo(bx + sp.w * k / n / 2, t - 26 * k); ctx.lineTo(bx + sp.w * k / n, t); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+        }
+    },
+
+    drawFront: function() {
+        for (let i = 0; i < movingObjects.length; i++) { var o = movingObjects[i]; if (o.oneTon && !o.dead) uiText("1 TON", wsx(o.x), wsy(o.y) + 6, Math.max(10, 22 * cameraScaleX), "#fde047", "center", "900"); }
+        if (Dummy.drag && Dummy.rd) {
+            var p = Dummy.rd.pts[Dummy.drag.i];
+            ctx.strokeStyle = "rgba(250,204,21,0.8)"; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
+            ctx.beginPath(); ctx.arc(wsx(p.x), wsy(p.y), 26, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+        }
+    },
+
+    drawHUD: function() {
+        var dy = 62;
+        uiPanel(cssW / 2 - 190, dy, 380, 92, "#facc15");
+        uiText("DAMAGE", cssW / 2, dy + 22, 13, "#fde68a", "center", "900");
+        uiText(String(Math.round(Dummy.total)), cssW / 2, dy + 60, 40, "#ffffff", "center", "900");
+        if (dummyChallenge()) {
+            uiText(Dummy.run === "aim" ? "STAIR DROP — click where to push the dummy (further = harder)" : (Dummy.run === "go" ? "falling…" : "run over — R to reset"), cssW / 2, dy + 116, 14, "#fde68a", "center", "900");
+            if (Dummy.run === "aim" && Dummy.rd) {
+                var mw = Components.getMouseWorldPos(), acx = Dummy.rd.centerX(), acy = Dummy.rd.centerY();
+                ctx.strokeStyle = "rgba(250,204,21,0.85)"; ctx.lineWidth = 3; ctx.setLineDash([8, 6]);
+                ctx.beginPath(); ctx.moveTo(wsx(acx), wsy(acy)); ctx.lineTo(wsx(mw[0]), wsy(mw[1])); ctx.stroke(); ctx.setLineDash([]);
+            }
+        }
+        uiText((dummyChallenge() ? DUMMY_SCN[LevelManager.currentLevelKey].name.toLowerCase() + " best " + dummyScnBest() : "best " + dummySave.best) + (Dummy.combo > 0 ? "   combo " + Math.round(Dummy.combo) : "") + "   bones " + Dummy.bones, cssW / 2, dy + 84, 12, "#cbd5e1", "center", "800");
+        // body chart
+        var tot = Math.max(1, Dummy.parts[0] + Dummy.parts[1] + Dummy.parts[2]);
+        var names = ["Head", "Torso", "Limbs"], cols = ["#f87171", "#fbbf24", "#a3e635"];
+        uiPanel(14, 14, 220, 92, "#facc15", 0.85);
+        uiText("CRASH LAB", 26, 38, 18, "#fde047", "left", "900");
+        for (let i = 0; i < 3; i++) {
+            uiText(names[i], 26, 60 + i * 16, 11, "#cbd5e1", "left", "700");
+            ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.fillRect(80, 52 + i * 16, 140, 9);
+            ctx.fillStyle = cols[i]; ctx.fillRect(80, 52 + i * 16, 140 * Dummy.parts[i] / tot, 9);
+        }
+        // tool bar (the sandbox only)
+        var n = dummyChallenge() ? 0 : DUMMY_TOOLS.length, bw = 70, x0 = cssW / 2 - (n * (bw + 6)) / 2, y0 = cssH - 96;
+        for (let i = 0; i < n; i++) {
+            var t = DUMMY_TOOLS[i], bx = x0 + i * (bw + 6), on = i === Dummy.tool;
+            ctx.fillStyle = on ? "rgba(250,204,21,0.3)" : "rgba(15,23,42,0.85)"; ctx.fillRect(bx, y0, bw, 58);
+            ctx.strokeStyle = on ? "#facc15" : "#475569"; ctx.lineWidth = 2; ctx.strokeRect(bx, y0, bw, 58);
+            uiText(t.icon, bx + bw / 2, y0 + 30, 22, "#fff", "center", "800");
+            uiText((i + 1) + " " + t.label, bx + bw / 2, y0 + 50, 9, on ? "#fde047" : "#94a3b8", "center", "800");
+        }
+        if (dummyChallenge()) { uiText("Click to push · R reset · Esc menu → Scenario", cssW / 2, cssH - 18, 12, "rgba(220,230,240,0.75)", "center", "700"); return; }
+        uiText(DUMMY_TOOLS[Dummy.tool].label + ": " + DUMMY_TOOLS[Dummy.tool].hint + "  ·  1-9 tools · R new dummy · WASD move · Space jetpack · Esc menu", cssW / 2, cssH - 18, 12, "rgba(220,230,240,0.75)", "center", "700");
+    },
+
+    menuItems: function(items) { var si = Math.max(0, DUMMY_SCN_ORDER.findIndex(function(o) { return o[0] === LevelManager.currentLevelKey; })); items.push({ id: "dm_scn", label: "Scenario:  ◀  " + DUMMY_SCN_ORDER[si][1] + "  ▶", hint: "", cycle: true }); items.push({ id: "dm_new", label: "New dummy (R)", hint: "" }, { id: "dm_clear", label: "Clear props", hint: "pads, spikes, TNT, weights, balls" }); },
+    onMenu: function(id, dir) {
+        if (id === "dm_scn") { var si = Math.max(0, DUMMY_SCN_ORDER.findIndex(function(o) { return o[0] === LevelManager.currentLevelKey; })); closePause(); LevelManager.selectLevel(DUMMY_SCN_ORDER[(si + (dir || 1) + DUMMY_SCN_ORDER.length) % DUMMY_SCN_ORDER.length][0]); return true; }
+        if (id === "dm_new") { closePause(); this.onKey("KeyR"); return true; }
+        if (id === "dm_clear") { closePause(); LevelManager.selectLevel(LevelManager.currentLevelKey); return true; }
+        return false;
+    },
+    onRestart: function() { LevelManager.selectLevel(LevelManager.currentLevelKey); }
+});

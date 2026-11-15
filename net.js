@@ -1,0 +1,1236 @@
+// ============================================================================
+// NET - local network (LAN) multiplayer for every game on this engine.
+//
+//   Run `node server.js`, open the printed http://<ip>:8080 link on each device, press "📡 LAN".
+//
+//   HOST   runs the real game. Each player who joins gets a hero (P3, P4 ...). Every 2 ticks the host
+//          sends a snapshot: the level/mode, every character, enemy, crate, level piece, bullet, pickup,
+//          ragdoll and gadget (only the fields that changed), a few HUD globals, and the sounds /
+//          floating texts / sparks that happened, so remote screens feel the same.
+//   CLIENT sends its keys/mouse/pad 60x a second and draws the host's world from the snapshots.
+//          Its OWN hero is moved right here, by this browser, the moment a key goes down (Net.predictStep):
+//          the same Character.move() the host runs, against the level pieces it already has. The host stays
+//          the referee: it still simulates that hero from the same keys, and the joiner blends toward the
+//          host's position only when the two disagree by more than lag explains (or snaps on a teleport).
+//          Everyone else's heroes, enemies and crates glide along their last known speed between snapshots.
+//   PACKETS only carry what changed; enemies leave out the route-planning and AI timers nobody else needs.
+//
+//   Modes can sync private HUD state with  netState() -> json  and  applyNetState(json)  hooks.
+// ============================================================================
+var NET_COLORS = ["#ff4d52", "#3da5ff", "#ffd23f", "#4ade80", "#c084fc", "#fb923c", "#f472b6", "#2dd4bf",
+                  "#a3e635", "#f87171", "#60a5fa", "#facc15", "#e879f9", "#34d399", "#fda4af", "#93c5fd"];
+var NET_GLOBALS = ["level", "score", "highScore", "combo", "comboTimer", "heroLevel", "heroXP", "heroXPNext", "coins", "gameOver",
+                   "lastStandTimer", "levelTransitionTimer", "zombiesRemainingToSpawn", "godMode", "jetpackEnabled", "rpgDamageMult", "baseZoom"];
+// fields that are bookkeeping, huge, or meaningless on another machine
+var NET_SKIP = { collidedWith: 1, collidedRamp: 1, target: 1, cpuIn: 1, netIn: 1, hitCd: 1, sticks: 1, navPath: 1, navBan: 1,
+                 flyPath: 1, pts: 1, lastAttacker: 1, thrownBy: 1, navTarget: 1, homeX: 0, flailCtrl: 1 };
+
+// enemy fields only the host's AI uses (never drawn): not worth sending 30x a second
+var NET_SKIP_NPC = { aiLastX: 1, aiLastY: 1, aiTick: 1, lastNavX: 1, lastNavY: 1, stuckTimer: 1, jumpCoolDownTimer: 1, coyoteTimer: 1,
+                     xOver: 1, yOver: 1, hitNormal: 1, lastSafeX: 1, lastSafeY: 1, hintFrame: 1, lazerCooldown: 1, ragdollImmune: 1,
+                     specialCd: 1, leapCd: 1, chargeCd: 1, dodgeCd: 1, alertTimer: 1, batTimer: 1,
+                     leftPressed: 1, rightPressed: 1, upPressed: 1, downPressed: 1 };
+// what the joiner's own browser decides for its hero; everything else on that hero still comes from the host
+var NET_PREDICT_KEYS = { x: 1, y: 1, xspeed: 1, yspeed: 1 };
+
+var Net = {
+    role: null,            // null | "host" | "client"
+    ws: null,
+    pid: 0,
+    name: "",
+    status: "",
+    peers: {},             // host: pid -> { pid, name, slot, color, ch, inp, seen:{da,gr,rl} }
+    lobbyPlayers: [],
+    addresses: [],
+    tickNo: 0,
+    resetNo: 0,
+    events: [],
+    nextNid: 1,
+    fullNext: true,
+    // client state
+    objs: new Map(),
+    myNid: 0,
+    lastSnapAt: 0,
+    snapCount: 0,
+    hostInHub: false,
+    inGame: false,
+    menuOpen: false,
+    localDash: 0, localGrab: 0, localReload: 0,
+    lastInpStr: "",
+    lastInpSent: 0,
+    // joiner-side movement of its own hero
+    predictEnabled: true,  // master switch (Net.predictEnabled = false -> the old "wait for the host" behaviour)
+    predictOn: false,      // true while this browser is moving its own hero
+    predicting: false,     // true only inside the local move() call (damage is the host's call, never ours)
+    predBad: 0, predPause: 0, predBroken: false, evOwner: 0,
+    predStat: { on: 0, off: 0, pulls: 0, snaps: 0, pauses: 0 },     // ticks moved locally / by the host, soft corrections, hard snaps, hand-backs
+
+    available: function() { return /^https?:$/.test(location.protocol); },
+    active: function() { return !!this.role; },
+    peerCount: function() { var n = 0; for (var k in this.peers) n++; return n; },
+
+    // ------------------------------------------------------------------ connection
+    // Make sure this page really comes from the game's server.js (a plain web server can't relay players)
+    connect: function(role, name) {
+        if (this.ws) this.disconnect();
+        this.name = (name || "Player").slice(0, 16);
+        try { localStorage.setItem("timsLanName", this.name); } catch (e) {}
+        var self = this;
+        this.status = "Checking for the LAN server…";
+        this.statusKind = "info";
+        this.serverMissing = false;
+        NetUI.render();
+        fetch("/lan-info", { cache: "no-store" }).then(function(r) {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+        }).then(function(info) {
+            if (!info || info.port === undefined) throw new Error("not the game server");
+            if (role === "host" && info.hasHost) {
+                self.status = "Someone on this network is already hosting. Press Join to play in their game.";
+                self.statusKind = "error";
+                NetUI.render();
+                return;
+            }
+            self.openSocket(role);
+        }).catch(function() {
+            self.serverMissing = true;
+            self.status = "This page isn't coming from the game's LAN server, so there's nothing to connect to.";
+            self.statusKind = "error";
+            NetUI.render();
+        });
+    },
+
+    openSocket: function(role) {
+        var url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/lan";
+        var ws;
+        try { ws = new WebSocket(url); } catch (e) { this.status = "Could not open a connection: " + e.message; this.statusKind = "error"; NetUI.render(); return; }
+        this.ws = ws;
+        this.status = "Connecting…";
+        this.statusKind = "info";
+        var self = this;
+        ws.onopen = function() { ws.send(JSON.stringify({ t: "hello", role: role, name: self.name })); };
+        ws.onmessage = function(ev) { self.onMessage(ev.data); };
+        ws.onclose = function() {
+            if (self.ws !== ws) return;
+            var was = self.role;
+            self.cleanup();
+            self.status = was ? "Disconnected from the LAN game (the host's server stopped, or the Wi-Fi dropped)." :
+                "Could not open the game connection. Is the LAN server window still open on the host computer? A VPN, a proxy or a security app that filters web traffic can also block it — try with those off.";
+            self.statusKind = "error";
+            NetUI.render();
+        };
+        NetUI.render();
+    },
+
+    disconnect: function() {
+        var ws = this.ws;
+        this.cleanup();
+        if (ws) { try { ws.close(); } catch (e) {} }
+        this.status = "Left the LAN game.";
+        NetUI.render();
+    },
+
+    cleanup: function() {
+        var wasClient = this.role === "client";
+        document.body.classList.remove("lan-client");
+        if (this.role === "host") this.removeAllRemoteHeroes();
+        this.uncapture();
+        this.role = null;
+        this.ws = null;
+        this.peers = {};
+        this.lobbyPlayers = [];
+        this.inGame = false;
+        this.menuOpen = false;
+        if (wasClient) {
+            // back to a normal local game
+            this.objs = new Map();
+            try { resetGame(); } catch (e) {}
+            if (typeof Hub !== "undefined") Hub.openHub(false);
+        }
+    },
+
+    send: function(obj) { if (this.ws && this.ws.readyState === 1) this.ws.send(typeof obj === "string" ? obj : JSON.stringify(obj)); },
+
+    onMessage: function(raw) {
+        var m;
+        try { m = JSON.parse(raw); } catch (e) { return; }
+        if (this.role === "host" && m.from !== undefined) { this.hostOnClientMsg(m.from, m.m); return; }
+        switch (m.t) {
+            case "welcome":
+                this.role = m.role; this.pid = m.pid;
+                if (m.addresses) this.addresses = m.addresses;
+                this.statusKind = "ok";
+                if (m.role === "host") {
+                    if (typeof paused !== "undefined" && paused && typeof closePause === "function") closePause();
+                    this.status = "Hosting. Players can join now.";
+                    this.capture();
+                    this.fullNext = true;
+                } else {
+                    this.status = m.hasHost ? "Joined! Waiting for the host's game…" : "Connected. Waiting for someone to host…";
+                    this.inGame = false;
+                    document.body.classList.add("lan-client");
+                    setTimeout(function() { NetUI.close(); }, 600);
+                    if (typeof SummonManager !== "undefined" && SummonManager.isOpen) SummonManager.togglePanel();
+                }
+                break;
+            case "error": this.status = m.msg; this.statusKind = "error"; break;
+            case "lobby": this.lobbyPlayers = m.players || []; break;
+            case "join": if (this.role === "host") this.hostAddPeer(m.pid, m.name); break;
+            case "leave": if (this.role === "host") this.hostRemovePeer(m.pid); break;
+            case "hostdown": this.status = "The host left. Waiting for a new host…"; this.inGame = false; break;
+            case "hostup": this.status = "Host connected. Loading…"; break;
+            case "snap": if (this.role === "client") this.clientApply(m); break;
+        }
+        NetUI.render();
+    },
+
+    // Turn-based full-screen games: LAN players take over CPU seats. list = the game's players; each seat may carry
+    // .pid (a LAN player) and .cpu. Returns true when seats changed. Freed seats go back to the CPU.
+    seatPeers: function(list, cpuName) {
+        if (this.role !== "host") return false;
+        var changed = false, self = this;
+        list.forEach(function(q, i) { if (q.pid && !self.peers[q.pid]) { q.pid = null; q.cpu = true; q.name = cpuName(i); changed = true; } });
+        for (var k in this.peers) {
+            var pr = this.peers[k];
+            if (list.some(function(q) { return q.pid === pr.pid; })) continue;
+            var seat = list.find(function(q) { return q.cpu && !q.pid && !q.out; });
+            if (seat) { seat.pid = pr.pid; seat.cpu = false; seat.name = pr.name.length <= 10 ? pr.name : "P" + (list.indexOf(seat) + 1); changed = true; }
+        }
+        return changed;
+    },
+    peerList: function() { var a = []; for (var k in this.peers) a.push(this.peers[k]); return a; },
+    peerX: function(pid) { var p = this.peers[pid]; return (p && p.inp && p.inp.x) || {}; },
+    // buttons of a LAN player for turn-based games: go = Space / F / ↑, no = ↓ / S, build/extra = E, plus left / right
+    peerButtons: function(pid) {
+        var p = this.peers[pid], i = (p && p.inp) || {};
+        return { go: !!(i.jt || i.sh || i.u), no: !!i.d, build: !!i.it, left: !!i.l, right: !!i.r, up: !!i.u, down: !!i.d };
+    },
+
+    // ================================================================== HOST
+    hostAddPeer: function(pid, name) {
+        var used = {};
+        for (var k in this.peers) used[this.peers[k].slot] = 1;
+        var slot = 2;
+        while (used[slot]) slot++;
+        var p = { pid: pid, name: name || ("Player " + (slot + 1)), slot: slot, color: NET_COLORS[slot % NET_COLORS.length], ch: null,
+                  inp: {}, seen: { da: 0, gr: 0, rl: 0 } };
+        this.peers[pid] = p;
+        if (!(typeof Hub !== "undefined" && Hub.isOpen)) this.spawnRemoteHero(p);
+        Components.addFloatingText(p.name + " JOINED!", redGuy ? redGuy.x : 0, (redGuy ? redGuy.y : 0) + 140, p.color, 22);
+        if (typeof SFX !== "undefined") SFX.play("pickup");
+        this.fullNext = true;
+    },
+
+    hostRemovePeer: function(pid) {
+        var p = this.peers[pid];
+        if (!p) return;
+        this.removeHero(p);
+        delete this.peers[pid];
+        Components.addFloatingText(p.name + " left", redGuy ? redGuy.x : 0, (redGuy ? redGuy.y : 0) + 140, "#94a3b8", 18);
+    },
+
+    // a joining player takes over a CPU (Brawl / Soccer ...) so teams and stocks stay fair
+    takeOverCpu: function(p) {
+        var humans = {}, cpu = null;
+        for (let i = 0; i < characters.length; i++) {
+            var c = characters[i];
+            if (c.isCPU) continue;
+            var t = c.fighterTeam !== undefined ? c.fighterTeam : -1;
+            humans[t] = (humans[t] || 0) + 1;
+        }
+        for (let i = 0; i < characters.length; i++) {
+            var c2 = characters[i];
+            if (!c2.isCPU || c2.dead || c2.isRemote) continue;
+            var t2 = c2.fighterTeam !== undefined ? c2.fighterTeam : -1;
+            if (!cpu || (humans[t2] || 0) < (humans[cpu.fighterTeam] || 0)) cpu = c2;
+        }
+        if (!cpu) return null;
+        cpu.isCPU = false;
+        cpu.wasCPU = cpu.playerLabel;
+        cpu.color = p.color;
+        cpu.name = p.name;
+        Components.addFloatingText(p.name + " takes over " + cpu.playerLabel, cpu.x, cpu.y + 120, p.color, 18);
+        return cpu;
+    },
+
+    newBrawlFighter: function(p) {
+        var sp = brawl.stage && brawl.stage.spawns ? brawl.stage.spawns[characters.length % brawl.stage.spawns.length] : [0, 300];
+        var ch = ModeKit.makeHero(p.slot, sp[0], sp[1], { name: p.name, color: p.color });
+        var used = {};
+        for (let i = 0; i < characters.length; i++) if (characters[i] !== ch) used[characters[i].fighterTeam] = 1;
+        var t = 0; while (used[t]) t++;
+        ch.fighterTeam = t;
+        ch.stocks = (typeof brawlCfg !== "undefined") ? brawlCfg.stocks : 3;
+        ch.damagePct = 0; ch.eliminated = false; ch.maxAirJumps = ch.airJumps = 2; ch.invulnTimer = 120;
+        return ch;
+    },
+
+    removeHero: function(p) {
+        if (!p.ch) return;
+        if (p.ch.wasCPU && characters.indexOf(p.ch) !== -1) {
+            // hand the slot back to the computer
+            var c = p.ch;
+            c.isCPU = true; c.isRemote = false; c.netIn = null; c.playerLabel = c.wasCPU; c.wasCPU = null;
+            c.cpuIn = c.cpuIn || { shoot: false, jet: false, interact: false, reloadQueued: false };
+            p.ch = null;
+            return;
+        }
+        var i = characters.indexOf(p.ch);
+        if (i !== -1) characters.splice(i, 1);
+        p.ch.dead = true;
+        p.ch = null;
+        if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+    },
+
+    removeAllRemoteHeroes: function() { for (var k in this.peers) this.removeHero(this.peers[k]); },
+
+    spawnRemoteHero: function(p) {
+        if (p.ch && characters.indexOf(p.ch) !== -1) return;
+        var anchor = redGuy || characters[0];
+        var lvl = (typeof LevelManager !== "undefined") ? LevelManager.getCurrentLevel() : null;
+        var sp = (lvl && lvl.spawnP1) ? lvl.spawnP1 : [anchor ? anchor.x : 0, anchor ? anchor.y : 200];
+        var off = ((p.slot % 2) ? 1 : -1) * (60 + 50 * Math.floor(p.slot / 2));
+        var ch;
+        if (GameModes.has("addNetPlayer")) ch = GameModes.call("addNetPlayer", p.slot, p);
+        if (!ch) ch = this.takeOverCpu(p);
+        if (!ch && typeof brawl !== "undefined" && brawl.active) ch = this.newBrawlFighter(p);
+        if (!ch) {
+            ch = ModeKit.makeHero(p.slot, sp[0] + off, sp[1] + 20, { name: p.name, color: p.color, label: "P" + (p.slot + 1), hp: anchor ? anchor.maxHealth : 100 });
+            if (anchor) { ch.team = anchor.team; if (anchor.fighterTeam !== undefined) ch.fighterTeam = anchor.fighterTeam; }
+        }
+        ch.isRemote = true;
+        ch.netPid = p.pid;
+        ch.netIn = { shoot: false, jet: false, interact: false, reloadQueued: false, kbShoot: false, kbJet: false, kbInteract: false };
+        ch.playerLabel = p.name.length <= 10 ? p.name : ("P" + (p.slot + 1));
+        p.ch = ch;
+        if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+        this.fullNext = true;
+    },
+
+    // called by resetGame() after the mode created its players
+    afterPlayersCreated: function() {
+        if (this.role !== "host") return;
+        this.resetNo++;
+        for (var k in this.peers) { this.peers[k].ch = null; this.spawnRemoteHero(this.peers[k]); }
+        this.fullNext = true;
+    },
+
+    hostOnClientMsg: function(pid, m) {
+        var p = this.peers[pid];
+        if (!p || !m) return;
+        if (m.full) { this.fullNext = true; return; }
+        if (m.t === "in") { p.inp = m; if (m.q) p.ackSeq = m.q; }
+        else if (m.t === "sb" && m.act) this.hostExecSandbox(pid, m.act);
+    },
+
+    findByNid: function(nid) {
+        if (!nid) return null;
+        var lists = [staticObjects, movingObjects, characters, zombies, powerUps,
+            typeof Gadgets !== "undefined" ? Gadgets.list : [],
+            typeof Ragdolls !== "undefined" ? Ragdolls.list : []];
+        for (let l = 0; l < lists.length; l++) {
+            var arr = lists[l];
+            for (let i = 0; i < arr.length; i++) if (arr[i] && arr[i]._nid === nid) return arr[i];
+        }
+        return null;
+    },
+
+    hostExecSandbox: function(pid, act) {
+        if (this.role !== "host" || !act || !act.k) return;
+        var p = this.peers[pid];
+        var ref = (p && p.ch && !p.ch.dead) ? p.ch : (redGuy || { x: 0, y: 120 });
+        var k = act.k;
+        try {
+            if (k === "addBox" && typeof GameObject !== "undefined") {
+                GameObject.addBox(act.x, act.y, act.w, act.h, act.col || "#4d7c36", act.opts || {});
+                if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            } else if (k === "spawn" && typeof UniversalSpawner !== "undefined") {
+                UniversalSpawner.spawnById(act.id, act.x, act.y);
+            } else if (k === "delObj") {
+                var o = this.findByNid(act.nid);
+                if (o && o !== redGuy && !o.isPlayer) {
+                    o.dead = true;
+                    if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                }
+            } else if (k === "moveObj") {
+                var o2 = this.findByNid(act.nid);
+                if (o2) {
+                    if (act.x !== undefined) o2.x = act.x;
+                    if (act.y !== undefined) o2.y = act.y;
+                    if (act.w !== undefined) o2.w = Math.max(10, act.w);
+                    if (act.h !== undefined) o2.h = Math.max(10, act.h);
+                    if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                }
+            } else if (k === "dupObj" && typeof GameObject !== "undefined") {
+                var o3 = this.findByNid(act.nid);
+                if (o3) {
+                    GameObject.addBox(o3.x + 50, o3.y + 30, o3.w || o3.s1 || 80, o3.h || o3.s2 || 80, o3.color || "#64748b", { name: o3.name, texture: o3.texture, kind: o3.kind });
+                    if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+                }
+            } else if (k === "swap" && typeof EntityTakeover !== "undefined") {
+                EntityTakeover.swapPlayers(pid);
+            } else if (k === "swapTo" && typeof EntityTakeover !== "undefined" && EntityTakeover.swapTo) {
+                EntityTakeover.swapTo(act.kind, act.id, pid);
+            } else if (k === "possess" && typeof EntityTakeover !== "undefined") {
+                var pe = this.findByNid(act.nid);
+                if (pe) EntityTakeover.possess(pe, act.slot || 0);
+            } else if (k === "spawnZombie" && typeof spawnZombie === "function") {
+                spawnZombie(act.pick || null, act.x !== undefined ? act.x : ref.x + 120, act.y !== undefined ? act.y : ref.y + 120);
+            } else if (k === "fling") {
+                var o4 = this.findByNid(act.nid);
+                if (o4) { o4.yspeed = 26; o4.xspeed = (Math.random() - 0.5) * 18; }
+            } else if (k === "healEnt") {
+                var o5 = this.findByNid(act.nid);
+                if (o5 && o5.maxHealth) o5.health = o5.maxHealth;
+            } else if (k === "freezeEnt") {
+                var o6 = this.findByNid(act.nid);
+                if (o6) { o6._sbFrozen = !o6._sbFrozen; if (o6._sbFrozen) { o6._sbPinX = o6.x; o6._sbPinY = o6.y; } }
+            } else if (k === "editEnt") {
+                var o7 = this.findByNid(act.nid);
+                if (o7 && act.props) for (var pk in act.props) o7[pk] = act.props[pk];
+            } else if (k === "clearWorld") {
+                for (let i = 0; i < staticObjects.length; i++) staticObjects[i].dead = true;
+                for (let i = 0; i < movingObjects.length; i++) movingObjects[i].dead = true;
+                for (let i = 0; i < zombies.length; i++) zombies[i].dead = true;
+                if (typeof rebuildAllObjects === "function") rebuildAllObjects();
+            } else if (k === "horde" && typeof spawnZombie === "function") {
+                for (let i = 0; i < 6; i++) spawnZombie(null, ref.x + (i % 2 ? 1 : -1) * (400 + i * 70), ref.y + 180);
+            } else if (k === "floor" && typeof sandboxCfg !== "undefined") {
+                sandboxCfg.showFloor = !!act.v; if (typeof saveSandboxCfg === "function") saveSandboxCfg();
+                if (typeof SandboxFloor !== "undefined") SandboxFloor.sync();
+            } else if (k === "noclip" && typeof sandboxCfg !== "undefined") {
+                sandboxCfg.noclip = !!act.v; if (typeof saveSandboxCfg === "function") saveSandboxCfg();
+            } else if (k === "god") {
+                var gv = !!act.v;
+                if (typeof godMode !== "undefined") godMode = gv;
+                if (typeof arenaCheats !== "undefined") arenaCheats.god = gv;
+                if (typeof sandboxCfg !== "undefined") sandboxCfg.invincible = gv;
+                if (typeof creativeCfg !== "undefined") creativeCfg.invincible = gv;
+            } else if (k === "ammo" && typeof settings !== "undefined") {
+                settings.ammo = act.v ? "unlimited" : "limited";
+                if (typeof saveSettings === "function") saveSettings();
+            } else if (k === "grav" && typeof devOpts !== "undefined") {
+                devOpts.gravityMult = Number(act.v);
+            } else if (k === "ts" && typeof devOpts !== "undefined") {
+                devOpts.timeScale = Number(act.v);
+            } else if (k === "pause") {
+                if (act.v) { if (typeof paused !== "undefined" && !paused && typeof openPause === "function") openPause(false); }
+                else { if (typeof paused !== "undefined" && paused && typeof closePause === "function") closePause(); }
+            } else if (k === "healAll" && typeof DevActions !== "undefined") {
+                DevActions.healAll();
+            } else if (k === "clearEnemies" && typeof DevActions !== "undefined") {
+                DevActions.clearEnemies();
+            } else if (k === "restart") {
+                if (GameModes.has("onRestart")) GameModes.call("onRestart");
+                else if (typeof resetGame === "function") resetGame();
+            } else if (k === "launch" && act.id) {
+                if (typeof paused !== "undefined" && paused && typeof closePause === "function") closePause();
+                GameModes.launch(act.id);
+            } else if (k === "resetBlank" && typeof LevelManager !== "undefined") {
+                if (typeof paused !== "undefined" && paused && typeof closePause === "function") closePause();
+                LevelManager.selectLevel("sandbox_blank");
+            } else if (k === "tune" && typeof GameTuning !== "undefined") {
+                var rows = GameTuning.rows();
+                if (rows[act.idx] && rows[act.idx].set) rows[act.idx].set(act.val);
+            } else if (k === "admin") {
+                if (act.cmd === "spawnBoss" && typeof spawnZombie === "function") {
+                    spawnZombie("BOSS_KING", ref.x + 240, ref.y + 120);
+                } else if (act.cmd === "respawnAll") {
+                    for (let i = 0; i < characters.length; i++) {
+                        var ch = characters[i];
+                        ch.dead = false; ch.health = ch.maxHealth; ch.invulnTimer = 90;
+                    }
+                    for (var pk2 in this.peers) if (!this.peers[pk2].ch || this.peers[pk2].ch.dead) this.spawnRemoteHero(this.peers[pk2]);
+                } else if (act.cmd === "respawnPeer") {
+                    var tp = this.peers[act.pid];
+                    if (tp) {
+                        if (tp.ch) { tp.ch.dead = false; tp.ch.health = tp.ch.maxHealth; tp.ch.x = ref.x; tp.ch.y = ref.y + 60; tp.ch.invulnTimer = 90; }
+                        else this.spawnRemoteHero(tp);
+                    }
+                }
+            }
+        } catch (e) { console.warn("net sb exec", e); }
+        this.fullNext = true;
+    },
+
+    // per-tick input for a remote hero (called from Components.moveTypeFinder)
+    applyRemoteInput: function(ch) {
+        var p = this.peers[ch.netPid];
+        var i = (p && p.inp) || {};
+        ch.upPressed = !!i.u; ch.downPressed = !!i.d; ch.leftPressed = !!i.l; ch.rightPressed = !!i.r;
+        ch.shootPressed = !!i.sh;
+        ch.abilityPressed = !!i.it;
+        var n = ch.netIn || (ch.netIn = {});
+        n.shoot = !!i.sh; n.jet = !!i.jt; n.interact = !!i.it;
+        ch.netAim = false;
+        if (i.ax !== undefined && i.ay !== undefined) {
+            ch.degree = ch.degreeToGoCW = (Math.degrees(Math.atan2(i.ax - ch.x, i.ay - ch.y)) + 360) % 360;
+            ch.degreeSpeedX = 0;
+            ch.netAim = true;
+        } else if (i.ag !== undefined) {
+            ch.degree = ch.degreeToGoCW = i.ag;
+            ch.netAim = true;
+        }
+        if (!p) return;
+        if ((i.da || 0) > p.seen.da) { p.seen.da = i.da; if (!ch.dead && !ch.isZombie) ch.triggerNinjaDash(); }
+        if ((i.pu || 0) > (p.seen.pu || 0)) { p.seen.pu = i.pu; if (typeof Feel !== "undefined") Feel.punch(ch); }
+        if (typeof Build !== "undefined") {
+            if ((i.bt || 0) > (p.seen.bt || 0)) { p.seen.bt = i.bt; Build.toggle(ch); }
+            ch.buildPiece = i.bp || 0; ch.buildMat = i.bm || 0;
+            ch.netAimX = i.ax; ch.netAimY = i.ay;
+            if (ch.buildMode && (i.gr || 0) > p.seen.gr) { p.seen.gr = i.gr; Build.removeAt(ch); }
+        }
+        if ((i.rl || 0) > p.seen.rl) { p.seen.rl = i.rl; n.reloadQueued = true; }
+        if ((i.gr || 0) > p.seen.gr) {
+            p.seen.gr = i.gr;
+            if (!ch.dead && !GameModes.call("onSecondary", ch)) {
+                var gx = i.ax !== undefined ? i.ax : ch.x + Math.sin(Math.radians(ch.degree)) * 160;
+                var gy = i.ay !== undefined ? i.ay : ch.y + Math.cos(Math.radians(ch.degree)) * 160;
+                ch.tryGrabOrThrow(gx, gy);
+            }
+        }
+    },
+
+    // ---- capture effects (sounds, texts, sparks) so remote screens replay them
+    capture: function() {
+        if (this._cap) return;
+        var self = this;
+        this._cap = {
+            sfx: typeof SFX !== "undefined" ? SFX.play : null,
+            txt: Components.addFloatingText,
+            spk: Components.spawnSparks,
+            ring: Components.addRing
+        };
+        if (this._cap.sfx) SFX.play = function(n, x, y, v, p) { self.pushEv(["s", n, r1(x), r1(y), v, p]); return self._cap.sfx.apply(SFX, arguments); };
+        Components.addFloatingText = function(t, x, y, c, s) { self.pushEv(["t", String(t), r1(x), r1(y), c, s]); return self._cap.txt.apply(Components, arguments); };
+        Components.spawnSparks = function(x, y, c, n) { self.pushEv(["p", r1(x), r1(y), c, Math.min(12, n | 0)]); return self._cap.spk.apply(Components, arguments); };
+        if (this._cap.ring) Components.addRing = function() { self.pushEv(["r"].concat(Array.prototype.slice.call(arguments))); return self._cap.ring.apply(Components, arguments); };
+    },
+
+    uncapture: function() {
+        if (!this._cap) return;
+        if (this._cap.sfx) SFX.play = this._cap.sfx;
+        Components.addFloatingText = this._cap.txt;
+        Components.spawnSparks = this._cap.spk;
+        if (this._cap.ring) Components.addRing = this._cap.ring;
+        this._cap = null;
+    },
+
+    pushEv: function(e) {
+        if (this.role !== "host" || this.peerCount() === 0) return;
+        if (this.events.length < 120) this.events.push(this.evOwner ? ["o", this.evOwner, e] : e);
+    },
+
+    // ---- entity serialisation (delta against the last snapshot)
+    nid: function(o) {
+        if (!o._nid) window.Object.defineProperty(o, "_nid", { value: this.nextNid++, enumerable: false, writable: true });
+        return o._nid;
+    },
+
+    ser: function(o, full, npc) {
+        var last = o._ns;
+        if (!last || full) { last = {}; window.Object.defineProperty(o, "_ns", { value: last, enumerable: false, writable: true, configurable: true }); }
+        var out = null;
+        for (var k in o) {
+            if (k.charCodeAt(0) === 95 || NET_SKIP[k] === 1 || k === "animPhase") continue;     // "_" private; animPhase advances in each screen's own draw
+            if (npc && (NET_SKIP_NPC[k] === 1 || (k.charCodeAt(0) === 110 && k.charCodeAt(1) === 97 && k.charCodeAt(2) === 118))) continue;   // nav*
+            var v = o[k], t = typeof v, enc;
+            if (t === "number") enc = isFinite(v) ? ((k === "x" || k === "y") ? Math.round(v * 10) / 10 : Math.round(v * 100) / 100) : null;
+            else if (t === "string" || t === "boolean") enc = v;
+            else if (v === null) enc = null;
+            else if (t === "object") {
+                if (v._nid || v instanceof Character || v instanceof Ragdoll || (v instanceof GameObject && v.constructor === GameObject)) {
+                    enc = { $: this.nid(v) };
+                    if (last[k] && last[k].$ === enc.$) continue;
+                } else {
+                    var s;
+                    try { s = JSON.stringify(v); } catch (e) { continue; }
+                    if (!s || s.length > 3000) continue;
+                    if (last[k] === s) continue;
+                    last[k] = s;
+                    (out || (out = {}))[k] = { j: s };
+                    continue;
+                }
+            } else continue;
+            if ((t !== "object" || v === null) && last[k] === enc && k in last) continue;      // unchanged (empty fields too)
+            last[k] = enc;
+            (out || (out = {}))[k] = enc;
+        }
+        return out;
+    },
+
+    serRagdoll: function(rd, full) {
+        var d = this.ser(rd, full);
+        var pts = [];
+        for (let i = 0; i < rd.pts.length; i++) pts.push(Math.round(rd.pts[i].x), Math.round(rd.pts[i].y), rd.pts[i].r);
+        var key = pts.join(",");
+        if (!full && rd._nsPts === key) return d;            // a body lying still: nothing to resend
+        if (rd._nsPts === undefined) window.Object.defineProperty(rd, "_nsPts", { value: key, enumerable: false, writable: true });
+        rd._nsPts = key;
+        d = d || {};
+        d.pts = pts;
+        return d;
+    },
+
+    collection: function(list, full, every, ragdoll) {
+        var o = [], d = {}, any = false;
+        for (let i = 0; i < list.length; i++) {
+            var e = list[i];
+            if (!e || (e.dead && !ragdoll && !(e instanceof Character))) continue;
+            var id = this.nid(e);
+            o.push(id);
+            if (!every && !full && e._ns) continue;
+            var x = ragdoll ? this.serRagdoll(e, full) : this.ser(e, full, e instanceof Character && !e.isPlayer);
+            if (x) { d[id] = x; any = true; }
+        }
+        return any || full ? { o: o, d: d } : { o: o };
+    },
+
+    hostFrame: function() {
+        if (this.role !== "host") return;
+        this.tickNo++;
+        if (this.peerCount() === 0) { this.events.length = 0; return; }
+        if (this.tickNo % 2) return;
+        var full = this.fullNext;
+        this.fullNext = false;
+        var staticsEvery = full || this.tickNo % 20 === 0 || staticObjects.length !== this._lastStaticCount;
+        this._lastStaticCount = staticObjects.length;
+        // every 2 s each joiner's hero is sent whole, so a wrong local guess can never stick
+        for (var rk in this.peers) { var rp = this.peers[rk]; if (rp.ch && rp.ch._ns && (this.tickNo + rp.pid * 14) % 120 === 0) rp.ch._ns = null; }
+        var C = {
+            ch: this.collection(characters, full, true),
+            zb: this.collection(zombies, full, true),
+            mv: this.collection(movingObjects, full, true),
+            lz: this.collection(lazers, full, true),
+            pu: this.collection(powerUps, full, true),
+            co: this.collection(coinOrbs, full, this.tickNo % 6 === 0),
+            tc: this.collection(typeof treasureChests !== "undefined" ? treasureChests : [], full, this.tickNo % 10 === 0),
+            gd: this.collection(typeof Gadgets !== "undefined" ? Gadgets.list : [], full, true),
+            rd: this.collection(typeof Ragdolls !== "undefined" ? Ragdolls.list : [], full, true, true)
+        };
+        if (staticsEvery) C.st = this.collection(staticObjects, full, true);
+        // HUD numbers: only the ones that changed since the last packet
+        var g = {}, lg = full ? (this._lastG = {}) : (this._lastG || (this._lastG = {}));
+        for (let i = 0; i < NET_GLOBALS.length; i++) { var gk = NET_GLOBALS[i], gv = window[gk]; if (lg[gk] !== gv) { lg[gk] = gv; g[gk] = gv; } }
+        if (lg.multiplayer !== multiplayer) { lg.multiplayer = multiplayer; g.multiplayer = multiplayer; }
+        var hsp = settings.heroSpeed; if (lg._hostHeroSpeed !== hsp) { lg._hostHeroSpeed = hsp; g._hostHeroSpeed = hsp; }
+        var hsObj = { weapon: settings.weapon, ammo: settings.ammo, hitRagdoll: settings.hitRagdoll, heroSpeed: settings.heroSpeed, fx: settings.fx, ricochet: settings.ricochet, glow: settings.glow, charDetail: settings.charDetail, view3d: settings.view3d, squareChars: settings.squareChars, ps: typeof playerSettings !== "undefined" ? playerSettings : null };
+        var hsStr = JSON.stringify(hsObj);
+        if (full || hsStr !== lg._hostSettingsStr) { lg._hostSettingsStr = hsStr; g._hostSettings = hsObj; }
+        var brS = JSON.stringify(brawl), brSend = (full || brS !== this._lastBr) ? brawl : undefined; this._lastBr = brS;
+        var gsO = (typeof Gadgets !== "undefined") ? { starsGot: Gadgets.starsGot, starsTotal: Gadgets.starsTotal, deaths: Gadgets.deaths, keys: Gadgets.keys } : null;
+        var gsS = JSON.stringify(gsO), gsSend = (full || gsS !== this._lastGs) ? gsO : undefined; this._lastGs = gsS;
+        var you = {}, ack = {};
+        for (var k in this.peers) {
+            if (this.peers[k].ch) you[k] = this.nid(this.peers[k].ch);
+            if (this.peers[k].ackSeq) ack[k] = this.peers[k].ackSeq;
+        }
+        this.isFullSnap = full;
+        var msData = GameModes.has("netState") ? GameModes.call("netState") : undefined;
+        this.isFullSnap = false;
+        var snap = {
+            t: "snap", f: this.tickNo, full: full ? 1 : 0, rs: this.resetNo,
+            mode: GameModes.current ? GameModes.current.id : "survival",
+            lvl: (typeof LevelManager !== "undefined") ? LevelManager.currentLevelKey : "",
+            g: g, br: brSend, gs: gsSend,
+            r: { red: redGuy ? this.nid(redGuy) : 0, blue: blueGuy ? this.nid(blueGuy) : 0 },
+            you: you, ack: ack, c: C, ev: this.events,
+            ms: msData
+        };
+        var s;
+        try { s = JSON.stringify(snap); } catch (e) { this.events = []; return; }
+        this.events = [];
+        this.send(s);
+        this.lastSnapBytes = s.length;
+    },
+
+    // host sitting in the Arcade menu: let clients know
+    hostIdle: function() {
+        if (this.role !== "host" || this.peerCount() === 0) return;
+        this.tickNo++;
+        if (this.tickNo % 30) return;
+        this.send('{"t":"snap","hub":1}');
+        this.fullNext = true;
+    },
+
+    // ================================================================== CLIENT
+    clientApply: function(s) {
+        this.lastSnapAt = performance.now();
+        if (s.hub) { this.hostInHub = true; return; }
+        this.hostInHub = false;
+        this.snapCount++;
+        // level / game changed: rebuild the backdrop locally (geometry itself comes from the host)
+        if (s.mode !== this.curMode || s.lvl !== this.curLvl || s.rs !== this.curReset) {
+            this.curMode = s.mode; this.curLvl = s.lvl; this.curReset = s.rs;
+            if (typeof Hub !== "undefined") Hub.close();
+            if (typeof SandboxUI !== "undefined") SandboxUI.render();
+            if (typeof topBarRefresh === "function") topBarRefresh();
+            paused = false;
+            try { GameModes.activate(s.mode); } catch (e) {}
+            if (typeof LevelManager !== "undefined" && s.lvl) LevelManager.currentLevelKey = s.lvl;
+            try { staticObjects = []; movingObjects = []; createMap(); } catch (e) { console.warn("net: createMap", e); }
+            if (!s.full) this.requestFull();
+        }
+        if (!this.inGame) { this.status = "Playing in " + (this.hostName || "the host") + "'s game."; this.statusKind = "info"; NetUI.render(); }
+        this.inGame = true;
+        var self = this;
+        var C = s.c;
+        var map = this.objs;
+        var protoFor = { ch: Character.prototype, zb: Character.prototype, mv: GameObject.prototype, st: GameObject.prototype, rd: Ragdoll.prototype };
+        var fresh = [];
+        var missing = false;
+        var build = function(key, assign) {
+            var col = C[key];
+            if (!col) return;
+            var arr = [];
+            for (let i = 0; i < col.o.length; i++) {
+                var id = col.o[i];
+                var e = map.get(id);
+                var d = col.d ? col.d[id] : null;
+                if (!e) {
+                    e = protoFor[key] ? window.Object.create(protoFor[key]) : {};
+                    window.Object.defineProperty(e, "_nid", { value: id, enumerable: false, writable: true });
+                    map.set(id, e);
+                    e._new = true;
+                }
+                if (d) fresh.push([e, d, key]);
+                else if (e._new) { map.delete(id); missing = true; continue; }     // never got its data: ask again
+                arr.push(e);
+            }
+            assign(arr);
+        };
+        build("ch", function(a) { characters = a; });
+        build("zb", function(a) { zombies = a; });
+        build("mv", function(a) { movingObjects = a; });
+        build("st", function(a) { staticObjects = a; });
+        build("lz", function(a) { lazers = a; });
+        build("pu", function(a) { powerUps = a; });
+        build("co", function(a) { coinOrbs = a; });
+        build("tc", function(a) { if (typeof treasureChests !== "undefined") treasureChests = a; });
+        build("gd", function(a) {
+            if (typeof Gadgets === "undefined") return;
+            Gadgets.list = a; Gadgets.byId = {};
+            for (let i = 0; i < a.length; i++) if (a[i].id) Gadgets.byId[a[i].id] = a[i];
+        });
+        build("rd", function(a) { if (typeof Ragdolls !== "undefined") Ragdolls.list = a; });
+        // apply field updates (refs resolve after every object exists)
+        for (let i = 0; i < fresh.length; i++) {
+            var e = fresh[i][0], d = fresh[i][1], key = fresh[i][2];
+            var smooth = (key === "ch" || key === "zb" || key === "mv") && !e._new;
+            var ox = e.x, oy = e.y;
+            var mineNow = this.predictOn && key === "ch" && e._nid === this.myNid && !e._new;
+            for (var k in d) {
+                var v = d[k];
+                if (mineNow && NET_PREDICT_KEYS[k] === 1) { e["_h" + k] = v; e._hFresh = true; continue; }     // the host's opinion, kept for the correction step
+                if (key === "ch" && NET_PREDICT_KEYS[k] === 1) e["_h" + k] = v;
+                if (k === "pts" && key === "rd") {
+                    var pts = e.pts || (e.pts = []);
+                    pts.length = v.length / 3;
+                    for (let p = 0; p < pts.length; p++) {
+                        var pp = pts[p] || (pts[p] = {});
+                        pp.x = v[p * 3]; pp.y = v[p * 3 + 1]; pp.r = v[p * 3 + 2]; pp.px = pp.x; pp.py = pp.y;
+                    }
+                    continue;
+                }
+                if (v && typeof v === "object") {
+                    if (v.$ !== undefined) { e[k] = map.get(v.$) || null; continue; }
+                    if (v.j !== undefined) { try { e[k] = JSON.parse(v.j); } catch (er) {} continue; }
+                }
+                e[k] = v;
+            }
+            if (mineNow) { e._tx = undefined; }
+            else if (smooth && ox !== undefined && Math.hypot(e.x - ox, e.y - oy) < 260) {
+                e._tx = e.x; e._ty = e.y; e.x = ox; e.y = oy;
+            } else { e._tx = undefined; }
+            e._new = false;
+        }
+        // forget objects that no longer exist anywhere (statics are only listed every 20 ticks)
+        if (s.full || this.snapCount % 60 === 0) {
+            var live = new Set();
+            for (var ck in C) for (let i = 0; i < C[ck].o.length; i++) live.add(C[ck].o[i]);
+            if (!C.st) for (let i = 0; i < staticObjects.length; i++) live.add(staticObjects[i]._nid);
+            map.forEach(function(v, k) { if (!live.has(k)) map.delete(k); });
+        }
+        for (var gk in s.g) window[gk] = s.g[gk];
+        if (s.g && s.g._hostSettings && typeof settings !== "undefined") {
+            var hs = s.g._hostSettings;
+            ["weapon", "ammo", "hitRagdoll", "heroSpeed", "fx", "ricochet", "glow", "charDetail", "view3d", "squareChars"].forEach(function(k) {
+                if (hs[k] !== undefined) settings[k] = hs[k];
+            });
+            if (Array.isArray(hs.ps) && typeof playerSettings !== "undefined") {
+                for (var pi = 0; pi < 2; pi++) if (hs.ps[pi]) playerSettings[pi] = Object.assign({}, playerSettings[pi], hs.ps[pi]);
+            }
+        }
+        if (s.br) for (var bk in s.br) brawl[bk] = s.br[bk];
+        if (s.gs && typeof Gadgets !== "undefined") { Gadgets.starsGot = s.gs.starsGot; Gadgets.starsTotal = s.gs.starsTotal; Gadgets.deaths = s.gs.deaths; Gadgets.keys = s.gs.keys || {}; }
+        this.myNid = s.you ? s.you[this.pid] : 0;
+        this.hostAck = (s.ack && s.ack[this.pid]) || 0;
+        // the HUD on this screen shows MY hero (falls back to the host's P1 while spectating)
+        var mine = map.get(this.myNid);
+        redGuy = mine || map.get(s.r.red) || characters[0] || null;
+        blueGuy = mine ? null : (map.get(s.r.blue) || null);
+        if (s.ms !== undefined && GameModes.has("applyNetState")) { try { GameModes.call("applyNetState", s.ms); } catch (e) {} }
+        // replay effects
+        var ev = s.ev || [];
+        for (let i = 0; i < ev.length; i++) {
+            var x = ev[i];
+            // an effect made by my own hero's movement: this browser already played it when it moved the hero
+            if (x[0] === "o") { if (x[1] === this.pid && this.predictOn) continue; x = x[2]; }
+            try {
+                if (x[0] === "s" && typeof SFX !== "undefined") SFX.play(x[1], x[2], x[3], x[4], x[5]);
+                else if (x[0] === "t") Components.addFloatingText(x[1], x[2], x[3], x[4], x[5]);
+                else if (x[0] === "p") Components.spawnSparks(x[1], x[2], x[3], x[4]);
+                else if (x[0] === "r" && Components.addRing) Components.addRing.apply(Components, x.slice(1));
+            } catch (e) {}
+        }
+        if (typeof StaticGrid !== "undefined" && C.st) StaticGrid.build();
+        // the movement code collides against these lists; keep them matching what the host just sent
+        allObjects = [];
+        for (let i = 0; i < staticObjects.length; i++) if (!staticObjects[i].dead) allObjects.push(staticObjects[i]);
+        for (let i = 0; i < movingObjects.length; i++) if (!movingObjects[i].dead) allObjects.push(movingObjects[i]);
+        for (let i = 0; i < characters.length; i++) allObjects.push(characters[i]);
+        for (let i = 0; i < zombies.length; i++) if (!zombies[i].dead) allObjects.push(zombies[i]);
+        if (typeof DynGrid !== "undefined") { try { DynGrid.build(); } catch (e) {} }
+        if (missing && performance.now() - (this.lastFullAsk || 0) > 500) { this.lastFullAsk = performance.now(); this.requestFull(); }
+    },
+
+    requestFull: function() { this.send({ t: "in", full: 1 }); },
+
+    myChar: function() { return this.objs.get(this.myNid) || null; },
+
+    // read this device's keyboard / mouse / pad and send it to the host
+    readInput: function() {
+        var inp = PlayerInput[0];
+        var pad = (typeof Pads !== "undefined") ? Pads.state[0] : null;
+        var padOn = pad && pad.active;
+        var me = this.myChar();
+        var m = {
+            t: "in",
+            u: (WASDupPressed || ULDRupPressed || (padOn && pad.up)) ? 1 : 0,
+            d: (WASDdownPressed || ULDRdownPressed || (padOn && pad.down)) ? 1 : 0,
+            l: (WASDleftPressed || ULDRleftPressed || (padOn && pad.left)) ? 1 : 0,
+            r: (WASDrightPressed || ULDRrightPressed || (padOn && pad.right)) ? 1 : 0,
+            sh: (inp.kbShoot || inp.shoot || (mouseDown && !this.menuOpen && !(typeof SandboxUI !== "undefined" && SandboxUI.pauseOpen)) || (padOn && pad.shoot)) ? 1 : 0,
+            jt: (inp.kbJet || inp.jet || (padOn && pad.jet)) ? 1 : 0,
+            it: (inp.kbInteract || inp.interact || (padOn && pad.interact)) ? 1 : 0,
+            da: this.localDash, gr: this.localGrab, rl: this.localReload,
+            pu: this.localPunch || 0,
+            bt: this.localBuildToggle || 0, bp: typeof Build !== "undefined" ? Build.localPiece : 0, bm: typeof Build !== "undefined" ? Build.localMat : 0
+        };
+        if (inp.reloadQueued) { inp.reloadQueued = false; this.localReload++; m.rl = this.localReload; }
+        if (GameModes.has("netInput")) { try { m.x = GameModes.call("netInput"); } catch (e) {} }    // full-screen games send their own controls
+        if (padOn && pad.aim) m.ag = Math.round((Math.degrees(Math.atan2(pad.aim[0], -pad.aim[1])) + 360) % 360);
+        else if (useMouseAim && me) { var mp = Components.getMouseWorldPos(); m.ax = Math.round(mp[0]); m.ay = Math.round(mp[1]); }
+        return m;
+    },
+    sendInput: function() {
+        var m = this.localIn = this.readInput();
+        var str = JSON.stringify(m);
+        var now = performance.now();
+        if (str !== this.lastInpStr || now - this.lastInpSent > 100) {
+            m.q = this.inSeq = (this.inSeq || 0) + 1;
+            this.send(JSON.stringify(m));
+            this.lastInpStr = str;
+            this.lastInpSent = now;
+        }
+    },
+
+    // Can this browser move its own hero right now? Not while the host is throwing it around (ragdoll, stun,
+    // frozen, carried, dead), not before a brawl starts, and not in games where the mode itself drives the hero.
+    canPredict: function(me) {
+        if (!this.predictEnabled || this.predBroken || !me || me.dead || me.eliminated || !me.isPlayer) return false;
+        if (this.predPause > 0) { this.predPause--; return false; }
+        if (me.ragdollTimer > 0 || me.liveRagdoll || me.hitstun > 0 || me.frozenTimer > 0 || me.staggerTimer > 0 || me.heldBy || me.vehicle || me.riding) return false;
+        if (typeof brawl !== "undefined" && brawl.active && brawl.phase !== "fight") return false;
+        if (GameModes.flag("playerControl", true) === false || GameModes.flag("netPredict", true) === false) return false;
+        if (typeof me.move !== "function" || me._hx === undefined) return false;
+        return true;
+    },
+
+    predictStep: function(me) {
+        var was = this.predictOn;
+        this.predictOn = this.canPredict(me);
+        if (!this.predictOn) {
+            this.predStat.off++;
+            // handing the hero back to the host: ease onto where the host has it
+            if (was && me && me._hx !== undefined) { me._tx = me._hx; me._ty = me._hy; me.xspeed = me._hxspeed || 0; me.yspeed = me._hyspeed || 0; }
+            return;
+        }
+        if (!was) { me._tx = undefined; this.predBad = 0; this.seenDash = this.localDash; }
+        var i = this.localIn || this.readInput();
+        me.upPressed = !!i.u; me.downPressed = !!i.d; me.leftPressed = !!i.l; me.rightPressed = !!i.r;
+        me.netIn = { shoot: !!i.sh, jet: !!i.jt, interact: !!i.it, reloadQueued: false };
+        if (i.ax !== undefined && i.ay !== undefined) me.degree = me.degreeToGoCW = (Math.degrees(Math.atan2(i.ax - me.x, i.ay - me.y)) + 360) % 360;
+        else if (i.ag !== undefined) me.degree = me.degreeToGoCW = i.ag;
+        // the host decides health and death; this browser only decides where the hero stands
+        var hp = me.health, sh = me.shield, dead = me.dead;
+        var mySpeed = settings.heroSpeed;
+        if (window._hostHeroSpeed) settings.heroSpeed = window._hostHeroSpeed;       // run at the host's speed setting, not this device's
+        this.predicting = true;
+        try {
+            if (this.localDash !== this.seenDash) { this.seenDash = this.localDash; if (typeof me.triggerNinjaDash === "function") me.triggerNinjaDash(); }
+            me.move();
+            CollisionDetector.enforceNonPenetration(staticObjects, [me]);
+            // a crate I'm pushing is only a picture here until the host's next packet: slide it now so it doesn't block me
+            var hit = me.collidedWith;
+            if (hit && !hit.heldBy && hit.isStatic !== true && movingObjects.indexOf(hit) !== -1 && Math.abs(hit.xspeed || 0) > 0.2 && (hit.xspeed > 0) === (me.x < hit.x)) {
+                hit.x += hit.xspeed; if (hit._tx !== undefined) hit._tx += hit.xspeed;
+            }
+        } catch (e) {
+            this.predBroken = true;
+            if (!this._predWarned) { this._predWarned = true; console.warn("net: local movement switched off", e); }
+        }
+        this.predicting = false;
+        settings.heroSpeed = mySpeed;
+        me.health = hp; me.shield = sh; me.dead = dead;
+        if (!isFinite(me.x) || !isFinite(me.y)) { me.x = me._hx; me.y = me._hy; me.xspeed = 0; me.yspeed = 0; }
+        // correction: the host runs the same keys a few frames later, so while moving it trails by speed x lag. Only
+        // pull toward it when the gap is bigger than that; when both stand still, settle onto the host exactly.
+        var fresh = me._hFresh; me._hFresh = false;
+        var ex = me._hx - me.x, ey = me._hy - me.y, err = Math.hypot(ex, ey);
+        var sp = Math.hypot(me.xspeed, me.yspeed) + Math.hypot(me._hxspeed || 0, me._hyspeed || 0);
+        if (err > 420) { me.x = me._hx; me.y = me._hy; me.xspeed = me._hxspeed || 0; me.yspeed = me._hyspeed || 0; this.predBad = 0; this.predStat.snaps++; }
+        else if (sp < 1.2) { if (err > 1) { me.x += ex * 0.2; me.y += ey * 0.2; } }          // both at rest: settle onto the host exactly
+        else if (fresh) {
+            // Lag only ever leaves the host BEHIND me along my direction of travel. If the host's hero is ahead of me, or
+            // is moving away from me (enemies shoving it, a crate I got stuck on), that is not lag: follow it firmly.
+            var alongMe = ex * me.xspeed + ey * me.yspeed, alongHost = ex * (me._hxspeed || 0) + ey * (me._hyspeed || 0);
+            if (err > 8 && (alongMe > 0 || alongHost > 0)) { me.x += ex * 0.5; me.y += ey * 0.5; this.predStat.pulls++; }
+            else if (err > 26 + sp * 5) { me.x += ex * 0.2; me.y += ey * 0.2; this.predBad += 2; this.predStat.pulls++; }
+            else if (this.predBad > 0) this.predBad--;
+        }
+        // the host keeps putting the hero somewhere else (a vehicle, a lift, being carried): watch the host for 2 s
+        if (this.predBad > 60) { this.predBad = 0; this.predPause = 120; this.predStat.pauses++; }
+        this.predErr = err;
+        this.predStat.on++;
+    },
+
+    // replaces tick() on a client: draw the host's world
+    clientTick: function() {
+        this.sendInput();
+        if (typeof topBarRefresh === "function" && (++this._tbN || (this._tbN = 1)) % 15 === 0) { try { topBarRefresh(); } catch (e) {} }
+        ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+        ctx.clearRect(0, 0, cssW, cssH);
+        if (!this.inGame || this.hostInHub) {
+            this.drawWaiting(this.hostInHub ? "The host is picking a game…" : (this.status || "Waiting for the host…"));
+            return;
+        }
+        // full-screen games: the ones with a draw-only path (turn-based board / table games) render the host's state;
+        // the rest don't stream over LAN yet, so say so instead of an empty world
+        if (GameModes.current && GameModes.current.flags && GameModes.current.flags.ownScreen && GameModes.has("screenDraw")) {
+            GameModes.call("screenDraw");
+            if (typeof drawBanners === "function") drawBanners();
+            if (typeof UniversalInspect !== "undefined") UniversalInspect.drawOverlay();
+            if (this.menuOpen) this.drawClientMenu();
+            return;
+        }
+        if (GameModes.current && GameModes.current.flags && GameModes.current.flags.ownScreen) {
+            this.drawWaiting("The host is playing " + (GameModes.current.title || "a game") + " — local-only for now (play it on the host's screen)");
+            return;
+        }
+        // my own hero: moved by this browser right now (the host corrects it if we ever disagree)
+        var mine = this.myChar();
+        this.predictStep(mine);
+        // everyone else: keep gliding along their last known speed between snapshots, easing onto the host's position
+        var lists = [characters, zombies, movingObjects];
+        for (let l = 0; l < lists.length; l++) for (let i = 0; i < lists[l].length; i++) {
+            var e = lists[l][i];
+            if (e._tx === undefined || (e === mine && this.predictOn)) continue;
+            if (!e.dead && !e.heldBy && l < 2 && Math.abs(e.xspeed || 0) + Math.abs(e.yspeed || 0) < 40) { e._tx += (e.xspeed || 0) * 0.5; if (!e.onGround) e._ty += (e.yspeed || 0) * 0.5; }
+            e.x += (e._tx - e.x) * 0.45; e.y += (e._ty - e.y) * 0.45;
+        }
+        for (let i = 0; i < lazers.length; i++) { lazers[i].x += (lazers[i].xspeed || 0) * 0.5; lazers[i].y += (lazers[i].yspeed || 0) * 0.5; }
+
+        // camera: my hero (or the host's view when I'm dead / spectating)
+        var me = this.myChar();
+        var focus = (me && !me.dead) ? me : (redGuy || characters[0]);
+        if (focus) {
+            var desired = baseZoom * userZoom;
+            cameraScaleX += (desired - cameraScaleX) * 0.08;
+            cameraScaleY = cameraScaleX;
+            cameraTargetX += (focus.x - cameraTargetX) * 0.16;
+            cameraTargetY += (focus.y - cameraTargetY) * 0.16;
+        }
+        var shX = 0, shY = 0;
+        if (screenShake > 0) { shX = (Math.random() - 0.5) * screenShake * 2 * settings.shake; shY = (Math.random() - 0.5) * screenShake * 2 * settings.shake; screenShake *= 0.85; }
+        xc = xcMaster - cameraTargetX * cameraScaleX + shX;
+        yc = ycMaster + (cameraTargetY + 110) * cameraScaleY + shY;
+
+        var safe = function(fn) { try { fn(); } catch (e) { if (!Net._warned) { Net._warned = true; console.warn("net draw", e); } } };
+        safe(function() { if (typeof BackgroundMosaic !== "undefined") BackgroundMosaic.draw(ctx); });
+        safe(function() { if (typeof Depth !== "undefined" && Depth.on()) Depth.drawSides(staticObjects.concat(movingObjects)); });
+        for (let i = 0; i < staticObjects.length; i++) safe(function() { if (!staticObjects[i].dead) staticObjects[i].staticObject(); });
+        safe(function() { if (typeof Gadgets !== "undefined") Gadgets.draw(); });
+        safe(function() { GameModes.call("drawWorld"); });
+        for (let i = 0; i < movingObjects.length; i++) safe(function() {
+            var o = movingObjects[i];
+            if (o.dead) return;
+            Polygon.create(o.poly, o.color, o);
+            if (o.drawDecorations) o.drawDecorations();
+        });
+        safe(function() { if (typeof Ragdolls !== "undefined") Ragdolls.drawCorpses(); });
+        safe(function() { Net.drawPickups(); });
+        for (let i = 0; i < characters.length; i++) safe(function() { if (!characters[i].dead) characters[i].createCharacter(); });
+        for (let i = 0; i < zombies.length; i++) safe(function() { if (!zombies[i].dead) zombies[i].createCharacter(); });
+        if (me && !me.dead) safe(function() { Net.drawYouMarker(me); });
+        for (let i = 0; i < lazers.length; i++) safe(function() { Components.drawProjectile(lazers[i]); });
+        safe(function() { Components.updateParticles(); });
+        safe(function() { Components.drawEffects(); });
+        safe(function() { GameModes.call("drawFront"); });
+        safe(function() { if (typeof Build !== "undefined") { Build.drawWorld(); Build.drawFront(); } });
+        safe(function() { Components.updateFloatingTexts(); });
+        safe(function() { drawHUD(); });
+        safe(function() { if (typeof Build !== "undefined") Build.drawHUD(); });
+        this.drawClientBadge(me);
+        if (this.menuOpen) this.drawClientMenu();
+    },
+
+    drawPickups: function() {
+        var t = performance.now() / 1000;
+        for (let i = 0; i < powerUps.length; i++) {
+            var p = powerUps[i];
+            var def = (typeof PowerUpDefs !== "undefined" && PowerUpDefs[p.type]) || { icon: "?", color: p.color || "#fff" };
+            var sx = wsx(p.x), sy = wsy(p.y + Math.sin(t * 4 + i) * 9);
+            ctx.fillStyle = def.color || "#ffdd33";
+            ctx.beginPath(); ctx.arc(sx, sy, 22 * cameraScaleX + 4, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "#0a0f16"; ctx.font = "800 " + Math.round(18 * cameraScaleX + 8) + "px " + UI_FONT; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+            ctx.fillText(def.icon || "?", sx, sy + 1);
+        }
+        ctx.fillStyle = "#ffd23f";
+        for (let i = 0; i < coinOrbs.length; i++) {
+            var c = coinOrbs[i];
+            ctx.beginPath(); ctx.arc(wsx(c.x), wsy(c.y), 9 * cameraScaleX + 3, 0, Math.PI * 2); ctx.fill();
+        }
+        if (typeof treasureChests !== "undefined") for (let i = 0; i < treasureChests.length; i++) {
+            var tc = treasureChests[i];
+            ctx.fillStyle = tc.opened ? "#5b3a1e" : "#b7791f";
+            ctx.fillRect(wsx(tc.x - tc.w / 2), wsy(tc.y + tc.h / 2), tc.w * cameraScaleX, tc.h * cameraScaleY);
+        }
+        ctx.textBaseline = "alphabetic";
+    },
+
+    drawYouMarker: function(me) {
+        var sx = wsx(me.x), sy = wsy(me.y + me.s2 / 2) - 46;
+        ctx.save();
+        ctx.fillStyle = me.color || "#fff";
+        ctx.beginPath(); ctx.moveTo(sx - 9, sy - 8); ctx.lineTo(sx + 9, sy - 8); ctx.lineTo(sx, sy + 4); ctx.closePath(); ctx.fill();
+        ctx.font = "800 12px " + UI_FONT; ctx.textAlign = "center";
+        ctx.fillText("YOU", sx, sy - 12);
+        ctx.restore();
+    },
+
+    drawClientBadge: function(me) {
+        var age = performance.now() - this.lastSnapAt;
+        var txt = "📡 LAN · " + (me ? (me.playerLabel || "you") : "spectating") + (age > 1000 ? " · host not responding…" : "") + "   Esc: menu · F2: side menu";
+        ctx.save();
+        ctx.font = "700 13px " + UI_FONT;
+        var wdt = ctx.measureText(txt).width + 24;
+        ctx.fillStyle = age > 1000 ? "rgba(127,29,29,0.85)" : "rgba(10,15,22,0.72)";
+        ctx.fillRect(cssW / 2 - wdt / 2, cssH - 34, wdt, 24);
+        ctx.fillStyle = "#e2e8f0"; ctx.textAlign = "center";
+        ctx.fillText(txt, cssW / 2, cssH - 17);
+        ctx.restore();
+    },
+
+    drawWaiting: function(msg) {
+        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = "#e2e8f0"; ctx.textAlign = "center";
+        ctx.font = "800 30px " + UI_FONT; ctx.fillText("📡 LAN GAME", cssW / 2, cssH / 2 - 40);
+        ctx.font = "600 17px " + UI_FONT; ctx.fillStyle = "#94a3b8"; ctx.fillText(msg, cssW / 2, cssH / 2);
+        var names = this.lobbyPlayers.map(function(p) { return p.name; }).join(", ");
+        if (names) ctx.fillText("Players here: " + names, cssW / 2, cssH / 2 + 30);
+        ctx.fillText("Esc: menu", cssW / 2, cssH / 2 + 60);
+        if (this.menuOpen) this.drawClientMenu();
+    },
+
+    drawClientMenu: function() {
+        ctx.save();
+        ctx.fillStyle = "rgba(5,8,14,0.78)"; ctx.fillRect(0, 0, cssW, cssH);
+        ctx.fillStyle = "#e2e8f0"; ctx.textAlign = "center";
+        ctx.font = "800 26px " + UI_FONT; ctx.fillText("LAN MENU", cssW / 2, cssH / 2 - 50);
+        ctx.font = "600 17px " + UI_FONT;
+        ctx.fillText("Enter / L — leave this LAN game", cssW / 2, cssH / 2);
+        ctx.fillText("Esc — back to the game", cssW / 2, cssH / 2 + 30);
+        ctx.fillStyle = "#94a3b8";
+        ctx.fillText("Waiting for host to pick a game…", cssW / 2, cssH / 2 + 70);
+        ctx.restore();
+    },
+
+    // keyboard on a client: Esc opens the full SandboxUI menu when in-game (or LAN menu in hub)
+    clientKey: function(e) {
+        if (this.inGame && !this.hostInHub && typeof SandboxUI !== "undefined") {
+            if (e.code === "Escape") {
+                if (!e.repeat) {
+                    if (SandboxUI.spawnerOpen) SandboxUI.spawnerOpen = false;
+                    else SandboxUI.pauseOpen = !SandboxUI.pauseOpen;
+                    SandboxUI.render();
+                }
+                e.preventDefault();
+                return true;
+            }
+            if (SandboxUI.pauseOpen) {
+                if (e.code === "KeyL" && !e.repeat) { SandboxUI.pauseOpen = false; SandboxUI.render(); this.disconnect(); }
+                e.preventDefault();
+                return true;
+            }
+            return false;
+        }
+        if (e.code === "Escape") { if (!e.repeat) this.menuOpen = !this.menuOpen; e.preventDefault(); return true; }
+        if (this.menuOpen) {
+            if (e.code === "Enter" || e.code === "KeyL") { this.menuOpen = false; this.disconnect(); }
+            e.preventDefault();
+            return true;
+        }
+        return false;
+    }
+};
+
+function r1(v) { return typeof v === "number" ? Math.round(v * 10) / 10 : v; }
+
+// ============================================================================
+// LAN panel (DOM): host / join, the join link to share, and who's connected
+// ============================================================================
+var NetUI = {
+    el: null,
+    open: function() {
+        if (!this.el) this.build();
+        this.el.style.display = "flex";
+        this.probe();
+        this.render();
+        var self = this;
+        clearInterval(this.poll);
+        this.poll = setInterval(function() { if (!self.isOpen()) return clearInterval(self.poll); if (!Net.role && self.info !== false) self.probe(); }, 2500);
+    },
+
+    // which kind of page is this? info = the game's server.js answered (LAN works), false = file or another server
+    info: null, probed: false,
+    probe: function() {
+        var self = this;
+        if (!Net.available()) { this.info = false; this.probed = true; return; }
+        var before = JSON.stringify(this.info);
+        fetch("/lan-info", { cache: "no-store" }).then(function(r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function(j) { self.info = (j && j.port !== undefined) ? j : false; })
+            .catch(function() { self.info = false; })
+            .then(function() {
+                self.probed = true;
+                if (JSON.stringify(self.info) === before) return;          // re-render only on a change (keeps the name box as typed)
+                var nm = document.getElementById("lan-name"), typed = nm && nm.value;
+                self.render();
+                nm = document.getElementById("lan-name"); if (nm && typed) nm.value = typed;
+            });
+    },
+
+    // the steps that work from anywhere: the launcher in the game folder, or the Control Panel button
+    startHelp: function(esc) {
+        var where = location.protocol === "file:" ? "This copy of the game was opened as a file" : "This page comes from <code>" + esc(location.host) + "</code>, a plain web server (like the Control Panel's Start server)";
+        return "<p>" + where + ", and a plain page can't connect players. Start the game's LAN server instead — one click either way:</p>" +
+            "<div class='big'><b>A.</b> In the game folder, double-click <b>Start LAN Game</b><br><small>(Start LAN Game.bat on Windows, Start LAN Game.command on a Mac)</small></div>" +
+            "<div class='big'><b>B.</b> Or in the <b>Control Panel</b>, press <b>Start LAN game</b> (Home → Play together)</div>" +
+            "<p>Either one opens the game in your browser, already hosting, and shows the link the others open. The first time, it may ask you to install <a href='https://nodejs.org' target='_blank' style='color:#7dd3fc'>Node.js</a> (free), and Windows may ask to allow it through the firewall — say yes for private networks.</p>" +
+            "<p style='font-size:12px'>Terminal fans: <code>node server.js --open</code> in the game folder.</p>";
+    },
+    close: function() { if (this.el) this.el.style.display = "none"; },
+    isOpen: function() { return !!this.el && this.el.style.display === "flex"; },
+
+    build: function() {
+        var css = document.createElement("style");
+        css.textContent =
+            "#lan-panel{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(5,8,14,.72);z-index:9999;font-family:'Segoe UI',Arial,sans-serif}" +
+            "#lan-panel .card{background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:14px;padding:22px 26px;width:min(560px,92vw);max-height:88vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)}" +
+            "#lan-panel h2{margin:0 0 4px;font-size:24px}#lan-panel p{margin:6px 0;color:#94a3b8;line-height:1.45}" +
+            "#lan-panel input{background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:8px;padding:9px 12px;font-size:16px;width:200px}" +
+            "#lan-panel button{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-size:15px;font-weight:700;cursor:pointer;margin:4px 6px 4px 0}" +
+            "#lan-panel button.sec{background:#334155}#lan-panel button.warn{background:#b91c1c}" +
+            "#lan-panel code{background:#1e293b;padding:3px 7px;border-radius:6px;color:#7dd3fc;font-size:15px;user-select:all}" +
+            "#lan-panel .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0}" +
+            "#lan-panel .pl{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;background:#1e293b;margin:5px 0}" +
+            "#lan-panel .dot{width:14px;height:14px;border-radius:4px;flex:none}#lan-panel .st{color:#fbbf24;font-weight:600}#lan-panel .err{color:#fca5a5;font-weight:700;background:rgba(127,29,29,.35);padding:8px 10px;border-radius:8px}" +
+            "#lan-panel button:disabled{opacity:.45;cursor:default}" +
+            "#lan-panel .big{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:10px 12px;margin:8px 0;line-height:1.45}#lan-panel .big small{color:#94a3b8}" +
+            "#lan-panel .link{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#082f49;border:1px solid #0ea5e9;border-radius:10px;padding:10px 12px;margin:8px 0}" +
+            "#lan-panel .link code{font-size:22px;font-weight:800;background:none;color:#e0f2fe;padding:0}" +
+            "#lan-panel button.go{background:#16a34a}" +
+            "body.lan-client .top-bar-btn:not(#lan-btn),body.lan-client #level-select-dropdown,body.lan-client #mario-maker-dock{display:none!important}";
+        document.head.appendChild(css);
+        var el = document.createElement("div");
+        el.id = "lan-panel";
+        el.addEventListener("mousedown", function(e) { e.stopPropagation(); if (e.target === el) NetUI.close(); });
+        el.addEventListener("keydown", function(e) { e.stopPropagation(); if (e.code === "Escape") NetUI.close(); });
+        el.addEventListener("keyup", function(e) { e.stopPropagation(); });
+        document.body.appendChild(el);
+        this.el = el;
+    },
+
+    render: function() {
+        if (!this.el || !this.isOpen()) return;
+        var esc = function(s) { return String(s).replace(/[&<>"]/g, function(c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+        var h = '<div class="card"><h2>📡 LAN Multiplayer</h2>';
+        if (!Net.available() || (this.info === false && !Net.role)) {
+            h += this.startHelp(esc) + "<div class='row'><button class='sec' id='lan-close'>Close</button></div>";
+        } else if (!Net.role) {
+            var nm = "";
+            try { nm = localStorage.getItem("timsLanName") || ""; } catch (e) {}
+            var busy = !!Net.ws || Net.statusKind === "info" && /Checking/.test(Net.status);
+            var inf = this.info || {}, hosting = !!inf.hasHost;
+            h += "<p>Play together on one Wi-Fi network. The <b>host</b> runs the game and picks what to play; every player who <b>joins</b> gets their own hero and camera on their own screen. Up to 16 players.</p>" +
+                 (this.info ? "<p class='st'>" + (hosting ? "🟢 A game is being hosted on this server (" + inf.players + " joined) — press Join." : "✅ LAN server ready — nobody is hosting yet.") + "</p>" : "<p class='st'>Checking the server…</p>") +
+                 "<div class='row'>Your name: <input id='lan-name' maxlength='16' value='" + esc(Net.name || nm || "Player") + "'></div>" +
+                 "<div class='row'><button id='lan-host' class='" + (hosting ? "sec" : "go") + "'" + (busy || hosting ? " disabled" : "") + ">🏠 Host a game</button><button id='lan-join' class='" + (hosting ? "go" : "") + "'" + (busy || (this.info && !hosting) ? " disabled title='Nobody is hosting yet'" : "") + ">🎮 Join the game</button><button class='sec' id='lan-close'>Close</button></div>";
+            if (this.info && !hosting && inf.addresses && inf.addresses.length) h += "<p>Once you host, the others open <code>http://" + esc(inf.addresses[0]) + ":" + esc(inf.port) + "</code> and press Join.</p>";
+            if (Net.status) h += "<p class='" + (Net.statusKind === "error" ? "err" : "st") + "'>" + esc(Net.status) + "</p>";
+            if (Net.serverMissing) h += this.startHelp(esc);
+        } else if (Net.role === "host") {
+            var link = Net.addresses.length ? ("http://" + Net.addresses[0] + ":" + location.port) : location.origin;
+            h += "<p class='st'>" + esc(Net.status) + "</p><p>Everyone else opens this link on their device (same Wi-Fi) and presses <b>Join</b>:</p>" +
+                 "<div class='link'><code id='lan-link'>" + esc(link) + "</code><button class='sec' id='lan-copy'>📋 Copy</button></div>";
+            if (Net.addresses.length > 1) h += "<p>If that link doesn't open on the other device, try: " + Net.addresses.slice(1).map(function(a) { return "<code>http://" + esc(a) + ":" + location.port + "</code>"; }).join(" ") + "</p>";
+            h += "<p><b>Players</b> (pick the game from the Arcade as usual; everyone follows you):</p>";
+            h += "<div class='pl'><span class='dot' style='background:" + (redGuy ? redGuy.color : "#ff4d52") + "'></span><b>You (host)</b> — P1, keyboard/mouse" + (multiplayer ? " + P2 on this keyboard" : "") + "</div>";
+            var any = false;
+            for (var k in Net.peers) {
+                var p = Net.peers[k]; any = true;
+                h += "<div class='pl'><span class='dot' style='background:" + p.color + "'></span><b>" + esc(p.name) + "</b> — P" + (p.slot + 1) + " · on their own device" + (p.ch ? "" : " · joins at the next round") + "</div>";
+            }
+            if (!any) h += "<p>No one has joined yet.</p>" +
+                "<details style='margin:6px 0;color:#94a3b8'><summary style='cursor:pointer;color:#fbbf24;font-weight:700'>Nobody can join? Check these</summary>" +
+                "<p>1. Both devices are on the <b>same Wi-Fi</b> (not a guest network, and not one on mobile data).</p>" +
+                "<p>2. The link above is typed exactly, <b>with the :" + esc(location.port) + "</b> at the end, starting with <b>http://</b> (not https).</p>" +
+                "<p>3. <b>Windows:</b> double-click <b>Allow LAN (Windows firewall).bat</b> in the game folder once, and make sure your Wi-Fi is set to <b>Private</b> (Settings → Network). <b>Mac:</b> allow incoming connections for node when asked (System Settings → Network → Firewall).</p>" +
+                "<p>4. Some routers isolate devices from each other (\"AP / client isolation\", common on guest and school networks) — then LAN play can't work on that Wi-Fi.</p></details>";
+            h += "<div class='row'><button class='sec' id='lan-close'>Back to the game</button><button class='warn' id='lan-leave'>Stop hosting</button></div>";
+        } else {
+            h += "<p class='st'>" + esc(Net.status) + "</p><p>You control your hero with WASD/arrows + mouse (or a controller). Your camera follows you; the host chooses the game.</p>";
+            h += "<p><b>In this game:</b> " + (Net.lobbyPlayers.map(function(p) { return esc(p.name); }).join(", ") || "—") + "</p>";
+            h += "<div class='row'><button class='sec' id='lan-close'>Back to the game</button><button class='warn' id='lan-leave'>Leave</button></div>";
+        }
+        h += "</div>";
+        this.el.innerHTML = h;
+        var $ = function(id) { return document.getElementById(id); };
+        var name = function() { return ($("lan-name") && $("lan-name").value.trim()) || "Player"; };
+        if ($("lan-host")) $("lan-host").onclick = function() { Net.connect("host", name()); };
+        if ($("lan-join")) $("lan-join").onclick = function() { Net.connect("client", name()); };
+        if ($("lan-close")) $("lan-close").onclick = function() { NetUI.close(); };
+        if ($("lan-leave")) $("lan-leave").onclick = function() { Net.disconnect(); };
+        if ($("lan-copy")) $("lan-copy").onclick = function() {
+            var t = $("lan-link").textContent, btn = this;
+            var ok = function() { btn.textContent = "✓ Copied"; };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, function() {});
+            else { var r = document.createRange(); r.selectNodeContents($("lan-link")); var sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); try { document.execCommand("copy"); ok(); } catch (e) {} }
+        };
+    }
+};
+
+// open the panel straight away for links like http://192.168.1.20:8080/?lan
+// ?lan=host (what Start LAN Game and the Control Panel open) also starts hosting straight away
+if (/[?&]lan\b/.test(location.search)) window.addEventListener("load", function() {
+    setTimeout(function() {
+        NetUI.open();
+        if (/[?&]lan=host\b/.test(location.search) && !Net.role) {
+            var nm = "Host";
+            try { nm = localStorage.getItem("timsLanName") || "Host"; } catch (e) {}
+            Net.connect("host", nm);
+            try { history.replaceState(null, "", location.pathname + "?lan"); } catch (e) {}   // a reload won't re-host
+        }
+    }, 300);
+});
+window.addEventListener("load", function() { if (!NetUI.el) NetUI.build(); });

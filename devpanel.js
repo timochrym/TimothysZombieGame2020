@@ -25,15 +25,15 @@ function devOptionList(list, selected) {
     return html;
 }
 
-function devSlider(label, opt, min, max, step, fmt, tip, req) {
-    return '<div class="dp-row"' + (req ? ' data-req="' + req + '"' : '') + ' title="' + (tip || "") + '">' +
+function devSlider(label, opt, min, max, step, fmt, tip) {
+    return '<div class="dp-row" title="' + (tip || "") + '">' +
         '<label>' + label + '</label>' +
         '<input type="range" class="dp-range" data-opt="' + opt + '" data-fmt="' + (fmt || "x") + '" min="' + min + '" max="' + max + '" step="' + step + '">' +
         '<span class="dp-val" data-val="' + opt + '"></span></div>';
 }
 
-function devToggle(label, opt, tip, special, req) {
-    return '<label class="dp-toggle"' + (req ? ' data-req="' + req + '"' : '') + ' title="' + (tip || "") + '"><input type="checkbox" ' +
+function devToggle(label, opt, tip, special) {
+    return '<label class="dp-toggle" title="' + (tip || "") + '"><input type="checkbox" ' +
         (special ? 'data-toggle="' + special + '"' : 'data-opt="' + opt + '"') + '><span class="dp-switch"></span><span>' + label + '</span></label>';
 }
 
@@ -219,7 +219,7 @@ var DevActions = {
             var items = JSON.parse(document.getElementById("dp-json").value);
             staticObjects = staticObjects.filter(function(o) { return o.isInfiniteBase; });
             movingObjects = [];
-            Object.loadMap(items);
+            GameObject.loadMap(items);
             rebuildAllObjects();
             SummonManager.refreshObjectList();
             DevUI.toast("Imported " + items.length + " objects");
@@ -291,6 +291,100 @@ var DevUI = {
         if (isFinite(mn) && isFinite(mx) && mx > mn) el.style.setProperty("--pct", (((v - mn) / (mx - mn)) * 100) + "%");
     },
 
+    refreshGameCard: function() {
+        var d = typeof GameInspect !== "undefined" && GameInspect.sel, card = document.getElementById("sp-game-card");
+        if (!d || !card) return;
+        (d.fields || []).forEach(function(r, i) {
+            var v = r.get(), el = card.querySelector('[data-gc="' + i + '"]'), lab = card.querySelector('[data-gc-val="' + i + '"]');
+            if (el && document.activeElement !== el) { if (el.type === "checkbox") el.checked = !!v; else el.value = v; if (el.type === "range") DevUI.paintRange(el); }
+            if (lab) lab.textContent = String(v);
+        });
+    },
+    // full-screen games: a live read-out of the match on the Inspect tab
+    syncMatchState: function() {
+        var box = document.getElementById("sp-match-state"); if (!box || typeof GAME_MATCH_STATE === "undefined") return;
+        var m = GameModes.current, own = GameModes.flag("ownScreen", false), fn = m && (typeof m.matchState === "function" ? m.matchState : GAME_MATCH_STATE[m.id]);
+        if (!own) { box.style.display = "none"; return; }
+        var rows = []; try { rows = fn ? fn() : []; } catch (e) { rows = []; }
+        box.style.display = "block";
+        box.innerHTML = '<div class="dp-section"><div class="dp-title"><span>' + (m.title || "") + ' — match</span></div>' +
+            (rows.length ? rows.map(function(r) { return '<div class="dp-row"><label>' + r[0] + '</label><span class="dp-val" style="width:auto;flex:1;text-align:left">' + r[1] + '</span></div>'; }).join("") : '<p class="dp-hint">This game draws its own screen — nothing to pick here. Its settings are on the Game tab.</p>') + '</div>';
+        ["sp-no-selection"].forEach(function(id) { var e = document.getElementById(id); if (e) e.style.display = "none"; });
+    },
+
+    // the mash-up section: every mix-in as "game default / on / off", plus the shared settings
+    syncMashup: function() {
+        var rowsEl = document.getElementById("dp-mash-rows"), box = document.getElementById("dp-mash");
+        if (!rowsEl || typeof Mashup === "undefined") return;
+        var world = Mashup.world();
+        box.style.display = world ? "" : "none";
+        var key = GameModes.current ? GameModes.current.id : "";
+        if (this.mashFor !== key) {
+            this.mashFor = key;
+            rowsEl.innerHTML = MASHUP_MIX.map(function(m) {
+                return '<div class="dp-row" title="from ' + m[2] + '"><label style="width:150px">' + m[1] + '<br><small style="color:#94a3b8;font-weight:600">from ' + m[2] + '</small></label>' +
+                    '<select class="dp-select" data-mash="' + m[0] + '"><option value="default"></option><option value="on">On</option><option value="off">Off</option></select></div>';
+            }).join("");
+            rowsEl.querySelectorAll("[data-mash]").forEach(function(el) { el.addEventListener("change", function() { Mashup.set(el.dataset.mash, el.value); DevUI.toast(el.options[el.selectedIndex].text.replace(/\s*\(.*/, "") + ": " + MASHUP_MIX.find(function(m) { return m[0] === el.dataset.mash; })[1]); DevUI.syncMashup(); }); });
+            var sh = document.getElementById("dp-shared-rows");
+            sh.innerHTML = SHARED_TUNABLES.map(function(r, i) { return '<div class="dp-row"' + (r.need ? ' data-need="' + r.need + '"' : '') + '><label style="width:150px">' + r.label.replace(" (every game)", "") + '</label><select class="dp-select" data-shared="' + i + '">' + r.options.map(function(o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join("") + '</select></div>'; }).join("");
+            sh.querySelectorAll("[data-need]").forEach(function(e) { e.style.display = GameTuning.applies(e.dataset.need) ? "" : "none"; });
+            sh.querySelectorAll("[data-shared]").forEach(function(el) { el.addEventListener("change", function() { var row = SHARED_TUNABLES[Number(el.dataset.shared)]; row.set(el.value); DevUI.toast(row.label.replace(" (every game)", "") + " set for every game"); }); });
+        }
+        rowsEl.querySelectorAll("[data-mash]").forEach(function(el) {
+            var id = el.dataset.mash, def = Mashup.gameDefault(id);
+            el.options[0].text = "Game default (" + (def ? "on" : "off") + ")";
+            if (document.activeElement !== el) el.value = Mashup.mix[id] === undefined ? "default" : (Mashup.mix[id] ? "on" : "off");
+        });
+        document.querySelectorAll("#dp-shared-rows [data-shared]").forEach(function(el) { if (document.activeElement !== el) el.value = String(SHARED_TUNABLES[Number(el.dataset.shared)].get()); });
+    },
+
+    // the Game tab follows the game that's on: its own settings first, shared rows only where they do something
+    NEED: { waves: { t: ["waves"], o: ["spawnRate", "maxEnemies", "powerUpRate"] }, enemies: { t: ["paths"], o: ["enemyHealth", "enemyDamage"] },
+            world: { t: ["god", "jetpack"], o: ["flight", "infiniteAmmo", "friendlyFire", "showHitboxes", "bouncyRagdolls", "playerDamage", "gravityMult", "timeScale"], id: ["dp-zoom"] }, coop: { t: ["coop"] } },
+    syncGame: function(panel) {
+        if (typeof GameTuning === "undefined" || !GameModes.current) return;
+        this.refreshGameCard(); this.syncMatchState(); this.syncDock(); SummonManager.refreshAllFields();
+        var hidden = 0;
+        for (var need in this.NEED) {
+            var N = this.NEED[need], show = GameTuning.applies(need), els = [];
+            (N.t || []).forEach(function(k) { var e = panel.querySelector('[data-toggle="' + k + '"]'); if (e) els.push(e.closest(".dp-toggle")); });
+            (N.o || []).forEach(function(k) { var e = panel.querySelector('[data-opt="' + k + '"]'); if (e) els.push(e.closest(".dp-toggle") || e.closest(".dp-row")); });
+            (N.id || []).forEach(function(k) { var e = document.getElementById(k); if (e) els.push(e.closest(".dp-row")); });
+            els.forEach(function(e) { if (e) { e.style.display = show ? "" : "none"; if (!show) hidden++; } });
+        }
+        panel.querySelectorAll("[data-need]").forEach(function(e) { e.style.display = GameTuning.applies(e.dataset.need) ? "" : "none"; });
+        var note = document.getElementById("dp-hidden-note");
+        if (note) note.textContent = hidden ? "(" + hidden + " that don't apply to this game are hidden)" : "";
+        this.syncMashup();
+        // "This game" section: rebuilt when the game changes, values refreshed every sync
+        var box = document.getElementById("dp-own"), rowsEl = document.getElementById("dp-own-rows"), id = GameModes.current.id;
+        var rows = GameTuning.rows();
+        if (!box) return;
+        box.style.display = rows.length ? "" : "none";
+        if (this.ownFor !== id) {
+            this.ownFor = id; this.ownRows = rows;
+            document.getElementById("dp-own-title").textContent = (GameModes.current.title || id) + " — its own settings";
+            rowsEl.innerHTML = rows.map(function(r, i) {
+                if (r.type === "toggle") return '<label class="dp-toggle"><input type="checkbox" data-own="' + i + '"><span class="dp-switch"></span><span>' + r.label + '</span></label>';
+                if (r.type === "choice") return '<div class="dp-row"><label>' + r.label + '</label><select class="dp-select" data-own="' + i + '">' + r.options.map(function(o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join("") + '</select></div>';
+                return '<div class="dp-row" title="' + (r.note || "") + '"><label>' + r.label + '</label><input type="range" class="dp-range" data-own="' + i + '" min="' + r.min + '" max="' + r.max + '" step="' + r.step + '"><span class="dp-val" data-own-val="' + i + '"></span></div>';
+            }).join("") + (rows.some(function(r) { return r.note; }) ? '<p class="dp-hint">Some take effect from the next match.</p>' : "");
+            rowsEl.querySelectorAll("[data-own]").forEach(function(el) {
+                var r = rows[Number(el.dataset.own)];
+                var apply = function() { var v = el.type === "checkbox" ? el.checked : Number(el.value); r.set(v); DevUI.toast(r.label + ": " + (el.type === "checkbox" ? (v ? "on" : "off") : (r.type === "choice" ? el.options[el.selectedIndex].text : v))); };
+                el.addEventListener(el.type === "range" ? "input" : "change", apply);
+            });
+        }
+        rowsEl.querySelectorAll("[data-own]").forEach(function(el) {
+            if (document.activeElement === el) return;
+            var r = DevUI.ownRows[Number(el.dataset.own)], v = r.get();
+            if (el.type === "checkbox") el.checked = !!v; else el.value = v;
+            var lab = rowsEl.querySelector('[data-own-val="' + el.dataset.own + '"]'); if (lab) lab.textContent = String(v);
+            if (el.type === "range") DevUI.paintRange(el);
+        });
+    },
+
     sync: function() {
         var panel = document.getElementById("summon-panel");
         if (!panel) return;
@@ -323,13 +417,16 @@ var DevUI = {
             var zl = panel.querySelector('[data-val="zoom"]');
             if (zl) zl.textContent = userZoom.toFixed(2) + "x";
         }
+        DevUI.syncGame(panel);
+        topBarRefresh();
+        var godBtn = document.getElementById("god-mode-btn");
+        if (godBtn) {
+            godBtn.classList.toggle("active", godMode);
+        }
         var info = document.getElementById("dp-live");
         if (info) {
-            var parts = [];
-            if (UI.flagOn("waves")) parts.push("Wave " + level);
-            if (UI.has("enemies") || zombies.length) parts.push(zombies.length + " enemies");
-            parts.push(measuredFPS + " fps");
-            info.textContent = parts.join(" · ");
+            var wv = typeof GameTuning !== "undefined" ? GameTuning.applies("waves") : true;
+            info.textContent = (wv ? "Wave " + level + " · " : (GameModes.current ? GameModes.current.title + " · " : "")) + (zombies.length ? zombies.length + " enemies · " : "") + measuredFPS + " fps";
         }
     },
 
@@ -340,37 +437,22 @@ var DevUI = {
         for (let i = 0; i < pages.length; i++) pages[i].classList.toggle("active", pages[i].getAttribute("data-page") === name);
         SummonManager.activeTab = name;
         if (name === "objects") SummonManager.refreshObjectList();
-        DevUI.syncDock();
+        // leaving the Build tab drops back to playing, so a stray click never places or drags anything
+        if (name !== "build" && name !== "inspect" && SummonManager.toolMode !== "shoot") SummonManager.setToolMode("shoot");
+        this.syncDock();
     },
 
-    // The palette dock only makes sense while editing a level: Build tab open, in a game whose levels are editable
+    // The row of pieces along the bottom belongs to placing things: it only shows on the Build tab, in Place mode,
+    // in a game that has a world to build in. (It used to sit there whenever the panel was open.)
     syncDock: function() {
         var dock = document.getElementById("mario-maker-dock");
-        if (dock) dock.classList.toggle("open", !!(SummonManager.isOpen && SummonManager.activeTab === "build" && UI.spec("edit")));
-    },
-
-    // Show only the tools the current game can use (data-req="flag:waves" etc.), fall back to a visible tab
-    applyContext: function() {
-        var panel = document.getElementById("summon-panel");
-        if (!panel) return;
-        var els = panel.querySelectorAll("[data-req]");
-        for (let i = 0; i < els.length; i++) els[i].classList.toggle("dp-hidden", !UI.has(els[i].getAttribute("data-req")));
-        var strip = panel.querySelector(".dp-tabs");
-        if (strip) strip.classList.toggle("dp-hidden", panel.querySelectorAll(".dp-tab:not(.dp-hidden)").length < 2);
-        var title = document.getElementById("dp-title");
-        if (title && GameModes.current) title.textContent = "🛠 " + GameModes.current.title;
-        // first time the panel opens in a game: editable games start on Build (palette dock), the rest on Tune
-        if (SummonManager.isOpen && DevUI.tabMode !== GameModes.current.id) {
-            DevUI.tabMode = GameModes.current.id;
-            DevUI.switchTab(UI.spec("edit") ? "build" : "game");
-        }
-        var activeTab = panel.querySelector(".dp-tab.active");
-        if (!activeTab || activeTab.classList.contains("dp-hidden")) {
-            var first = panel.querySelector(".dp-tab:not(.dp-hidden)");
-            if (first) DevUI.switchTab(first.getAttribute("data-tab"));
-        }
-        if (!UI.spec("edit") && SummonManager.toolMode !== "shoot") SummonManager.setToolMode("shoot");
-        DevUI.syncDock();
+        if (!dock) return;
+        var world = !GameModes.flag("ownScreen", false);
+        dock.classList.toggle("open", !!SummonManager.isOpen && world && SummonManager.activeTab === "build" && SummonManager.toolMode === "place");
+        // full-screen games (arenas, boards, tables) have nothing to build, list or save: only show the tabs that work there
+        var hide = { build: !world, objects: !world, level: !world };
+        document.querySelectorAll(".dp-tab").forEach(function(t) { var k = t.getAttribute("data-tab"); if (k in hide) t.style.display = hide[k] ? "none" : ""; });
+        if (!world && hide[SummonManager.activeTab]) this.switchTab("game");
     },
 
     bind: function(panel) {
@@ -474,6 +556,28 @@ SummonManager.buildUI = function() {
     var style = document.createElement("style");
     style.textContent = `
         :root { --dp-bg: rgba(10,16,24,0.94); --dp-line: rgba(130,180,210,0.22); --dp-accent: #22d3ee; --dp-accent2: #ffd23f; --dp-text: #e6f1f7; --dp-dim: #8aa3b5; }
+        /* Legacy right-hand menu bars are consolidated into the single unified SandboxUI menu */
+        #top-right-bar { position: fixed; top: 10px; right: 12px; z-index: 1000; display: none !important; gap: 6px; align-items: center; user-select: none; font-family: 'Segoe UI', Arial, sans-serif; opacity: .62; transition: opacity .2s; }
+        #top-right-bar:hover, #top-right-bar.menu-open, body.hub-open #top-right-bar, body.paused #top-right-bar { opacity: 1; }
+        body.studio-open #top-right-bar { display: none !important; }
+        .top-bar-btn { background: var(--dp-bg); color: var(--dp-text); border: 1px solid var(--dp-line); height: 36px; min-width: 38px; padding: 0 11px; font-size: 13px; font-weight: 700; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,0.35); transition: border-color .15s, background .15s; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .top-bar-btn:hover { border-color: var(--dp-accent); }
+        .top-bar-btn.active { background: linear-gradient(135deg, #ffd23f, #ff9f1c); color: #1a1205; border-color: #fff3; }
+        #coop-btn.active { background: linear-gradient(135deg, #22d3ee, #3b82f6); color: #04121c; }
+        #lan-btn.live { background: linear-gradient(135deg, #34d399, #059669); color: #03140d; }
+        @media (max-width: 1100px) { .top-bar-btn .lbl { display: none; } }
+        #top-menu { position: fixed; top: 52px; right: 12px; z-index: 1001; width: 300px; max-height: calc(100vh - 70px); overflow-y: auto; background: var(--dp-bg); border: 1px solid var(--dp-line); border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.6); padding: 8px; display: none !important; font-family: 'Segoe UI', Arial, sans-serif; color: var(--dp-text); }
+        #top-menu.open { display: none !important; }
+        #top-menu .tm-head { padding: 6px 8px 8px; border-bottom: 1px solid var(--dp-line); margin-bottom: 6px; }
+        #top-menu .tm-head b { display: block; font-size: 14px; color: #fde68a; } #top-menu .tm-head span { font-size: 12px; color: var(--dp-dim); }
+        #top-menu .tm-sec { font-size: 10px; font-weight: 800; letter-spacing: .1em; color: var(--dp-dim); text-transform: uppercase; margin: 8px 8px 3px; }
+        #top-menu button.tm { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; background: transparent; color: var(--dp-text); border: 0; border-radius: 9px; padding: 8px 10px; font: 600 13px inherit; cursor: pointer; }
+        #top-menu button.tm:hover { background: rgba(34,211,238,.12); }
+        #top-menu button.tm .ic { width: 22px; text-align: center; font-size: 16px; }
+        #top-menu button.tm .tx { flex: 1; } #top-menu button.tm .tx small { display: block; color: var(--dp-dim); font-weight: 500; font-size: 11px; }
+        #top-menu button.tm kbd { margin-left: auto; }
+        #top-menu button.tm.active { background: rgba(255,210,63,.16); }
+        #level-select-dropdown { width: calc(100% - 16px); margin: 2px 8px 6px; background: #0b1220; color: #7ff0b0; border: 1px solid var(--dp-line); border-radius: 9px; padding: 7px 8px; font: 600 13px inherit; }
 
         #mario-maker-dock { position: fixed; bottom: 166px; left: calc(50% - 215px); transform: translateX(-50%); z-index: 1000; background: var(--dp-bg); border: 1px solid var(--dp-line); border-radius: 16px; padding: 10px 14px; display: none; align-items: center; gap: 8px; box-shadow: 0 12px 34px rgba(0,0,0,.6); user-select: none; font-family: 'Segoe UI', Arial, sans-serif; max-width: calc(100vw - 460px); overflow-x: auto; }
         #mario-maker-dock.open { display: flex; }
@@ -484,14 +588,17 @@ SummonManager.buildUI = function() {
         .mm-divider { width: 1px; height: 48px; background: var(--dp-line); margin: 0 2px; flex: 0 0 auto; }
         .mm-label { color: var(--dp-dim); font-size: 11px; font-weight: 800; line-height: 1.25; letter-spacing: .5px; }
 
-        #summon-panel { position: fixed; top: 62px; right: 16px; bottom: 16px; width: 410px; background: var(--dp-bg); border: 1px solid var(--dp-line); border-radius: 18px; color: var(--dp-text); font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; z-index: 1000; display: none; flex-direction: column; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,.65); user-select: none; backdrop-filter: blur(8px); }
-        #summon-panel.open { display: flex; }
-        .dp-head { padding: 14px 16px 8px; display: flex; justify-content: space-between; align-items: baseline; }
+        #summon-panel { position: fixed; top: 62px; right: 16px; bottom: 16px; width: 410px; background: var(--dp-bg); border: 1px solid var(--dp-line); border-radius: 18px; color: var(--dp-text); font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; z-index: 1000; display: none !important; flex-direction: column; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,.65); user-select: none; backdrop-filter: blur(8px); }
+        #summon-panel.open { display: none !important; }
+        .dp-head { padding: 12px 12px 8px 16px; display: flex; align-items: center; }
         .dp-head b { font-size: 16px; letter-spacing: .5px; color: var(--dp-accent2); }
-        .dp-head span { font-size: 11px; color: var(--dp-dim); }
-        .dp-hidden { display: none !important; }
-        .dp-tabs { display: flex; gap: 4px; padding: 0 12px 10px; border-bottom: 1px solid var(--dp-line); }
-        .dp-tab { flex: 1; background: transparent; border: 0; color: var(--dp-dim); padding: 8px 2px; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 12px; font-family: inherit; transition: all .12s; }
+        .dp-head span { font-size: 11px; color: var(--dp-dim); margin-left: auto; margin-right: 10px; }
+        .dp-x { background: rgba(255,255,255,.06); border: 1px solid var(--dp-line); color: var(--dp-text); border-radius: 8px; width: 28px; height: 28px; cursor: pointer; font-size: 13px; flex: none; }
+        .dp-x:hover { background: rgba(255,77,94,.25); }
+        @media (max-width: 900px) { #summon-panel { width: min(410px, calc(100vw - 24px)); right: 12px; top: 56px; bottom: 12px; } #mario-maker-dock { left: 12px; transform: none; max-width: calc(100vw - 450px); bottom: auto; top: 150px; } }
+        @media (max-width: 640px) { #mario-maker-dock.open { display: none; } }
+        .dp-tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 0 12px 10px; border-bottom: 1px solid var(--dp-line); }
+        .dp-tab { background: transparent; border: 0; color: var(--dp-dim); padding: 8px 2px; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 12px; font-family: inherit; transition: all .12s; }
         .dp-tab:hover { background: rgba(255,255,255,.06); color: var(--dp-text); }
         .dp-tab.active { background: rgba(34,211,238,.16); color: var(--dp-accent); box-shadow: inset 0 -2px 0 var(--dp-accent); }
         .dp-body { overflow-y: auto; flex: 1; padding: 6px 14px 14px; }
@@ -502,6 +609,8 @@ SummonManager.buildUI = function() {
         .dp-hint { font-size: 11px; color: var(--dp-dim); margin: 4px 0 0; line-height: 1.35; }
         .dp-row { display: flex; align-items: center; gap: 8px; margin: 7px 0; }
         .dp-row label { width: 104px; white-space: nowrap; flex: 0 0 auto; color: #c3d5e2; font-weight: 600; }
+        #dp-own-rows .dp-row label, #dp-shared-rows .dp-row label { width: 150px; white-space: normal; line-height: 1.2; }
+        #dp-own-rows .dp-row .dp-range, #dp-own-rows .dp-row .dp-select, #dp-shared-rows .dp-row .dp-select { flex: 1 1 0; min-width: 0; }
         .dp-val { width: 52px; text-align: right; font-variant-numeric: tabular-nums; color: var(--dp-accent2); font-weight: 800; flex: 0 0 auto; }
         .dp-range { -webkit-appearance: none; appearance: none; flex: 1; height: 8px; border-radius: 8px; --pct: 50%; background: linear-gradient(90deg, #22d3ee var(--pct), rgba(255,255,255,.16) var(--pct)); outline: none; min-width: 0; }
         .dp-range::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg, #67e8f9, #22d3ee); border: 2px solid #04121c; box-shadow: 0 0 10px rgba(34,211,238,.6); cursor: pointer; }
@@ -554,6 +663,102 @@ SummonManager.buildUI = function() {
 
     var stop = function(e) { e.stopPropagation(); };
 
+    // ---------- Top-right bar ----------
+    var topBar = document.createElement("div");
+    topBar.id = "top-right-bar";
+    topBar.addEventListener("mousedown", stop);
+    topBar.addEventListener("click", stop);
+
+    var mk = function(id, icon, label, title, fn) {
+        var b = document.createElement("button");
+        if (id) b.id = id;
+        b.className = "top-bar-btn";
+        b.innerHTML = icon + (label ? " <span class='lbl'>" + label + "</span>" : "");
+        b.title = title;
+        b.addEventListener("click", function(e) { e.stopPropagation(); fn(); this.blur(); });
+        topBar.appendChild(b);
+        return b;
+    };
+    mk("coop-btn", "👥", "Players", "Who's playing: humans, CPUs, teams, controls", function() { closeTopMenu(); PlayersUI.open(); });
+    mk("lan-btn", "📡", "LAN", "Play with other devices on the same Wi-Fi: host or join", function() { closeTopMenu(); NetUI.open(); });
+    mk("studio-btn", "🛠", "Studio", "Level Studio [B]: build, test and share levels", function() { closeTopMenu(); Studio.open(); });
+    var menuBtn = mk("top-menu-btn", "☰", "Menu", "Open game menu, tuning, inspector, and settings", function() {
+        if (typeof SandboxUI !== "undefined" && SandboxUI.isActive()) {
+            closeTopMenu();
+            SandboxUI.sideOpen = !SandboxUI.sideOpen;
+            SandboxUI.render();
+        } else {
+            toggleTopMenu();
+        }
+    });
+
+    // ---------- the ☰ menu ----------
+    var menu = document.createElement("div");
+    menu.id = "top-menu";
+    ["mousedown", "click", "wheel", "keydown"].forEach(function(ev) { menu.addEventListener(ev, function(e) { e.stopPropagation(); }); });
+    var row = function(id, icon, text, sub, key, fn) {
+        var b = document.createElement("button");
+        b.className = "tm"; if (id) b.id = id;
+        b.innerHTML = "<span class='ic'>" + icon + "</span><span class='tx'>" + text + (sub ? "<small>" + sub + "</small>" : "") + "</span>" + (key ? "<kbd>" + key + "</kbd>" : "");
+        b.addEventListener("click", function(e) { e.stopPropagation(); fn(b); });
+        menu.appendChild(b);
+        return b;
+    };
+    var sec = function(t, id) { var d = document.createElement("div"); d.className = "tm-sec"; if (id) d.id = id; d.textContent = t; menu.appendChild(d); return d; };
+    var head = document.createElement("div"); head.className = "tm-head"; head.id = "tm-head"; menu.appendChild(head);
+    sec("Play", "tm-sec-play");
+    row("", "🕹", "Arcade — switch game", "All the games made with this engine", "", function() { closeTopMenu(); if (typeof paused !== "undefined" && paused) closePause(); Hub.openHub(false); });
+    var lvlSelect = document.createElement("select");
+    lvlSelect.id = "level-select-dropdown";
+    lvlSelect.title = "Levels / courses of this game";
+    lvlSelect.addEventListener("change", function() { closeTopMenu(); LevelManager.selectLevel(this.value); this.blur(); });
+    menu.appendChild(lvlSelect);
+    row("tm-frontier", "🌲", "Wildwood Frontier", "Survival on the endless generated trail", "", function() { closeTopMenu(); LevelManager.selectLevel("infinite_frontier"); });
+    row("", "⏸", "Pause menu", "Restart, game options, levels", "Esc", function() { closeTopMenu(); if (typeof openPause === "function" && !paused) openPause(false); });
+    sec("Make & tune", "tm-sec-make");
+    row("tm-studio", "🛠", "Level Studio", "Build, play-test and share levels", "B", function() { closeTopMenu(); Studio.open(); });
+    row("summon-toggle-btn", "🧪", "Cheats & tuning", "Dev panel: sliders, spawning, god mode", "F2", function() {
+        closeTopMenu();
+        if (typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false) && typeof SandboxUI !== "undefined") {
+            SandboxUI.sideOpen = !SandboxUI.sideOpen;
+            if (SandboxUI.sideOpen) SandboxUI.sideTab = "controls";
+            SandboxUI.render();
+        } else {
+            SummonManager.togglePanel();
+        }
+    });
+    row("tm-mash", "🧩", "Mash-up", "Mix other games' parts into this one", "", function() {
+        closeTopMenu(); if (!SummonManager.isOpen) SummonManager.togglePanel(); DevUI.switchTab("game");
+        var m = document.getElementById("dp-mash"); if (m) setTimeout(function() { m.scrollIntoView({ block: "start" }); }, 50);
+    });
+    var god = row("god-mode-btn", "⚡", "God mode", "Invincible + unlimited everything", "V", function() { SummonManager.toggleGodMode(); DevUI.sync(); });
+    god.style.display = "none";
+    sec("Settings", "tm-sec-settings");
+    row("", "⚙", "Settings", "Sound, shake, graphics, theme", "", function() { closeTopMenu(); if (!paused) openPause(false); pauseActivate("settings"); });
+    row("", "🎮", "Controls", "Remap keys and gamepad buttons", "", function() { closeTopMenu(); if (typeof ControlsUI !== "undefined") ControlsUI.open(); });
+    row("tm-help", "❓", "Key help on screen", "Show / hide the control cheat-sheet", "H", function(b) { devOpts.showHelp = !devOpts.showHelp; b.classList.toggle("active", devOpts.showHelp); });
+    document.body.appendChild(menu);
+    window.toggleTopMenu = function() {
+        var open = !menu.classList.contains("open");
+        menu.classList.toggle("open", open); topBar.classList.toggle("menu-open", open);
+        if (open) {
+            if (typeof SummonManager !== "undefined") SummonManager.refreshLevelDropdown();
+            var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
+            var stEl = document.getElementById("tm-studio"); if (stEl) stEl.style.display = "none"; // already on top bar (#studio-btn)
+            var msEl = document.getElementById("tm-mash"); if (msEl) msEl.style.display = own ? "none" : "";
+            var frEl = document.getElementById("tm-frontier"); if (frEl) frEl.style.display = own ? "none" : "";
+            var ldEl = document.getElementById("level-select-dropdown"); if (ldEl) ldEl.style.display = (own || ldEl.options.length <= 1) ? "none" : "";
+            var g = GameModes.current, lvl = LevelManager.getCurrentLevel ? LevelManager.getCurrentLevel() : null;
+            var lvlTxt = (!own && lvl && lvl.name) ? lvl.name.replace(/^[^A-Za-z0-9]+/, "") : (g && g.tagline ? g.tagline : "");
+            head.innerHTML = "<b>" + (g ? g.title : "") + "</b><span>" + lvlTxt + "</span>";
+            var h = document.getElementById("tm-help"); if (h) h.classList.toggle("active", !!devOpts.showHelp);
+        }
+    };
+    window.closeTopMenu = function() { menu.classList.remove("open"); topBar.classList.remove("menu-open"); };
+    document.addEventListener("mousedown", function(e) { if (menu.classList.contains("open") && !menu.contains(e.target) && e.target !== menuBtn) closeTopMenu(); }, true);
+    document.addEventListener("keydown", function(e) { if (e.code === "Escape" && menu.classList.contains("open")) { closeTopMenu(); e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+    document.body.appendChild(topBar);
+
     // ---------- Bottom palette dock ----------
     var dock = document.createElement("div");
     dock.id = "mario-maker-dock";
@@ -589,18 +794,18 @@ SummonManager.buildUI = function() {
     panel.addEventListener("keyup", stop);
 
     panel.innerHTML = `
-        <div class="dp-head"><b id="dp-title">🛠 DEV MODE</b><span id="dp-live"></span></div>
+        <div class="dp-head"><b>🧪 Cheats &amp; tuning</b><span id="dp-live"></span><button class="dp-x" title="Close (Esc)" onclick="SummonManager.togglePanel()">✕</button></div>
         <div class="dp-tabs">
-            <button class="dp-tab" data-tab="build" data-req="ui:edit">🧱 Build</button>
-            <button class="dp-tab" data-tab="inspect" data-req="ui:edit">🔍 Inspect</button>
-            <button class="dp-tab active" data-tab="game">🎮 Tune</button>
-            <button class="dp-tab" data-tab="objects" data-req="ui:edit">📋 Objects</button>
-            <button class="dp-tab" data-tab="level" data-req="ui:edit">💾 Level</button>
+            <button class="dp-tab active" data-tab="game">🎮 Game</button>
+            <button class="dp-tab" data-tab="build">🧱 Build</button>
+            <button class="dp-tab" data-tab="inspect">🔍 Inspect</button>
+            <button class="dp-tab" data-tab="objects">📋 Objects</button>
+            <button class="dp-tab" data-tab="level">💾 Level</button>
         </div>
         <div class="dp-body">
 
         <!-- ================= BUILD ================= -->
-        <div class="dp-page" data-page="build" data-req="ui:edit">
+        <div class="dp-page" data-page="build">
             <div class="dp-section">
                 <div class="dp-title"><span>Cursor mode</span><span id="sp-mode-hint">Click: Shoot | R-Click: Grab</span></div>
                 <div class="dp-seg">
@@ -608,7 +813,7 @@ SummonManager.buildUI = function() {
                     <button id="mode-place" onclick="SummonManager.setToolMode('place')">➕ Place</button>
                     <button id="mode-select" onclick="SummonManager.setToolMode('select')">✋ Edit</button>
                 </div>
-                <p class="dp-hint">Pick an item from the dock below the map (drag it out, or click it then use <b>Place</b>). In <b>Edit</b> mode drag objects, pull edge handles to resize, hold <kbd>Alt</kbd> to copy.</p>
+                <p class="dp-hint"><b>Play</b>: the game as normal. <b>Place</b>: a row of pieces appears along the bottom — drag one onto the map, or click it and then click the map. <b>Edit</b>: drag objects, pull edge handles to resize, hold <kbd>Alt</kbd> to copy.</p>
             </div>
             <div class="dp-section">
                 <div class="dp-title"><span>New object</span><span id="dp-size-label"></span></div>
@@ -633,7 +838,9 @@ SummonManager.buildUI = function() {
         </div>
 
         <!-- ================= INSPECT ================= -->
-        <div class="dp-page" data-page="inspect" data-req="ui:edit">
+        <div class="dp-page" data-page="inspect">
+            <div id="sp-game-card" style="display:none"></div>
+            <div id="sp-match-state" style="display:none"></div>
             <div class="dp-empty" id="sp-no-selection">Nothing selected.<br>Switch to <b>✋ Edit</b> mode and click an object,<br>or pick one from the <b>Objects</b> tab.</div>
             <div id="sp-inspector" style="display:none">
                 <div class="dp-section">
@@ -660,6 +867,15 @@ SummonManager.buildUI = function() {
                     <div class="dp-row" id="sp-edit-bounce-row" style="display:none"><label>Bounce</label>
                         <input type="range" class="dp-range" id="sp-edit-bounce" min="10" max="40" step="1" oninput="if(SummonManager.selectedObject){SummonManager.selectedObject.bounceForce=Number(this.value);} this.nextElementSibling.textContent=this.value">
                         <span class="dp-val"></span></div>
+                    <div class="dp-row" id="sp-edit-weight-row" style="display:none" title="Heavier = harder to push, throw and blast, and hits harder"><label>Weight</label>
+                        <input type="range" class="dp-range" id="sp-edit-weight" min="0.2" max="10" step="0.1" oninput="SummonManager.setSelectedField('weight', Number(this.value)); this.nextElementSibling.textContent=this.value">
+                        <span class="dp-val"></span></div>
+                    <div class="dp-row" id="sp-edit-impact-row" style="display:none" title="How hard this block hurts what it lands on. 0 = harmless"><label>Impact damage ×</label>
+                        <input type="range" class="dp-range" id="sp-edit-impact" min="0" max="3" step="0.1" oninput="SummonManager.setSelectedField('impactMult', Number(this.value)); this.nextElementSibling.textContent=this.value">
+                        <span class="dp-val"></span></div>
+                    <div class="dp-row" id="sp-edit-grav-row" style="display:none" title="1 = normal, 0 = floats in place, negative = rises like a balloon"><label>Gravity ×</label>
+                        <input type="range" class="dp-range" id="sp-edit-grav" min="-1" max="3" step="0.1" oninput="SummonManager.setSelectedField('gravityMult', Number(this.value)); this.nextElementSibling.textContent=this.value">
+                        <span class="dp-val"></span></div>
                     <div class="dp-row" id="sp-edit-hp-row" style="display:none"><label>Health</label>
                         <input type="range" class="dp-range" id="sp-edit-hp" min="10" max="800" step="10" oninput="SummonManager.setSelectedHP(Number(this.value)); this.nextElementSibling.textContent=this.value">
                         <span class="dp-val"></span></div>
@@ -671,41 +887,58 @@ SummonManager.buildUI = function() {
                     <select id="sp-kind-select" class="dp-select" onchange="SummonManager.setSelectedKind(this.value)" title="Structure type"><option value="stairs">Stairs</option><option value="slope">Slope</option><option value="slide">Slide</option><option value="wall">Wall</option><option value="platform">One-way platform</option><option value="block">Solid block</option></select>
                     <button class="dp-btn warn" id="sp-kill-btn" data-act="killSelected" style="display:none">☠ Kill</button>
                 </div></div>
+                <details class="dp-section" id="sp-all-fields" ontoggle="SummonManager.renderAllFields()">
+                    <summary class="dp-title" style="cursor:pointer"><span>▸ All fields <span id="sp-all-count"></span></span><span style="text-transform:none;letter-spacing:0;font-weight:600">every value on this object</span></summary>
+                    <input id="sp-all-filter" class="dp-text" placeholder="filter… (speed, health, jump)" style="width:100%;box-sizing:border-box;margin:4px 0 6px" oninput="SummonManager.renderAllFields()">
+                    <div id="sp-all-rows"></div>
+                </details>
             </div>
         </div>
 
         <!-- ================= GAME ================= -->
         <div class="dp-page active" data-page="game">
+            <div class="dp-section" id="dp-own" style="display:none">
+                <div class="dp-title"><span id="dp-own-title">This game</span></div>
+                <div id="dp-own-rows"></div>
+            </div>
+            <div class="dp-section" id="dp-mash">
+                <div class="dp-title"><span>🧩 Mash-up — mix in from other games</span></div>
+                <div id="dp-mash-rows"></div>
+            </div>
+            <div class="dp-section" id="dp-shared">
+                <div class="dp-title"><span>🎨 Shared by every game</span></div>
+                <div id="dp-shared-rows"></div>
+            </div>
             <div class="dp-section">
-                <div class="dp-title"><span>Toggles</span></div>
+                <div class="dp-title"><span>Toggles</span><span id="dp-hidden-note" style="text-transform:none;letter-spacing:0;font-weight:600"></span></div>
                 <div class="dp-toggles">
                     ${devToggle("God mode [V]", "", "Invincible, endless fuel", "god")}
-                    ${devToggle("Co-op", "", "Two players (restarts the run)", "coop", "flag:coopToggle")}
-                    ${devToggle("Waves running", "", "Pause enemy waves", "waves", "flag:waves")}
-                    ${devToggle("Jetpack", "", "Enable jetpacks", "jetpack", "flag:jetpack")}
+                    ${devToggle("Co-op", "", "Two players (restarts the run)", "coop")}
+                    ${devToggle("Waves running", "", "Pause enemy waves", "waves")}
+                    ${devToggle("Jetpack", "", "Enable jetpacks", "jetpack")}
                     ${devToggle("Creative flight", "flight", "Double-tap jump to fly (W/S up and down) in any game")}
-                    ${devToggle("Infinite ammo", "infiniteAmmo", "Unlimited bullets, no fuel drain or cooldowns", "", "flag:ammo,flag:jetpack")}
-                    ${devToggle("Friendly fire", "friendlyFire", "Heroes can hurt each other", "", "multi")}
+                    ${devToggle("Infinite ammo", "infiniteAmmo", "Unlimited bullets, no fuel drain or cooldowns")}
+                    ${devToggle("Friendly fire", "friendlyFire", "Heroes can hurt each other")}
                     ${devToggle("Show hitboxes", "showHitboxes", "")}
                     ${devToggle("FPS counter", "showFPS", "")}
-                    ${devToggle("Nav paths [P]", "", "Enemy pathfinding debug", "paths", "enemies")}
+                    ${devToggle("Nav paths [P]", "", "Enemy pathfinding debug", "paths")}
                     ${devToggle("Controls help [H]", "showHelp", "")}
                     ${devToggle("Bouncy ragdolls", "bouncyRagdolls", "Bodies bounce like rubber")}
                 </div>
             </div>
-            <div class="dp-section">
+            <div class="dp-section" data-need="world">
                 <div class="dp-title"><span>Tuning</span><button class="sp-small-btn" data-act="resetTuning">Reset</button></div>
                 ${devSlider("Game speed", "timeScale", 0, 2, 0.05, "x", "0 = freeze, 1 = normal")}
                 <div class="dp-row"><label>Zoom [+/-]</label><input type="range" class="dp-range" id="dp-zoom" min="0.55" max="1.9" step="0.05"><span class="dp-val" data-val="zoom"></span></div>
-                ${devSlider("Spawn rate", "spawnRate", 0.2, 4, 0.1, "x", "", "flag:waves")}
-                ${devSlider("Max enemies", "maxEnemies", 1, 40, 1, "int", "", "enemies")}
-                ${devSlider("Enemy HP", "enemyHealth", 0.25, 5, 0.25, "x", "", "enemies")}
-                ${devSlider("Enemy damage", "enemyDamage", 0, 4, 0.25, "x", "", "enemies")}
-                ${devSlider("Player damage", "playerDamage", 0.25, 6, 0.25, "x", "", "flag:shooting")}
-                ${devSlider("Power-up drops", "powerUpRate", 0, 4, 0.25, "x", "", "flag:waves")}
+                ${devSlider("Spawn rate", "spawnRate", 0.2, 4, 0.1, "x")}
+                ${devSlider("Max enemies", "maxEnemies", 1, 40, 1, "int")}
+                ${devSlider("Enemy HP", "enemyHealth", 0.25, 5, 0.25, "x")}
+                ${devSlider("Enemy damage", "enemyDamage", 0, 4, 0.25, "x")}
+                ${devSlider("Player damage", "playerDamage", 0.25, 6, 0.25, "x")}
+                ${devSlider("Power-up drops", "powerUpRate", 0, 4, 0.25, "x")}
                 ${devSlider("Gravity", "gravityMult", 0.15, 2, 0.05, "x", "Low = moon jumps & floaty bodies")}
             </div>
-            <div class="dp-section" data-req="flag:waves">
+            <div class="dp-section" data-need="waves">
                 <div class="dp-title"><span>Waves</span></div>
                 <div class="dp-grid3">
                     <button class="dp-btn" data-act="nextWave">⏭ Next wave</button>
@@ -713,7 +946,7 @@ SummonManager.buildUI = function() {
                     <div class="dp-row" style="margin:0"><input type="number" id="dp-wave-num" class="dp-num" style="width:44px" value="5" min="1" max="99"><button class="dp-btn" style="flex:1;padding:8px 2px" data-act="gotoWave">Go</button></div>
                 </div>
             </div>
-            <div class="dp-section" data-req="enemies">
+            <div class="dp-section" data-need="world">
                 <div class="dp-title"><span>Spawn</span></div>
                 <div class="dp-row"><select id="dp-enemy-type" class="dp-select">${devOptionList(DEV_ENEMY_TYPES, "NORMAL")}</select>
                     <input type="number" id="dp-enemy-count" class="dp-num" style="width:52px" value="3" min="1" max="30"><button class="dp-btn" data-act="spawnEnemy">🧟 Spawn</button></div>
@@ -724,7 +957,7 @@ SummonManager.buildUI = function() {
                     <button class="dp-btn good" data-act="giveAllPowers">🎁 Give all powers</button>
                 </div>
             </div>
-            <div class="dp-section" data-req="flag:revive,flag:waves">
+            <div class="dp-section" data-need="world">
                 <div class="dp-title"><span>Heroes &amp; revive testing</span></div>
                 <div class="dp-grid3">
                     <button class="dp-btn good" data-act="healAll">❤ Heal all</button>
@@ -739,7 +972,7 @@ SummonManager.buildUI = function() {
                     <button class="dp-btn" data-act="levelUp">⭐ Level up</button>
                 </div>
             </div>
-            <div class="dp-section">
+            <div class="dp-section" data-need="world">
                 <div class="dp-title"><span>Ragdoll toys</span></div>
                 <div class="dp-grid3">
                     <button class="dp-btn" data-act="ragdollCannon" title="Fires bodies from the hero toward the cursor">💥 Body cannon</button>
@@ -747,7 +980,7 @@ SummonManager.buildUI = function() {
                     <button class="dp-btn" data-act="ragdollRain" title="Drops a pile of dummies from the sky">🌧 Body rain</button>
                 </div>
             </div>
-            <div class="dp-section">
+            <div class="dp-section" data-need="world">
                 <div class="dp-title"><span>Physics lab</span></div>
                 <div class="dp-grid3">
                     <button class="dp-btn" data-act="rain">🌧 Rain crates</button>
@@ -758,7 +991,7 @@ SummonManager.buildUI = function() {
         </div>
 
         <!-- ================= OBJECTS ================= -->
-        <div class="dp-page" data-page="objects" data-req="ui:edit">
+        <div class="dp-page" data-page="objects">
             <div class="dp-section">
                 <div class="dp-title"><span>World objects (<span id="sp-obj-count">0</span>)</span></div>
                 <input type="text" id="sp-obj-search" class="dp-text" style="width:100%;box-sizing:border-box" placeholder="Search by name…" oninput="SummonManager.refreshObjectList()">
@@ -772,12 +1005,7 @@ SummonManager.buildUI = function() {
         </div>
 
         <!-- ================= LEVEL ================= -->
-        <div class="dp-page" data-page="level" data-req="ui:edit">
-            <div class="dp-section">
-                <div class="dp-title"><span>Load a level</span></div>
-                <select id="level-select-dropdown" class="dp-select" style="width:100%" onchange="LevelManager.selectLevel(this.value); this.blur()"></select>
-                <p class="dp-hint">Levels of this game, plus anything you saved.</p>
-            </div>
+        <div class="dp-page" data-page="level">
             <div class="dp-section">
                 <div class="dp-title"><span>Save / load</span></div>
                 <div class="dp-row"><input type="text" id="dp-level-name" class="dp-text" value="My Custom Arena" placeholder="Level name">
@@ -786,7 +1014,7 @@ SummonManager.buildUI = function() {
                     <button class="dp-btn" data-act="newLevel">➕ New blank level</button>
                     <button class="dp-btn warn" data-act="stressLab">⚠ Stress lab</button>
                 </div>
-                <p class="dp-hint">Saved levels appear in the list above and in the pause menu's Level row.</p>
+                <p class="dp-hint">Saved levels appear in the level drop-down at the top of the screen.</p>
             </div>
             <div class="dp-section">
                 <div class="dp-title"><span>Import / export JSON</span></div>
@@ -835,20 +1063,29 @@ SummonManager.toggleShowGrid = function() {
 };
 
 SummonManager.togglePanel = function() {
-    if (!UI.spec("dev")) return;
     this.isOpen = !this.isOpen;
-    document.getElementById("summon-panel").classList.toggle("open", this.isOpen);
+    var panel = document.getElementById("summon-panel");
+    var dock = document.getElementById("mario-maker-dock");
+    var godBtn = document.getElementById("god-mode-btn");
+    var devBtn = document.getElementById("summon-toggle-btn");
+
     if (this.isOpen) {
-        DevUI.applyContext();
+        panel.classList.add("open");
+        if (!this.activeTab) this.activeTab = "game";
+        DevUI.syncDock();
+        godBtn.style.display = "flex";
+        devBtn.classList.add("active");
         this.refreshLevelDropdown();
         this.refreshObjectList();
         DevUI.sync();
     } else {
+        panel.classList.remove("open");
+        dock.classList.remove("open");
+        if (!godMode) godBtn.style.display = "none";
+        devBtn.classList.remove("active");
         this.showGrid = false;
         this.setToolMode("shoot");
     }
-    DevUI.syncDock();
-    UI.refresh(true);
 };
 
 SummonManager.setToolMode = function(mode) {
@@ -862,6 +1099,7 @@ SummonManager.setToolMode = function(mode) {
         hint.textContent = (mode == "shoot") ? "Click: shoot · R-click: grab" :
             (mode == "place") ? "Click: place · R-click: delete" : "Drag: move · edges: resize · Alt: copy";
     }
+    if (typeof DevUI !== "undefined") DevUI.syncDock();
 };
 
 SummonManager.onPresetChange = function(type) {
@@ -899,21 +1137,21 @@ SummonManager.spawnAt = function(worldX, worldY) {
 
     if (t == "box" || t == "grass_box" || t == "wall" || t == "platform") {
         var bk = (t == "wall") ? "wall" : (t == "platform" ? "platform" : "block");
-        created = Object.addBox(rx, ry, w, h, col, { name: bk == "wall" ? "Wall" : (bk == "platform" ? "One-way Platform" : "Block"), texture: tex, kind: bk });
+        created = GameObject.addBox(rx, ry, w, h, col, { name: bk == "wall" ? "Wall" : (bk == "platform" ? "One-way Platform" : "Block"), texture: tex, kind: bk });
     } else if (t == "ramp_right" || t == "ramp_left") {
-        created = Object.addRamp(rx, ry, w, h, t == "ramp_right" ? "right" : "left", col, { name: "Stairs", texture: tex, kind: "stairs" });
+        created = GameObject.addRamp(rx, ry, w, h, t == "ramp_right" ? "right" : "left", col, { name: "Stairs", texture: tex, kind: "stairs" });
     } else if (t == "slope_right" || t == "slope_left") {
-        created = Object.addRamp(rx, ry, w, h, t == "slope_right" ? "right" : "left", col, { name: "Slope", texture: tex, kind: "slope" });
+        created = GameObject.addRamp(rx, ry, w, h, t == "slope_right" ? "right" : "left", col, { name: "Slope", texture: tex, kind: "slope" });
     } else if (t == "slide_right" || t == "slide_left") {
-        created = Object.addRamp(rx, ry, w, h, t == "slide_right" ? "right" : "left", col, { name: "Slide", texture: null, kind: "slide" });
+        created = GameObject.addRamp(rx, ry, w, h, t == "slide_right" ? "right" : "left", col, { name: "Slide", texture: null, kind: "slide" });
     } else if (t == "bumper") {
-        created = Object.addBumper(rx, ry, w, h, this.spawnBounce || 24, col, { name: "Bounce Pad", texture: tex });
+        created = GameObject.addBumper(rx, ry, w, h, this.spawnBounce || 24, col, { name: "Bounce Pad", texture: tex });
     } else if (t == "crate") {
-        created = Object.addCrate(rx, ry, w, col, { w: w, h: h, name: "Crate", texture: tex || "crate_plank" });
+        created = GameObject.addCrate(rx, ry, w, col, { w: w, h: h, name: "Crate", texture: tex || "crate_plank" });
     } else if (t == "tnt") {
-        created = Object.addCrate(rx, ry, w, "#e84545", { w: w, h: h, explosive: true, name: "TNT Barrel" });
+        created = GameObject.addCrate(rx, ry, w, "#e84545", { w: w, h: h, explosive: true, name: "TNT Barrel" });
     } else if (t == "bouncy_cube") {
-        created = Object.addCrate(rx, ry, w, col, { w: w, h: h, bounciness: -0.92, name: "Bouncy Cube", texture: tex || "neon_grid" });
+        created = GameObject.addCrate(rx, ry, w, col, { w: w, h: h, bounciness: -0.92, name: "Bouncy Cube", texture: tex || "neon_grid" });
     } else if (t == "zombie") {
         created = spawnZombie(this.spawnZombieType || "NORMAL", rx, ry);
     } else if (t == "powerup") {
@@ -948,7 +1186,36 @@ SummonManager.setSelectedHP = function(v) {
     if (o && o instanceof Character) { o.maxHealth = v; o.health = v; }
 };
 
+// a game object picked through GameInspect (inspect.js): a card with its own fields and actions
+SummonManager.selectGameItem = function(d) {
+    this.selectedObject = null;
+    GameInspect.sel = d;
+    var card = document.getElementById("sp-game-card");
+    ["sp-inspector", "sp-no-selection"].forEach(function(id) { var e = document.getElementById(id); if (e) e.style.display = "none"; });
+    if (!card) return;
+    card.style.display = "block";
+    card.innerHTML = '<div class="dp-section"><div class="dp-title"><span>' + d.title + '</span><button class="sp-small-btn" id="sp-gc-close">✕</button></div>' +
+        (d.sub ? '<p class="dp-hint" style="margin-top:0">' + d.sub + '</p>' : "") +
+        (d.fields || []).map(function(r, i) {
+            if (r.type === "text") return '<div class="dp-row"><label>' + r.label + '</label><span class="dp-val" style="width:auto;flex:1;text-align:left" data-gc-val="' + i + '"></span></div>';
+            if (r.type === "toggle") return '<label class="dp-toggle"><input type="checkbox" data-gc="' + i + '"><span class="dp-switch"></span><span>' + r.label + '</span></label>';
+            if (r.type === "choice") return '<div class="dp-row"><label>' + r.label + '</label><select class="dp-select" data-gc="' + i + '">' + r.options.map(function(o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join("") + '</select></div>';
+            return '<div class="dp-row"><label>' + r.label + '</label><input type="range" class="dp-range" data-gc="' + i + '" min="' + r.min + '" max="' + r.max + '" step="' + r.step + '"><span class="dp-val" data-gc-val="' + i + '"></span></div>';
+        }).join("") +
+        ((d.actions || []).length ? '<div class="dp-grid3" style="margin-top:8px">' + d.actions.map(function(a, i) { return '<button class="dp-btn" data-gca="' + i + '">' + a.label + '</button>'; }).join("") + '</div>' : "") + '</div>';
+    card.querySelectorAll("[data-gc]").forEach(function(el) {
+        var r = d.fields[Number(el.dataset.gc)];
+        el.addEventListener(el.type === "range" ? "input" : "change", function() { r.set(el.type === "checkbox" ? el.checked : Number(el.value)); DevUI.refreshGameCard(); });
+    });
+    card.querySelectorAll("[data-gca]").forEach(function(b) { b.onclick = function() { d.actions[Number(b.dataset.gca)].fn(); DevUI.refreshGameCard(); }; });
+    document.getElementById("sp-gc-close").onclick = function() { SummonManager.selectObject(null); };
+    DevUI.refreshGameCard();
+    if (this.isOpen) DevUI.switchTab("inspect");
+};
+
 SummonManager.selectObject = function(obj) {
+    GameInspect.sel = null;
+    var gcard = document.getElementById("sp-game-card"); if (gcard) gcard.style.display = "none";
     this.selectedObject = obj;
     var insp = document.getElementById("sp-inspector");
     var empty = document.getElementById("sp-no-selection");
@@ -991,9 +1258,69 @@ SummonManager.selectObject = function(obj) {
         }
         var physBtn = document.getElementById("sp-toggle-physics");
         if (physBtn && !isChar) physBtn.textContent = obj.movable ? "Freeze (static)" : "Enable physics";
+        // weight / impact / gravity: things with physics that are not characters
+        var phys = !isChar && !!obj.movable;
+        [["sp-edit-weight", obj.weight === undefined ? 1 : obj.weight], ["sp-edit-impact", obj.impactMult === undefined ? 1 : obj.impactMult], ["sp-edit-grav", obj.gravityMult === undefined ? 1 : obj.gravityMult]].forEach(function(r) {
+            var rowEl = document.getElementById(r[0] + "-row"); if (!rowEl) return;
+            rowEl.style.display = phys ? "flex" : "none";
+            if (phys) { val(r[0], r[1]); rowEl.querySelector(".dp-val").textContent = r[1]; var rg = document.getElementById(r[0]); if (rg && DevUI.paintRange) DevUI.paintRange(rg); }
+        });
+        this.renderAllFields();
         if (this.isOpen && this.toolMode == "select") DevUI.switchTab("inspect");
     }
     this.refreshObjectList();
+};
+
+SummonManager.setSelectedField = function(key, v) {
+    var o = this.selectedObject;
+    if (!o) return;
+    o[key] = v;
+};
+
+// "All fields": every plain value on the selected object (numbers, text, on/off), editable in place. Lists and
+// links to other objects are shown read-only. Private bookkeeping (names starting with "_") is left out.
+SummonManager.renderAllFields = function() {
+    var box = document.getElementById("sp-all-rows"), det = document.getElementById("sp-all-fields"), o = this.selectedObject;
+    if (!box || !det) return;
+    var keys = [];
+    if (o) for (var k in o) { if (k.charCodeAt(0) === 95 || typeof o[k] === "function") continue; keys.push(k); }
+    keys.sort();
+    var cnt = document.getElementById("sp-all-count"); if (cnt) cnt.textContent = o ? "(" + keys.length + ")" : "";
+    if (!det.open || !o) { box.innerHTML = ""; this.allFieldsFor = null; return; }
+    var f = (document.getElementById("sp-all-filter").value || "").toLowerCase();
+    if (f) keys = keys.filter(function(k) { return k.toLowerCase().indexOf(f) !== -1; });
+    var esc = function(x) { return String(x).replace(/[&<>"]/g, function(c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+    box.innerHTML = keys.map(function(k) {
+        var v = o[k], t = typeof v, ctl;
+        if (t === "number") ctl = '<input class="dp-text" type="number" step="any" data-field="' + k + '" value="' + (isFinite(v) ? Math.round(v * 1000) / 1000 : 0) + '" style="width:112px;flex:0 0 auto">';
+        else if (t === "boolean") ctl = '<label class="dp-toggle" style="margin:0"><input type="checkbox" data-field="' + k + '"' + (v ? " checked" : "") + '><span class="dp-switch"></span></label>';
+        else if (t === "string") ctl = '<input class="dp-text" type="text" data-field="' + k + '" value="' + esc(v) + '" style="width:112px;flex:0 0 auto">';
+        else ctl = '<span class="dp-val" style="width:112px;text-align:left;color:#8aa3b5">' + (v === null || v === undefined ? "—" : (Array.isArray(v) ? "list of " + v.length : (v.name ? "→ " + esc(v.name) : "…"))) + '</span>';
+        return '<div class="dp-row" style="margin:3px 0"><label style="width:auto;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + k + '">' + k + '</label>' + ctl + '</div>';
+    }).join("") || '<p class="dp-hint">No field matches that filter.</p>';
+    this.allFieldsFor = o;
+    box.querySelectorAll("[data-field]").forEach(function(el) {
+        el.addEventListener(el.type === "checkbox" ? "change" : "input", function() {
+            var cur = SummonManager.selectedObject; if (!cur) return;
+            var key = el.dataset.field;
+            if (el.type === "checkbox") cur[key] = el.checked;
+            else if (el.type === "number") { var n = Number(el.value); if (el.value !== "" && isFinite(n)) cur[key] = n; }
+            else cur[key] = el.value;
+        });
+        el.addEventListener("keydown", function(e) { e.stopPropagation(); });
+    });
+};
+// keep the open list showing live values (not the box being typed in)
+SummonManager.refreshAllFields = function() {
+    var det = document.getElementById("sp-all-fields"), o = this.selectedObject;
+    if (!det || !det.open || !o || this.allFieldsFor !== o) return;
+    det.querySelectorAll("[data-field]").forEach(function(el) {
+        if (document.activeElement === el) return;
+        var v = o[el.dataset.field];
+        if (el.type === "checkbox") el.checked = !!v;
+        else if (el.type === "number") { if (typeof v === "number" && isFinite(v)) { var s2 = String(Math.round(v * 1000) / 1000); if (el.value !== s2) el.value = s2; } }
+        else if (typeof v === "string" && el.value !== v) el.value = v;
+    });
 };
 
 SummonManager.toggleWavePause = function() {
@@ -1050,3 +1377,56 @@ SummonManager.refreshObjectList = function() {
 setInterval(function() {
     if (typeof SummonManager !== "undefined" && SummonManager.isOpen) DevUI.sync();
 }, 400);
+
+// keeps the compact top bar honest a few times a second: player count, LAN status, paused / arcade state
+function topBarRefresh() {
+        // keep the open Cheats & tuning panel in step with the game that's on
+        var sp = document.getElementById("summon-panel");
+        if (sp && sp.classList.contains("open")) {
+            if (typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false) && typeof SummonManager !== "undefined") {
+                SummonManager.togglePanel();
+            } else if (typeof DevUI !== "undefined" && DevUI.syncGame && !topBarRefresh.inSync) {
+                topBarRefresh.inSync = true; try { DevUI.syncGame(sp); } catch (e) {} topBarRefresh.inSync = false;
+            }
+        }
+        var coopBtn = document.getElementById("coop-btn");
+        if (coopBtn) {
+            coopBtn.classList.toggle("active", multiplayer || brawl.active);
+            var humans = characters.filter(function(c) { return c.isPlayer && !c.isCPU; }).length, cpus = characters.filter(function(c) { return c.isPlayer && c.isCPU; }).length;
+            if (GameModes.flag("ownScreen", false) && GameModes.has("seats")) {          // full-screen games: count their seats
+                humans = 0; cpus = 0;
+                GameModes.call("seats").forEach(function(st) { if (st.count) cpus += st.value; else if (st.value === "human") humans++; else if (st.value === "cpu") cpus++; });
+            }
+            if (typeof Net !== "undefined" && (Net.role === "host" || Net.role === "client")) {
+                var netN = Net.role === "host" ? (Net.peerCount() + 1) : ((Net.lobbyPlayers && Net.lobbyPlayers.length) || humans);
+                if (netN > humans) humans = netN;
+            }
+            var ch = "👥 <b>" + humans + "</b>" + (cpus ? "<span style='opacity:.8'>+" + cpus + "🤖</span>" : "") + " <span class='lbl'>" + (humans === 1 ? "player" : "players") + "</span>";
+            if (coopBtn.innerHTML !== ch) coopBtn.innerHTML = ch;
+            coopBtn.title = humans + " human" + (humans === 1 ? "" : "s") + (cpus ? " + " + cpus + " CPU" : "") + " — click to change who's playing";
+            var sbQp = document.getElementById("sb-quick-players"), sbTp = document.getElementById("sb-top-players");
+            var pTxt = "👥 " + humans + "P" + (cpus ? "+" + cpus + "🤖" : "");
+            if (sbQp && sbQp.textContent !== pTxt) sbQp.textContent = pTxt;
+            if (sbTp && sbTp.textContent !== pTxt) sbTp.textContent = pTxt;
+        }
+        var lanBtn = document.getElementById("lan-btn");
+        if (lanBtn && typeof Net !== "undefined") {
+            var live = Net.role === "host" || Net.role === "client";
+            lanBtn.classList.toggle("live", live);
+            var nLan = Net.role === "host" ? (Net.peerCount() + 1) : ((Net.lobbyPlayers && Net.lobbyPlayers.length) || 2);
+            var lTxt = Net.role === "host" ? "Hosting · " + nLan : (Net.role === "client" ? "Joined · " + nLan : "LAN");
+            var lh = "📡 <span class='lbl'>" + lTxt + "</span>";
+            if (lanBtn.innerHTML !== lh) lanBtn.innerHTML = lh;
+            var sbQl = document.getElementById("sb-quick-lan"), sbTl = document.getElementById("sb-top-lan");
+            if (sbQl && sbQl.textContent !== "📡 " + lTxt) sbQl.textContent = "📡 " + lTxt;
+            if (sbTl && sbTl.textContent !== "📡 " + lTxt) sbTl.textContent = "📡 " + lTxt;
+        }
+    var stBtn = document.getElementById("studio-btn");
+    if (stBtn) stBtn.style.display = GameModes.flag("ownScreen", false) ? "none" : "";
+    var sbLive = document.getElementById("sb-live-stat");
+    if (sbLive && typeof Mix !== "undefined" && GameModes.current && GameModes.current.id === "mix" && Mix.liveStat) {
+        if (sbLive.textContent !== Mix.liveStat) sbLive.textContent = Mix.liveStat;
+    }
+    document.body.classList.toggle("paused", typeof paused !== "undefined" && !!paused);
+    document.body.classList.toggle("hub-open", typeof Hub !== "undefined" && !!Hub.isOpen);
+}

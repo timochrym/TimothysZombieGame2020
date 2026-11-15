@@ -6,7 +6,7 @@ class LevelManager {
         // All built-in levels are constructed 100% flush on the 40px World Grid!
         this.builtInLevels = {
             "classic_arena": {
-                name: "1. Overworld Arena (Mario/Dojo)",
+                name: "1. Overworld Arena",
                 spawnP1: [-80, 120],
                 spawnP2: [80, 120],
                 wavesEnabled: true,
@@ -96,7 +96,7 @@ class LevelManager {
             },
 
             "bunker_bridges": {
-                name: "3. Jetpack Joyride Sci-Fi Lab",
+                name: "3. Sci-Fi Jetpack Lab",
                 spawnP1: [-80, 120],
                 spawnP2: [80, 120],
                 wavesEnabled: true,
@@ -203,7 +203,7 @@ class LevelManager {
             },
 
             "infinite_frontier": {
-                name: "6. 🌲 Oregon Trail: Infinite Frontier [Procedural]",
+                name: "6. 🌲 Wildwood Frontier [Procedural]",
                 spawnP1: [80, 120],
                 spawnP2: [200, 120],
                 wavesEnabled: true,
@@ -255,6 +255,24 @@ class LevelManager {
                 { type: "box", name: "Catch Platform", x: 0, y: -330, w: 700, h: 70, color: "#2b3a4a", texture: "lab_metal", kind: "platform" },
                 { type: "box", name: "West Cloud", x: -700, y: 700, w: 420, h: 60, color: "#e0f2fe", texture: "solid", kind: "platform" },
                 { type: "box", name: "East Cloud", x: 700, y: 700, w: 420, h: 60, color: "#e0f2fe", texture: "solid", kind: "platform" }
+            ]
+        };
+
+        this.builtInLevels["brawl_gearworks"] = {
+            name: "⚔ Brawl: Gearworks", isBrawl: true, _scaled: true, wavesEnabled: false,
+            spawnP1: [-700, 160], spawnP2: [700, 160],
+            stageTopY: 80, stageCenterX: 0,
+            blast: { minX: -3600, maxX: 3600, minY: -1400, maxY: 2700 },
+            brawlSpawns: [[-700, 160], [700, 160], [-250, 160], [250, 160]],
+            // a main deck with slopes that run off both ends, and a lift that sweeps across above it
+            layout: [
+                { type: "box", name: "Main Deck", x: 0, y: -100, w: 1600, h: 360, color: "#52525b", texture: "metal_plate", kind: "block" },
+                { type: "ramp", name: "West Slope", x: -1050, y: -20, w: 500, h: 200, dir: "right", color: "#71717a", texture: "metal_plate" },
+                { type: "ramp", name: "East Slope", x: 1050, y: -20, w: 500, h: 200, dir: "left", color: "#71717a", texture: "metal_plate" },
+                { type: "box", name: "Gear Hub", x: 0, y: 900, w: 360, h: 60, color: "#a16207", texture: "dojo_wood", kind: "platform" }
+            ],
+            gadgets: [
+                { type: "mover", x: -900, y: 520, w: 420, h: 40, x2: 900, y2: 520, speed: 3 }
             ]
         };
 
@@ -327,7 +345,7 @@ class LevelManager {
         var lvl = all[key];
 
         if (typeof SummonManager !== "undefined") {
-            SummonManager.pauseWaves = !lvl.wavesEnabled;
+            SummonManager.pauseWaves = !lvl.wavesEnabled && !(typeof Mashup !== "undefined" && Mashup.mix.waves === true);     // mash-up waves stay on
             var btn = document.getElementById("sp-wave-btn");
             if (btn) {
                 btn.textContent = SummonManager.pauseWaves ? "▶ Resume Waves" : "⏸ Waves";
@@ -360,18 +378,18 @@ class LevelManager {
                 var cx = col * 80;
                 var cy = 360 + row * 80;
                 if (idx % 4 == 0) {
-                    Object.addCrate(cx, cy, 80, "#00f5d4", { bounciness: -0.9, name: "Stress Cube", texture: "neon_grid" });
+                    GameObject.addCrate(cx, cy, 80, "#00f5d4", { bounciness: -0.9, name: "Stress Cube", texture: "neon_grid" });
                 } else if (idx % 7 == 0) {
-                    Object.addCrate(cx, cy, 80, "#e84545", { explosive: true, name: "TNT Barrel" });
+                    GameObject.addCrate(cx, cy, 80, "#e84545", { explosive: true, name: "TNT Barrel" });
                 } else {
-                    Object.addCrate(cx, cy, 80, "#d9a05b", { name: "Stress Crate", texture: "crate_plank" });
+                    GameObject.addCrate(cx, cy, 80, "#d9a05b", { name: "Stress Crate", texture: "crate_plank" });
                 }
                 idx++;
             }
         }
 
         for (let i = 0; i < 4; i++) {
-            var cube = Object.addCrate((1360 + (i % 2) * 80) * STRUCT_SCALE, 160 + i * 80, 80, "#ffbe0b", {
+            var cube = GameObject.addCrate((1360 + (i % 2) * 80) * STRUCT_SCALE, 160 + i * 80, 80, "#ffbe0b", {
                 bounciness: -0.95,
                 name: "Cage Cube",
                 texture: "question_gold"
@@ -393,7 +411,7 @@ class LevelManager {
             var rx = Math.round((centerX + (Math.random() - 0.5) * 720) / 40) * 40;
             var ry = Math.round((640 + Math.random() * 360) / 40) * 40;
             var isBouncy = Math.random() < 0.45;
-            var c = Object.addCrate(
+            var c = GameObject.addCrate(
                 rx,
                 ry,
                 80,
@@ -517,7 +535,7 @@ class LevelManager {
         zombies = [];
         lazers = [];
         powerUps = [];
-        Object.loadMap([
+        GameObject.loadMap([
             { type: "box", name: "Main Floor", x: 0, y: -440, w: 3360, h: 960, color: "#7f4f24", texture: "grass_dirt" },
             { type: "box", name: "Left Wall", x: -1620, y: 1000, w: 120, h: 1920, color: "#4a5568", texture: "castle_stone" },
             { type: "box", name: "Right Wall", x: 1620, y: 1000, w: 120, h: 1920, color: "#4a5568", texture: "castle_stone" }
@@ -540,7 +558,7 @@ class LevelManager {
 }
 
 // ============================================================================
-// RECURSIVE PROCEDURAL SIDE-SCROLLER GENERATOR ("Oregon Trail: Infinite Frontier")
+// RECURSIVE PROCEDURAL SIDE-SCROLLER GENERATOR ("Wildwood Frontier")
 // Generates 40px-grid-snapped Fields, Trees, Rivers, Houses, Mountains, Castles & Dungeons!
 // ============================================================================
 class WorldGenerator {
@@ -573,6 +591,7 @@ class WorldGenerator {
     // Shifts the entire world around the player in multiples of 1600px (divisible by 40px grid & 32px textures)
     // so coordinates always stay near 0 and performance stays 100% locked at 60 FPS forever!
     static shiftWorldOrigin(shiftX) {
+        if (typeof Pathfinder !== "undefined" && Pathfinder.shiftWorld) Pathfinder.shiftWorld(shiftX);
         if (shiftX === 0) return;
         worldOriginOffsetX += shiftX;
         cameraTargetX -= shiftX;
@@ -699,7 +718,7 @@ class WorldGenerator {
 
     static addGridBox(left, bottom, w, h, color, opts = {}) {
         left = this.tx(left); bottom = this.ty(bottom); w *= STRUCT_SCALE; h *= STRUCT_SCALE;
-        var obj = Object.addBox(left + w / 2, bottom + h / 2, w, h, color, opts);
+        var obj = GameObject.addBox(left + w / 2, bottom + h / 2, w, h, color, opts);
         obj.chunkIdx = this.activeBuildChunk;
         return obj;
     }
@@ -711,21 +730,21 @@ class WorldGenerator {
 
     static addGridRamp(left, bottom, w, h, dir, color, opts = {}) {
         left = this.tx(left); bottom = this.ty(bottom); w *= STRUCT_SCALE; h *= STRUCT_SCALE;
-        var obj = Object.addRamp(left + w / 2, bottom + h / 2, w, h, dir, color, opts);
+        var obj = GameObject.addRamp(left + w / 2, bottom + h / 2, w, h, dir, color, opts);
         obj.chunkIdx = this.activeBuildChunk;
         return obj;
     }
 
     static addGridBumper(left, bottom, w, h, bounce, color, opts = {}) {
         left = this.tx(left); bottom = this.ty(bottom); w *= STRUCT_SCALE; h = 40; // thin spring pad: walk over it, never blocked
-        var obj = Object.addBumper(left + w / 2, bottom + h / 2, w, h, bounce, color, opts);
+        var obj = GameObject.addBumper(left + w / 2, bottom + h / 2, w, h, bounce, color, opts);
         obj.chunkIdx = this.activeBuildChunk;
         return obj;
     }
 
     static addGridCrate(left, bottom, size, color, opts = {}) {
         left = this.tx(left); bottom = this.ty(bottom);
-        var obj = Object.addCrate(left + size / 2, bottom + size / 2, size, color, opts);
+        var obj = GameObject.addCrate(left + size / 2, bottom + size / 2, size, color, opts);
         obj.chunkIdx = this.activeBuildChunk;
         return obj;
     }
@@ -846,7 +865,7 @@ class WorldGenerator {
             }
         }
 
-        // Update current biome HUD title & Oregon Trail miles milestone
+        // Update current biome HUD title & Wildwood miles milestone
         if (this.generatedChunks[centerChunk]) {
             this.currentBiomeTitle = this.generatedChunks[centerChunk].title;
         }
@@ -954,7 +973,7 @@ class WorldGenerator {
         this.buildOriginX = leftX;
         this.buildOriginY = startY;
 
-        // Starting Chunk 0: Safe Oregon Trail Outpost & Frontier Lodge
+        // Starting Chunk 0: Safe Wildwood Outpost & Frontier Lodge
         if (chunkIdx === 0) {
             this.generatedChunks[chunkIdx] = { type: "OUTPOST", title: "🏕️ Independence Frontier Outpost" };
             this.setRightEdgeY(chunkIdx, 40);
@@ -970,6 +989,10 @@ class WorldGenerator {
 
         // Cycle cleanly through distinct, non-repetitive macro-biomes (Chunk 1 starts with GRAND_CASTLE so you can explore the 12-story Mega-Citadel immediately!)
         var biomes = ["GRAND_CASTLE", "BRIDGE_GORGE", "FRONTIER_TOWN", "MOUNTAIN_PASS", "DEEP_CAVERN"];
+        // Heading east the trail also dips underground: a mine descent, a long tunnel, then the climb back out.
+        // (Only eastward: chunk edge heights chain left -> right, and the deep cavern stays on the surface so its
+        //  lowest tier never reaches the bedrock / rescue line.)
+        if (chunkIdx > 0) biomes = ["GRAND_CASTLE", "BRIDGE_GORGE", "FRONTIER_TOWN", "MOUNTAIN_PASS", "MINE_DESCENT", "MINE_TUNNEL", "MINE_ASCENT", "DEEP_CAVERN"];
         var idx = (Math.abs(chunkIdx) - 1 + (chunkIdx < 0 ? 1 : 0)) % biomes.length;
         var pick = biomes[idx];
 
@@ -1274,6 +1297,57 @@ class WorldGenerator {
         //    Descend 2 full tiers underground (-240px and -480px) into a massive
         //    glowing cavern complex!
         // ====================================================================
+        // ====================================================================
+        // 6-8. ⛏ THE OLD MINE: down a stepped shaft, along a tunnel 560px under the
+        //      frontier, and back up to daylight. (Edge heights carry to the next chunk.)
+        // ====================================================================
+        else if (pick === "MINE_DESCENT") {
+            this.generatedChunks[chunkIdx] = { type: "MINE_DESCENT", title: "⛏ Old Mine Entrance" };
+            var mineY = startY - 280;
+            this.addInteriorWall(leftX + 480, mineY, 1760, 440, "cavern");
+            this.addGridBox(leftX, startY - 120, 480, 120, "#588157", { name: "Mine Yard", texture: "grass_dirt" });
+            // a stepped shaft: seven 40-high steps down
+            for (let k = 0; k < 7; k++) this.addGridBox(leftX + 480 + k * 160, startY - 400, 160, 360 - k * 40, "#6b4f3a", { name: "Mine Shaft Step", texture: "stone_raw" });
+            this.addGridBox(leftX + 1600, mineY - 120, 640, 120, "#4a5568", { name: "Mine Gallery Floor", texture: "stone_raw" });
+            // timber-framed roof over the shaft
+            this.addGridBox(leftX + 640, startY + 120, 1600, 40, "#8b5a2b", { name: "Mine Roof Timbers", texture: "log" });
+            this.addGridCrate(leftX + 1700, mineY, 80, "#c49a6c", { name: "Iron Ore", texture: "ore_iron", weight: 2 });
+            this.addGridCrate(leftX + 1860, mineY, 80, "#e84545", { explosive: true, name: "Mining Dynamite Crate" });
+            this.addChest(leftX + 2000, mineY);
+            this.spawnChunkEnemy("BAT", leftX + 1000, startY + 40);
+            this.spawnChunkEnemy("SLIME", leftX + 1900, mineY + 60);
+            this.setRightEdgeY(chunkIdx, this.ty(mineY));
+        }
+        else if (pick === "MINE_TUNNEL") {
+            this.generatedChunks[chunkIdx] = { type: "MINE_TUNNEL", title: "⛏ Deep Mine Tunnels" };
+            this.addInteriorWall(leftX, startY, this.designWidth, 200, "cavern");
+            this.addGridBox(leftX, startY - 200, this.designWidth, 200, "#4a5568", { name: "Tunnel Floor", texture: "stone_raw" });
+            this.addGridBox(leftX, startY + 200, this.designWidth, 160, "#374151", { name: "Tunnel Ceiling", texture: "stone_raw" });
+            // one-way timber platforms and support pillars to fight around
+            this.addGridBox(leftX + 360, startY + 100, 280, 20, "#8b5a2b", { name: "Mine Scaffold", texture: "wood_plank", kind: "platform" });
+            this.addGridBox(leftX + 1000, startY + 100, 280, 20, "#8b5a2b", { name: "Mine Scaffold", texture: "wood_plank", kind: "platform" });
+            this.addGridBox(leftX + 1640, startY + 100, 280, 20, "#8b5a2b", { name: "Mine Scaffold", texture: "wood_plank", kind: "platform" });
+            this.addGridCrate(leftX + 760, startY, 80, "#eab308", { name: "Gold Ore", texture: "ore_gold", weight: 2 });
+            this.addGridCrate(leftX + 1420, startY, 80, "#1f2937", { name: "Coal", texture: "ore_coal", weight: 2 });
+            this.addGridCrate(leftX + 1500, startY, 80, "#e84545", { explosive: true, name: "Mining Dynamite Crate" });
+            this.addChest(leftX + 1120, startY + 120);
+            this.spawnChunkEnemy("KNIGHT", leftX + 900, startY + 60);
+            this.spawnChunkEnemy("ARCHER", leftX + 1700, startY + 160);
+            this.spawnChunkEnemy("BAT", leftX + 1300, startY + 150);
+            this.setRightEdgeY(chunkIdx, startY);
+        }
+        else if (pick === "MINE_ASCENT") {
+            this.generatedChunks[chunkIdx] = { type: "MINE_ASCENT", title: "⛏ Mine Exit — Back to Daylight" };
+            this.addInteriorWall(leftX, startY, 640, 200, "cavern");
+            this.addGridBox(leftX, startY - 200, 640, 200, "#4a5568", { name: "Tunnel Floor", texture: "stone_raw" });
+            this.addGridBox(leftX, startY + 200, 640, 160, "#374151", { name: "Tunnel Ceiling", texture: "stone_raw" });
+            for (let k = 0; k < 7; k++) this.addGridBox(leftX + 640 + k * 160, startY - 200, 160, 200 + (k + 1) * 40, "#6b4f3a", { name: "Mine Exit Step", texture: "stone_raw" });
+            this.addGridBox(leftX + 1760, startY - 200, 480, 480, "#588157", { name: "Hillside", texture: "grass_dirt" });
+            this.addGridBumper(leftX + 400, startY, 160, 40, 28, "#ff2e63", { name: "Mine Lift Spring" });
+            this.addChest(leftX + 1960, startY + 280);
+            this.spawnChunkEnemy("SLIME", leftX + 300, startY + 60);
+            this.setRightEdgeY(chunkIdx, this.ty(startY + 280));
+        }
         else if (pick === "DEEP_CAVERN") {
             this.generatedChunks[chunkIdx] = { type: "DEEP_CAVERN", title: "💎 Deep Echo Caverns & Catacombs" };
             var tier1Y = startY - 240;

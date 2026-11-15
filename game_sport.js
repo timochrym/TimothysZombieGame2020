@@ -3,7 +3,8 @@
 //   Kick (F / Enter / click / RT), dash-tackle opponents (Shift / B), shockwave the ball (E / Y),
 //   jump for headers. 1v1 to 3v3 with CPU teammates/opponents, or P1 vs P2.
 // ============================================================================
-var sportCfg = Store.load("timsZombieBallCfg", { format: "1v1", level: 2, minutes: 2, goals: 5 });
+var sportCfg = { format: "1v1", level: 2, minutes: 2, goals: 5, ball: "classic", style: "classic" };
+try { var _sc = JSON.parse(localStorage.getItem("timsZombieBallCfg") || "null"); if (_sc) { for (var _k in _sc) sportCfg[_k] = _sc[_k]; } } catch (e) {}
 var SPORT_FORMATS = [
     ["1v1", "P1 vs CPU"], ["pvp", "P1 vs P2"], ["2v2", "P1 + CPU vs 2 CPU"], ["coop", "P1 + P2 vs 2 CPU"], ["3v3", "P1 + 2 CPU vs 3 CPU"]
 ];
@@ -13,7 +14,37 @@ var TEAM_NAMES = ["RED", "BLUE"];
 var Ball = {
     x: 0, y: 300, vx: 0, vy: 0, r: 44, angle: 0, lastTeam: -1, lastTouch: null,
 
-    reset: function() { this.x = 0; this.y = 420; this.vx = 0; this.vy = 0; this.angle = 0; this.lastTeam = -1; },
+    reset: function() { this.x = 0; this.y = 420; this.vx = 0; this.vy = 0; this.angle = 0; this.lastTeam = -1; this.ensureBody(true); },
+
+    // "Zombie Ball": the ball is a real zombie ragdoll curled around the ball's core. The core keeps the
+    // reliable circle physics (kicks, goals); the zombie's spine follows it and its head and limbs flop with
+    // the same Verlet ragdoll physics every character uses.
+    body: null,
+    ensureBody: function(teleport) {
+        if (sportCfg.ball !== "zombie") { if (this.body) { Ragdolls.remove(this.body); this.body = null; } return; }
+        if (!this.body || Ragdolls.list.indexOf(this.body) === -1) {
+            var fake = { x: this.x, y: this.y, s1: 112, s2: 112, zombiePower: "NORMAL", originalColor: "#2d6e32", lastFacing: 1, xspeed: 0, yspeed: 0 };
+            this.body = Ragdolls.spawnFrom(fake, { vx: 0, vy: 0, spin: 0 });
+            this.body.life = -1;
+            this.body.isBallBody = true;
+        } else if (teleport) {
+            var ox = this.body.centerX(), oy = this.body.centerY();
+            for (let i = 0; i < this.body.pts.length; i++) { var p = this.body.pts[i]; p.x += this.x - ox; p.y += this.y - oy; p.px = p.x; p.py = p.y; }
+        }
+    },
+    syncBody: function() {
+        var rd = this.body;
+        if (!rd) return;
+        var c = Math.cos(this.angle), s = Math.sin(this.angle);
+        var pin = function(i, oy) {
+            var p = rd.pts[i];
+            p.x = Ball.x - s * oy; p.y = Ball.y + c * oy;
+            p.px = p.x - Ball.vx; p.py = p.y - Ball.vy;
+        };
+        pin(1, 22);    // neck
+        pin(2, -10);   // pelvis
+        rd.wake();
+    },
 
     step: function() {
         var g = gravity * (devOpts.gravityMult || 1) * 0.78;
@@ -98,6 +129,14 @@ var Ball = {
         var hgt = Math.max(0, this.y - this.r);
         ctx.fillStyle = "rgba(0,0,0," + Math.max(0.08, 0.35 - hgt / 2500) + ")";
         ctx.beginPath(); ctx.ellipse(sx, floorY, r * Math.max(0.4, 1 - hgt / 1600), r * 0.25, 0, 0, Math.PI * 2); ctx.fill();
+        if (this.body && Ragdolls.list.indexOf(this.body) !== -1) {
+            Ragdolls.draw(this.body); // always visible above the players, including on LAN clients
+            // zombie mode: just a faint ring so you can still read the ball's size
+            ctx.strokeStyle = "rgba(248,250,252,0.25)"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
+            if (sx < 0 || sx > cssW || sy < 0 || sy > cssH) drawEdgeIndicator(this.x, this.y, "#86efac", "ZOMBIE");
+            return;
+        }
         ctx.save();
         ctx.translate(sx, sy);
         ctx.rotate(-this.angle);
@@ -141,6 +180,7 @@ var Sport = {
         }
         this.phase = "kickoff";
         this.timer = fresh ? 180 : 130;
+        if (typeof Flail !== "undefined") Flail.kickoff(fresh);
     },
 
     goal: function(team) {
@@ -149,6 +189,7 @@ var Sport = {
         this.timer = 170;
         this.goalTeam = team;
         if (typeof SFX !== "undefined") SFX.play("goal");
+        if (typeof Flail !== "undefined" && Flail.on() && typeof Juice !== "undefined" && Juice.slowMo) Juice.slowMo(70, 0.3);   // savour the flop
         Juice.slowMo(70, 0.35);
         screenShake = 10;
         var gx = team === 0 ? this.goalX + 150 : -this.goalX - 150;
@@ -160,7 +201,7 @@ var Sport = {
         // the losing side gets blown over by the goal blast (ragdolls!)
         for (let i = 0; i < characters.length; i++) {
             var c = characters[i];
-            if (c.fighterTeam !== team && Math.abs(c.x - gx) < 900) { c.ragdollImmune = 0; c.startRagdoll(Math.sign(c.x - gx) * 9, 8, 60); }
+            if (!c.dead && c.fighterTeam !== team && Math.abs(c.x - gx) < 900) { c.ragdollImmune = 0; c.startRagdoll(Math.sign(c.x - gx) * 9, 8, 60); }
         }
         var who = Ball.lastTouch && Ball.lastTouch.fighterTeam !== team ? " (OWN GOAL!)" : "";
         if (typeof showBanner === "function") showBanner("GOOOAL!" + who, TEAM_NAMES[team] + " scores  ·  " + this.score[0] + " - " + this.score[1], TEAM_COLORS[team]);
@@ -201,15 +242,6 @@ GameModes.register({
     overSub: function() { return TEAM_NAMES[0] + " " + Sport.score[0] + "  -  " + Sport.score[1] + " " + TEAM_NAMES[1]; },
     overTitle: "FULL TIME",
     againLabel: "Rematch",
-    restartLabel: "Rematch",
-    ui: {
-        levelPicker: false,
-        help: function() {
-            var p1 = { title: multiplayer ? "PLAYER 1" : "", color: "#ff7b80", items: [["A / D", "move"], ["W", "jump"], ["F / click", "kick"], ["Shift", "dash-tackle"], ["E", "shockwave"]] };
-            if (!multiplayer) return [p1];
-            return [p1, { title: "PLAYER 2", color: "#6cb8ff", items: [["← →", "move"], ["↑", "jump"], ["Enter", "kick"], ["R-Shift", "dash-tackle"], ["/", "shockwave"]] }];
-        }
-    },
 
     onActivate: function() { jetpackEnabled = false; },
 
@@ -229,6 +261,8 @@ GameModes.register({
         };
         red.forEach(function(p) { make(p, 0); });
         blue.forEach(function(p) { make(p, 1); });
+        // Flail style: the teams are one-button ragdoll players instead (heroes stay as hidden seats)
+        if (typeof Flail !== "undefined" && Flail.on()) characters.forEach(function(c) { c.dead = true; c.noCollide = true; });
         multiplayer = (f === "pvp" || f === "coop");
     },
 
@@ -274,6 +308,9 @@ GameModes.register({
             Ball.step();
             Ball.collideCharacters();
         }
+        Ball.ensureBody(false);
+        Ball.syncBody();
+        if (typeof Flail !== "undefined") Flail.update();
 
         // Kicks: shoot button near the ball
         if (S.phase === "play") {
@@ -333,6 +370,7 @@ GameModes.register({
     cameraTargets: function() {
         var pts = [{ x: Ball.x, y: Ball.y }, { x: Ball.x, y: Ball.y }];
         for (let i = 0; i < characters.length; i++) if (!characters[i].dead) pts.push(characters[i]);
+        if (typeof Flail !== "undefined" && Flail.on()) Flail.men.forEach(function(m) { pts.push({ x: m.pts[1].x, y: m.pts[1].y }); });
         return pts;
     },
 
@@ -416,6 +454,25 @@ GameModes.register({
         ctx.restore();
     },
 
+    netState: function() {
+        return { ball: [Ball.x, Ball.y, Ball.vx, Ball.vy, Ball.angle], ballStyle: sportCfg.ball, style: sportCfg.style,
+            phase: Sport.phase, timer: Sport.timer, score: Sport.score, clock: Sport.clock,
+            sudden: Sport.sudden, goalTeam: Sport.goalTeam };
+    },
+    applyNetState: function(m) {
+        if (!m || !m.ball) return;
+        Ball.x = m.ball[0]; Ball.y = m.ball[1]; Ball.vx = m.ball[2]; Ball.vy = m.ball[3]; Ball.angle = m.ball[4];
+        sportCfg.ball = m.ballStyle;
+        if (m.style) sportCfg.style = m.style;
+        // Flail style on a joiner's screen: the one-button players arrive as plain bodies; give them their look back
+        if (typeof Flail !== "undefined") {
+            Flail.men = sportCfg.style === "flail" ? Ragdolls.list.filter(function(r) { return r.flailTeam !== undefined; }) : [];
+            for (let i = 0; i < Flail.men.length; i++) if (Flail.men[i].drawFn !== Flail.drawMan) Flail.men[i].drawFn = Flail.drawMan;
+        }
+        Ball.body = sportCfg.ball === "zombie" ? Ragdolls.list.find(function(r) { return r.isBallBody; }) || null : null;
+        Sport.phase = m.phase; Sport.timer = m.timer; Sport.score = m.score; Sport.clock = m.clock;
+        Sport.sudden = m.sudden; Sport.goalTeam = m.goalTeam;
+    },
     drawFront: function() { Ball.draw(); },
 
     drawHUD: function() {
@@ -434,23 +491,51 @@ GameModes.register({
             uiText(n > 0 ? String(n) : "GO!", cx, cssH / 2 - 60, 110, "#ffd23f", "center", "900");
             uiText("KICK-OFF", cx, cssH / 2 - 4, 22, "#e2e8f0", "center", "800");
         }
+        // controls strip
+        uiPanel(14, cssH - 64, 560, 50, "rgba(120,170,200,0.4)", 0.8);
+        if (typeof Flail !== "undefined") Flail.hud();
+        if (typeof Flail !== "undefined" && Flail.on()) uiText((typeof Net !== "undefined" && Net.role === "client") ? "ONE BUTTON — W / Space / click   (tap = jump & kick, hold = tip forward)" :
+            "ONE BUTTON — P1: W / F / click / pad A   ·   P2: ↑ / Enter" + ((sportCfg.format === "pvp" || Flail.p2In) ? "" : " (press to take BLUE)") + "   ·   LAN players join a team automatically", 28, cssH - 34, 12, "#dbe7f0", "left", "800");
+        else uiText("P1: A/D move · W jump · F / click KICK · Shift DASH-TACKLE · E shockwave", 28, cssH - 34, 12, "#dbe7f0", "left", "700");
+        if (multiplayer) uiText("P2: arrows · Enter KICK · R-Shift DASH · / shockwave", 28, cssH - 18, 11, "#94a3b8", "left", "700");
+        uiText("Esc: menu (format, CPU skill, match length)", cssW - 20, cssH - 22, 12, "rgba(200,220,235,0.6)", "right", "700");
         for (let i = 0; i < characters.length; i++) {
             var c = characters[i];
             if (!c.dead) drawEdgeIndicator(c.x, c.y, TEAM_COLORS[c.fighterTeam], c.playerLabel);
         }
     },
 
-    menuRows: function() {
-        var save = function() { Store.set("timsZombieBallCfg", sportCfg); };
-        return [
-            { label: "Teams", icon: "👥", cycle: true, hint: "Applies on Rematch", value: function() { return SPORT_FORMATS.find(function(f) { return f[0] === sportCfg.format; })[1]; },
-              act: function(d) { var i = SPORT_FORMATS.findIndex(function(f) { return f[0] === sportCfg.format; }); sportCfg.format = SPORT_FORMATS[(i + d + SPORT_FORMATS.length) % SPORT_FORMATS.length][0]; save(); } },
-            { label: "CPU skill", icon: "🤖", cycle: true, value: function() { return ["", "Easy", "Normal", "Hard"][sportCfg.level]; },
-              act: function(d) { sportCfg.level = ((sportCfg.level - 1 + d + 3) % 3) + 1; save(); } },
-            { label: "Match length", icon: "⏱", cycle: true, hint: "Applies on Rematch", value: function() { return sportCfg.minutes + " min"; },
-              act: function(d) { sportCfg.minutes = Math.max(1, Math.min(10, sportCfg.minutes + d)); save(); } },
-            { label: "Goals to win", icon: "🥅", cycle: true, value: function() { return sportCfg.goals; },
-              act: function(d) { sportCfg.goals = Math.max(1, Math.min(15, sportCfg.goals + d)); save(); } }
-        ];
+    menuItems: function(items) {
+        var fmt = SPORT_FORMATS.find(function(f) { return f[0] === sportCfg.format; });
+        items.push({ id: "zb_fmt", label: "Teams:  ◀  " + fmt[1] + "  ▶", hint: "Applies on Rematch", cycle: true });
+        items.push({ id: "zb_lvl", label: "CPU skill:  ◀  " + ["", "Easy", "Normal", "Hard"][sportCfg.level] + "  ▶", hint: "", cycle: true });
+        items.push({ id: "zb_min", label: "Match length:  ◀  " + sportCfg.minutes + " min  ▶", hint: "Applies on Rematch", cycle: true });
+        items.push({ id: "zb_goals", label: "Goals to win:  ◀  " + sportCfg.goals + "  ▶", hint: "", cycle: true });
+        items.push({ id: "zb_style", label: "Style:  ◀  " + (sportCfg.style === "flail" ? "Flail (one-button physics soccer)" : "Classic (run, kick, tackle)") + "  ▶", hint: "Restarts the match", cycle: true });
+        if (sportCfg.style === "flail") {
+            var fm = FLAIL_MODS.find(function(f) { return f[0] === (sportCfg.flailMod || "none"); }) || FLAIL_MODS[0];
+            items.push({ id: "zb_fmod", label: "Modifier:  ◀  " + fm[1] + "  ▶", hint: "Restarts the match", cycle: true });
+            items.push({ id: "zb_keep", label: "Goalkeepers:  ◀  " + (sportCfg.keepers === false ? "Off" : "On") + "  ▶", hint: "Restarts the match", cycle: true });
+        }
+        items.push({ id: "zb_ball", label: "Ball:  ◀  " + (sportCfg.ball === "zombie" ? "Zombie ragdoll" : "Classic ball") + "  ▶", hint: "", cycle: true });
+        if (!pauseFromGameOver) items.push({ id: "again", label: "Rematch", hint: "Start a new match" });
+    },
+
+    onMenu: function(id, dir) {
+        dir = dir || 1;
+        var save = function() { try { localStorage.setItem("timsZombieBallCfg", JSON.stringify(sportCfg)); } catch (e) {} };
+        if (id === "zb_fmt") {
+            var i = SPORT_FORMATS.findIndex(function(f) { return f[0] === sportCfg.format; });
+            sportCfg.format = SPORT_FORMATS[(i + dir + SPORT_FORMATS.length) % SPORT_FORMATS.length][0];
+            save(); return true;
+        }
+        if (id === "zb_lvl") { sportCfg.level = ((sportCfg.level - 1 + dir + 3) % 3) + 1; save(); return true; }
+        if (id === "zb_min") { sportCfg.minutes = Math.max(1, Math.min(10, sportCfg.minutes + dir)); save(); return true; }
+        if (id === "zb_goals") { sportCfg.goals = Math.max(1, Math.min(15, sportCfg.goals + dir)); save(); return true; }
+        if (id === "zb_style") { sportCfg.style = sportCfg.style === "flail" ? "classic" : "flail"; save(); closePause(); if (typeof Flail !== "undefined" && sportCfg.style !== "flail") Flail.clearMen(); LevelManager.selectLevel("zb_stadium"); return true; }
+        if (id === "zb_fmod") { var fi = FLAIL_MODS.findIndex(function(f) { return f[0] === (sportCfg.flailMod || "none"); }); sportCfg.flailMod = FLAIL_MODS[(fi + dir + FLAIL_MODS.length) % FLAIL_MODS.length][0]; save(); closePause(); Flail.modPicked = false; Flail.clearMen(); LevelManager.selectLevel("zb_stadium"); return true; }
+        if (id === "zb_keep") { sportCfg.keepers = sportCfg.keepers === false; save(); closePause(); Flail.clearMen(); LevelManager.selectLevel("zb_stadium"); return true; }
+        if (id === "zb_ball") { sportCfg.ball = sportCfg.ball === "zombie" ? "classic" : "zombie"; save(); Ball.ensureBody(true); return true; }
+        return false;
     }
 });

@@ -88,8 +88,8 @@ class Ragdoll {
         this.wake();
     }
 
-    centerX() { return this.kind === "blob" ? this.pts[0].x : (this.pts[1].x + this.pts[2].x) / 2; }
-    centerY() { return this.kind === "blob" ? this.pts[0].y : (this.pts[1].y + this.pts[2].y) / 2; }
+    centerX() { return this.kind === "blob" ? this.pts[0].x : (this.pts.length < 3 ? this.pts[this.pts.length - 1].x : (this.pts[1].x + this.pts[2].x) / 2); }
+    centerY() { return this.kind === "blob" ? this.pts[0].y : (this.pts.length < 3 ? this.pts[this.pts.length - 1].y : (this.pts[1].y + this.pts[2].y) / 2); }
 
     velX() { var s = 0; for (let i = 0; i < this.pts.length; i++) s += this.pts[i].x - this.pts[i].px; return s / this.pts.length; }
     velY() { var s = 0; for (let i = 0; i < this.pts.length; i++) s += this.pts[i].y - this.pts[i].py; return s / this.pts.length; }
@@ -119,7 +119,7 @@ Ragdoll.nextId = 0;
 
 var Ragdolls = {
     list: [],
-    maxCount: 30,
+    maxCount: 60,          // corpses kept at once (drops to 30 automatically if the frame rate sinks)
 
     clear: function() { this.list = []; },
 
@@ -146,6 +146,7 @@ var Ragdolls = {
                 s.sprite = zombieImg; s.tint = "#7a5cff"; s.body = "#5b4aa8"; s.limb = "#7a5cff"; s.head = "#a78bfa";
             } else {
                 var skin = ch.skinId();
+                if (skin.indexOf("npc:") === 0) return this.styleFor({ zombiePower: skin.slice(4), originalColor: accent });
                 s.face = "hero";
                 if (skin === "stick") { s.body = accent; s.limb = accent; s.head = "#f8fafc"; s.thick = 0.55; s.acc = "headband"; s.accColor = accent; }
                 else if (skin === "brawler") { s.body = "#f8fafc"; s.limb = "#f2c9a0"; s.head = "#f2c9a0"; s.acc = "headband"; s.accColor = accent; s.hair = true; s.belt = accent; }
@@ -223,6 +224,7 @@ var Ragdolls = {
 
     trim: function() {
         var corpses = this.list.filter(function(r) { return r.life >= 0; });
+        if (this.maxCount <= 60 && typeof measuredFPS !== "undefined") this.maxCount = measuredFPS < 40 ? 30 : 60;
         while (corpses.length > this.maxCount) {
             var old = corpses.shift();
             this.remove(old);
@@ -296,7 +298,7 @@ var Ragdolls = {
                 else rd.sleepFrames = 0;
             }
             // fell out of the world
-            if (rd.centerY() < -3300) { this.remove(rd); continue; }
+            if (rd.centerY() < (GameModes.flag("deepWorld", false) ? -9000 : -3300)) { this.remove(rd); continue; }
         }
         this.interact();
     },
@@ -315,10 +317,13 @@ var Ragdolls = {
         var pts = rd.pts, sticks = rd.sticks;
         for (let s = 0; s < sticks.length; s++) {
             var st = sticks[s];
+            if (st.broken) continue;
             var a = pts[st.a], b = pts[st.b];
             var dx = b.x - a.x, dy = b.y - a.y;
             var d = Math.hypot(dx, dy) || 0.0001;
             if (st.minOnly && d >= st.len) continue;
+            // breakable joints (vehicles: the rider tears off on a big hit)
+            if (st.breakAt && Math.abs(d - st.len) > st.breakAt) { st.broken = true; if (rd.onBreak) rd.onBreak(st); continue; }
             var diff = (d - st.len) / d * 0.5 * st.stiff;
             a.x += dx * diff; a.y += dy * diff;
             b.x -= dx * diff; b.y -= dy * diff;
@@ -328,7 +333,8 @@ var Ragdolls = {
     nearbySolids: function(rd) {
         var b = rd.bounds(70);
         var out = [];
-        var lists = [staticObjects, movingObjects];
+        // statics come from the spatial hash instead of scanning the whole level for every body
+        var lists = [typeof StaticGrid !== "undefined" ? StaticGrid.query(b.l, b.b, b.r, b.t, false, this._sbuf || (this._sbuf = [])).slice() : staticObjects, movingObjects];
         for (let li = 0; li < lists.length; li++) {
             var L = lists[li];
             for (let i = 0; i < L.length; i++) {
@@ -391,8 +397,9 @@ var Ragdolls = {
                         // once per frame (first solver pass) and per contact point: a whole body sums to a
                         // believable shove instead of every point x every pass stacking up
                         if (!iter && -(ivx * nx + ivy * ny) > 0.4) {
-                            o.xspeed = Math.max(-16, Math.min(16, o.xspeed + ivx * 0.075 * mass));
-                            o.yspeed = Math.max(-16, Math.min(16, o.yspeed + ivy * 0.05 * mass));
+                            var ow = o.weight || 1;
+                            o.xspeed = Math.max(-16, Math.min(16, o.xspeed + ivx * 0.075 * mass / ow));
+                            o.yspeed = Math.max(-16, Math.min(16, o.yspeed + ivy * 0.05 * mass / ow));
                         }
                     }
                 }
@@ -405,12 +412,13 @@ var Ragdolls = {
                 var vn = vx * nx + vy * ny;
                 if (vn < 0) {
                     var tx = vx - vn * nx, ty = vy - vn * ny;
-                    var fr = ny > 0.5 ? 0.78 : 0.92;
+                    var fr = p.roll ? 0.996 : (ny > 0.5 ? 0.78 : 0.92);     // wheels roll, bodies scrape
                     var nvx = tx * fr - vn * nx * bounce, nvy = ty * fr - vn * ny * bounce;
                     p.px = p.x - nvx; p.py = p.y - nvy;
                     if (-vn > maxImpact) maxImpact = -vn;
                 }
                 if (ny > 0.5) rd.grounded = true;
+                p.contact = 3; p.cnx = nx; p.cny = ny;              // which way the surface faces (vehicles drive along it)
             }
         }
         if (finalPass && maxImpact > 9 && rd.bonkCd <= 0) {
@@ -435,7 +443,7 @@ var Ragdolls = {
 
             for (let a = 0; a < actors.length; a++) {
                 var ch = actors[a];
-                if (ch.dead || ch === rd.owner || ch.liveRagdoll || ch === rd.heldBy) continue;
+                if (ch.dead || ch === rd.owner || ch.liveRagdoll || ch === rd.heldBy || ch.vehicle || ch.noCollide) continue;
                 var hw = ch.s1 / 2, hh = ch.s2 / 2;
                 if (ch.x + hw < b.l || ch.x - hw > b.r || ch.y + hh < b.b || ch.y - hh > b.t) continue;
 
@@ -478,15 +486,16 @@ var Ragdolls = {
         }
 
         // 3) Bodies pile up instead of overlapping (cheap: head / neck / pelvis only)
-        for (let i = 0; i < list.length; i++) {
-            var A = list[i];
-            if (A.kind !== "humanoid") continue;
-            var ba = A.bounds(0);
-            for (let j = i + 1; j < list.length; j++) {
-                var Bd = list[j];
-                if (Bd.kind !== "humanoid") continue;
-                var bb = Bd.bounds(0);
-                if (ba.r < bb.l || ba.l > bb.r || ba.t < bb.b || ba.b > bb.t) continue;
+        var hs = [];
+        for (let i = 0; i < list.length; i++) if (list[i].kind === "humanoid") hs.push({ rd: list[i], b: list[i].bounds(0) });
+        hs.sort(function(p, q) { return p.b.l - q.b.l; });
+        for (let i = 0; i < hs.length; i++) {
+            var A = hs[i].rd, ba = hs[i].b;
+            for (let j = i + 1; j < hs.length; j++) {
+                var Bd = hs[j].rd, bb = hs[j].b;
+                if (bb.l > ba.r) break;
+                if (A.asleep && Bd.asleep) continue;
+                if (ba.t < bb.b || ba.b > bb.t) continue;
                 var keys = [0, 1, 2];
                 for (let u = 0; u < 3; u++) for (let v = 0; v < 3; v++) {
                     var p1 = A.pts[keys[u]], p2 = Bd.pts[keys[v]];
@@ -523,7 +532,7 @@ var Ragdolls = {
         if (!l.rdHit) l.rdHit = {};
         for (let i = 0; i < this.list.length; i++) {
             var rd = this.list[i];
-            if (rd.life < 0 || l.rdHit[rd.id]) continue;
+            if ((rd.life < 0 && !rd.isDummy) || l.rdHit[rd.id]) continue;
             var b = rd.bounds(8);
             if (l.x < b.l || l.x > b.r || l.y < b.b || l.y > b.t) continue;
             for (let j = 0; j < rd.pts.length; j++) {
@@ -553,7 +562,7 @@ var Ragdolls = {
     // ============================== RENDERING ==============================
     drawCorpses: function() {
         for (let i = 0; i < this.list.length; i++) {
-            if (!this.list[i].owner) this.draw(this.list[i]);
+            if (!this.list[i].owner && !this.list[i].isBallBody) this.draw(this.list[i]);
         }
     },
 
@@ -564,8 +573,45 @@ var Ragdolls = {
         if (sr < -20 || sl > cssW + 20 || sb < -20 || st > cssH + 20) return;
         ctx.save();
         ctx.globalAlpha = rd.alpha();
-        if (rd.kind === "blob") this.drawBlob(rd);
+        if (rd.drawFn) rd.drawFn(rd);
+        else if (rd.kind === "blob") this.drawBlob(rd);
+        else if (typeof settings !== "undefined" && settings.squareChars) this.drawSquare(rd);
         else this.drawHumanoid(rd);
+        ctx.restore();
+    },
+
+    // "Classic squares" look: one rounded square rotated to the neck-pelvis angle
+    drawSquare: function(rd) {
+        var P = rd.pts.map(this.sp);
+        var neck = P[1], pelvis = P[2];
+        var ang = Math.atan2(pelvis[0] - neck[0], pelvis[1] - neck[1]);
+        var k = rd.k;
+        var o = rd.owner;
+        var w = (o ? o.s1 : 48 * k) * cameraScaleX, h = (o ? o.s2 : 72 * k) * cameraScaleY;
+        var cx = (P[0][0] + (P[8][0] + P[10][0]) / 2) / 2, cy = (P[0][1] + (P[8][1] + P[10][1]) / 2) / 2;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(-ang);
+        var r = Math.min(w, h) * 0.18;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(-w / 2, -h / 2, w, h, r); else ctx.rect(-w / 2, -h / 2, w, h);
+        ctx.fillStyle = (o && o.color) || rd.style.body;
+        ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = "#0a0f16"; ctx.stroke();
+        // X-eyes for corpses, plain eyes for a knocked-down live body
+        var eyeR = Math.max(2, Math.min(w, h) * 0.1);
+        ctx.strokeStyle = "#0a0f16"; ctx.fillStyle = "#ffffff"; ctx.lineWidth = Math.max(1.5, eyeR * 0.5);
+        for (var e = -1; e <= 1; e += 2) {
+            var ex = e * w * 0.2, ey = -h * 0.18;
+            if (rd.life >= 0) {
+                ctx.beginPath();
+                ctx.moveTo(ex - eyeR, ey - eyeR); ctx.lineTo(ex + eyeR, ey + eyeR);
+                ctx.moveTo(ex + eyeR, ey - eyeR); ctx.lineTo(ex - eyeR, ey + eyeR);
+                ctx.stroke();
+            } else {
+                ctx.beginPath(); ctx.arc(ex, ey, eyeR, 0, Math.PI * 2); ctx.fill();
+            }
+        }
         ctx.restore();
     },
 
@@ -583,6 +629,11 @@ var Ragdolls = {
         ctx.strokeStyle = col;
         ctx.lineWidth = lw;
         ctx.stroke();
+        // close up: a soft highlight down the limb so bodies read as round, not flat
+        if (lw > 3.5 && typeof col === "string" && (col.charAt(0) === "#" || col.indexOf("rgb") === 0)) {
+            ctx.save(); ctx.globalAlpha = 0.45; ctx.strokeStyle = Components.shade(col, 45); ctx.lineWidth = lw * 0.3;
+            ctx.translate(-lw * 0.18, -lw * 0.18); ctx.stroke(); ctx.restore();
+        }
     },
 
     drawHumanoid: function(rd) {
@@ -642,8 +693,14 @@ var Ragdolls = {
         // hands & feet
         ctx.fillStyle = s.limb;
         for (let hI of [4, 6]) { ctx.beginPath(); ctx.arc(P[hI][0], P[hI][1], Math.max(2, 4.5 * k * s.thick), 0, Math.PI * 2); ctx.fill(); }
+        // boots: a rounded shoe pointing along the shin, toe forward
         ctx.fillStyle = "#1f2937";
-        for (let fI of [8, 10]) { ctx.beginPath(); ctx.arc(P[fI][0], P[fI][1], Math.max(2, 5.5 * k * Math.max(0.7, s.thick)), 0, Math.PI * 2); ctx.fill(); }
+        for (let fI of [8, 10]) {
+            var kn = P[fI - 1], ft = P[fI], sa = Math.atan2(ft[1] - kn[1], ft[0] - kn[0]), fr = Math.max(2, 5.5 * k * Math.max(0.7, s.thick));
+            ctx.save(); ctx.translate(ft[0], ft[1]); ctx.rotate(sa - Math.PI / 2);
+            ctx.beginPath(); ctx.ellipse(fr * 0.5, 0, fr * 1.5, fr, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+        }
 
         this.drawHead(rd, P[0], P[1], k);
     },

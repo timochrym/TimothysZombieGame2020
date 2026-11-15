@@ -20,7 +20,7 @@ var PowerUpDefs = {
 class Character {
 
     constructor(name, hitbox, poly, color, xy, maxspeed, slower, gravity, bounciness, speed, moveType, health, lazerType = "ULDR", isZombie = false, zombiePower = "NORMAL") {
-        this.id = ++Object.nextId;
+        this.id = ++GameObject.nextId;
         this.name = name;
         this.hitbox = hitbox;
         this.poly = poly;
@@ -153,17 +153,20 @@ class Character {
 
     accent() { return this.accentColor || (typeof FIGHTER_COLORS !== "undefined" && FIGHTER_COLORS[this.playerIndex]) || "#ff5a5f"; }
 
-    get input() { return this.isCPU ? this.cpuIn : (PlayerInput[this.playerIndex] || PlayerInput[0]); }
+    get input() { return this.isCPU ? this.cpuIn : (this.netIn || PlayerInput[this.playerIndex] || PlayerInput[0]); }
 
     // Calm top running speed (px/frame); knockback, dashes and wall-jumps can briefly exceed it
     runCapNow() {
-        if (!this.isPlayer) return this.maxspeed * 0.4;
+        if (!this.isPlayer) return this.maxspeed * 0.4 * (this.capMult || 1);
+        if (GameModes.has("runMult")) { var rm = GameModes.call("runMult", this); if (rm && rm !== 1) return this.maxspeed * 0.48 * rm; }
+        var fm = (typeof Feel !== "undefined") ? Feel.speedMult() : 1;
+        if (fm !== 1 && !this.creativeFlying) return this.maxspeed * (this.hasPower("SPEED") ? 0.62 : 0.48) * fm;
         if (this.creativeFlying) return this.maxspeed * 0.75;   // flying is quick
         return this.maxspeed * (this.hasPower("SPEED") ? 0.62 : 0.48);
     }
 
     // ---- Ammo ------------------------------------------------------------
-    unlimitedAmmo() { return godMode || devOpts.infiniteAmmo || this.isZombie || (typeof brawl !== "undefined" && brawl.active) || !GameModes.flag("ammo", true); }
+    unlimitedAmmo() { return (typeof settings !== "undefined" && settings.ammo !== "limited") || godMode || devOpts.infiniteAmmo || this.isZombie || (typeof brawl !== "undefined" && brawl.active) || !GameModes.flag("ammo", true); }
 
     totalAmmo() { return this.ammoMag + this.ammoReserve; }
 
@@ -219,6 +222,7 @@ class Character {
     }
 
     startRagdoll(kx, ky, dur, noImpulse) {
+        if (typeof Net !== "undefined" && Net.predicting) return;
         if (this.ragdollTimer > 0 || this.ragdollImmune > 0 || this.dead) return;
         this.ragdollTimer = dur || 55;
         this.ragdollExtend = 0;
@@ -288,6 +292,7 @@ class Character {
     }
 
     tryGrabOrThrow(cursorWorldX, cursorWorldY) {
+        if (this.heldChar && typeof Feel !== "undefined") { Feel.throwCharacter(this, cursorWorldX, cursorWorldY); return true; }
         if (this.heldRagdoll) {
             this.throwHeldRagdoll(cursorWorldX, cursorWorldY);
             return true;
@@ -351,6 +356,8 @@ class Character {
                 return true;
             }
         }
+        // nothing else in reach: grab a player or an enemy
+        if (typeof Feel !== "undefined" && Feel.tryGrabCharacter(this)) return true;
         return false;
     }
 
@@ -399,8 +406,9 @@ class Character {
         var throwSpeed = godMode ? 32 : 25;
         block.x = this.x + dx * (this.s1 * 0.65 + block.w * 0.55);
         block.y = this.y + dy * (this.s2 * 0.65 + block.h * 0.55);
-        block.xspeed = dx * throwSpeed + this.xspeed * 0.35;
-        block.yspeed = dy * throwSpeed + 3;
+        var bw = Math.sqrt(block.weight || 1);
+        block.xspeed = (dx * throwSpeed + this.xspeed * 0.35) / bw;
+        block.yspeed = (dy * throwSpeed + 3) / bw;
 
         CollisionDetector.enforceNonPenetration(staticObjects, [block]);
         Components.spawnSparks(block.x, block.y, "#00f5d4", 8);
@@ -432,12 +440,14 @@ class Character {
 
     takeDamage(amount, knockX = 0, knockY = 0, attacker = null) {
         if (this.dead) return;
+        if (typeof Net !== "undefined" && Net.predicting) return;      // a LAN joiner moving its own hero: damage is the host's call
         // God Mode protects living heroes from all damage!
         if (!this.isZombie && (godMode || this.dashTimer > 0 || this.invulnTimer > 0)) {
             return;
         }
         if (attacker && attacker.team === this.team && attacker !== this && !devOpts.friendlyFire) return;
         if (this.isPlayer && GameModes.has("onDamage") && GameModes.call("onDamage", this, amount, knockX, knockY, attacker)) return;
+        if (!this.isPlayer && GameModes.has("onEnemyDamage") && GameModes.call("onEnemyDamage", this, amount, knockX, knockY, attacker)) return;
 
         // Brawl mode: damage becomes a percent and knockback grows with it (no health, no death)
         if (typeof brawl !== "undefined" && brawl.active && this.isPlayer) {
@@ -455,7 +465,7 @@ class Character {
         // Enemies hit by a hero immediately know where they are; knights block frontal chip damage with the shield
         if (!this.isPlayer && attacker && attacker.isPlayer) {
             this.alertTimer = 600;
-            if (this.zombiePower == "KNIGHT" && amount > -40 && this.dashTimer <= 0) {
+            if (this.zombiePower == "KNIGHT" && amount > -40 && this.dashTimer <= 0 && !this.stompHit) {
                 var facingToward = ((attacker.x - this.x) * (this.lastFacing || 1)) > 0;
                 if (facingToward) {
                     amount *= 0.4;
@@ -534,6 +544,7 @@ class Character {
             var humanityGain = (this.zombiePower == "BOSS_KING") ? 100 : ((this.zombiePower == "TANK" || this.zombiePower == "KNIGHT") ? 45 : (this.zombiePower == "MINI_SLIME" ? 8 : 24));
             var killer = this.lastHitBy;
             if (killer && killer.isPlayer) killer.kills++;
+            if (killer && killer.isPlayer && typeof Build !== "undefined" && GameModes.flag("building", false)) { Build.mats(killer).wood += 5; if (Math.random() < 0.25) Build.mats(killer).stone += 4; }
             for (let pi = 0; pi < characters.length; pi++) {
                 var pc = characters[pi];
                 if (pc.isPlayer && pc.isZombie) {
@@ -802,6 +813,8 @@ class Character {
         }
         if (this.invulnTimer > 0) this.invulnTimer--;
         if (this.hitCooldown > 0) this.hitCooldown--;
+        if (this.stompGrace > 0) this.stompGrace--;
+        if (this.stompCd > 0) this.stompCd--;
         if (this.staggerTimer > 0) {
             this.staggerTimer--;
             this.leftPressed = this.rightPressed = this.upPressed = false;
@@ -938,7 +951,7 @@ class Character {
 
         // Creative flight: double-tap jump to take off / land (Creative game, or the dev-panel cheat)
         if (this.isPlayer) {
-            var canFly = !this.isZombie && !this.dead && (GameModes.flag("flight", false) || devOpts.flight);
+            var canFly = !this.isZombie && !this.dead && (GameModes.flag("flight", false) || devOpts.flight || (GameModes.current.id === "terra" && TERRA.creative));
             if (!canFly) this.creativeFlying = false;
             else if (freshJumpPress) {
                 if (this.flyTapTimer > 0) {
@@ -1038,7 +1051,7 @@ class Character {
             // Tactile Arcade Horizontal Movement (snappy turn-around skid + apex air-control boost)
             var isAtJumpApex = !this.onGround && Math.abs(this.yspeed) < 3.4;
             var capNow = this.runCapNow();
-            var accel = this.speed * (isAtJumpApex ? 1.0 : 0.9) * (this.onSlide ? 0.55 : 1);
+            var accel = this.speed * (isAtJumpApex ? 1.0 : 0.9) * (this.onSlide ? 0.55 : 1) * (this.isPlayer && typeof Feel !== "undefined" ? Feel.speedMult() : 1);
             var turnSnap = this.onGround ? (this.speed * 1.3 + this.slower * 0.9) : (this.speed * 1.0 + this.slower * 0.4);
 
             if (this.rightPressed && !this.leftPressed) {
@@ -1297,7 +1310,10 @@ class Character {
                 if (CollisionDetector.collision(this, [0, stepY], allObjects)) {
                     var hitY = this.collidedWith;
                     this.y += stepY + this.yOver;
-                    this.handleCharacterCollision(hitY);
+                    if (this.handleCharacterCollision(hitY) === "stomp" && this.yspeed > 0) {
+                        stepY = 0;                                             // keep the stomp bounce; don't damp it
+                        continue;
+                    }
 
                     if (hitY && hitY.isBumper && this.yspeed <= 0 && !(this.isPlayer && this.downPressed)) {
                         this.yspeed = hitY.bounceForce;
@@ -1325,10 +1341,10 @@ class Character {
                         if (this.yspeed > 0) {
                             this.jump = false;
                         }
-                        this.yspeed = this.yspeed * this.bounciness;
-                        if (Math.abs(this.yspeed) < this.gravity * 2.2) {
-                            this.yspeed = 0;
-                        }
+                        // Upright characters land and stop at ceilings. Bumpers and stomps above
+                        // have their own explicit bounce; prop restitution must not make heroes pogo.
+                        this.yspeed = 0;
+                        this.jump = false;
                     }
                     stepY = 0;
                 } else {
@@ -1415,15 +1431,55 @@ class Character {
         if (typeof brawl !== "undefined" && brawl.active) return;
         if (other.team === this.team) return;
         if (this.frozenTimer > 0) return;
+        if (this.isPlayer && other.isPlayer && GameModes.flag("noHeroContact", false)) return;
+        if (this.grabbedBy === other || other.grabbedBy === this) return;          // held in someone's hands
         // Enemy touches hero => hero is hurt (heroes only get a half-strength hit while undead)
         var victim = this.isPlayer ? this : other;
         var bully = this.isPlayer ? other : this;
         if (bully.frozenTimer > 0) return;
+        // Hero vs enemy only: head stomps, then the mode's contact hook, then default contact damage
+        if (victim.isPlayer && !bully.isPlayer) {
+            if (victim.stompGrace > 0) return;                    // just bounced off a head: no contact damage
+            if (Character.isStomp(victim, bully)) {
+                victim.stompGrace = 10;
+                bully.stompCd = 8;
+                if (!(GameModes.has("onStomp") && GameModes.call("onStomp", victim, bully))) {
+                    Character.applyStomp(victim, bully);
+                }
+                return "stomp";
+            }
+            if (GameModes.has("onContact") && GameModes.call("onContact", victim, bully)) return;
+        }
         var mult = victim.isZombie ? 0.5 : 1;
         var dmg = -9, kx = 3;
         if (bully.dashTimer > 0 && bully.zombiePower == "TANK") { dmg = -26; kx = 7; }
         else if (bully.dashTimer > 0 && bully.zombiePower == "KNIGHT") { dmg = -16; kx = 5; }
         victim.takeDamage(dmg * mult, (victim.x > bully.x ? kx : -kx), 1.5, bully);
+    }
+
+    // Hero is clearly on top of the foe and falling (or level) relative to it
+    static isStomp(hero, foe) {
+        if (hero.dead || foe.dead || hero.ragdollTimer > 0 || foe.stompCd > 0) return false;
+        var feet = hero.y - hero.s2 / 2;
+        var head = foe.y + foe.s2 / 2;
+        if (hero.y <= foe.y) return false;
+        if (feet < head - Math.min(18, foe.s2 * 0.3)) return false;           // too far down the foe's side
+        if (Math.abs(hero.x - foe.x) > (hero.s1 + foe.s1) * 0.5 - 2) return false;
+        return hero.yspeed - (foe.yspeed || 0) <= 0.5;
+    }
+
+    static applyStomp(hero, foe) {
+        foe.stompHit = true;                                                   // bypasses the knight's frontal shield
+        foe.takeDamage(-35 * rpgDamageMult * devOpts.playerDamage, (foe.x >= hero.x ? 1.5 : -1.5), -1, hero);
+        foe.stompHit = false;
+        foe.scaleX = 1.35; foe.scaleY = 0.6;                                  // squash
+        hero.yspeed = hero.upPressed ? 12.5 : 8;                              // hold jump to bounce higher
+        hero.jump = false;
+        hero.onGround = false;
+        hero.coyoteTimer = 0;
+        hero.scaleX = 0.86; hero.scaleY = 1.16;
+        Components.spawnSparks(hero.x, hero.y - hero.s2 / 2, "#ffe066", 7);
+        if (typeof SFX !== "undefined") SFX.play("boing", hero.x, hero.y, 0.9, 1.3);
     }
 
     createCharacter() {
@@ -1464,7 +1520,9 @@ class Character {
 
         // Custom Distinct Artwork for Non-Zombie Enemy Archetypes (Bats, Slimes, Archers, Knights, Mages, Bosses)
         var customEnemyTypes = ["BAT", "SLIME", "MINI_SLIME", "ARCHER", "KNIGHT", "MAGE", "BOSS_KING"];
-        if (isEnemyChar) {
+        if (typeof settings !== "undefined" && settings.squareChars) {
+            this.drawSquareBody(drawX, drawY, drawW, drawH, drawColor);
+        } else if (isEnemyChar) {
             this.drawEnemyChar(drawX, drawY, drawW, drawH);
         } else if (this.isZombie && customEnemyTypes.indexOf(this.zombiePower) !== -1) {
             ctx.save();
@@ -1600,6 +1658,49 @@ class Character {
         return "#ff3b4a";
     }
 
+    // "Classic squares" look (settings.squareChars): the original blocky 2020 style with eyes that follow facing
+    drawSquareBody(x, y, w, h, color) {
+        var facing = this.xspeed > 0.3 ? 1 : (this.xspeed < -0.3 ? -1 : (this.lastFacing || 1));
+        this.lastFacing = facing;
+        var enemy = this.isZombie && !this.isPlayer;
+        // little feet (they step while walking) and hands at the sides (they swing) - drawn first, body on top
+        var walk = this.onGround && Math.abs(this.xspeed) > 0.6 ? Math.sin(performance.now() * 0.018 + (this.id || 0)) : 0;
+        var dark = Components.shade(color, -45);
+        ctx.fillStyle = dark; ctx.strokeStyle = "#0a0f16"; ctx.lineWidth = 2;
+        for (var f = 0; f < 2; f++) {
+            var fx = x + w * (f ? 0.56 : 0.16) + (f ? -walk : walk) * w * 0.07, fy = y + h - h * 0.06 - Math.max(0, (f ? -walk : walk)) * h * 0.06;
+            this.roundRectPath(fx, fy, w * 0.28, h * 0.14, h * 0.05); ctx.fill(); ctx.stroke();
+        }
+        for (var hs = -1; hs <= 1; hs += 2) {
+            var hx = x + w / 2 + hs * w * 0.54, hy = y + h * 0.6 + hs * walk * h * 0.05;
+            ctx.beginPath(); ctx.arc(hx, hy, Math.max(2, w * 0.1), 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill(); ctx.stroke();
+        }
+        ctx.fillStyle = color;
+        this.roundRectPath(x, y, w, h, Math.min(w, h) * 0.18);
+        ctx.fill();
+        this.outlineBox(x, y, w, h, 3);
+        var eyeR = Math.max(2, Math.min(w, h) * 0.11);
+        var eyeY = y + h * 0.32;
+        var cx = x + w / 2 + facing * w * 0.1;
+        var look = facing * eyeR * 0.45;
+        for (var e = -1; e <= 1; e += 2) {
+            var ex = cx + e * w * 0.2;
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath(); ctx.arc(ex, eyeY, eyeR, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = enemy ? "#ff2e3e" : "#111111";
+            ctx.beginPath(); ctx.arc(ex + look, eyeY + eyeR * 0.1, eyeR * 0.5, 0, Math.PI * 2); ctx.fill();
+            if (enemy) {
+                // angry brows slanting down toward the middle
+                ctx.strokeStyle = "#111111";
+                ctx.lineWidth = Math.max(1.5, eyeR * 0.45);
+                ctx.beginPath();
+                ctx.moveTo(ex - e * eyeR * 1.2, eyeY - eyeR * 1.7);
+                ctx.lineTo(ex + e * eyeR * 1.1, eyeY - eyeR * 1.05);
+                ctx.stroke();
+            }
+        }
+    }
+
     roundRectPath(x, y, w, h, r) {
         r = Math.min(r, w / 2, h / 2);
         ctx.beginPath();
@@ -1681,6 +1782,7 @@ class Character {
             aimX: aimX, aimY: aimY,
             color: this.originalColor || this.color,
             firing: firing,
+            fists: typeof Fight !== "undefined" && Fight.fists(this),
             flash: this.hitFlashTimer > 0,
             t: Date.now(),
             ragdoll: this.ragdollTimer > 0 || this.corpse
@@ -1741,6 +1843,23 @@ class Character {
             // Hero: bright visor with eyes, belt stripe in player colour and gun barrel
             var accent = this.accent();
             this.drawSprite(characterImg, x, y, w, h, r, this.playerIndex === 1 ? "#2f8cff" : null);
+            // big on screen: soft lighting, rim light and eye catch-lights so the pixel face doesn't look flat
+            var det = (typeof settings === "undefined" || settings.charDetail !== false) ? Math.max(0, Math.min(1, (w - 90) / 60)) : 0;
+            if (det > 0 && !flash) {
+                ctx.save();
+                this.roundRectPath(x, y, w, h, r); ctx.clip();
+                var lg = ctx.createLinearGradient(x, y, x + w, y + h);
+                lg.addColorStop(0, "rgba(255,255,255," + (0.16 * det).toFixed(3) + ")");
+                lg.addColorStop(0.55, "rgba(255,255,255,0)");
+                lg.addColorStop(1, "rgba(0,0,0," + (0.28 * det).toFixed(3) + ")");
+                ctx.fillStyle = lg; ctx.fillRect(x, y, w, h);
+                ctx.globalAlpha = 0.9 * det; ctx.fillStyle = "#ffffff";
+                var ex = facing >= 0 ? [0.27, 0.66] : [0.29, 0.68];
+                for (let e = 0; e < 2; e++) ctx.fillRect(x + w * ex[e], y + h * 0.43, Math.max(2, w * 0.035), Math.max(2, h * 0.035));
+                ctx.globalAlpha = 0.5 * det; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = Math.max(1.5, w * 0.012);
+                ctx.beginPath(); ctx.moveTo(x + r, y + 2); ctx.lineTo(x + w - r, y + 2); ctx.moveTo(x + 2, y + r); ctx.lineTo(x + 2, y + h * 0.5); ctx.stroke();
+                ctx.restore();
+            }
             ctx.fillStyle = accent;
             ctx.fillRect(x + 2, y + h * 0.66, w - 4, h * 0.10);
             // headband tail
@@ -1751,8 +1870,10 @@ class Character {
             ctx.moveTo(cx - facing * w * 0.46, y + h * 0.14);
             ctx.lineTo(cx - facing * (w * 0.46 + 26 * cameraScaleX), y + h * 0.14 + rib);
             ctx.stroke();
-            // aim barrel
+            // aim barrel (none when fighting with fists)
             var rad = Math.radians(this.degree);
+            if (typeof Fight !== "undefined" && Fight.fists(this)) rad = null;
+            if (rad !== null) {
             var ax = Math.sin(rad), ay = -Math.cos(rad);
             ctx.strokeStyle = "#0a0f16";
             ctx.lineWidth = Math.max(6, 11 * cameraScaleX);
@@ -1767,6 +1888,7 @@ class Character {
             ctx.moveTo(cx + ax * w * 0.2, cy + ay * h * 0.2);
             ctx.lineTo(cx + ax * w * 0.78, cy + ay * h * 0.78);
             ctx.stroke();
+            }
         } else {
             // Undead / enemy: glowing eyes + jagged teeth
             this.drawSprite(zombieImg, x, y, w, h, r, this.isPlayer ? "#7a5cff" : (pw == "NORMAL" ? null : drawColor));
@@ -1950,3 +2072,14 @@ class Character {
         this.createCharacter();
     }
 }
+
+// Resize a character in place (feet stay on the ground). k is relative to its first size, so 1 = back to normal.
+Character.prototype.scaleSize = function(k) {
+    if (this.baseW === undefined) { this.baseW = this.s1; this.baseH = this.s2; }
+    var oldH = this.s2, nw = Math.round(this.baseW * k), nh = Math.round(this.baseH * k);
+    this.s1 = this.w = nw; this.s2 = this.h = nh;
+    this.hitbox = Math.makeHitbox(nw, nh); this.poly = Math.makeHitbox(nw, nh);
+    this.sizeScale = nw / s1;
+    this.y += (nh - oldH) / 2;
+    this.scaleX = k > 1 ? 0.75 : 1.25; this.scaleY = k > 1 ? 1.3 : 0.8;     // squash-and-stretch pop
+};

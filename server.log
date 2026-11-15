@@ -1,0 +1,16 @@
+
+  Timothy's Zombie Game - LAN server running
+
+  On this computer:   http://localhost:8099
+  On your network:    http://192.0.2.2:8099
+
+  1. Open one of those links on every device (same Wi-Fi).
+  2. One player: Arcade -> LAN PLAY -> Host.  Everyone else: LAN PLAY -> Join.
+  3. If other devices can't connect, allow Node.js through your firewall.
+
+[lan] host connected: Tim
+[lan] player 1 joined: Bob
+[lan] player 2 joined: Ann
+[lan] host left
+[lan] player 2 left
+[lan] player 1 left

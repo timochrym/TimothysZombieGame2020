@@ -1,7 +1,7 @@
-class Object {
+class GameObject {
 
     constructor(name, hitbox, poly, color, xy, maxspeed = 0, slower = 0, gravity = 0, bounciness = 0, movable = false, options = {}) {
-        this.id = ++Object.nextId;
+        this.id = ++GameObject.nextId;
         this.name = name;
         this.hitbox = hitbox;
         this.poly = poly;
@@ -43,6 +43,7 @@ class Object {
         else if (this.h > this.w || /wall|pillar|divider|cage/i.test(nm)) this.kind = "wall";
         else this.kind = "block";
         this.portalable = !!options.portalable;
+        this.weight = options.weight || 1;          // heavier = harder to push, throw and blast (Level Studio: weight)
         this.texture = options.texture !== undefined ? options.texture : (movable && !this.explosive ? "crate_plank" : null);
         this.health = options.health || (this.explosive ? 25 : 9999);
         this.dead = false;
@@ -74,7 +75,7 @@ class Object {
     static addBox(x, y, w, h, color = "#243b4a", options = {}) {
         var box = Math.makeHitbox(w, h);
         var opts = { w: w, h: h, name: options.name || "Platform", ...options };
-        var obj = new Object(opts.name, box, box, color, [x, y], 0, 0, 0, 0, false, opts);
+        var obj = new GameObject(opts.name, box, box, color, [x, y], 0, 0, 0, 0, false, opts);
         staticObjects.push(obj);
         return obj;
     }
@@ -90,7 +91,7 @@ class Object {
             triPoly = [[-hw, -hh], [hw, hh], [hw, -hh]];
         }
         var opts = { w: w, h: h, isRamp: true, rampDir: direction, name: options.name || ("Ramp (" + direction + ")"), ...options };
-        var obj = new Object(opts.name, hitbox, triPoly, color, [x, y], 0, 0, 0, 0, false, opts);
+        var obj = new GameObject(opts.name, hitbox, triPoly, color, [x, y], 0, 0, 0, 0, false, opts);
         staticObjects.push(obj);
         return obj;
     }
@@ -105,7 +106,7 @@ class Object {
             name: options.name || "Bounce Pad",
             ...options
         };
-        var obj = new Object(opts.name, box, box, color, [x, y], 0, 0, 0, 0, false, opts);
+        var obj = new GameObject(opts.name, box, box, color, [x, y], 0, 0, 0, 0, false, opts);
         staticObjects.push(obj);
         return obj;
     }
@@ -117,7 +118,7 @@ class Object {
         var isExplosive = options.explosive || false;
         var crateColor = isExplosive ? "#e84545" : color;
         var opts = { w: w, h: h, name: options.name || (isExplosive ? "TNT Barrel" : "Crate"), ...options };
-        var obj = new Object(
+        var obj = new GameObject(
             opts.name,
             box,
             box,
@@ -138,13 +139,13 @@ class Object {
         for (let i = 0; i < items.length; i++) {
             var it = items[i];
             if (it.type == "box") {
-                Object.addBox(it.x, it.y, it.w, it.h, it.color, it);
+                GameObject.addBox(it.x, it.y, it.w, it.h, it.color, it);
             } else if (it.type == "ramp") {
-                Object.addRamp(it.x, it.y, it.w, it.h, it.dir || "right", it.color, it);
+                GameObject.addRamp(it.x, it.y, it.w, it.h, it.dir || "right", it.color, it);
             } else if (it.type == "bumper") {
-                Object.addBumper(it.x, it.y, it.w, it.h, it.bounce || 22, it.color, it);
+                GameObject.addBumper(it.x, it.y, it.w, it.h, it.bounce || 22, it.color, it);
             } else if (it.type == "crate") {
-                Object.addCrate(it.x, it.y, it.size || 72, it.color, it);
+                GameObject.addCrate(it.x, it.y, it.size || 72, it.color, it);
             }
         }
         if (typeof Pathfinder !== "undefined") Pathfinder.rebuildGraph(true);
@@ -295,7 +296,8 @@ class Object {
                         if (hitY && (hitY.movable || hitY instanceof Character)) {
                             CollisionDetector.transferMomentum(this, hitY, 0, dirY);
                         }
-                        this.yspeed = this.yspeed * this.bounciness;
+                        // crates landing on crates barely bounce (stacks settle instead of buzzing)
+                        this.yspeed = this.yspeed * this.bounciness * ((hitY && hitY.movable && stepY < 0) ? 0.2 : 1);
                         if (Math.abs(this.yspeed) < this.gravity * 2.5) {
                             this.yspeed = 0;
                         }
@@ -324,12 +326,24 @@ class Object {
         if (!hitObj) return;
         var speedMag = Math.hypot(this.xspeed, this.yspeed);
         if (this.thrownTimer > 0 || speedMag > 10) {
+            if (this.explosive && hitObj === this.thrownBy && this.thrownTimer > 0) return;   // not in the thrower's own hands
             if (this.explosive && (hitObj instanceof Character || speedMag > 14)) {
                 this.takeDamage(-999);
                 return;
             }
             if (hitObj instanceof Character && hitObj != this.thrownBy) {
-                var dmg = -Math.round(Math.min(65, speedMag * 2.5));
+                // Impact damage = speed x weight (a weight-1 crate is the old formula), times this block's own
+                // "impact damage" setting. Heroes are not zombies: a crate that merely falls or gets blasted into a
+                // hero needs real speed and only bruises (it used to take up to 65 of 100 health); one thrown at a
+                // hero on purpose (Brawl, friendly fire) hurts, but can't one-shot.
+                var wk = Math.sqrt(Math.max(0.1, this.weight || 1)), mult = this.impactMult === undefined ? 1 : this.impactMult;
+                var raw = Math.min(65 * wk, speedMag * 2.5 * wk) * mult;
+                if (hitObj.isPlayer && !hitObj.isZombie) {
+                    if (this.thrownTimer > 0) raw = Math.min(35, raw * 0.6);
+                    else { if (speedMag < 15) return; raw = Math.min(18, raw * 0.3); }
+                }
+                if (raw < 1) return;
+                var dmg = -Math.round(raw);
                 hitObj.takeDamage(dmg, this.xspeed * 0.6, Math.abs(this.yspeed) * 0.4 + 4);
                 Components.addFloatingText("SMASH! " + dmg, hitObj.x, hitObj.y + 55, "#00f5d4", 20);
                 Components.spawnSparks(this.x, this.y, this.color, 10);
@@ -378,7 +392,7 @@ class Object {
     }
 
     staticObject() {
-        if (this.dead) return;
+        if (this.dead || this.invisible) return;
         if (this.isInfiniteBase && typeof cameraTargetX !== "undefined") {
             this.x = Math.round(cameraTargetX / 960) * 960 + (this.baseOffsetX || 0);
         }
@@ -395,4 +409,4 @@ class Object {
     }
 }
 
-Object.nextId = 0;
+GameObject.nextId = 0;

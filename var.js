@@ -157,6 +157,7 @@ var SpacePressed = false;
 var EnterPressed = false;
 var EPressed = false;
 var ShiftPressed = false;
+var RShiftPressed = false;
 
 // Mouse Aim & Click-to-Shoot
 var mouseX = w / 2;
@@ -175,10 +176,9 @@ window.addEventListener("resize", function() {
 // ---------------------------------------------------------------------------
 // Per-player input (P1 = WASD cluster, P2 = Arrow cluster). Filled by keyHandler.js
 // ---------------------------------------------------------------------------
-var PlayerInput = [
-    { shoot: false, jet: false, interact: false, kbShoot: false, kbJet: false, kbInteract: false, dashQueued: false, grabQueued: false, reloadQueued: false },
-    { shoot: false, jet: false, interact: false, kbShoot: false, kbJet: false, kbInteract: false, dashQueued: false, grabQueued: false, reloadQueued: false }
-];
+var PlayerInput = [0, 1, 2, 3].map(function() {
+    return { shoot: false, jet: false, interact: false, kbShoot: false, kbJet: false, kbInteract: false, dashQueued: false, grabQueued: false, reloadQueued: false };
+});
 
 // ---------------------------------------------------------------------------
 // Developer / tuning options (driven by the Dev Mode panel)
