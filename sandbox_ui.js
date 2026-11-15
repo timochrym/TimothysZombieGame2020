@@ -420,30 +420,37 @@ var SandboxUI = {
 
         // Poll mode transitions & refresh live inspect telemetry
         setInterval(function() {
-            var active = self.isActive();
-            var modeId = (typeof GameModes !== "undefined" && GameModes.current) ? GameModes.current.id : null;
-            if (active !== self._lastMode || modeId !== self._lastModeId) {
-                self._lastMode = active;
-                self._lastModeId = modeId;
-                if (!active) {
-                    self.spawnerOpen = false; self.rosterOpen = false; self.pauseOpen = false;
-                    self.ctxMenu = null; self.piePos = null;
-                } else {
-                    var sb = self.isSandbox();
-                    self.sideOpen = sb;
-                    self.tool = sb ? "select" : "play";
-                    if (typeof UniversalInspect !== "undefined") {
-                        UniversalInspect.selected = null;
-                        UniversalInspect.hovered = null;
-                        UniversalInspect.followTarget = null;
-                    }
-                }
+            if (self.syncMode()) {
                 self.render();
-            } else if (active) {
+            } else if (self.isActive()) {
                 if (self.rosterOpen) self.renderRosterOnly();
                 if (self.sideOpen && self.sideTab === "inspect") self.refreshInspectLive();
             }
         }, 220);
+    },
+
+    syncMode: function() {
+        var active = this.isActive();
+        var modeId = (typeof GameModes !== "undefined" && GameModes.current) ? GameModes.current.id : null;
+        if (active !== this._lastMode || modeId !== this._lastModeId) {
+            this._lastMode = active;
+            this._lastModeId = modeId;
+            if (!active) {
+                this.spawnerOpen = false; this.rosterOpen = false; this.pauseOpen = false;
+                this.ctxMenu = null; this.piePos = null;
+            } else {
+                var sb = this.isSandbox();
+                this.sideOpen = sb;
+                this.tool = sb ? "select" : "play";
+                if (typeof UniversalInspect !== "undefined") {
+                    UniversalInspect.selected = null;
+                    UniversalInspect.hovered = null;
+                    UniversalInspect.followTarget = null;
+                }
+            }
+            return true;
+        }
+        return false;
     },
 
     openPause: function() { this.pauseOpen = true; this.spawnerOpen = false; this.ctxMenu = null; this.render(); },
@@ -542,10 +549,14 @@ var SandboxUI = {
         }
 
         // 2. Universal Side Menu Handle (when collapsed) OR Full Side Drawer (when open)
+        var own = typeof GameModes !== "undefined" && GameModes.flag("ownScreen", false);
+        var mid0 = m && m.id ? m.id : "";
         if (!this.sideOpen) {
-            html += '<div class="sb-pe sb-glass" style="position:fixed;top:' + (sb ? 62 : 12) + 'px;left:12px;border-radius:12px;padding:4px 6px;display:flex;align-items:center;gap:5px">' +
-                '<button class="sb-btn" id="sb-side-open" title="Open Universal Side Menu [F2 / `]">☰ Side Menu</button>' +
-                '<button class="sb-btn ' + (this.tool === 'inspect' ? 'active' : '') + '" id="sb-quick-inspect" title="Click anything to inspect">🔍 Inspect</button>' +
+            // In .io / ownScreen games, #top-menu-btn on the top-right bar opens this menu, so we only show a subtle Inspect pill next to the HUD card instead of a duplicate "Side Menu" bar
+            var posStyle = own ? ('left:' + (mid0 === "mix" ? 468 : 344) + 'px;top:10px') : ('left:12px;top:' + (sb ? 62 : 10) + 'px');
+            html += '<div class="sb-pe sb-glass" style="position:fixed;' + posStyle + ';border-radius:10px;padding:4px 6px;display:flex;align-items:center;gap:5px">' +
+                '<button class="sb-btn" id="sb-side-open" style="' + (own ? 'display:none' : '') + '" title="Open Menu [F2 / `]">☰ Menu</button>' +
+                '<button class="sb-btn ' + (this.tool === 'inspect' ? 'active' : '') + '" id="sb-quick-inspect" title="Click anything in the arena to inspect or swap">🔍 Inspect</button>' +
                 (this.tool !== "play" ? '<button class="sb-btn" id="sb-quick-play" title="Return to Play mode">🎮 Play</button>' : '') +
                 '</div>';
         } else {
@@ -803,6 +814,8 @@ var SandboxUI = {
             '<button class="sb-btn" id="sb-act-clear">🧹 Clear Foes</button>' : '') +
             (isIo ? '<button class="sb-btn" id="sb-tl-swap">🔄 Swap Bot [V]</button>' +
             '<button class="sb-btn ' + (this.tool === "inspect" ? "active" : "") + '" id="sb-act-inspect">🔍 Inspect</button>' : '') +
+            '<button class="sb-btn" id="sb-act-settings">⚙ Settings</button>' +
+            '<button class="sb-btn" id="sb-act-controls">🎮 Controls</button>' +
             '<button class="sb-btn" id="sb-act-restart">🔄 Restart</button>' +
             '<button class="sb-btn active" id="sb-act-hub">🕹 Arcade Hub</button>' +
             '</div>';
@@ -1293,6 +1306,12 @@ var SandboxUI = {
             self.tool = self.tool === "inspect" ? "play" : "inspect";
             if (self.tool === "inspect") self.sideTab = "inspect";
             self.render();
+        };
+        if (el("sb-act-settings")) el("sb-act-settings").onclick = function() {
+            if (typeof toggleDevPanel === "function") toggleDevPanel("game");
+        };
+        if (el("sb-act-controls")) el("sb-act-controls").onclick = function() {
+            if (typeof toggleControlMenu === "function") toggleControlMenu();
         };
         if (el("sb-act-restart")) el("sb-act-restart").onclick = function() {
             if (!self.sendNet({ k: "restart" })) {

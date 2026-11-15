@@ -1010,10 +1010,11 @@ var Mix = {
         else if (m && m.kind === "blob") Cells.hud();
         else if (m) Snake.hud();
 
-        var lx = (typeof SandboxUI !== "undefined" && SandboxUI.sideOpen) ? 320 : 14;
+        var sideOpen = typeof SandboxUI !== "undefined" && SandboxUI.sideOpen;
+        var lx = sideOpen ? 320 : 14;
         var menuOpen = typeof document !== "undefined" && document.getElementById("top-menu") && document.getElementById("top-menu").classList.contains("open");
 
-        // Unified 3-in-1 Top-Left Header Card (shifts right when SandboxUI drawer is open)
+        // Unified 3-in-1 Top-Left Header Card (compact status bar when side menu is open; includes quick-switch pills when side menu is closed)
         var name = MIX_BODIES[0][1];
         for (let i = 0; i < MIX_BODIES.length; i++) if (MIX_BODIES[i][0] === mixCfg.body) { name = MIX_BODIES[i][1]; break; }
         var liveStat = "Spectating / Respawning", subStat = "Best: " + (mixSave.best[mixCfg.body] || 0);
@@ -1038,12 +1039,8 @@ var Mix = {
                 subStat = "Best " + (mixSave.best.worm || 0) + (X ? " · Bite " + X.st[0] + " · Armor " + X.st[1] + " · Appetite " + X.st[2] : "") + " · Q body · V swap";
             }
         }
-        uiPanel(lx, 10, 446, 94, "#fde047", 0.88);
-        uiText("🌀 ARENA MIX", lx + 14, 34, 18, "#fde047", "left", "900");
-        uiText(liveStat, lx + 432, 33, 12, "#f8fafc", "right", "800");
-        uiText(subStat, lx + 14, 54, 11, "#cbd5e1", "left", "700");
 
-        // Clickable quick-switch body pills inside the header card (cached per active body & lx)
+        // Clickable quick-switch body pills (cached per active body & lx)
         var pillsKey = mixCfg.body + ":" + lx;
         if (!this._pillsCanvas || this._pillsBody !== pillsKey) {
             this._pillsBody = pillsKey;
@@ -1079,7 +1076,20 @@ var Mix = {
             pg.fillText(swLbl, px + 1 + swW * 0.5, 17);
             this._swapPill = { id: "_swap", x: lx + 12 + px, y: 68, w: swW, h: 23 };
         }
-        ctx.drawImage(this._pillsCanvas, lx + 12, 66);
+
+        if (sideOpen) {
+            // Side menu already shows the body switcher buttons — only draw a sleek status badge here!
+            uiPanel(lx, 10, 420, 52, "#fde047", 0.86);
+            uiText("🌀 ARENA MIX", lx + 14, 32, 16, "#fde047", "left", "900");
+            uiText(liveStat, lx + 406, 32, 12, "#f8fafc", "right", "800");
+            uiText(subStat, lx + 14, 50, 11, "#cbd5e1", "left", "700");
+        } else {
+            uiPanel(lx, 10, 446, 94, "#fde047", 0.88);
+            uiText("🌀 ARENA MIX", lx + 14, 34, 18, "#fde047", "left", "900");
+            uiText(liveStat, lx + 432, 33, 12, "#f8fafc", "right", "800");
+            uiText(subStat, lx + 14, 54, 11, "#cbd5e1", "left", "700");
+            ctx.drawImage(this._pillsCanvas, lx + 12, 66);
+        }
 
         // Interactive Worm Upgrade Pills at bottom-left when playing as a worm with unspent points
         this._wormRects = [];

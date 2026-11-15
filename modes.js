@@ -67,6 +67,7 @@ var GameModes = {
         this.current = next;
         if (next.onActivate) next.onActivate();
         if (typeof topBarRefresh === "function") topBarRefresh();
+        if (typeof SandboxUI !== "undefined" && SandboxUI.syncMode && SandboxUI.syncMode()) SandboxUI.render();
     },
 
     flag: function(name, def) {
@@ -97,6 +98,7 @@ var GameModes = {
         var key = (typeof m.firstLevel === "function") ? m.firstLevel() : m.firstLevel;
         if (key && LevelManager.getAllLevels()[key]) LevelManager.selectLevel(key);
         if (typeof topBarRefresh === "function") topBarRefresh();
+        if (typeof SandboxUI !== "undefined" && SandboxUI.syncMode && SandboxUI.syncMode()) SandboxUI.render();
         try { localStorage.setItem("timsArcadeLastGame", id); } catch (e) {}
     }
 };

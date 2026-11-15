@@ -682,7 +682,15 @@ SummonManager.buildUI = function() {
     mk("coop-btn", "👥", "Players", "Who's playing: humans, CPUs, teams, controls", function() { closeTopMenu(); PlayersUI.open(); });
     mk("lan-btn", "📡", "LAN", "Play with other devices on the same Wi-Fi: host or join", function() { closeTopMenu(); NetUI.open(); });
     mk("studio-btn", "🛠", "Studio", "Level Studio [B]: build, test and share levels", function() { closeTopMenu(); Studio.open(); });
-    var menuBtn = mk("top-menu-btn", "☰", "Menu", "Everything else: switch game, levels, settings, controls, cheats", function() { toggleTopMenu(); });
+    var menuBtn = mk("top-menu-btn", "☰", "Menu", "Open game menu, tuning, inspector, and settings", function() {
+        if (typeof SandboxUI !== "undefined" && SandboxUI.isActive()) {
+            closeTopMenu();
+            SandboxUI.sideOpen = !SandboxUI.sideOpen;
+            SandboxUI.render();
+        } else {
+            toggleTopMenu();
+        }
+    });
 
     // ---------- the ☰ menu ----------
     var menu = document.createElement("div");
