@@ -73,6 +73,7 @@ var Snake = {
         w.name = o.name; w.color = o.color; w.human = o.human; w.alive = true; w.len = 24; w.ang = ang; w.want = ang;
         w.boost = false; w.segs = []; w.kills = w.kills || 0; w.deadT = 0; w.cpuT = 0; w._dmgLog = null;
         w.kinId = 0; w.slowed = false; w.rejoinCd = 0; w.splitCd = 0; w.gone = false;         // a fresh worm is on its own again
+        w.kbT = 0; w.kbSpeed = 0; w.splitOwner = null; w.isSplitChild = false;
         w.safeT = o.human !== undefined ? 120 : 0;          // humans get 2 s of spawn protection
         for (let i = 0; i < w.len; i++) w.segs.push({ x: x - Math.cos(ang) * i * SNK.SEG, y: y - Math.sin(ang) * i * SNK.SEG });
         if (!o.old) this.worms.push(w);
@@ -81,6 +82,46 @@ var Snake = {
 
     radius: function(w) { return ((w && w._sbScale) ? w._sbScale : 1) * (9 + Math.min(22, Math.sqrt(w.len) * 0.9)); },
     rad: function(w) { return this.radius(w); },
+    sizeDmgScale: function(w) { return w ? Math.pow(Math.max(0.15, w.len / 100), 1.45) : 1; },
+    hitKnockback: function(w, hitAng, spd) {
+        if (!w || !w.alive) return;
+        w.ang = hitAng; w.want = hitAng; w.kbAng = hitAng;
+        w.kbSpeed = Math.max(w.kbSpeed || 0, spd || 11);
+        w.kbT = Math.max(w.kbT || 0, 18);
+    },
+    splitAt: function(w, x, y, hitAng) {
+        if (!w || !w.alive || !w.segs || w.segs.length < 16 || w.len < 32) return null;
+        var owner = w.splitOwner || w;
+        var sibCount = 0;
+        for (let i = 0; i < this.worms.length; i++) {
+            var sw = this.worms[i];
+            if (sw.alive && (sw.splitOwner || sw) === owner) sibCount++;
+        }
+        if (sibCount >= 4) return null;
+        var lo = Math.max(4, Math.floor(w.segs.length * 0.25)), hi = Math.min(w.segs.length - 4, Math.floor(w.segs.length * 0.75));
+        var bestIdx = Math.floor(w.segs.length * 0.5), bestD = Infinity;
+        for (let i = lo; i <= hi; i++) {
+            var dd = Math.hypot(w.segs[i].x - x, w.segs[i].y - y);
+            if (dd < bestD) { bestD = dd; bestIdx = i; }
+        }
+        var frac = bestIdx / w.segs.length;
+        var frontLen = Math.max(14, Math.round(w.len * frac));
+        var backLen = Math.max(14, Math.round(w.len - frontLen));
+        var backSegs = w.segs.slice(bestIdx).map(function(s) { return { x: s.x, y: s.y }; });
+        w.segs = w.segs.slice(0, bestIdx);
+        w.len = frontLen;
+        w.splitOwner = owner;
+        var w2 = {
+            name: w.name, color: w.color, human: w.human, pid: w.pid,
+            alive: true, len: backLen, ang: hitAng, want: hitAng,
+            boost: false, segs: backSegs, kills: 0, deadT: 0, cpuT: 0,
+            _dmgLog: null, safeT: 14, mx: w.mx,
+            splitOwner: owner, isSplitChild: true, kbT: 0, kbSpeed: 0
+        };
+        this.worms.push(w2);
+        this.hitKnockback(w2, hitAng, 11);
+        return w2;
+    },
 
     control: function(w) {
         if (w.human === 0) {
@@ -193,6 +234,7 @@ var Snake = {
                     var w = cell[i + 3];
                     if (w === self) continue;
                     if (self && self.kinId && w.kinId === self.kinId) continue;       // pieces of one player's split worm never hurt each other
+                    if (self && (w.splitOwner || w) === (self.splitOwner || self)) continue;
                     var dx = cell[i] - x, dy = cell[i + 1] - y, rr = rad + cell[i + 2];
                     if (dx * dx + dy * dy < rr * rr) { this.lastHitIdx = cell[i + 4]; return w; }     // lastHitIdx: which body segment was hit
                 }
@@ -417,15 +459,22 @@ var Snake = {
             if (w.splitCd > 0) w.splitCd--;
             if (!w.alive) {
                 w.deadT++;
-                if (w.human === undefined && w.deadT > 180) this.spawn({ old: w, name: w.name, color: w.color });
+                if (w.human === undefined && !w.isSplitChild && w.deadT > 180) this.spawn({ old: w, name: w.name, color: w.color });
                 continue;
             }
-            this.control(w);
-            // turn toward the wanted heading (bigger worms turn a little slower)
-            var d = ((w.want - w.ang + Math.PI * 3) % (Math.PI * 2)) - Math.PI, turn = 0.11 - Math.min(0.05, w.len / 4000);
-            w.ang += Math.max(-turn, Math.min(turn, d));
-            var boosting = w.boost && w.len > 14;
-            var sp = (boosting ? 6.2 : 3.2) * arenaSpeed(w) * (w.slowed ? this.BRAKE_FACTOR : 1);
+            if (w.kbT > 0) {
+                w.kbT--;
+                w.ang = w.kbAng;
+                w.want = w.kbAng;
+            } else {
+                this.control(w);
+                // turn toward the wanted heading (bigger worms turn a little slower)
+                var d = ((w.want - w.ang + Math.PI * 3) % (Math.PI * 2)) - Math.PI, turn = 0.11 - Math.min(0.05, w.len / 4000);
+                w.ang += Math.max(-turn, Math.min(turn, d));
+            }
+            var boosting = w.kbT > 0 ? false : (w.boost && w.len > 14);
+            var sp = (w.kbT > 0 ? w.kbSpeed : (boosting ? 6.2 : 3.2)) * arenaSpeed(w) * (w.kbT > 0 ? 1 : (w.slowed ? this.BRAKE_FACTOR : 1));
+            if (w.kbT > 0) w.kbSpeed = Math.max(4.5, w.kbSpeed * 0.94);
             if (boosting && this.t % 4 === 0) { w.len -= 1; var tl = w.segs[w.segs.length - 1]; this.addPellet(tl.x, tl.y, 1, w.color); }
             var snkDec = (typeof cellsCfg !== "undefined") ? cellsCfg.decay : 0.0000333;
             if (snkDec > 0 && w.len > 60) {

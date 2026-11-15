@@ -523,7 +523,7 @@ var Mix = {
                     if (!k2.alive) continue;
                     var rrT = tankS[i] + wr2 * 0.6, dxT = h2.x - k2.x, dyT = h2.y - k2.y;
                     if (dxT > rrT || dxT < -rrT || dyT > rrT || dyT < -rrT || dxT * dxT + dyT * dyT > rrT * rrT) continue;
-                    Tanks.hurt(k2, (8 + bite * 4) * (boost > 1 ? 1.5 : 1), { name: w2.name });
+                    Tanks.hurt(k2, (8 + bite * 4) * (boost > 1 ? 1.5 : 1) * Snake.sizeDmgScale(w2), { name: w2.name });
                     w2.len = Math.max(12, w2.len - (2 + k2.st[2]));          // biting a tank costs a little length (more against Body damage)
                     w2.mx.biteCd = 18; S.wormBite++; this.wormXp(w2, 4);
                     this.burst(k2.x, k2.y, w2.color, "spark", "BITE!", 34);
@@ -537,7 +537,7 @@ var Mix = {
                     if (bW.dead || Cells.protectedNow(bW.pl)) continue;
                     var rrBW = blobR[i] + wr2 * 0.7, dxBW = h2.x - bW.x, dyBW = h2.y - bW.y;
                     if (dxBW > rrBW || dxBW < -rrBW || dyBW > rrBW || dyBW < -rrBW || dxBW * dxBW + dyBW * dyBW > rrBW * rrBW) continue;
-                    var biteDmg = (10 + bite * 5) * (boost > 1 ? 1.5 : 1);
+                    var biteDmg = (10 + bite * 5) * (boost > 1 ? 1.5 : 1) * Snake.sizeDmgScale(w2);
                     var actualBite = Math.min(bW.m, biteDmg);
                     bW.m -= biteDmg;
                     arenaRecordDmg(bW.pl, w2, actualBite);
@@ -596,7 +596,7 @@ var Mix = {
             if (kx * kx + ky * ky <= MIX_SNK_RING_SQ) {
                 var wall = Snake.hitBody(kx, ky, ks * 0.8, null);
                 if (wall && wall.alive) {
-                    Tanks.hurt(k, 1.1, { name: wall.name }); S.wormWall++;
+                    Tanks.hurt(k, 1.1 * Snake.sizeDmgScale(wall), { name: wall.name }); S.wormWall++;
                     var wh = wall.segs[0], wdx = kx - wh.x, wdy = ky - wh.y, pd = Math.sqrt(wdx * wdx + wdy * wdy) || 1;
                     k.vx += wdx / pd * 0.25; k.vy += wdy / pd * 0.25;
                     if (!k.alive) { this.wormXp(wall, 40); this.note(wall.human !== undefined || k.human !== undefined, k.name + " drove into " + wall.name, wall.color); continue; }
@@ -720,11 +720,11 @@ var Mix = {
             }
             if (!hw) hw = Snake.hitBody(ep.x, ep.y, 18, null);
             if (!hw || !hw.alive) continue;
-            var ejDmg = isHeadEj ? Math.max(16, Math.round(hw.len * 0.14)) : Math.max(10, Math.round(hw.len * 0.08));
+            var ejDmg = isHeadEj ? Math.max(6, Math.round(hw.len * 0.06)) : Math.max(4, Math.round(hw.len * 0.04));
             var actualEjDmg = Math.min(hw.len, ejDmg);
             hw.len -= ejDmg;
             arenaRecordDmg(hw, ep.ownerPl, actualEjDmg);
-            var ownerGain = Math.max(18, Math.round(actualEjDmg * 1.3));
+            var ownerGain = Math.max(14, Math.round(actualEjDmg * 1.4));
             if (ep.ownerPl && ep.ownerPl.alive) {
                 var ownBlobs = Cells.mine(ep.ownerPl);
                 if (ownBlobs.length) {
@@ -746,7 +746,10 @@ var Mix = {
                 this.burst(ep.x, ep.y, ep.col || "#38bdf8", "ring", "SNIPED! +" + ownerGain, 48);
                 this.note((ep.ownerPl && ep.ownerPl.human !== undefined) || hw.human !== undefined, ((ep.ownerPl && ep.ownerPl.name) || "A blob") + " sniped " + hw.name + " with food!", ep.col || "#38bdf8");
             } else {
-                this.burst(ep.x, ep.y, ep.col || "#38bdf8", "ring", "-" + ejDmg + " LEN! +" + ownerGain, 38);
+                var hitAng = Math.atan2(ep.vy || 0, ep.vx || 1);
+                var didSplit = (hw.len >= 32) ? Snake.splitAt(hw, ep.x, ep.y, hitAng) : null;
+                Snake.hitKnockback(hw, didSplit ? hitAng + 0.5 : hitAng, 11);
+                this.burst(ep.x, ep.y, ep.col || "#38bdf8", "ring", (didSplit ? "SPLIT! +" : "BOUNCE! +") + ownerGain, 38);
             }
             if (ep.ownerPl && ep.ownerPl.alive) {
                 ep._returning = true; ep._hitOnce = true;
@@ -847,7 +850,7 @@ var Mix = {
                     this.note(bH.pl.human !== undefined || wH.human !== undefined, wH.name + " ate " + bH.pl.name, wH.color);
                     this._blobGone(blobs, bH, wH.name); anyDead = true;
                 } else {
-                    var bite = Math.min(bH.m * 0.14, 10 + (wH.mx ? wH.mx.st[0] * 2 : 0));
+                    var bite = Math.min(bH.m * 0.14, (10 + (wH.mx ? wH.mx.st[0] * 2 : 0)) * Snake.sizeDmgScale(wH));
                     bH.m = Math.max(15, bH.m - bite); blobR[i] = Cells.rad(bH.m, bH);
                     arenaRecordDmg(bH.pl, wH, bite);
                     bH.popCd = 20;
@@ -936,6 +939,7 @@ var Mix = {
                 if (pu.kind === "speed") fx.speed = PW.t;
                 else if (pu.kind === "magnet") fx.magnet = PW.t;
                 else if (pu.kind === "shield") { if (T.tank) R.inv = Math.max(R.inv || 0, PW.t); else R.safeT = Math.max(R.safeT || 0, PW.t); }
+                else if (pu.kind === "swap") this.triggerSwap(R, T.x, T.y);
                 else if (T.tank) R.mixMass += 30; else R.len += 30;
                 mixSwapPop(pus, u); S.pickups++;
                 this.burst(T.x, T.y, PW.col, "ring", PW.icon, T.r + 36);
@@ -1014,8 +1018,52 @@ var Mix = {
         this.cam.z += (Math.max(0.22, z) - this.cam.z) * 0.05;
     },
 
+    triggerSwap: function(pickerRef, px, py) {
+        if (!pickerRef || pickerRef.human === undefined) return false;
+        this._tempSwaps = this._tempSwaps || [];
+        var cands = [];
+        for (let i = 0; i < Tanks.tanks.length; i++) {
+            var k = Tanks.tanks[i];
+            if (k !== pickerRef && k.alive && k.human === undefined) cands.push({ ref: k, kind: "tank", x: k.x, y: k.y });
+        }
+        for (let i = 0; i < Cells.players.length; i++) {
+            var p = Cells.players[i];
+            if (p !== pickerRef && p.alive && p.human === undefined) cands.push({ ref: p, kind: p.chain ? "chain" : "blob", x: p.cx || 0, y: p.cy || 0 });
+        }
+        for (let i = 0; i < Snake.worms.length; i++) {
+            var w = Snake.worms[i];
+            if (w !== pickerRef && w.alive && w.human === undefined && w.segs && w.segs[0]) cands.push({ ref: w, kind: "worm", x: w.segs[0].x, y: w.segs[0].y });
+        }
+        if (!cands.length) return false;
+        for (let i = cands.length - 1; i > 0; i--) {
+            var rj = (Math.random() * (i + 1)) | 0, tmp = cands[i]; cands[i] = cands[rj]; cands[rj] = tmp;
+        }
+        var three = cands.slice(0, 3), tgt = three[0], bestD = Infinity;
+        for (let i = 0; i < three.length; i++) {
+            var d = Math.hypot(three[i].x - px, three[i].y - py);
+            if (d < bestD) { bestD = d; tgt = three[i]; }
+        }
+        var h0 = pickerRef.human, p0 = pickerRef.pid, origBody = (h0 === 0) ? mixCfg.body : null;
+        pickerRef.human = undefined; pickerRef.pid = undefined;
+        tgt.ref.human = h0; tgt.ref.pid = p0;
+        if (h0 === 0) mixCfg.body = tgt.kind;
+        this._tempSwaps.push({ orig: pickerRef, target: tgt.ref, human: h0, pid: p0, origBody: origBody, t: 360 });
+        return true;
+    },
+
     frame: function() {
         this.t++;
+        this._tempSwaps = this._tempSwaps || [];
+        for (let si = this._tempSwaps.length - 1; si >= 0; si--) {
+            var sw = this._tempSwaps[si];
+            if (--sw.t <= 0) {
+                sw.target.human = undefined; sw.target.pid = undefined;
+                sw.orig.human = sw.human; sw.orig.pid = sw.pid;
+                if (sw.origBody) mixCfg.body = sw.origBody;
+                if (sw.human !== undefined) showBanner("🔀 BACK TO YOURSELF!", "", "#a855f7");
+                this._tempSwaps.splice(si, 1);
+            }
+        }
         // respawn the human when they press their button
         var m = this.me();
         if (m && !m.alive) {

@@ -21,7 +21,8 @@ try { var _cc = JSON.parse(localStorage.getItem("timsBlobArenaCfg") || "null"); 
 function saveCellsCfg() { try { cellsCfg.decayV2 = true; localStorage.setItem("timsBlobArenaCfg", JSON.stringify(cellsCfg)); } catch (e) {} }
 // Pickups borrowed from the main games' power-ups: run fast, can't be eaten, pull food in, or a lump of mass.
 var CELL_POWERS = { speed: { icon: "⚡", col: "#facc15", t: 480, name: "SPEED" }, shield: { icon: "🛡", col: "#38bdf8", t: 420, name: "SHIELD" },
-                    magnet: { icon: "🧲", col: "#f472b6", t: 540, name: "MAGNET" }, mass: { icon: "➕", col: "#4ade80", t: 0, name: "+60 MASS" } };
+                    magnet: { icon: "🧲", col: "#f472b6", t: 540, name: "MAGNET" }, mass: { icon: "➕", col: "#4ade80", t: 0, name: "+60 MASS" },
+                    swap: { icon: "🔀", col: "#a855f7", t: 360, name: "BODY SWAP (6s)" } };
 try { var _cs = JSON.parse(localStorage.getItem("timsBlobArena") || "null"); if (_cs) cellsSave.best = _cs.best || 0; } catch (e) {}
 
 var Cells = {
@@ -668,7 +669,17 @@ var Cells = {
             }
         }
         this.pickups = this.pickups || [];
-        if (cellsCfg.powerups && this.pickups.length < 7 && this.t % 240 === 0) { var pp = this.rndPos(300), kinds = ["speed", "shield", "magnet", "mass"]; this.pickups.push({ x: pp[0], y: pp[1], kind: kinds[(Math.random() * kinds.length) | 0] }); }
+        this._tempSwaps = this._tempSwaps || [];
+        for (let si = this._tempSwaps.length - 1; si >= 0; si--) {
+            var sw = this._tempSwaps[si];
+            if (--sw.t <= 0) {
+                sw.target.human = undefined; sw.target.pid = undefined;
+                sw.orig.human = sw.human; sw.orig.pid = sw.pid;
+                if (sw.human !== undefined) showBanner("🔀 BACK TO YOURSELF!", "", "#a855f7");
+                this._tempSwaps.splice(si, 1);
+            }
+        }
+        if (cellsCfg.powerups && this.pickups.length < 8 && this.t % 180 === 0) { var pp = this.rndPos(300), kinds = ["speed", "shield", "magnet", "mass", "swap"]; this.pickups.push({ x: pp[0], y: pp[1], kind: kinds[(Math.random() * kinds.length) | 0] }); }
         if (!cellsCfg.powerups && this.pickups.length) this.pickups = [];
         for (let u = this.pickups.length - 1; u >= 0; u--) {
             var pu = this.pickups[u];
@@ -677,8 +688,26 @@ var Cells = {
                 if (Math.hypot(ub.x - pu.x, ub.y - pu.y) < this.rad(ub.m) + 26) {
                     var PW = CELL_POWERS[pu.kind], upl = ub.pl;
                     upl.fx = upl.fx || { speed: 0, shield: 0, magnet: 0 };
-                    if (pu.kind === "mass") ub.m += 60; else upl.fx[pu.kind] = PW.t;
-                    if (upl.human !== undefined) { showBanner(PW.icon + " " + PW.name, "", PW.col); if (typeof SFX !== "undefined") SFX.play("pickup", ub.x, ub.y); }
+                    if (pu.kind === "swap") {
+                        if (typeof Mix !== "undefined" && Mix.on && typeof Mix.triggerSwap === "function") {
+                            Mix.triggerSwap(upl, ub.x, ub.y);
+                        } else if (upl.human !== undefined) {
+                            var cands = this.players.filter(function(p) { return p !== upl && p.alive && p.human === undefined; });
+                            if (cands.length) {
+                                for (let ci = cands.length - 1; ci > 0; ci--) { var rj = (Math.random() * (ci + 1)) | 0; var tmp = cands[ci]; cands[ci] = cands[rj]; cands[rj] = tmp; }
+                                var three = cands.slice(0, 3), tgtPl = three[0], bestD = Infinity;
+                                for (let ti = 0; ti < three.length; ti++) {
+                                    var d = Math.hypot((three[ti].cx || 0) - ub.x, (three[ti].cy || 0) - ub.y);
+                                    if (d < bestD) { bestD = d; tgtPl = three[ti]; }
+                                }
+                                var h0 = upl.human, p0 = upl.pid;
+                                upl.human = undefined; upl.pid = undefined;
+                                tgtPl.human = h0; tgtPl.pid = p0;
+                                this._tempSwaps.push({ orig: upl, target: tgtPl, human: h0, pid: p0, t: PW.t });
+                            }
+                        }
+                    } else if (pu.kind === "mass") ub.m += 60; else upl.fx[pu.kind] = PW.t;
+                    if (upl.human !== undefined || (pu.kind === "swap" && typeof Mix === "undefined")) { showBanner(PW.icon + " " + PW.name, "", PW.col); if (typeof SFX !== "undefined") SFX.play("pickup", ub.x, ub.y); }
                     this.pickups.splice(u, 1); break;
                 }
             }
