@@ -223,3 +223,30 @@ var measuredFPS = 60;
 // Last Stand: when every hero has fallen the team has this long to earn a life back
 var lastStandTimerMax = 60 * 40;
 var lastStandTimer = -1;
+
+// Build version & live release-age display
+var GAME_VERSION = {
+    version: "v1.144",
+    releasedAt: "2026-11-15T21:54:00Z",
+    releasedMs: Date.parse("2026-11-15T21:54:00Z")
+};
+
+function gameVersionAgeText(nowMs) {
+    var ref = (nowMs === undefined) ? Date.now() : nowMs;
+    var sec = Math.max(0, Math.floor((ref - GAME_VERSION.releasedMs) / 1000));
+    if (sec < 60) return sec + " second" + (sec === 1 ? "" : "s") + " ago";
+    var min = Math.floor(sec / 60);
+    if (min < 60) return min + " minute" + (min === 1 ? "" : "s") + " ago";
+    var hr = Math.floor(min / 60);
+    if (hr < 24) return hr + " hour" + (hr === 1 ? "" : "s") + " ago";
+    var day = Math.floor(hr / 24);
+    if (day < 7) return day + " day" + (day === 1 ? "" : "s") + " ago";
+    var wk = Math.floor(day / 7);
+    if (day < 365) return wk + " week" + (wk === 1 ? "" : "s") + " ago";
+    var yr = Math.floor(day / 365);
+    return yr + " year" + (yr === 1 ? "" : "s") + " ago";
+}
+
+function gameVersionLabel(nowMs) {
+    return GAME_VERSION.version + " · updated " + gameVersionAgeText(nowMs);
+}

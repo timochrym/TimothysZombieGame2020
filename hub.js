@@ -125,6 +125,7 @@ var Hub = {
 
         uiText("TIM'S ARCADE", W / 2, 84, 58, "#ffd23f", "center", "900");
         uiText("One engine  ·  " + this.games().length + " games  ·  pick one!", W / 2, 118, 16, "#c4b5fd", "center", "700");
+        if (typeof gameVersionLabel === "function") uiText(gameVersionLabel(), W - 18, 24, 13, "#94a3b8", "right", "700");
 
         var games = this.games();
         var cols = this.cols();

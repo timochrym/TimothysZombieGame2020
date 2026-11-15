@@ -125,6 +125,14 @@ var SandboxUI = {
 
         this.bindEvents();
         this.render();
+        setInterval(function() {
+            if (typeof gameVersionLabel !== "function") return;
+            var txt = gameVersionLabel();
+            var p = document.getElementById("sb-version-pill");
+            if (p) p.textContent = txt;
+            var d = document.getElementById("sb-drawer-version");
+            if (d) d.textContent = txt;
+        }, 1000);
     },
 
     bindEvents: function() {
@@ -583,6 +591,7 @@ var SandboxUI = {
                     '<button class="sb-btn ' + (sandboxCfg.showFloor ? 'active' : '') + '" id="sb-top-floor">▦ Floor</button>' +
                     (posTarget ? '<button class="sb-btn active" id="sb-top-eject">↩ Eject [F]</button>' : '') : '') +
                 (this.tool !== "play" ? '<button class="sb-btn" id="sb-quick-play" title="Return to Play mode">🎮 Play</button>' : '') +
+                (typeof gameVersionLabel === "function" ? '<span id="sb-version-pill" style="font-size:11px;font-weight:700;color:#94a3b8;padding:0 6px;white-space:nowrap">' + gameVersionLabel() + '</span>' : '') +
                 '</div>';
         } else {
             html += this.renderSideDrawerHTML(sb, m);
@@ -716,7 +725,8 @@ var SandboxUI = {
             }).join("") + '</div></div>' +
             '<div class="sb-scroll" style="flex:1;overflow-y:auto;padding:10px">' + body + '</div>' +
             '<div style="padding:5px 10px;border-top:1px solid rgba(148,163,184,0.15);font-size:10px;color:#64748b;text-align:center">' +
-            (this.pauseOpen ? '↑↓ pick · ←→ change · Enter · Q/E tabs · Esc resume' : 'Esc pause menu · ✕ close') + '</div>' +
+            (this.pauseOpen ? '↑↓ pick · ←→ change · Enter · Q/E tabs · Esc resume' : 'Esc pause menu · ✕ close') +
+            (typeof gameVersionLabel === "function" ? '<div id="sb-drawer-version" style="margin-top:2px;color:#94a3b8;font-weight:700">' + gameVersionLabel() + '</div>' : '') + '</div>' +
             '</div>';
     },
     renderSideInspectHTML: function() {
