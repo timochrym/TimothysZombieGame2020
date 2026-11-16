@@ -1599,6 +1599,13 @@ function tick() {
                 lowFpsSeconds = 0;
             }
         } else lowFpsSeconds = 0;
+        // If FPS drops like crazy (< 25), delete the 1st player passing broken/oversized thresholds until FPS recovers
+        if (measuredFPS < 25 && devOpts.timeScale >= 1 && slowMoFrames <= 0 && !paused &&
+            (typeof Hub === "undefined" || !Hub.isOpen) &&
+            (typeof Studio === "undefined" || !Studio.isOpen) &&
+            typeof killBrokenArenaPlayers === "function") {
+            killBrokenArenaPlayers({ maxKill: 1, quietIfNone: true, tag: "LAG GUARD (" + measuredFPS + " FPS)" });
+        }
     }
 }
 

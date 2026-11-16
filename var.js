@@ -226,9 +226,9 @@ var lastStandTimer = -1;
 
 // Build version & live release-age display
 var GAME_VERSION = {
-    version: "v1.144",
-    releasedAt: "2026-11-15T21:54:00Z",
-    releasedMs: Date.parse("2026-11-15T21:54:00Z")
+    version: "v1.145",
+    releasedAt: "2026-11-16T00:13:00Z",
+    releasedMs: Date.parse("2026-11-16T00:13:00Z")
 };
 
 function gameVersionAgeText(nowMs) {

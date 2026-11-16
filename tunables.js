@@ -76,7 +76,11 @@ function setTankSkill(v) { arenaCheats.tankSkill = Math.max(1, Math.min(3, Numbe
 function arenaHuman(p) { return p && p.human !== undefined; }
 function arenaProtected(p) { return arenaHuman(p) && (arenaCheats.god || godMode); }
 function arenaSpeed(p) { return (arenaHuman(p) ? arenaCheats.speed : 1) * (p && p.mixFx && p.mixFx.speed > 0 ? 1.5 : 1); }      // mixFx: a speed power-up picked up in Arena Mix
-function killBrokenArenaPlayers() {
+function killBrokenArenaPlayers(opts) {
+    opts = opts || {};
+    var maxKill = opts.maxKill || Infinity;
+    var quietIfNone = !!opts.quietIfNone;
+    var tag = opts.tag || "";
     var removed = 0, reasons = [];
     var totalBlob = 0, blobAlive = 0, totalWorm = 0, wormAlive = 0, totalTank = 0, tankAlive = 0;
     var cMasses = [];
@@ -111,14 +115,14 @@ function killBrokenArenaPlayers() {
     var totalWorld = totalBlob + totalWorm + totalTank;
     var totalAlive = blobAlive + wormAlive + tankAlive;
     var spawnBlobM = (typeof cellsCfg !== "undefined" && cellsCfg.startMass) ? cellsCfg.startMass : 20;
-    var worldLimC = (typeof CEL !== "undefined") ? Math.min(CEL.W, CEL.H) * 0.28 : 1600;
-    for (let i = 0; i < cMasses.length; i++) {
+    var worldLimC = (typeof CEL !== "undefined") ? Math.min(CEL.W, CEL.H) * 0.2 : 1040;
+    for (let i = 0; i < cMasses.length && removed < maxKill; i++) {
         var c = cMasses[i], cp = c.pl, rsn = null;
         var fastBlob = c.blobs.some(function(b) { return Math.hypot(b.vx || 0, b.vy || 0) > 65; });
         var hugeBlob = c.blobs.some(function(b) { return Cells.rad(b.m, b) >= worldLimC; });
         if ((cp._fastTicks || 0) >= 5 || fastBlob) rsn = "abnormal speed";
         else if ((totalAlive >= 2 && totalWorld > 200 && c.m / totalWorld >= 0.99) || (blobAlive >= 2 && totalBlob > 300 && c.m / totalBlob >= 0.99)) rsn = "99% value";
-        else if (hugeBlob || c.m >= 50000) rsn = "oversized";
+        else if (hugeBlob || c.m >= 20000) rsn = "oversized";
         else if (c.m >= 50 * spawnBlobM && ((cp._dupBurst || 0) >= 6 || c.blobs.length >= 24)) rsn = "50x rapid duplication";
         if (rsn) {
             for (let j = 0; j < c.blobs.length; j++) c.blobs[j].dead = true;
@@ -127,7 +131,7 @@ function killBrokenArenaPlayers() {
             removed++; reasons.push((cp.name || "Blob") + " (" + rsn + ")");
         }
     }
-    for (let i = 0; i < wList.length; i++) {
+    for (let i = 0; i < wList.length && removed < maxKill; i++) {
         var wk = wList[i], wrsn = null;
         var sibs = 0;
         for (let j = 0; j < wList.length; j++) {
@@ -136,7 +140,7 @@ function killBrokenArenaPlayers() {
         }
         if ((wk._fastTicks || 0) >= 5) wrsn = "abnormal speed";
         else if ((totalAlive >= 2 && totalWorld > 200 && wk.len / totalWorld >= 0.99) || (wormAlive >= 2 && totalWorm > 300 && wk.len / totalWorm >= 0.99)) wrsn = "99% value";
-        else if (wk.len >= 3000) wrsn = "oversized";
+        else if (wk.len >= 1500) wrsn = "oversized";
         else if (wk.len >= 50 * 24 && ((wk._dupBurst || 0) >= 3 || sibs >= 4)) wrsn = "50x rapid duplication";
         if (wrsn) {
             wk.alive = false; wk.gone = true;
@@ -146,12 +150,12 @@ function killBrokenArenaPlayers() {
     if (typeof Snake !== "undefined" && Snake.worms && removed > 0) {
         Snake.worms = Snake.worms.filter(function(q) { return !q.gone; });
     }
-    var worldLimT = (typeof TNK !== "undefined") ? Math.min(TNK.W, TNK.H) * 0.2 : 1200;
-    for (let i = 0; i < tList.length; i++) {
+    var worldLimT = (typeof TNK !== "undefined") ? Math.min(TNK.W, TNK.H) * 0.18 : 1080;
+    for (let i = 0; i < tList.length && removed < maxKill; i++) {
         var tk = tList[i].k, tv = tList[i].v, trsn = null;
         if (Math.hypot(tk.vx || 0, tk.vy || 0) > 40) trsn = "abnormal speed";
         else if ((totalAlive >= 2 && totalWorld > 200 && tv / totalWorld >= 0.99) || (tankAlive >= 2 && totalTank > 300 && tv / totalTank >= 0.99)) trsn = "99% value";
-        else if (Tanks.size(tk) >= worldLimT || (tk.mixMass || 0) >= 50000) trsn = "oversized";
+        else if (Tanks.size(tk) >= worldLimT || (tk.mixMass || 0) >= 20000) trsn = "oversized";
         if (trsn) {
             tk.alive = false; tk.hp = 0; tk.gone = true;
             removed++; reasons.push((tk.name || "Tank") + " (" + trsn + ")");
@@ -160,11 +164,14 @@ function killBrokenArenaPlayers() {
     if (typeof Tanks !== "undefined" && Tanks.tanks && removed > 0) {
         Tanks.tanks = Tanks.tanks.filter(function(q) { return !q.gone; });
     }
-    if (typeof showBanner === "function") {
-        showBanner(removed ? ("KILLED " + removed + " BROKEN PLAYER" + (removed > 1 ? "S" : "")) : "No broken players found", reasons.slice(0, 3).join(", "), removed ? "#f87171" : "#94a3b8");
-    }
-    if (typeof DevUI !== "undefined" && DevUI.toast) {
-        DevUI.toast(removed ? ("Removed " + removed + ": " + reasons.join(", ")) : "No broken players detected");
+    if (removed > 0 || !quietIfNone) {
+        var head = removed ? ((tag ? tag + ": " : "") + "KILLED " + removed + " BROKEN PLAYER" + (removed > 1 ? "S" : "")) : "No broken players found";
+        if (typeof showBanner === "function") {
+            showBanner(head, reasons.slice(0, 3).join(", "), removed ? "#f87171" : "#94a3b8");
+        }
+        if (typeof DevUI !== "undefined" && DevUI.toast) {
+            DevUI.toast(removed ? ((tag ? tag + " — " : "") + "Removed " + removed + ": " + reasons.join(", ")) : "No broken players detected");
+        }
     }
     return { removed: removed, reasons: reasons };
 }
