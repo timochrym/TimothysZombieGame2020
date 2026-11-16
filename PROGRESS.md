@@ -5,6 +5,15 @@ RETROS.md has the detail for each shipped update; TODO.md has the full checklist
 
 ## PICK UP HERE (handoff, 2026-11-15, Claude session)
 
+**Latest (2026-11-16): LAN joiner feel.** Owner said objects were invisible, points laggy, game not "locked in". Fixed on the
+session branch (not on `main`): `mode.netVars` (changed variables mirrored to joiners; used by wheels, race, puzzle, portal,
+dummy), bike wheel flags + `netApplied` re-attaching the bike draw function, moving Blob Arena pellets streamed every snapshot,
+badge moved off the hints. Tests: `tests/lan_vars.js`, `lan_view.js`, `lan_feel.js`, `lan_parity.js`. Regression run after the
+change: lan_core, joiner, play, soccer, resilience, vars, mix_p2_body, 4 .io games, view cells/mix all pass; `lan_perf` had
+one failure that was the test picking the wrong player (join order), fixed by matching on player id (3/3 pass).
+**Still open for LAN:** no `netVars`/`netState` yet for siege (its `Siege` object is IIFE-local), words, creative, sandbox;
+Mix packet spikes (avg 8 KB, max 32 KB: stagger the full/meta resyncs); Terra first packet 40 KB.
+
 Task from the owner: study the menus (wrong info between games, odd / doubled menus), make them fit each game, add
 tabs and a clear menu tree, improve LAN packets, then feel, performance and code clean-up. **About half is done.**
 

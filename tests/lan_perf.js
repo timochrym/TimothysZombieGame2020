@@ -35,7 +35,8 @@ const init = () => { const O = Object; window.__O = { is: O.is, keys: O.keys, en
   const cl = await C.p.evaluate(() => ({ fps: measuredFPS, me: !!Net.myChar(), predicted: Net.predictOn, broken: Net.predBroken, err: Math.round(Net.predErr || 0), stat: Net.predStat }));
   // do host and joiner agree on where the joiner's hero is once it stops?
   await C.p.waitForTimeout(900);
-  const hx = await H.p.evaluate(() => characters.filter(c => c.isRemote).map(c => Math.round(c.x))[0]);
+  const myNid = await C.p.evaluate(() => Net.myChar()._nid);     // match by player id: join order of the two joiners is not fixed
+  const hx = await H.p.evaluate((n) => characters.filter(c => c.isRemote && c._nid === n).map(c => Math.round(c.x))[0], myNid);
   const cx = await C.p.evaluate(() => Math.round(Net.myChar().x));
   const dbg = await C.p.evaluate(() => { const m = Net.myChar(); return { on: Net.predictOn, hx: Math.round(m._hx), x: Math.round(m.x), tx: m._tx === undefined ? 'u' : Math.round(m._tx), dead: m.dead, rag: m.ragdollTimer, live: !!m.liveRagdoll, hs: m.hitstun, stag: m.staggerTimer, pause: Net.predPause, bad: Net.predBad, stat: Net.predStat, hsp: [m._hxspeed, m._hyspeed], sp: [m.xspeed, m.yspeed], nid: m._nid, myNid: Net.myNid }; });
   const hdbg = await H.p.evaluate(() => characters.filter(c => c.isRemote).map(c => ({ x: Math.round(c.x), nid: c._nid, dead: c.dead, rag: c.ragdollTimer, lbl: c.playerLabel })));
