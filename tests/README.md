@@ -21,6 +21,9 @@ Need Node and Playwright (`npm i -D playwright` once, or a global install). Run 
     node word_rooms.js          # Word Lab rooms 6-8: unsolvable by walking, solved by their word
     node word_tower_fly.js      # Word Lab: "fly", climb, steer over the tower, get the star
     node word_pets.js           # Word Lab: dog / cat / bird follow the hero, the dog bites a zombie
+    node lan_mix_joiner.js      # Arena Mix over LAN seen only from player 2: 66 s of play, every error / warning, FPS, snapshot age, packet sizes
+    node lan_mix_p2_body.js     # Arena Mix: P2 switches tank / blob / worm / chain; the host holds the same body and P2's body moves
+    node lan_all_joiner.js      # every game over LAN from player 2's side: errors per game, snapshots keep coming (ONLY=mix,snake SECS=8)
     node lan_resilience.js      # LAN: ping shows in both menus, a dropped connection re-joins by itself, short packets rebuild the same world
     node lan_buttons.js         # LAN through the real buttons: Host, Join, host picks a game, joiner is in it
     node touch_phone.js         # touch controls on an emulated phone: Arcade tap, walk, shoot, pause
