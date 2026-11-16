@@ -27,6 +27,10 @@ tabs and a clear menu tree, improve LAN packets, then feel, performance and code
    Measured with the stub-peer bench: world games -20..38% bytes per snapshot (platform 534 -> 333 B), worm data -24%.
    New test `tests/lan_resilience.js` (PASS). `lan_core/joiner/play/soccer/perf` still pass (`lan_core` needs a server on 8099).
 
+**LAN check from player 2 (2026-11-16):** `tests/lan_all_joiner.js` ran all 24 games with the joiner playing 7 s each: 0 errors or warnings, 60 FPS,
+snapshots every 7-39 ms. `lan_mix_joiner.js` (66 s of Arena Mix) and `lan_mix_p2_body.js` (all 4 bodies) pass. Open point: Mix packets average 8 KB
+(p95 19 KB, max 32 KB = periodic full / Cells meta resync); stagger them if phones stutter.
+
 **Not done, in this order:**
 1. **Stale tests** that click removed buttons (`#top-menu-btn`, `#lan-btn`, `#coop-btn`, `#sp-all-fields summary`) were
    already failing on main before this work: `level_select`, `panel_dock`, `players`, `inspector_fields`,
