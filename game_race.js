@@ -198,6 +198,7 @@ GameModes.register({
     firstLevel: function() { return RACE_COURSES[raceSave.course || 0] || RACE_COURSES[0]; },
     flags: { waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, noBedrock: true, scenery: false,
         coopToggle: true, dash: true, wallJump: true, airJumps: 1, enemiesPassive: true, playerControl: true, bigPads: true },
+    netVars: ["Race.phase", "Race.timer", "Race.time", "Race.finish", "Race.newBest"],
     overTitle: "COURSE COMPLETE",
     againLabel: "Run it again",
 

@@ -1089,7 +1089,7 @@ GameModes.register({
             u: (Cells.pickups || []).map(function(u) { return [Math.round(u.x), Math.round(u.y), u.kind]; })
         };
         if (hasPm) st.pm = pm;
-        if ((typeof Net !== "undefined" && Net.isFullSnap) || Cells.netTick % 6 === 0) {
+        {
             var boxes = [];
             for (let i = 0; i < Cells.players.length; i++) {
                 var q = Cells.players[i];
@@ -1109,11 +1109,19 @@ GameModes.register({
                     if (sw.human === "lan" && sw.segs && sw.segs[0]) boxes.push([sw.segs[0].x, sw.segs[0].y, 1800, 1200]);
                 }
             }
-            var near = boxes.length ? Cells.pellets.filter(function(p) {
+            var inBox = function(p) {
                 for (let i = 0; i < boxes.length; i++) if (Math.abs(p.x - boxes[i][0]) < boxes[i][2] && Math.abs(p.y - boxes[i][1]) < boxes[i][3]) return true;
                 return false;
-            }) : [];
-            st.p = near.map(function(p) { var ci = CEL_COLORS.indexOf(p.col); return [Math.round(p.x), Math.round(p.y), p.m, ci >= 0 ? ci : p.col]; });
+            };
+            var enc = function(p) { var ci = CEL_COLORS.indexOf(p.col); return [Math.round(p.x), Math.round(p.y), p.m, ci >= 0 ? ci : p.col]; };
+            var moving = [], resting = [], wantRest = (typeof Net !== "undefined" && Net.isFullSnap) || Cells.netTick % 6 === 0;
+            if (boxes.length) for (let i = 0; i < Cells.pellets.length; i++) {
+                var pp = Cells.pellets[i];
+                if (Math.abs(pp.vx || 0) + Math.abs(pp.vy || 0) > 0.3) { if (inBox(pp)) moving.push(enc(pp)); }       // ejected / bursting pellets: every snapshot (smooth motion)
+                else if (wantRest && inBox(pp)) resting.push(enc(pp));                                               // resting pellets: every 6th snapshot
+            }
+            st.pv = moving;
+            if (wantRest) st.p = resting;
         }
         return st;
     },
@@ -1146,15 +1154,15 @@ GameModes.register({
             if (bb.pl.chain) bb.pl.chainList.push(bb);
         }
         Cells.players.forEach(function(p) { var M = 0, x = 0, y = 0; Cells.blobs.forEach(function(bb) { if (bb.pl === p) { M += bb.m; x += bb.x * bb.m; y += bb.y * bb.m; } }); if (M) { p.cx = x / M; p.cy = y / M; } });
-        if (m.p) {
+        if (m.p) Cells._restP = m.p;
+        if (Cells._restP) {
             var now = performance.now(), eaten = Cells._eatenPellets;
             if (eaten && eaten.length) {
                 eaten = Cells._eatenPellets = eaten.filter(function(e) { return e[2] > now; });
             }
-            Cells.pellets = m.p.map(function(a) {
-                return { x: a[0], y: a[1], m: a[2], col: typeof a[3] === "string" ? a[3] : (a[3] >= 0 ? CEL_COLORS[a[3]] : "#94a3b8"), vx: 0, vy: 0 };
-            }).filter(function(p) {
-                if (!eaten || !eaten.length) return true;
+            var mk = function(a, mv) { return { x: a[0], y: a[1], m: a[2], col: typeof a[3] === "string" ? a[3] : (a[3] >= 0 ? CEL_COLORS[a[3]] : "#94a3b8"), vx: 0, vy: 0, netMoving: mv }; };
+            Cells.pellets = Cells._restP.map(function(a) { return mk(a, false); }).concat((m.pv || []).map(function(a) { return mk(a, true); })).filter(function(p) {
+                if (p.netMoving || !eaten || !eaten.length) return true;
                 for (let i = 0; i < eaten.length; i++) if (Math.abs(p.x - eaten[i][0]) < 8 && Math.abs(p.y - eaten[i][1]) < 8) return false;
                 return true;
             });

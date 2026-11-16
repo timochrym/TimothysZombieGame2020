@@ -386,6 +386,13 @@ GameModes.register({
     tagline: "Ragdoll riders on bikes, wheelchairs and carts. Survive the traps, beat the clock.",
     color: "#f97316",
     firstLevel: function() { return WHEELS_COURSES[0]; },
+    // the other screens see the clock and the bikes: the vehicles are the synced ragdolls, the rest is plain numbers
+    netVars: ["Wheels.phase", "Wheels.time", "Wheels.t", "Wheels.crashes", "Wheels.flips", "Wheels.cpReached", "Wheels.done"],
+    netApplied: function() {
+        if (typeof Net === "undefined" || Net.role !== "client" || typeof Ragdolls === "undefined") return;
+        Wheels.riders = Ragdolls.list.filter(function(r) { return r.wheelsSlot !== undefined && r.pts && r.def; });
+        Wheels.riders.forEach(function(r) { r.drawFn = wheelsDraw; r.isVehicle = true; });      // functions cannot travel over the network
+    },
     flags: { waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, noBedrock: true, scenery: true,
         coopToggle: true, dash: false, wallJump: false, airJumps: 0, playerControl: false },
     overTitle: "COURSE COMPLETE",

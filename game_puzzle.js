@@ -166,6 +166,7 @@ GameModes.register({
     color: "#d9a05b",
     firstLevel: function() { return PUZZLE_ROOMS[Math.min(puzzleState.room, puzzleState.unlocked - 1)]; },
     flags: { waves: false, revive: false, jetpack: false, shooting: true, ability: false, ammo: false, noBedrock: false, scenery: false, coopToggle: true, wallJump: false, airJumps: 1, enemiesPassive: true },
+    netVars: ["puzzleState.time", "puzzleState.done", "puzzleState.room"],
     overTitle: "LAB COMPLETE!",
     againLabel: "Play from room 1",
 

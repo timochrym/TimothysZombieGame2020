@@ -57,6 +57,18 @@ var NetPack = {
     }
 };
 
+// Plain game variables a mode wants every screen to share (timers, phase, scores): mode.netVars = ["Race.phase", "Race.time"].
+// The host sends only the ones that changed; the joiner writes them back. Anything that is not plain data is skipped.
+var NetVars = {
+    root: function(path, make) {
+        var p = path.split("."), o = window[p[0]];
+        for (var i = 1; i < p.length - 1 && o != null; i++) o = o[p[i]];
+        return o == null ? null : { o: o, k: p[p.length - 1] };
+    },
+    get: function(path) { var r = this.root(path); return r ? r.o[r.k] : undefined; },
+    set: function(path, v) { var r = this.root(path); if (r) r.o[r.k] = v; }
+};
+
 var Net = {
     role: null,            // null | "host" | "client"
     ws: null,
@@ -635,6 +647,11 @@ var Net = {
         rd._nsPts = key;
         d = d || {};
         d.pts = pts;
+        if (rd.vbase !== undefined) {                       // vehicles (Wobble Wheels): which points are wheels, and how far they have turned
+            var pf = "", pa = [];
+            for (let i = 0; i < rd.pts.length; i++) { var pp = rd.pts[i]; pf += pp.wheel ? "1" : "0"; if (pp.wheel) pa.push(Math.round((pp.ang || 0) * 100) / 100); }
+            d.pf = pf; d.pa = pa;
+        }
         return d;
     },
 
@@ -698,6 +715,16 @@ var Net = {
         }
         this.isFullSnap = full;
         var msData = GameModes.has("netState") ? GameModes.call("netState") : undefined;
+        var nvList = GameModes.current && GameModes.current.netVars, mvOut;
+        if (nvList) {
+            var lv = this._lastNv || (this._lastNv = {});
+            for (let i = 0; i < nvList.length; i++) {
+                var nvv = NetVars.get(nvList[i]), nvs;
+                try { nvs = JSON.stringify(nvv); } catch (e) { continue; }
+                if (nvs === undefined) continue;
+                if (full || lv[nvList[i]] !== nvs) { lv[nvList[i]] = nvs; (mvOut || (mvOut = {}))[nvList[i]] = nvv; }
+            }
+        }
         this.isFullSnap = false;
         var snap = {
             t: "snap", f: this.tickNo, full: full ? 1 : 0, rs: this.resetNo,
@@ -706,7 +733,7 @@ var Net = {
             g: g, br: brSend, gs: gsSend,
             r: { red: redGuy ? this.nid(redGuy) : 0, blue: blueGuy ? this.nid(blueGuy) : 0 },
             you: you, ack: ack, c: C, ev: this.events,
-            ms: msData
+            ms: msData, mv: mvOut
         };
         var s;
         try { s = JSON.stringify(snap); } catch (e) { this.events = []; return; }
@@ -811,6 +838,10 @@ var Net = {
                 }
                 e[k] = v;
             }
+            if (key === "rd" && d.pf && e.pts) {                         // vehicle points: wheels and their spin
+                var wi = 0;
+                for (let p = 0; p < e.pts.length; p++) { var isW = d.pf.charAt(p) === "1"; e.pts[p].wheel = isW; if (isW) { e.pts[p].roll = true; e.pts[p].ang = d.pa ? (d.pa[wi++] || 0) : 0; } }
+            }
             if (mineNow) { e._tx = undefined; }
             else if (smooth && ox !== undefined && Math.hypot(e.x - ox, e.y - oy) < 260) {
                 e._tx = e.x; e._ty = e.y; e.x = ox; e.y = oy;
@@ -843,6 +874,8 @@ var Net = {
         redGuy = mine || map.get(s.r.red) || characters[0] || null;
         blueGuy = mine ? null : (map.get(s.r.blue) || null);
         if (s.ms !== undefined && GameModes.has("applyNetState")) { try { GameModes.call("applyNetState", s.ms); } catch (e) {} }
+        if (s.mv) { for (var mvp in s.mv) NetVars.set(mvp, s.mv[mvp]); }
+        if (GameModes.has("netApplied")) { try { GameModes.call("netApplied"); } catch (e) {} }
         // replay effects
         var ev = s.ev || [];
         for (let i = 0; i < ev.length; i++) {
@@ -1099,9 +1132,9 @@ var Net = {
         ctx.font = "700 13px " + UI_FONT;
         var wdt = ctx.measureText(txt).width + 24;
         ctx.fillStyle = age > 1000 ? "rgba(127,29,29,0.85)" : "rgba(10,15,22,0.72)";
-        ctx.fillRect(cssW / 2 - wdt / 2, cssH - 34, wdt, 24);
+        ctx.fillRect(cssW / 2 - wdt / 2, cssH - 64, wdt, 24);
         ctx.fillStyle = "#e2e8f0"; ctx.textAlign = "center";
-        ctx.fillText(txt, cssW / 2, cssH - 17);
+        ctx.fillText(txt, cssW / 2, cssH - 47);
         ctx.restore();
     },
 

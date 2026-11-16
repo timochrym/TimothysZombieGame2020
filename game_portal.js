@@ -366,6 +366,7 @@ GameModes.register({
     color: "#38bdf8",
     firstLevel: function() { return PORTAL_CHAMBERS[Math.min(portalState.chamber, portalState.unlocked - 1)]; },
     flags: { waves: false, revive: false, jetpack: false, shooting: false, ability: false, ammo: false, noBedrock: true, scenery: false, coopToggle: true, dash: false, wallJump: false, airJumps: 0, enemiesPassive: true },
+    netVars: ["portalState.time", "portalState.done", "Portals.pairs", "Portals.beams"],
     overTitle: "TESTING COMPLETE",
     againLabel: "Restart from chamber 1",
 

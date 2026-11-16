@@ -126,6 +126,7 @@ function dummyHurt(amount, x, y, part) {
 }
 
 GameModes.register({
+    netVars: ["Dummy.tool", "Dummy.total", "Dummy.combo", "Dummy.bones", "Dummy.parts"],
     id: "dummy",
     title: "CRASH LAB",
     tagline: "Launch, blast and fling a crash-test dummy. Every bone-rattling hit is scored.",
