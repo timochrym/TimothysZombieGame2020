@@ -1230,7 +1230,7 @@ var Mix = {
 
     draw: function() {
         this.updateCam();
-        ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH);
+        Theme.drawBg(ctx, cssW, cssH, this.cam.x * 0.15, this.cam.y * 0.15);
         Tanks.render();      // tank floor + grid, shapes, bullets, tanks
         Cells.render();      // the blob zone, food, blobs, spikes
         Snake.render();      // the worm ring, food, worms

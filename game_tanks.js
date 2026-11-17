@@ -427,7 +427,7 @@ var Tanks = {
         if (span) z = Math.min(z, Math.min(cssW, cssH) * 0.8 / (span + 500));
         this.cam.x += (tx - this.cam.x) * 0.15; this.cam.y += (ty - this.cam.y) * 0.15; this.cam.z += (Math.max(0.3, z) - this.cam.z) * 0.05;
         var c = this.cam, Z = c.z;
-        if (!this.mixLayer) { ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH); }      // Arena Mix draws one shared floor
+        if (!this.mixLayer) { Theme.drawBg(ctx, cssW, cssH, c.x * 0.15, c.y * 0.15); }      // Arena Mix draws one shared floor
         var tl = this.toScreen(-TNK.W / 2, -TNK.H / 2), br = this.toScreen(TNK.W / 2, TNK.H / 2);
         ctx.fillStyle = Theme.floor("#121a30"); ctx.fillRect(tl[0], tl[1], br[0] - tl[0], br[1] - tl[1]);
         var mid = this.toScreen(0, 0);

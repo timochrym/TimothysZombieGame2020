@@ -620,7 +620,7 @@ var Snake = {
         var z = Math.max(0.35, Math.min(1.1, 1.15 - Math.sqrt(biggest) * 0.035)), fitZ = span ? Math.min(z, (Math.min(cssW, cssH) * 0.8) / (span + 300)) : z;
         this.cam.x += (tx - this.cam.x) * 0.15; this.cam.y += (ty - this.cam.y) * 0.15; this.cam.z += (Math.max(0.25, fitZ) - this.cam.z) * 0.05;
         var c = this.cam, Z = c.z;
-        if (!this.mixLayer) { ctx.fillStyle = Theme.bg(); ctx.fillRect(0, 0, cssW, cssH); }
+        if (!this.mixLayer) { Theme.drawBg(ctx, cssW, cssH, c.x * 0.15, c.y * 0.15); }
         // hex-ish dot floor inside the arena
         var o = this.toScreen(0, 0);
         ctx.save();

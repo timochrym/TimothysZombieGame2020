@@ -209,6 +209,7 @@ class BackgroundMosaic {
         }
         ctx.fillStyle = this._skyGrad;
         ctx.fillRect(0, 0, cssW, cssH);
+        if (typeof Theme !== "undefined" && Theme.drawBgOverlay) Theme.drawBgOverlay(ctx, cssW, cssH, totalWorldX * 0.08, 0);
 
         var horizonScreenY = Math.min(cssH - 40, Math.max(200, yc + 40 * cameraScaleY));
 

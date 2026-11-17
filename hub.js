@@ -101,11 +101,15 @@ var Hub = {
         ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
         var W = cssW, H = cssH;
         // CRT-style backdrop: deep gradient, drifting pixel stars, scanlines
-        var g = ctx.createLinearGradient(0, 0, 0, H);
-        g.addColorStop(0, "#0b1020");
-        g.addColorStop(1, "#1a0f2e");
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, W, H);
+        if (typeof Theme !== "undefined" && Theme.c && Theme.c.anim) {
+            Theme.drawBg(ctx, W, H, this.t * 0.4, 0);
+        } else {
+            var g = ctx.createLinearGradient(0, 0, 0, H);
+            g.addColorStop(0, "#0b1020");
+            g.addColorStop(1, "#1a0f2e");
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, W, H);
+        }
         if (!this.stars) { this.stars = []; for (let i = 0; i < 90; i++) this.stars.push([Math.random(), Math.random(), 1 + Math.random() * 2]); }
         ctx.fillStyle = "#c7d2fe";
         for (let i = 0; i < this.stars.length; i++) {
